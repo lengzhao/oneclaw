@@ -33,3 +33,5 @@ go.work.sum
 
 # Local research snapshots
 claude_code/
+claude-code-2026-03-31/
+.DS_Store
