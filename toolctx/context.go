@@ -17,8 +17,11 @@ type Context struct {
 	ReadFileCache   map[string]string
 	readFileCacheMu sync.RWMutex
 
-	// NestedMemoryPaths tracks loaded memory paths for nested includes (phase B).
+	// NestedMemoryPaths reserved for future memory path tracking on the tool side.
 	NestedMemoryPaths map[string]struct{}
+
+	// MemoryWriteRoots are extra absolute directories where read/write_file may access (memory scopes).
+	MemoryWriteRoots []string
 }
 
 // New builds a tool context. If abort is nil, context.Background() is used.

@@ -23,7 +23,7 @@ type ReadTool struct{}
 func (ReadTool) Name() string        { return "read_file" }
 func (ReadTool) ConcurrencySafe() bool { return true }
 func (ReadTool) Description() string {
-	return "Read the contents of a file path relative to the working directory (or absolute within it). Text only; capped at 256KiB."
+	return "Read file contents from a path under the working directory or under ~/.oneclaw / .oneclaw memory roots. Text only; capped at 256KiB."
 }
 
 func (ReadTool) Parameters() openai.FunctionParameters {
@@ -40,7 +40,7 @@ func (ReadTool) Execute(ctx context.Context, input json.RawMessage, tctx *toolct
 	if err := json.Unmarshal(input, &in); err != nil {
 		return "", err
 	}
-	abs, err := pathutil.ResolveUnderRoot(tctx.CWD, in.Path)
+	abs, err := pathutil.ResolveForSession(tctx.CWD, tctx.MemoryWriteRoots, in.Path)
 	if err != nil {
 		return "", err
 	}

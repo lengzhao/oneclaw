@@ -54,7 +54,7 @@ func (GrepTool) Execute(ctx context.Context, input json.RawMessage, tctx *toolct
 	if err != nil {
 		return "", err
 	}
-	rootAbs, err := pathutil.ResolveUnderRoot(tctx.CWD, in.Path)
+	rootAbs, err := pathutil.ResolveForSession(tctx.CWD, tctx.MemoryWriteRoots, in.Path)
 	if err != nil {
 		return "", err
 	}

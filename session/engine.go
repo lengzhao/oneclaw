@@ -12,6 +12,7 @@ import (
 
 	"github.com/openai/openai-go"
 	"github.com/lengzhao/oneclaw/loop"
+	"github.com/lengzhao/oneclaw/memory"
 	"github.com/lengzhao/oneclaw/routing"
 	"github.com/lengzhao/oneclaw/toolctx"
 	"github.com/lengzhao/oneclaw/tools"
@@ -31,6 +32,8 @@ type Engine struct {
 	SessionID string
 	// SinkRegistry resolves sinks by routing.Inbound.Source. If nil, no outbound emission.
 	SinkRegistry routing.SinkRegistry
+	// RecallState tracks memory recall surfacing across turns (phase B).
+	RecallState memory.RecallState
 }
 
 // NewEngine builds an engine with sensible defaults.
@@ -67,6 +70,20 @@ func (e *Engine) SubmitUser(ctx context.Context, in routing.Inbound) error {
 
 	slog.Debug("session.submit", "cwd", e.CWD, "model", e.Model, "user_chars", utf8.RuneCountInString(in.Text))
 	tctx := toolctx.New(e.CWD, ctx)
+	home, herr := os.UserHomeDir()
+	memOK := herr == nil && os.Getenv("ONCLAW_DISABLE_MEMORY") != "1"
+	var layout memory.Layout
+	var bundle memory.TurnBundle
+	if memOK {
+		layout = memory.DefaultLayout(e.CWD, home)
+		bundle = memory.BuildTurn(layout, home, in.Text, &e.RecallState)
+		if bundle.UpdatedRecall != nil {
+			e.RecallState = *bundle.UpdatedRecall
+		}
+		tctx.MemoryWriteRoots = layout.WriteRoots()
+	} else if herr != nil {
+		slog.Warn("session.user_home", "err", herr)
+	}
 	var em *routing.Emitter
 	if e.SinkRegistry != nil {
 		sink, err := e.SinkRegistry.SinkFor(in.Source)
@@ -75,19 +92,32 @@ func (e *Engine) SubmitUser(ctx context.Context, in routing.Inbound) error {
 		}
 		em = routing.NewEmitter(sink, e.SessionID, "")
 	}
-	cfg := loop.Config{
-		Client:      &e.Client,
-		Model:       e.Model,
-		System:      e.System,
-		MaxTokens:   e.MaxTokens,
-		MaxSteps:    e.MaxSteps,
-		Messages:    &e.Messages,
-		Registry:    e.Registry,
-		ToolContext: tctx,
-		CanUseTool:  e.CanUseTool,
-		Outbound:    em,
+	system := e.System
+	if memOK {
+		system += bundle.SystemSuffix
 	}
-	return loop.RunTurn(ctx, cfg, in)
+	cfg := loop.Config{
+		Client:         &e.Client,
+		Model:          e.Model,
+		System:         system,
+		MaxTokens:      e.MaxTokens,
+		MaxSteps:       e.MaxSteps,
+		Messages:       &e.Messages,
+		Registry:       e.Registry,
+		ToolContext:    tctx,
+		CanUseTool:     e.CanUseTool,
+		Outbound:       em,
+		MemoryAgentMd: bundle.AgentMdBlock,
+		MemoryRecall:   bundle.RecallBlock,
+	}
+	err := loop.RunTurn(ctx, cfg, in)
+	if err != nil {
+		return err
+	}
+	if memOK {
+		memory.PostTurn(layout, in.Text, LastAssistantDisplay(e.Messages))
+	}
+	return nil
 }
 
 func newSessionID() string {

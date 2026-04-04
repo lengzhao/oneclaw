@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/openai/openai-go"
@@ -29,6 +30,9 @@ type Config struct {
 	CanUseTool  tools.CanUseTool
 	// Outbound emits text/tool/done events; nil disables outbound for this turn.
 	Outbound *routing.Emitter
+	// MemoryAgentMd / MemoryRecall are optional extra user messages before the real user turn (phase B).
+	MemoryAgentMd string
+	MemoryRecall  string
 }
 
 func logOutboundEmit(op string, err error) {
@@ -60,6 +64,12 @@ func RunTurn(ctx context.Context, cfg Config, in routing.Inbound) (err error) {
 	}()
 
 	msgs := cfg.Messages
+	if s := strings.TrimSpace(cfg.MemoryAgentMd); s != "" {
+		*msgs = append(*msgs, openai.UserMessage(s))
+	}
+	if s := strings.TrimSpace(cfg.MemoryRecall); s != "" {
+		*msgs = append(*msgs, openai.UserMessage(s))
+	}
 	*msgs = append(*msgs, openai.UserMessage(in.Text))
 
 	for step := 0; step < cfg.MaxSteps; step++ {

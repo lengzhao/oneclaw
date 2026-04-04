@@ -33,7 +33,7 @@
 ## 3. Memory 子系统（对齐 [`claude-code-memory-system.md`](claude-code-memory-system.md)）
 
 1. **存储层**：`MEMORY.md` 为短索引；topic 承载正文；按 user / project / local / agent / team 分作用域；daily log 按日 append。
-2. **发现层**：工作目录向上查找 `CLAUDE.md`、`.claude/rules/*.md`、memory 根；支持受控 `@include`（文本 only、相对路径、防环、缺失忽略）。
+2. **发现层**：工作目录向上查找 `AGENT.md`、`.oneclaw/rules/*.md`、memory 根；**不实现** `@include`，文件以磁盘正文为准。
 3. **注入层**：前缀（policy + 截断索引）↔ system；规则与日期等 ↔ messages 前缀 meta；按需 recall ↔ attachment（surfaced bytes 上限、路径去重）。
 4. **在线更新层**：主 Agent 通过工具写文件。
 5. **增量提取层**：窄上下文子任务，对应 `extract memories`。

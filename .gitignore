@@ -32,6 +32,7 @@ go.work.sum
 # .vscode/
 
 # Local research snapshots
-claude_code/
-claude-code-2026-03-31/
+# claude_code/
+# claude-code-2026-03-31/
 .DS_Store
+.oneclaw/

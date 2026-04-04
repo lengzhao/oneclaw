@@ -22,7 +22,7 @@ type WriteTool struct{}
 func (WriteTool) Name() string        { return "write_file" }
 func (WriteTool) ConcurrencySafe() bool { return false }
 func (WriteTool) Description() string {
-	return "Write text content to a path under the working directory. Overwrites if the file exists. Creates parent directories."
+	return "Write text content to a path under the working directory or under ~/.oneclaw and <cwd>/.oneclaw memory roots. Overwrites if the file exists. Creates parent directories."
 }
 
 func (WriteTool) Parameters() openai.FunctionParameters {
@@ -43,7 +43,7 @@ func (WriteTool) Execute(ctx context.Context, input json.RawMessage, tctx *toolc
 	if err := json.Unmarshal(input, &in); err != nil {
 		return "", err
 	}
-	abs, err := pathutil.ResolveUnderRoot(tctx.CWD, in.Path)
+	abs, err := pathutil.ResolveForSession(tctx.CWD, tctx.MemoryWriteRoots, in.Path)
 	if err != nil {
 		return "", err
 	}

@@ -54,8 +54,8 @@
 |------|------|------|
 | B1 | 存储与路径 | 各 scope；`MEMORY.md` 索引；topic；daily log append |
 | B2 | `MEMORY.md` 截断 | 行数 + 字节双上限、截断说明 |
-| B3 | 发现层 | 向上查找 `CLAUDE.md`、`.claude/rules`、`memory` 根 |
-| B4 | `@include` | 文本、相对路径、防环、缺失忽略 |
+| B3 | 发现层 | 向上查找 `AGENT.md`、`.oneclaw/rules`、`memory` 根 |
+| B4 | `@include` | **不实现**（仅磁盘正文） |
 | B5 | 注入与 recall | system 前缀；recall → attachment；字节上限与路径去重 |
 | B6 | 在线更新 | 工具写 topic / `MEMORY.md` / daily log |
 | B7 | extract / dream | 窄上下文子任务 + 触发策略；合并去重可先简化 |

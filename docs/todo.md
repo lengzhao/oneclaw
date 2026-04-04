@@ -31,13 +31,12 @@
 
 **验收**：切换目录/scope 发现正确；下一轮能注入更新后的 memory；recall 不爆 token。
 
-- [ ] **B1** 存储与路径：user / project / local / agent / team scope；`MEMORY.md` 索引；topic 文件；daily log append
-- [ ] **B2** `MEMORY.md` 截断：行数上限 + 字节上限 + 截断提示文案
-- [ ] **B3** 发现层：自 cwd 向上查找 `CLAUDE.md`、`.claude/rules/*.md`、memory 根
-- [ ] **B4** `@include`：仅文本、相对路径、防环、缺失忽略
-- [ ] **B5** 注入与 recall：system 前缀拼装；recall → attachment；surfaced 字节上限、路径去重
-- [ ] **B6** 在线更新：工具可写 topic、`MEMORY.md`、daily log
-- [ ] **B7** extract / dream：窄上下文子任务入口 + 触发策略（回合结束/定时）；合并去重（可先简化）
+- [x] **B1** 存储与路径：user / project / local / agent / team scope；`MEMORY.md` 索引；topic 文件；daily log append
+- [x] **B2** `MEMORY.md` 截断：行数上限 + 字节上限 + 截断提示文案
+- [x] **B3** 发现层：自 cwd 向上查找 `AGENT.md`、`.oneclaw/rules/*.md`、memory 根
+- [x] **B5** 注入与 recall：system 前缀拼装；recall → attachment；surfaced 字节上限、路径去重
+- [x] **B6** 在线更新：工具可写 topic、`MEMORY.md`、daily log
+- [x] **B7** extract / dream：窄上下文子任务入口 + 触发策略（回合结束/定时）；合并去重（可先简化）
 
 ---
 

@@ -1,0 +1,205 @@
+# E2E 用例清单（Stub 模型）
+
+所有用例默认使用 **`test/openaistub`**：`OPENAI_BASE_URL` 指向 stub、`ONCLAW_CHAT_TRANSPORT=non_stream`。  
+隔离建议：每个用例 **`t.TempDir()` 作 cwd**；需要用户级配置时用 **`t.Setenv("HOME", tmpHome)`** 再写 `~/.oneclaw`。
+
+**状态**：`[ ]` 未实现 · `[x]` 已实现（对应 `*_test.go` 内测试函数名）
+
+---
+
+## 实现总表
+
+| ID | 摘要 | 状态 | 测试函数 / 文件 |
+|----|------|------|------------------|
+| E2E-01 | 最小对话（纯文本结束） | [x] | `TestE2E_StubTextReply` · `stub_loop_test.go` |
+| E2E-02 | 同 session 多轮（两次 `RunTurn` 共享 `Messages`） | [x] | `TestE2E_02_MultiTurnSameSession` · `stub_session_test.go` |
+| E2E-03 | 工具调用闭环（read） | [x] | `TestE2E_StubToolThenText` · `stub_loop_test.go` |
+| E2E-04 | 写后读（write → read） | [x] | `TestE2E_04_WriteThenRead` · `stub_session_test.go` |
+| E2E-05 | Abort（ctx cancel） | [x] | `TestE2E_05_AbortCanceledContext` · `stub_session_test.go` |
+| E2E-10 | 用户级 `~/.oneclaw/AGENT.md` 注入 | [x] | `TestE2E_10_UserAgentMdInjected` · `stub_memory_engine_test.go` |
+| E2E-11 | 项目根 `AGENT.md` | [x] | `TestE2E_11_ProjectRootAgentMd` · `stub_memory_engine_test.go` |
+| E2E-12 | 仅 `.oneclaw/AGENT.md` | [x] | `TestE2E_12_DotOneclawAgentMdOnly` · `stub_memory_engine_test.go` |
+| E2E-13 | `.oneclaw/rules/*.md` | [x] | `TestE2E_13_DotOneclawRules` · `stub_memory_engine_test.go` |
+| E2E-14 | 目录向上遍历优先级 | [x] | `TestE2E_14_WalkUpOrderChildAfterParent` · `stub_memory_engine_test.go` |
+| E2E-15 | `ONCLAW_DISABLE_MEMORY=1` 关闭注入 | [x] | `TestE2E_15_MemoryDisabledNoAgentInject` · `stub_memory_engine_test.go` |
+| E2E-16 | `HOME` 不可用时的降级 | [x] | `TestE2E_16_NoHomeDegradesGracefully` · `stub_memory_engine_test.go` |
+| E2E-20 | `MEMORY.md` 索引出现在 system/上下文 | [x] | `TestE2E_20_MemoryMDInSystemSuffix` · `stub_memory_bundle_test.go`（`BuildTurn`） |
+| E2E-21 | `MEMORY.md` 行数截断 + WARNING | [x] | `TestE2E_21_MemoryMDLineTruncationWarning` · `stub_memory_bundle_test.go` |
+| E2E-22 | `MEMORY.md` 字节截断 + WARNING | [x] | `TestE2E_22_MemoryMDByteTruncationWarning` · `stub_memory_bundle_test.go` |
+| E2E-30 | recall 命中关键词 | [x] | `TestE2E_30_RecallHit` · `stub_memory_engine_test.go` |
+| E2E-31 | recall 未命中无附件 | [x] | `TestE2E_31_RecallMissNoAttachment` · `stub_memory_engine_test.go` |
+| E2E-32 | recall 同路径会话内去重 | [x] | `TestE2E_32_RecallPathDedupSecondTurn` · `stub_recall_more_test.go` |
+| E2E-33 | recall 总字节预算 | [x] | `TestE2E_33_RecallTotalByteBudget` · `stub_recall_more_test.go` |
+| E2E-40 | `write_file` 仅 cwd 内 | [x] | `TestE2E_40_WriteFileUnderCwdOnly` · `stub_paths_test.go` |
+| E2E-41 | `write_file` 到 memory 根（`.oneclaw` / `HOME`） | [x] | `TestE2E_41_WriteFileUnderUserMemoryRoot` · `stub_paths_test.go` |
+| E2E-42 | 越权路径拒绝 | [x] | `TestE2E_42_WriteFileRejectedOutsideRoots` · `stub_paths_test.go` |
+| E2E-43 | `grep` 在 memory 根内 | [x] | `TestE2E_43_GrepUnderProjectMemoryRoot` · `stub_paths_test.go` |
+| E2E-50 | 默认 daily log 追加 | [x] | `TestE2E_50_DailyLogAppendDefault` · `stub_postturn_test.go` |
+| E2E-51 | `ONCLAW_DISABLE_MEMORY_EXTRACT=1` 不写 log | [x] | `TestE2E_51_DailyLogDisabledByEnv` · `stub_postturn_test.go` |
+| E2E-52 | `ONCLAW_DISABLE_AUTO_MEMORY` 关闭 auto | [x] | `TestE2E_52_AutoMemoryDisabledOmitsAutoBullet` · `stub_memory_bundle_test.go` |
+| E2E-60 | transcript 保存再加载 | [x] | `TestE2E_60_TranscriptRoundTrip` · `stub_transcript_test.go` |
+| E2E-61 | transcript 损坏 JSON 报错 | [x] | `TestE2E_61_TranscriptInvalidJSON` · `stub_transcript_test.go` |
+| E2E-70 | CLI / Sink 事件（可选） | [x] | `TestE2E_70_SinkRegistryTextAndDone` · `stub_sink_test.go` |
+| E2E-80 | 无 `OPENAI_API_KEY`（真客户端路径，可选） | [ ] | — |
+| E2E-81 | 空用户输入被拒绝 | [x] | `TestE2E_81_EmptyInboundRejected` · `stub_negative_test.go` |
+| E2E-82 | 未知工具名 tool_result | [x] | `TestE2E_82_UnknownToolName` · `stub_negative_test.go` |
+
+---
+
+## 1. 会话与模型闭环
+
+### E2E-01 最小对话
+
+- **前置**：stub `Enqueue(CompletionStop(...))`；`Registry` 可无工具。
+- **步骤**：`loop.RunTurn` 一次，`Inbound.Text` 任意非空。
+- **期望**：无 error；`Messages` 末条为 assistant，内容与 stub 一致。
+- **实现**：`TestE2E_StubTextReply`。
+
+### E2E-02 同 session 多轮
+
+- **前置**：stub 按顺序 `Enqueue` 两段 `CompletionStop`。
+- **步骤**：同一 `Messages` 切片上连续两次 `RunTurn`，不同用户句。
+- **期望**：两次都有 assistant；history 条数递增；第二轮请求里包含前序内容（可通过 stub 记录收到的 messages 长度或本地断言条数）。
+- **实现**：`TestE2E_02_MultiTurnSameSession`（第二轮 `history_messages=4` 覆盖「含前序」）。
+
+### E2E-03 工具调用闭环
+
+- **前置**：`Enqueue(ToolCalls read_file)` + `Enqueue(CompletionStop)`；registry 含 `read_file`；cwd 下有待读文件。
+- **期望**：存在 tool 消息；最终 assistant 为第二段 stub 文本。
+- **实现**：`TestE2E_StubToolThenText`。
+
+### E2E-04 写后读
+
+- **前置**：stub：`ToolCalls write_file` → `ToolCalls read_file` → `CompletionStop`（或合并为两轮 model，按你编排）。
+- **步骤**：参数写入 `subdir/x.txt` 再读同一路径。
+- **期望**：tool 结果成功；文件在磁盘存在且内容一致。
+- **实现**：`TestE2E_04_WriteThenRead`。
+
+### E2E-05 Abort
+
+- **前置**：stub 第一请求阻塞（可用 `time.Sleep` + 可取消的 context），或慢速响应。
+- **步骤**：`RunTurn` 使用已 cancel 的 ctx。
+- **期望**：返回 `context.Canceled`；无 panic。
+- **实现**：`TestE2E_05_AbortCanceledContext`（**进入模型前**即 cancel，不命中 stub 队列）。
+
+---
+
+## 2. Memory 注入（AGENT.md / `.oneclaw`）
+
+> 使用 **`session.Engine.SubmitUser`** 或自行组装与 `SubmitUser` 等价的 `memory.BuildTurn` + `loop.Config`（与生产一致）。  
+> 环境：**不要**设 `ONCLAW_DISABLE_MEMORY=1`；设 **`HOME`** 为 `t.TempDir()`。
+
+### E2E-10 用户级 AGENT.md
+
+- **前置**：`$HOME/.oneclaw/AGENT.md` 含唯一标记字符串 `E2E_MARKER_USER`。
+- **步骤**：`SubmitUser` 一轮；stub 返回 `CompletionStop`，内容可带该标记或仅断言请求侧。
+- **期望**：注入的 user/meta 消息或 system 后缀中出现该标记（对 `Messages` 或 `memory.BuildTurn` 返回值断言）。
+
+### E2E-11 项目根 AGENT.md
+
+- **前置**：`cwd/AGENT.md` 含 `E2E_MARKER_PROJ_ROOT`。
+- **期望**：注入中出现该标记。
+
+### E2E-12 仅 `.oneclaw/AGENT.md`
+
+- **前置**：仅有 `cwd/.oneclaw/AGENT.md`，根目录无 `AGENT.md`。
+- **期望**：标记出现。
+
+### E2E-13 `.oneclaw/rules`
+
+- **前置**：`cwd/.oneclaw/rules/x.md` 含 `E2E_MARKER_RULE`。
+- **期望**：标记出现。
+
+### E2E-14 向上遍历优先级
+
+- **前置**：父目录与子目录各放不同 `AGENT.md` 标记；**cwd 为子目录**。
+- **期望**：**更靠近 cwd** 的规则在拼接结果中占优（顺序或覆盖语义与 `memory/discover.go` 一致）。
+
+### E2E-15 关闭 memory
+
+- **前置**：同 E2E-11 文件布局；`t.Setenv("ONCLAW_DISABLE_MEMORY", "1")`。
+- **期望**：注入中**无**项目标记。
+
+### E2E-16 HOME 不可用
+
+- **前置**：`t.Setenv("HOME", "/nonexistent_path_e2e")` 或使用无写权限路径（按平台谨慎）。
+- **期望**：不崩溃；`SubmitUser` 返回错误或跳过 user 侧 memory（与 `session/engine.go` 行为一致）。
+
+---
+
+## 3. MEMORY.md 与截断
+
+### E2E-20 / E2E-21 / E2E-22
+
+- **前置**：在某一 memory 根下放置 `MEMORY.md`（短文本 / >200 行 / 少行大字节）。
+- **步骤**：开启 memory，`BuildTurn` 或完整 `SubmitUser`。
+- **期望**：system 后缀中出现索引片段；截断场景含 **WARNING** 子串（与 `memory/truncate.go` 一致）。
+
+---
+
+## 4. Recall
+
+### E2E-30～E2E-33
+
+- **前置**：memory 目录下 `.md` 含与用户问题重叠的词；或故意无重叠；或多样文件测总预算。
+- **步骤**：`BuildTurn`/`SubmitUser` 带特定 `userText`；同一 `RecallState` 多轮测 E2E-32。
+- **期望**：`Attachment: relevant_memories` 出现与否；路径去重；总长度上限。
+
+---
+
+## 5. 工具路径与 memory 根
+
+### E2E-40～E2E-43
+
+- **前置**：`ToolContext` 带与 `session` 一致的 `MemoryWriteRoots`（可用 `memory.DefaultLayout` + `WriteRoots()`）。
+- **步骤**：`RunTurn` + stub 下发 `write_file` / `grep`。
+- **期望**：cwd 内成功；memory 根内成功；越权失败；grep 在 memory 路径可匹配。
+
+---
+
+## 6. Auto memory 与 daily log
+
+### E2E-50～E2E-52
+
+- **前置**：layout 可写；`PostTurn` 触发条件（默认开启 extract 时）。
+- **期望**：`logs/YYYY/MM/YYYY-MM-DD.md` 追加一行；禁用 env 时不追加；`ONCLAW_DISABLE_AUTO_MEMORY` 时 auto 目录行为与文档一致。
+
+---
+
+## 7. Transcript
+
+### E2E-60 / E2E-61
+
+- **前置**：`loop.MarshalMessages` / `Engine.MarshalTranscript` 写入文件；再 `LoadTranscript`。
+- **期望**：轮次一致；损坏文件返回 error。
+
+---
+
+## 8. 路由与 CLI（可选）
+
+### E2E-70
+
+- **说明**：若需测 `routing.Emitter`，在 `loop.Config` 挂 sink + `SubmitUser`；或单独子测试调用 CLI（较重）。
+
+---
+
+## 9. 负面与韧性
+
+### E2E-80～E2E-82
+
+- **E2E-80**：不设 key 且 **不**走 stub（可选，非默认 CI）。
+- **E2E-81**：`Engine.SubmitUser` 空文本。
+- **E2E-82**：stub 返回未注册工具名；期望 tool 错误消息 + 会话可继续或结束（与 `loop` 一致）。
+
+---
+
+## Stub 编排提示
+
+| 场景 | 典型 `Enqueue` 顺序 |
+|------|---------------------|
+| 纯回复 | `CompletionStop` ×1 |
+| 单次工具 | `CompletionToolCalls` → `CompletionStop` |
+| 写+读 | `ToolCalls(write)` → `ToolCalls(read)` → `CompletionStop`（或中间再 Enqueue 视 MaxSteps） |
+| 多轮 model | 每个 step 消费队列中一项 |
+
+实现新用例时：在表中将 `[ ]` 改为 `[x]` 并填写 **测试函数名**。
