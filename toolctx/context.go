@@ -4,12 +4,17 @@ package toolctx
 import (
 	"context"
 	"sync"
+
+	"github.com/openai/openai-go"
 )
 
 // Context is the Go analogue of ToolUseContext: tools share cwd, abort signal,
 // and optional read cache. NestedMemoryPaths is reserved for phase B (memory).
 type Context struct {
 	CWD string
+
+	// HomeDir is the session user's home directory (for audit / policy paths). Empty if unknown.
+	HomeDir string
 
 	// Abort is cancelled when the user or host aborts the turn.
 	Abort context.Context
@@ -22,6 +27,11 @@ type Context struct {
 
 	// MemoryWriteRoots are extra absolute directories where read/write_file may access (memory scopes).
 	MemoryWriteRoots []string
+
+	// DeferredUserAfterToolBatch are user messages appended to the transcript immediately after
+	// the current step's tool result messages (e.g. sidechain merge in user mode).
+	DeferredUserAfterToolBatch []openai.ChatCompletionMessageParamUnion
+	deferMu                    sync.Mutex
 
 	// SubagentDepth is 0 on the main thread; incremented for each nested run_agent/fork_context.
 	SubagentDepth int
@@ -52,6 +62,7 @@ func (c *Context) ChildContext() *Context {
 	}
 	child := New(c.CWD, c.Abort)
 	child.MemoryWriteRoots = append([]string(nil), c.MemoryWriteRoots...)
+	child.HomeDir = c.HomeDir
 	child.MaxSubagentDepth = c.MaxSubagentDepth
 	child.Subagent = c.Subagent
 	child.SubagentDepth = c.SubagentDepth + 1
@@ -85,4 +96,26 @@ func (c *Context) SetCachedRead(absPath, content string) {
 	c.readFileCacheMu.Lock()
 	defer c.readFileCacheMu.Unlock()
 	c.ReadFileCache[absPath] = content
+}
+
+// DeferUserMessageAfterToolBatch queues a user message to append after the current model step's tool outputs.
+func (c *Context) DeferUserMessageAfterToolBatch(m openai.ChatCompletionMessageParamUnion) {
+	if c == nil {
+		return
+	}
+	c.deferMu.Lock()
+	defer c.deferMu.Unlock()
+	c.DeferredUserAfterToolBatch = append(c.DeferredUserAfterToolBatch, m)
+}
+
+// TakeDeferredUserMessagesAfterToolBatch returns and clears queued user messages.
+func (c *Context) TakeDeferredUserMessagesAfterToolBatch() []openai.ChatCompletionMessageParamUnion {
+	if c == nil {
+		return nil
+	}
+	c.deferMu.Lock()
+	defer c.deferMu.Unlock()
+	out := c.DeferredUserAfterToolBatch
+	c.DeferredUserAfterToolBatch = nil
+	return out
 }

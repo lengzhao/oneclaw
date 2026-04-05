@@ -12,7 +12,8 @@ import (
 	"time"
 )
 
-// Append-only audit of writes under memory WriteRoots. Log path:
+// Append-only audit of writes under memory WriteRoots, project `.oneclaw/rules`,
+// user `~/.oneclaw/rules`, and canonical `AGENT.md` paths. Log path:
 //   <cwd>/.oneclaw/audit/memory-write.jsonl
 // Each line is a JSON object: ts, source, path, bytes, sha256.
 // Disable with ONCLAW_DISABLE_MEMORY_AUDIT=1/true/yes.
@@ -33,12 +34,15 @@ func memoryAuditDisabled() bool {
 	return v == "1" || strings.EqualFold(v, "true") || strings.EqualFold(v, "yes")
 }
 
-// AppendMemoryAudit appends one JSON line if absPath is under any of writeRoots.
-func AppendMemoryAudit(cwd string, writeRoots []string, absPath, source string, content []byte) {
+// AppendMemoryAudit appends one JSON line if absPath is under layout.AuditWriteRoots()
+// or matches a canonical AGENT.md path (behavior policy file).
+func AppendMemoryAudit(layout Layout, absPath, source string, content []byte) {
+	cwd := layout.CWD
 	if memoryAuditDisabled() || cwd == "" || absPath == "" {
 		return
 	}
-	if !pathUnderAnyRoot(absPath, writeRoots) {
+	absPath = filepath.Clean(absPath)
+	if !pathUnderAnyRoot(absPath, layout.AuditWriteRoots()) && !layout.IsBehaviorPolicyFile(absPath) {
 		return
 	}
 	sum := sha256.Sum256(content)
@@ -93,4 +97,9 @@ func pathUnderRoot(file, root string) bool {
 		return false
 	}
 	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+// PathUnderRoot reports whether file lies under root (directory containment, after Clean).
+func PathUnderRoot(file, root string) bool {
+	return pathUnderRoot(filepath.Clean(file), filepath.Clean(root))
 }

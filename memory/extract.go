@@ -48,7 +48,7 @@ func PostTurn(layout Layout, in PostTurnInput) {
 		slog.Warn("memory.daily_log.write", "path", path, "err", err)
 		return
 	}
-	AppendMemoryAudit(layout.CWD, layout.WriteRoots(), path, "daily_log_line", []byte(line))
+	AppendMemoryAudit(layout, path, "daily_log_line", []byte(line))
 }
 
 func buildDailyLogLine(user, assistant string, tools []loop.ToolTraceEntry) string {

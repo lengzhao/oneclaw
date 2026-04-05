@@ -55,7 +55,11 @@ func (WriteTool) Execute(ctx context.Context, input json.RawMessage, tctx *toolc
 	if err := os.WriteFile(abs, content, 0o644); err != nil {
 		return "", err
 	}
-	memory.AppendMemoryAudit(tctx.CWD, tctx.MemoryWriteRoots, abs, "write_file", content)
+	home := tctx.HomeDir
+	if home == "" {
+		home, _ = os.UserHomeDir()
+	}
+	memory.AppendMemoryAudit(memory.DefaultLayout(tctx.CWD, home), abs, "write_file", content)
 	tctx.SetCachedRead(abs, in.Content)
 	return "ok", nil
 }

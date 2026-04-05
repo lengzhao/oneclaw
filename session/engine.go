@@ -81,6 +81,9 @@ func (e *Engine) SubmitUser(ctx context.Context, in routing.Inbound) error {
 	bg := budget.FromEnv()
 	tctx := toolctx.New(e.CWD, ctx)
 	home, herr := os.UserHomeDir()
+	if herr == nil {
+		tctx.HomeDir = home
+	}
 	memOK := herr == nil && os.Getenv("ONCLAW_DISABLE_MEMORY") != "1"
 	var traceSink *loop.ToolTraceSink
 	var layout memory.Layout

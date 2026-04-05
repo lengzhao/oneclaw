@@ -169,6 +169,47 @@ func agentDefaultPair(cwd, memoryBase, agentType string) []string {
 	}
 }
 
+// AuditWriteRoots is WriteRoots plus behavior-policy directories (for D2 audit coverage).
+// Individual AGENT.md files are handled by IsBehaviorPolicyFile.
+func (l Layout) AuditWriteRoots() []string {
+	seen := make(map[string]struct{})
+	var out []string
+	add := func(p string) {
+		p = filepath.Clean(p)
+		if p == "" || p == "." {
+			return
+		}
+		if _, ok := seen[p]; ok {
+			return
+		}
+		seen[p] = struct{}{}
+		out = append(out, p)
+	}
+	for _, p := range l.WriteRoots() {
+		add(p)
+	}
+	add(filepath.Join(l.CWD, DotDir, "rules"))
+	add(filepath.Join(l.MemoryBase, "rules"))
+	return out
+}
+
+// IsBehaviorPolicyFile reports whether abs is one of the canonical AGENT.md locations
+// (project root, project .oneclaw, or user memory base).
+func (l Layout) IsBehaviorPolicyFile(abs string) bool {
+	abs = filepath.Clean(abs)
+	candidates := []string{
+		filepath.Join(l.CWD, AgentInstructionsFile),
+		filepath.Join(l.CWD, DotDir, AgentInstructionsFile),
+		filepath.Join(l.MemoryBase, AgentInstructionsFile),
+	}
+	for _, c := range candidates {
+		if abs == filepath.Clean(c) {
+			return true
+		}
+	}
+	return false
+}
+
 // WriteRoots returns distinct directory roots tools may write for memory topics and logs.
 func (l Layout) WriteRoots() []string {
 	seen := make(map[string]struct{})

@@ -207,7 +207,7 @@ YAML 与用户/项目/`-config` 合并、以及 `ApplyEnvDefaults` 与 `ONCLAW_*
 详见 [`docs/todo.md`](docs/todo.md) 中「目标导向：自我进化闭环」：
 
 - 多段 daily log 整理、topic 合并与强去重  
-- 行为策略写回 `.oneclaw/rules` / `AGENT.md` 的流程与护栏强化  
+- **行为策略写回**：`write_behavior_policy` 工具与 D2 审计扩展（见 `docs/config.md`）  
 - 可选：侧链摘要合入主会话、向量 recall 插件  
 
 ---

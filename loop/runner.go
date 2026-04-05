@@ -168,6 +168,11 @@ func RunTurn(ctx context.Context, cfg Config, in routing.Inbound) (err error) {
 		for _, tm := range toolMsgs {
 			*msgs = append(*msgs, tm)
 		}
+		if cfg.ToolContext != nil {
+			for _, um := range cfg.ToolContext.TakeDeferredUserMessagesAfterToolBatch() {
+				*msgs = append(*msgs, um)
+			}
+		}
 	}
 
 	return fmt.Errorf("max model steps (%d) exceeded", cfg.MaxSteps)

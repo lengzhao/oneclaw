@@ -36,9 +36,9 @@
 
 7. `[x]` **通用 Channel 抽象** — 飞书 / Slack 等可插拔 channel，对齐 [`inbound-routing-design.md`](inbound-routing-design.md)（参考 openclaw/picoclaw）。
 8. `[x]` **Skills（Claude Code 机制）** — 已实现：`skills` 包 + `~/.oneclaw/skills` / `<cwd>/.oneclaw/skills` 下 `<name>/SKILL.md`、系统提示注入索引、`invoke_skill` 拉取全文、`skills-recent.json` LRU（20）排序；细节见 [`claude-code-skills-mechanism.md`](claude-code-skills-mechanism.md) §11 与 `ONCLAW_DISABLE_SKILLS` 等环境变量（`docs/config.md`）。**审计 / 条件 paths / 动态子目录发现** 等待续作。
-9. `[ ]` **行为策略写回** — 规则进 `.oneclaw/rules` / `AGENT.md` 的路径与护栏（与 D2 审计衔接）。
+9. `[x]` **行为策略写回** — 规则进 `.oneclaw/rules` / `AGENT.md` 的路径与护栏（与 D2 审计衔接）。
 10. `[x]` **任务状态工具** — Task 创建/更新或等价落盘，长会话与 resume 对齐进度。
-11. `[ ]` **侧链合并（可选）** — sidechain 结论以 attachment 或 user 摘要合入主 transcript。
+11. `[x]` **侧链合并（可选）** — sidechain 结论以 attachment 或 user 摘要合入主 transcript。
 
 ### P2
 
@@ -111,7 +111,7 @@
 - [x] **C1** Agent 定义加载：`.oneclaw/agents/*.md` + 内置 `general-purpose` / `explore`
 - [x] **C2** 嵌套调用：`run_agent` 内独立 `loop.RunTurn`；子级 `ToolUseContext` 默认隔离（独立读缓存、深度计数）
 - [x] **C3** Fork：`fork_context` 共享本回合父级 `ParentSystem` + 裁剪父消息尾部
-- [x] **C4** sidechain transcript：`.oneclaw/sidechain/*.jsonl` 落盘；**可选合并回主会话** — 未做（仅旁路存储）
+- [x] **C4** sidechain transcript：`.oneclaw/sidechain/*.jsonl` 落盘；**可选合并回主会话** — `ONCLAW_SIDECCHAIN_MERGE`（tool / user 模式，见 `docs/config.md`）
 - [x] **C5** 权限：`fork_context` 子路径禁 `bash`；嵌套时剥离 `run_agent`/`fork_context`；`run_agent` 仍走父级 `CanUseTool`（未单独做「子 Agent 一律更严」的二次策略，可按 Agent 类型加强）
 
 ---
@@ -139,9 +139,9 @@
 | P0 | **全局上下文预算** | [x] 见 backlog #6 |
 | P1 | **通用 Channel 抽象** | [ ] 见 backlog #7 |
 | P1 | **Skills（Claude Code 机制）** | [ ] 见 backlog #8 |
-| P1 | **行为策略写回** | [ ] 见 backlog #9 |
+| P1 | **行为策略写回** | [x] 见 backlog #9 |
 | P1 | **任务状态工具** | [ ] 见 backlog #10 |
-| P1 | **侧链合并（可选）** | [ ] 见 backlog #11 |
+| P1 | **侧链合并（可选）** | [x] 见 backlog #11 |
 | P2 | **入口编排加厚** | [ ] 见 backlog #12 |
 | P2 | **D3 向量 recall** | [ ] 见 backlog #13（阶段 D3） |
 | P2 | **预算精度（可选）** | [ ] 见 backlog #14 |

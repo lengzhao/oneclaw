@@ -7,6 +7,7 @@ func DefaultRegistry() *tools.Registry {
 	r := tools.NewRegistry()
 	r.MustRegister(ReadTool{})
 	r.MustRegister(WriteTool{})
+	r.MustRegister(WriteBehaviorPolicyTool{})
 	r.MustRegister(GrepTool{})
 	r.MustRegister(GlobTool{})
 	r.MustRegister(ListDirTool{})

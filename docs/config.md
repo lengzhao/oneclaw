@@ -35,6 +35,8 @@
 | 开关 | `features.disable_*` | 对应 `ONCLAW_DISABLE_*`（见示例文件） |
 | Skills | — | `ONCLAW_DISABLE_SKILLS=1` 关闭系统提示里的 Skills 索引（`invoke_skill` 仍可用）；`ONCLAW_SKILLS_RECENT_PATH` 覆盖 `<cwd>/.oneclaw/skills-recent.json`；`ONCLAW_SKILLS_INDEX_MAX_BYTES` 覆盖索引字节上限（默认约为 `ONCLAW_MAX_PROMPT_BYTES` 的 1%，见 `budget.Global.SkillIndexMaxBytes`） |
 | 任务列表 | — | `ONCLAW_DISABLE_TASKS=1` 关闭系统提示里的任务摘要，并拒绝 `task_create` / `task_update`；任务文件默认为 `<cwd>/.oneclaw/tasks.json` |
+| 行为策略写回 | — | `ONCLAW_DISABLE_BEHAVIOR_POLICY_WRITE=1` 拒绝 `write_behavior_policy`；该工具仅允许写入 `<cwd>/.oneclaw/rules/*.md`、项目或 `.oneclaw/AGENT.md`、用户 `~/.oneclaw/AGENT.md`，写入记入 D2 审计（`source=write_behavior_policy`） |
+| 侧链合并 | — | `ONCLAW_SIDECCHAIN_MERGE`：留空关闭；`1` / `true` / `tool` / `append` 在 `run_agent` / `fork_context` 的 **tool 结果**末尾附加侧链文件路径；`user` 则在同一轮工具输出之后向主 transcript 追加一条 **user** 消息（摘要 + 路径） |
 
 启动时若调用了 `config.ApplyEnvDefaults`，会把「当前仍为空的」`ONCLAW_*` 设为 YAML 中的值，使 `memory`、`budget` 等仍读环境的代码与文件配置一致；**不会**设置 `OPENAI_API_KEY`。
 

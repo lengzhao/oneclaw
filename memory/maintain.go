@@ -50,7 +50,7 @@ func appendMaintenanceSection(layout Layout, memPath, section string) error {
 		if err := os.WriteFile(memPath, []byte(body), 0o644); err != nil {
 			return err
 		}
-		AppendMemoryAudit(layout.CWD, layout.WriteRoots(), memPath, "maintain", []byte(section))
+		AppendMemoryAudit(layout, memPath, "maintain", []byte(section))
 		return nil
 	}
 	raw, err := os.ReadFile(memPath)
@@ -68,7 +68,7 @@ func appendMaintenanceSection(layout Layout, memPath, section string) error {
 	if err := os.WriteFile(memPath, []byte(body), 0o644); err != nil {
 		return err
 	}
-	AppendMemoryAudit(layout.CWD, layout.WriteRoots(), memPath, "maintain", []byte(section))
+	AppendMemoryAudit(layout, memPath, "maintain", []byte(section))
 	return nil
 }
 

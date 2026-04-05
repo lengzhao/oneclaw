@@ -116,8 +116,10 @@ func RunAgent(ctx context.Context, h *Host, parent *toolctx.Context, agentType, 
 	if err := loop.RunTurn(ctx, cfg, routing.Inbound{Text: task}); err != nil {
 		return "", err
 	}
-	_ = writeSidechain(h.CWD, h.SessionID, agentID, "run_agent", msgs)
-	return loop.LastAssistantDisplay(msgs), nil
+	scPath, _ := writeSidechain(h.CWD, h.SessionID, agentID, "run_agent", msgs)
+	reply := loop.LastAssistantDisplay(msgs)
+	applySidechainMerge(parent, "run_agent", agentID, scPath, &reply)
+	return reply, nil
 }
 
 // RunFork shares the parent system string and a trimmed parent message tail (TS: forkedAgent).
@@ -177,8 +179,26 @@ func RunFork(ctx context.Context, h *Host, parent *toolctx.Context, task string,
 	if err := loop.RunTurn(ctx, cfg, routing.Inbound{Text: task}); err != nil {
 		return "", err
 	}
-	_ = writeSidechain(h.CWD, h.SessionID, agentID, "fork_context", msgs)
-	return loop.LastAssistantDisplay(msgs), nil
+	scPath, _ := writeSidechain(h.CWD, h.SessionID, agentID, "fork_context", msgs)
+	reply := loop.LastAssistantDisplay(msgs)
+	applySidechainMerge(parent, "fork_context", agentID, scPath, &reply)
+	return reply, nil
+}
+
+func applySidechainMerge(parent *toolctx.Context, kind, agentID, scPath string, reply *string) {
+	if parent == nil || reply == nil {
+		return
+	}
+	if SidechainMergeUserAfter() {
+		note := fmt.Sprintf(
+			"[Sidechain merge] kind=%s agent_id=%s\nTranscript file: %s\nThe preceding tool result carries the sub-agent's final reply.",
+			kind, agentID, scPath)
+		parent.DeferUserMessageAfterToolBatch(openai.UserMessage(note))
+		return
+	}
+	if SidechainMergeToolSuffix() && scPath != "" {
+		*reply = *reply + "\n\n---\n[sidechain] transcript file: " + scPath
+	}
 }
 
 func buildSubagentSystem(cwd, role string) string {
@@ -219,19 +239,19 @@ func newSubAgentID() string {
 	return "sub_" + hex.EncodeToString(b[:])
 }
 
-func writeSidechain(cwd, sessionID, agentID, kind string, msgs []openai.ChatCompletionMessageParamUnion) error {
+func writeSidechain(cwd, sessionID, agentID, kind string, msgs []openai.ChatCompletionMessageParamUnion) (string, error) {
 	if cwd == "" {
-		return nil
+		return "", nil
 	}
 	dir := filepath.Join(cwd, ".oneclaw", "sidechain")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return err
+		return "", err
 	}
 	name := fmt.Sprintf("%s_%s.jsonl", sanitizeID(sessionID), agentID)
 	path := filepath.Join(dir, name)
 	raw, err := loop.MarshalMessages(msgs)
 	if err != nil {
-		return err
+		return "", err
 	}
 	rec := struct {
 		SessionID  string          `json:"session_id"`
@@ -246,15 +266,17 @@ func writeSidechain(cwd, sessionID, agentID, kind string, msgs []openai.ChatComp
 	}
 	line, err := json.Marshal(&rec)
 	if err != nil {
-		return err
+		return "", err
 	}
 	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer f.Close()
-	_, err = f.Write(append(line, '\n'))
-	return err
+	if _, err = f.Write(append(line, '\n')); err != nil {
+		return "", err
+	}
+	return path, nil
 }
 
 func sanitizeID(s string) string {

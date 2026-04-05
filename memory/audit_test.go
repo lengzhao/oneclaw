@@ -14,11 +14,10 @@ func TestAppendMemoryAudit_WritesLine(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	lay := DefaultLayout(cwd, home)
-	roots := lay.WriteRoots()
 	memFile := filepath.Join(lay.Project, "topic.md")
 	_ = os.MkdirAll(filepath.Dir(memFile), 0o755)
 	content := []byte("hello audit\n")
-	AppendMemoryAudit(cwd, roots, memFile, "write_file", content)
+	AppendMemoryAudit(lay, memFile, "write_file", content)
 
 	auditPath := filepath.Join(cwd, DotDir, "audit", "memory-write.jsonl")
 	raw, err := os.ReadFile(auditPath)
@@ -41,7 +40,8 @@ func TestAppendMemoryAudit_SkipsOutsideRoots(t *testing.T) {
 	t.Setenv("ONCLAW_DISABLE_MEMORY_AUDIT", "")
 	cwd := t.TempDir()
 	out := filepath.Join(cwd, "outside.txt")
-	AppendMemoryAudit(cwd, nil, out, "write_file", []byte("x"))
+	lay := DefaultLayout(cwd, t.TempDir())
+	AppendMemoryAudit(lay, out, "write_file", []byte("x"))
 	auditPath := filepath.Join(cwd, DotDir, "audit", "memory-write.jsonl")
 	if _, err := os.Stat(auditPath); err == nil {
 		t.Fatal("expected no audit file")
@@ -55,10 +55,34 @@ func TestAppendMemoryAudit_Disabled(t *testing.T) {
 	lay := DefaultLayout(cwd, home)
 	memFile := filepath.Join(lay.Project, "t.md")
 	_ = os.MkdirAll(filepath.Dir(memFile), 0o755)
-	AppendMemoryAudit(cwd, lay.WriteRoots(), memFile, "x", []byte("y"))
+	AppendMemoryAudit(lay, memFile, "x", []byte("y"))
 	auditPath := filepath.Join(cwd, DotDir, "audit", "memory-write.jsonl")
 	if _, err := os.Stat(auditPath); err == nil {
 		t.Fatal("expected no audit file when disabled")
+	}
+}
+
+func TestAppendMemoryAudit_ProjectRulesFile(t *testing.T) {
+	t.Setenv("ONCLAW_DISABLE_MEMORY_AUDIT", "")
+	cwd := t.TempDir()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	lay := DefaultLayout(cwd, home)
+	rulesDir := filepath.Join(cwd, DotDir, "rules")
+	_ = os.MkdirAll(rulesDir, 0o755)
+	ruleFile := filepath.Join(rulesDir, "editing.md")
+	content := []byte("# rule\n")
+	AppendMemoryAudit(lay, ruleFile, "write_behavior_policy", content)
+	raw, err := os.ReadFile(filepath.Join(cwd, DotDir, "audit", "memory-write.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var rec auditRecord
+	if err := json.Unmarshal(raw, &rec); err != nil {
+		t.Fatalf("json: %v", err)
+	}
+	if rec.Path != ruleFile || rec.Source != "write_behavior_policy" {
+		t.Fatalf("record: %+v", rec)
 	}
 }
 
