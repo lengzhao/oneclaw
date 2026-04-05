@@ -59,20 +59,15 @@ func RunMaintain(ctx context.Context, layout Layout, client *openai.Client, opt 
 
 	dateStr := time.Now().Format("2006-01-02")
 	digestHeader := "## Auto-maintained (" + dateStr + ")"
-	logPath := DailyLogPath(layout.Auto, dateStr)
-	data, err := os.ReadFile(logPath)
-	if err != nil {
-		logScheduledMaintainSkip(opt.Scheduled, "daily_log_unreadable", "path", logPath, "err", err)
+	minB := maintenanceMinLogBytes()
+	maxPer := maintenanceMaxLogRead()
+	maxCombined := maintenanceMaxCombinedLogBytes()
+	logCorpus, rawIncluded := collectRecentDailyLogs(layout.Auto, dateStr, maintenanceLogDays(), minB, maxPer, maxCombined)
+	if strings.TrimSpace(logCorpus) == "" || rawIncluded < minB {
+		logScheduledMaintainSkip(opt.Scheduled, "daily_logs_too_small", "days", maintenanceLogDays(), "raw_bytes", rawIncluded, "min", minB)
 		return
 	}
-	if len(data) < maintenanceMinLogBytes() {
-		logScheduledMaintainSkip(opt.Scheduled, "daily_log_too_small", "path", logPath, "bytes", len(data), "min", maintenanceMinLogBytes())
-		return
-	}
-	excerpt := string(data)
-	if len(excerpt) > maintenanceMaxLogRead() {
-		excerpt = strings.TrimRight(utf8SafePrefix(excerpt, maintenanceMaxLogRead()), "\n") + "\n\n…"
-	}
+	excerpt := logCorpus
 
 	memPath := filepath.Join(layout.Project, entrypointName)
 	existingBytes, _ := os.ReadFile(memPath)
@@ -91,12 +86,20 @@ func RunMaintain(ctx context.Context, layout Layout, client *openai.Client, opt 
 		prev = strings.TrimRight(utf8SafePrefix(prev, 8000), "\n") + "\n…"
 	}
 
+	topicBlock := collectProjectTopicExcerpts(layout.Project, maintenanceMaxTopicFiles(), maintenanceTopicExcerptBytes(), 24_000)
+	topicSection := ""
+	if strings.TrimSpace(topicBlock) != "" {
+		topicSection = "Project topic excerpts (do not repeat facts already stated here or in MEMORY.md):\n\n" + topicBlock + "\n\n"
+	}
+
 	userPrompt := fmt.Sprintf(
-		"Project MEMORY.md excerpt (may be empty):\n```\n%s\n```\n\nToday's daily log:\n```\n%s\n```\n\n"+
+		"Project MEMORY.md excerpt (may be empty):\n```\n%s\n```\n\n%s"+
+			"Recent daily log(s) (newest section first; may span multiple days):\n```\n%s\n```\n\n"+
 			"Task: Output markdown only. First line must be exactly:\n%s\n\n"+
-			"Then 3–12 bullet lines of durable facts learned from the log (preferences, bugs, decisions). "+
-			"If nothing durable, a single line: \"- (no durable entries)\". No other sections.",
-		prev, excerpt, digestHeader,
+			"Then 3–12 bullet lines of **new** durable facts learned from the logs (preferences, bugs, decisions). "+
+			"Skip any fact that is already covered in MEMORY.md or the topic excerpts above (paraphrases count as duplicates). "+
+			"If nothing new remains, a single line: \"- (no durable entries)\". No other sections.",
+		prev, topicSection, excerpt, digestHeader,
 	)
 
 	reg := tools.NewRegistry()
@@ -128,6 +131,11 @@ func RunMaintain(ctx context.Context, layout Layout, client *openai.Client, opt 
 	}
 	if !strings.Contains(out, digestHeader) {
 		slog.Warn("memory.maintain.missing_header", "model", model, "preview", utf8SafePrefix(out, 120))
+		return
+	}
+	out = dedupeMaintenanceBullets(out, existing)
+	if maintenanceSectionOnlyNoDurable(out) {
+		slog.Info("memory.maintain.skip", "reason", "no_new_facts_after_dedupe", "date", dateStr)
 		return
 	}
 	if err := appendMaintenanceSection(layout, memPath, out); err != nil {

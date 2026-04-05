@@ -66,6 +66,17 @@ func maintenanceMaxLogRead() int {
 	return getenvIntMaint("ONCLAW_MAINTENANCE_MAX_LOG_BYTES", 24_000)
 }
 
+func maintenanceMaxCombinedLogBytes() int {
+	n := getenvIntMaint("ONCLAW_MAINTENANCE_MAX_COMBINED_LOG_BYTES", 48_000)
+	if n < 1024 {
+		n = 1024
+	}
+	if n > 256_000 {
+		n = 256_000
+	}
+	return n
+}
+
 func getenvIntMaint(key string, def int) int {
 	v := strings.TrimSpace(os.Getenv(key))
 	if v == "" {

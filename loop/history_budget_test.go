@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/lengzhao/oneclaw/budget"
 	"github.com/openai/openai-go"
 )
 
@@ -18,6 +19,28 @@ func TestTrimMessagesToBudget_dropsOldestUser(t *testing.T) {
 	}
 	if len(trimmed) < 4 {
 		t.Fatalf("expected min tail preserved, got %d", len(trimmed))
+	}
+}
+
+func TestApplyHistoryBudget_insertsCompactBoundary(t *testing.T) {
+	t.Setenv("ONCLAW_DISABLE_SEMANTIC_COMPACT", "")
+	var msgs []openai.ChatCompletionMessageParamUnion
+	for range 200 {
+		msgs = append(msgs, openai.UserMessage(strings.Repeat("z", 900)))
+	}
+	g := budget.Global{MaxPromptBytes: 120_000, MinTailMessages: 6}
+	before := len(msgs)
+	ApplyHistoryBudget(g, "system-prompt", &msgs)
+	if len(msgs) >= before {
+		t.Fatalf("expected trim/compact, before=%d after=%d", before, len(msgs))
+	}
+	u := userMessageText(msgs[0])
+	if !strings.Contains(u, "compact_boundary") {
+		previewLen := 200
+		if len(u) < previewLen {
+			previewLen = len(u)
+		}
+		t.Fatalf("expected compact_boundary in first message, got %q", u[:previewLen])
 	}
 }
 

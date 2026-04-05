@@ -1,0 +1,19 @@
+# 复制为同目录下的 live_llm.config.yaml 并填入 api_key（该文件已 gitignore）。
+# 运行：go test -tags=live_llm ./test/e2e/... -run TestLiveLLM -count=1 -v
+#
+# 字段与仓库 config 包一致，见 docs/config.md
+
+openai:
+  api_key: "YOUR_API_KEY_HERE"
+  # 可选；留空则走 SDK 默认官方地址。兼容网关时填写 base_url。
+  # base_url: "https://api.openai.com/v1"
+
+model: gpt-4o
+
+chat:
+  # stream | non_stream；与 ONCLAW_CHAT_TRANSPORT 一致
+  transport: non_stream
+
+features:
+  # false：与生产一致，回合结束后会跑 MaybeMaintain（多一次维护模型调用，更费 token / 更慢，但更真实）
+  disable_auto_maintenance: false

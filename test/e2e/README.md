@@ -4,7 +4,8 @@
 
 ## 文档
 
-- **[CASES.md](./CASES.md)**：全部 E2E 编号、前置条件、期望与 **实现状态表**（逐项实现时在此勾选）。
+- **[CASES.md](./CASES.md)**：全部 E2E 编号、前置条件、期望与 **实现状态表**（逐项实现时在此勾选）；默认 **openaistub**，供 CI 使用。
+- **[CASES_LIVE.md](./CASES_LIVE.md)**：调用 **真实 LLM** 时专验 **自学/进化**（memory 落盘、recall、维护、compact 等在真模型下的效果）；**异常与边界**仍以 Stub **[CASES.md](./CASES.md)** 为准；含「预期 vs 实际差异」记录方式；不默认进 CI。
 
 ## 测试文件
 
@@ -21,6 +22,14 @@
 | `stub_memory_bundle_test.go` | E2E-20～22、52（`memory.BuildTurn`） |
 | `stub_transcript_test.go` | E2E-60、61 |
 | `stub_postturn_test.go` | E2E-50、51 |
+| `stub_maintain_test.go` | E2E-92 |
+| `stub_maintain_pipeline_e2e_test.go` | E2E-101、102（多日 log / topic / 维护去重） |
+| `stub_semantic_compact_e2e_test.go` | E2E-103、104（全局预算语义 compact） |
+| `stub_audit_test.go` | E2E-93～95 |
+| `stub_maintain_cli_test.go` | E2E-96、97 |
+| `stub_turn_log_test.go` | E2E-98～100 |
+
+`../openaistub` 会记录每次 `POST /v1/chat/completions` 的 JSON 体（`ChatRequestBodies` / `ChatRequestUserTextConcat`），供 E2E-101 等断言 prompt。
 
 ## 运行
 
@@ -48,3 +57,9 @@ go test ./test/e2e/... -run TestE2E_StubTextReply -count=1 -v
 5. daily log / transcript / 其它：E2E-50～E2E-61  
 
 每完成一条，更新 **CASES.md** 中的状态列与测试函数名。
+
+## 真实 LLM（opt-in）
+
+- 配置：复制 `live_llm.config.example.yaml` → `live_llm.config.yaml`，填写 `openai.api_key`（后者已 `.gitignore`）。
+- 运行：`go test -tags=live_llm ./test/e2e/... -run TestLiveLLM -count=1 -v`
+- 说明：见 **[CASES_LIVE.md](./CASES_LIVE.md)**；无 `live_llm.config.yaml` 时测试会 `Skip`。

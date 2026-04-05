@@ -3,6 +3,7 @@ package loop
 import (
 	"encoding/json"
 	"log/slog"
+	"strings"
 
 	"github.com/lengzhao/oneclaw/budget"
 	"github.com/openai/openai-go"
@@ -79,11 +80,40 @@ func dropOldestPrefix(msgs []openai.ChatCompletionMessageParamUnion) ([]openai.C
 }
 
 // ApplyHistoryBudget re-slices *msgs in place when a budget is enabled.
+// When semantic compact is enabled (default), trimming also prepends a user message with a heuristic
+// summary and a compact_boundary marker so the model retains gist of dropped turns.
 func ApplyHistoryBudget(g budget.Global, system string, msgs *[]openai.ChatCompletionMessageParamUnion) {
 	if msgs == nil || !g.Enabled() {
 		return
 	}
 	limit := g.HistoryByteBudget(len(system))
-	trimmed := TrimMessagesToBudget(*msgs, limit, g.MinTailMessages)
+	full := *msgs
+	if semanticCompactEnabled() && len(full) > g.MinTailMessages && limit > 12_000 {
+		summaryCap := compactSummaryMaxBytes(limit)
+		reserve := summaryCap + 768
+		effective := limit - reserve
+		if effective > 4096 {
+			trimmed := TrimMessagesToBudget(full, effective, g.MinTailMessages)
+			if len(trimmed) < len(full) {
+				dropped := full[:len(full)-len(trimmed)]
+				summary := buildCompactSummary(dropped, summaryCap)
+				if strings.TrimSpace(summary) != "" {
+					compactMsg := openai.UserMessage(compactEnvelope(summary))
+					candidate := append([]openai.ChatCompletionMessageParamUnion{compactMsg}, trimmed...)
+					for len(summary) > 64 && totalMessagesBytes(candidate) > limit {
+						summary = utf8TrimToBytes(summary, len(summary)*4/5)
+						compactMsg = openai.UserMessage(compactEnvelope(summary))
+						candidate = append([]openai.ChatCompletionMessageParamUnion{compactMsg}, trimmed...)
+					}
+					if totalMessagesBytes(candidate) <= limit {
+						slog.Info("loop.budget.semantic_compact", "dropped_messages", len(dropped), "kept", len(trimmed))
+						*msgs = candidate
+						return
+					}
+				}
+			}
+		}
+	}
+	trimmed := TrimMessagesToBudget(full, limit, g.MinTailMessages)
 	*msgs = trimmed
 }

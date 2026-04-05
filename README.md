@@ -69,7 +69,7 @@ go run ./cmd/maintain --cwd . -once
 与 [`docs/todo.md`](docs/todo.md) 阶段对应：
 
 - **阶段 A**：主循环、工具、CLI、多轮 transcript — 已完成。
-- **阶段 B**：memory 全链路、在线写入、回合后维护 + 定时维护入口 — 主干已完成；topic 合并与强去重等待续作。
+- **阶段 B**：memory 全链路、在线写入、回合后维护 + 定时维护入口 — 主干已完成；维护提示已含多日 daily log 与 project topic 摘录，并对写入 `MEMORY.md` 的 bullet 做强去重。
 - **阶段 C**：子 Agent、`run_agent` / `fork_context`、侧链 transcript — 主干已完成；侧链结论合入主会话为可选后续。
 - **阶段 D**：维护调度与变更审计 — 已接；**向量 recall** 为可选插件（文件仍为真源）。
 

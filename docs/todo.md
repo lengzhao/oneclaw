@@ -26,10 +26,10 @@
 ### P0
 
 1. `[x]` **统一 config 模块（开发/生产同一套）** — 用 `config` 包与**单一加载规则**覆盖开发与线上：默认路径（如项目下 `.oneclaw/config` 或约定文件名）、可选 `--config`、示例/模板与本地覆盖与现在用 `env` 一样顺手，**不削弱开发体验**。敏感项以配置文件为**主真源**，不把「必须 export 进进程 `env`」当作唯一方式，避免自主化后子进程/脚本继承 `env` 导致 API key 泄漏。合并/覆盖顺序（显式路径、项目、用户级等）见 [`config.md`](config.md)。
-2. `[ ]` **模型化维护管道收口** — 读多段 log、topic 合并、强去重（阶段 B7 / 进化闭环未竟部分）。
-3. `[ ]` **语义 compact（最小可用）** — 摘要 + `compact_boundary`（或等价）+ 保留最近 K 轮；不仅 `TrimMessagesToBudget` 丢头。
-4. `[ ]` **受控并行 tool 调用** — 只读可并行，写仍串行；`ParallelToolCalls` 或注册表声明可并行工具集。
-5. `[ ]` **Glob / 列表工具** — `glob` 或 `list_dir`，与 `pathutil` 一致。
+2. `[x]` **模型化维护管道收口** — 读多段 log、topic 合并、强去重（阶段 B7 / 进化闭环未竟部分）。
+3. `[x]` **语义 compact（最小可用）** — 摘要 + `compact_boundary`（或等价）+ 保留最近 K 轮；不仅 `TrimMessagesToBudget` 丢头。
+4. `[x]` **受控并行 tool 调用** — 只读可并行，写仍串行；`ParallelToolCalls` 或注册表声明可并行工具集。
+5. `[x]` **Glob / 列表工具** — `glob` 或 `list_dir`，与 `pathutil` 一致。
 6. `[x]` **全局上下文预算** — `budget` + `loop` 裁剪 + `ApplyTurnBudget`（JSON 字节估算）。
 
 ### P1
@@ -100,7 +100,7 @@
 - [x] **B3** 发现层：自 cwd 向上查找 `AGENT.md`、`.oneclaw/rules/*.md`、memory 根
 - [x] **B5** 注入与 recall：system 前缀拼装；recall → attachment；surfaced 字节上限、路径去重
 - [x] **B6** 在线更新：工具可写 topic、`MEMORY.md`、daily log
-- [x] **B7** extract / dream：**主干已接** — daily log + **默认开启**的回合后维护 `memory.MaybeMaintain`；**定时**入口 `go run ./cmd/maintain`（默认按 `ONCLAW_MAINTAIN_INTERVAL` 常驻循环，默认 1h；cron 用 `-once` 或间隔 `0`）。维护模型可选：`ONCLAW_MAINTENANCE_MODEL` / `ONCLAW_MAINTENANCE_SCHEDULED_MODEL`（未设则回退主会话模型）。写 **project `MEMORY.md`** `## Auto-maintained (日期)`，按日去重。尚未做：多文件 topic 合并、强去重
+- [x] **B7** extract / dream：**主干已接** — daily log + **默认开启**的回合后维护 `memory.MaybeMaintain`；**定时**入口 `go run ./cmd/maintain`（默认按 `ONCLAW_MAINTAIN_INTERVAL` 常驻循环，默认 1h；cron 用 `-once` 或间隔 `0`）。维护模型可选：`ONCLAW_MAINTENANCE_MODEL` / `ONCLAW_MAINTENANCE_SCHEDULED_MODEL`（未设则回退主会话模型）。写 **project `MEMORY.md`** `## Auto-maintained (日期)`，按日去重；**已做**：多日 log 拼接（`ONCLAW_MAINTENANCE_LOG_DAYS` 等）、project 下 topic 摘录进提示、对模型输出做 bullet 级强去重
 
 ---
 
@@ -132,8 +132,8 @@
 | 优先级 | 项 | 说明 |
 |--------|-----|------|
 | P0 | **统一 config 模块** | [x] 见 backlog #1、[`config.md`](config.md) |
-| P0 | **模型化维护管道** | [x] 回合后 `MaybeMaintain`；[x] 定时 `cmd/maintain`；[ ] 多段 log、topic、强去重（backlog #2） |
-| P0 | **语义 compact（最小可用）** | [ ] 见 backlog #3 |
+| P0 | **模型化维护管道** | [x] 回合后 `MaybeMaintain`；[x] 定时 `cmd/maintain`；[x] 多段 log、topic 摘录、输出强去重（backlog #2） |
+| P0 | **语义 compact（最小可用）** | [x] 见 backlog #3（`ApplyHistoryBudget` + `compact_boundary` 摘要 + 尾窗 `MinTailMessages`） |
 | P0 | **受控并行 tool 调用** | [ ] 见 backlog #4 |
 | P0 | **Glob / 列表工具** | [ ] 见 backlog #5 |
 | P0 | **全局上下文预算** | [x] 见 backlog #6 |
