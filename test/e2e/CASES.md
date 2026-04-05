@@ -61,6 +61,8 @@
 | E2E-105 | Skills：首轮请求 system 含 `## Skills` 与技能名/描述 | [x] | `TestE2E_105_SkillsIndexInSystemPrompt` · `stub_skills_e2e_test.go` |
 | E2E-106 | `invoke_skill` 返回正文 + `skills-recent.json` 记录 | [x] | `TestE2E_106_InvokeSkillToolAndRecentFile` · `stub_skills_e2e_test.go` |
 | E2E-107 | `ONCLAW_DISABLE_SKILLS=1` 时 system 无 Skills 段 | [x] | `TestE2E_107_SkillsDisabledNoSystemSection` · `stub_skills_e2e_test.go` |
+| E2E-108 | 存在 `tasks.json` 时 system 含 Task list 摘要 | [x] | `TestE2E_108_TasksBlockInSystemPrompt` · `stub_tasks_e2e_test.go` |
+| E2E-109 | `task_create` / `task_update` 落盘；`ONCLAW_DISABLE_TASKS=1` 关闭 system 任务段 | [x] | `TestE2E_109_TaskToolsWriteFileAndDisableHidesBlock` · `stub_tasks_e2e_test.go` |
 
 ---
 

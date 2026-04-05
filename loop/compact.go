@@ -2,14 +2,18 @@ package loop
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"strings"
 	"time"
 	"unicode/utf8"
 
-	"github.com/lengzhao/oneclaw/message"
+	"github.com/lengzhao/oneclaw/prompts"
 	"github.com/openai/openai-go"
 )
+
+// compactBoundaryKind is the marker string embedded in compact envelopes (persisted transcript).
+const compactBoundaryKind = "compact_boundary"
 
 func semanticCompactEnabled() bool {
 	v := strings.TrimSpace(os.Getenv("ONCLAW_DISABLE_SEMANTIC_COMPACT"))
@@ -37,18 +41,28 @@ func compactSummaryMaxBytes(limit int) int {
 
 func compactEnvelope(summary string) string {
 	ts := time.Now().UTC().Format(time.RFC3339)
-	var b strings.Builder
-	b.WriteString("[oneclaw:")
-	b.WriteString(string(message.KindCompactBoundary))
-	b.WriteString(" ts=")
-	b.WriteString(ts)
-	b.WriteString("]\n")
-	b.WriteString("Earlier conversation (omitted from context for byte budget). Heuristic recap — verify with tools if needed:\n\n")
-	b.WriteString(strings.TrimSpace(summary))
-	b.WriteString("\n\n[/oneclaw:")
-	b.WriteString(string(message.KindCompactBoundary))
-	b.WriteString("]\n")
-	return b.String()
+	summary = strings.TrimSpace(summary)
+	s, err := prompts.Render(prompts.NameCompactEnvelope, struct {
+		Kind      string
+		Timestamp string
+		Summary   string
+	}{
+		Kind:      compactBoundaryKind,
+		Timestamp: ts,
+		Summary:   summary,
+	})
+	if err != nil {
+		slog.Warn("loop.prompts.compact_envelope", "err", err)
+		return fallbackCompactEnvelope(ts, summary)
+	}
+	return s
+}
+
+func fallbackCompactEnvelope(ts, summary string) string {
+	k := compactBoundaryKind
+	return "[oneclaw:" + k + " ts=" + ts + "]\n" +
+		"Earlier conversation (omitted from context for byte budget). Heuristic recap — verify with tools if needed:\n\n" +
+		summary + "\n\n[/oneclaw:" + k + "]\n"
 }
 
 func userMessageText(m openai.ChatCompletionMessageParamUnion) string {

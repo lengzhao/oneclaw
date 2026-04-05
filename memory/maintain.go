@@ -1,15 +1,38 @@
 package memory
 
 import (
+	"log/slog"
 	"os"
 	"strconv"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/lengzhao/oneclaw/prompts"
 )
 
-func maintenanceSystemPrompt() string {
-	return `You are a silent memory indexer for a coding agent. Follow the user format exactly.
-Output only the requested markdown section (header + bullets). No preamble or explanation.`
+// MaintainPromptData fills prompts/templates/maintenance_system.tmpl for memory distillation.
+type MaintainPromptData struct {
+	CWD        string // project working directory
+	Today      string // YYYY-MM-DD, same as digest day
+	MemoryPath string // path to project MEMORY.md
+	RunTS      string // RFC3339 UTC, wall time of this maintain pass
+}
+
+func maintenanceSystemPrompt(cwd, memoryPath, today, runTS string) string {
+	d := MaintainPromptData{CWD: cwd, Today: today, MemoryPath: memoryPath, RunTS: runTS}
+	s, err := prompts.Render(prompts.NameMaintenanceSystem, d)
+	if err != nil {
+		slog.Error("memory.prompts.maintenance_system", "err", err)
+		return fallbackMaintenanceSystemPrompt(cwd, memoryPath, today, runTS)
+	}
+	return s
+}
+
+func fallbackMaintenanceSystemPrompt(cwd, memoryPath, today, runTS string) string {
+	return "You are a silent memory indexer for a coding agent. Scope: project `" + cwd + "`, calendar date " + today + ", target file `" + memoryPath + "`.\n" +
+		"Maintenance run started (UTC): " + runTS + ".\n" +
+		"Follow the user message format exactly.\n" +
+		"Output only the requested markdown section (header + bullets). No preamble or explanation.\n"
 }
 
 func appendMaintenanceSection(layout Layout, memPath, section string) error {

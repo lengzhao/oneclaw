@@ -60,12 +60,12 @@ func lineNameOnly(s Skill) string {
 	return "- " + s.Name
 }
 
-// FormatIndex builds the skill listing under a byte budget (UTF-8 byte length, not runes).
-func FormatIndex(ordered []Skill, maxBytes int) string {
+// FormatIndexLines returns one bullet line per skill under maxBytes (same picking rules as FormatIndex).
+func FormatIndexLines(ordered []Skill, maxBytes int) []string {
 	if maxBytes <= 0 || len(ordered) == 0 {
-		return ""
+		return nil
 	}
-	var b strings.Builder
+	var lines []string
 	used := 0
 	for _, s := range ordered {
 		full := lineFull(s)
@@ -78,38 +78,51 @@ func FormatIndex(ordered []Skill, maxBytes int) string {
 		} else {
 			break
 		}
-		if b.Len() > 0 {
-			_ = b.WriteByte('\n')
+		if len(lines) > 0 {
 			used++
 		}
-		b.WriteString(pick)
 		used += len(pick)
+		lines = append(lines, pick)
 	}
-	return b.String()
+	return lines
 }
 
-// SystemBlock returns a markdown section for the system prompt, or empty if disabled / no skills.
-func SystemBlock(cwd, home string, maxBytes int) string {
-	if strings.TrimSpace(os.Getenv("ONCLAW_DISABLE_SKILLS")) == "1" {
+// FormatIndex builds the skill listing under a byte budget (UTF-8 byte length, not runes).
+func FormatIndex(ordered []Skill, maxBytes int) string {
+	lines := FormatIndexLines(ordered, maxBytes)
+	if len(lines) == 0 {
 		return ""
+	}
+	return strings.Join(lines, "\n")
+}
+
+// PromptSkillLines returns skill bullet lines for system prompts (empty if disabled or no skills).
+func PromptSkillLines(cwd, home string, maxBytes int) []string {
+	if strings.TrimSpace(os.Getenv("ONCLAW_DISABLE_SKILLS")) == "1" {
+		return nil
 	}
 	all := LoadAll(cwd, home)
 	if len(all) == 0 {
-		return ""
+		return nil
 	}
 	rec, err := LoadRecent(RecentFilePath(cwd))
 	if err != nil {
 		rec = RecentFile{Version: 1}
 	}
 	ordered := OrderSkills(all, rec.NamesInOrder())
-	body := FormatIndex(ordered, maxBytes)
-	if body == "" {
+	return FormatIndexLines(ordered, maxBytes)
+}
+
+// SystemBlock returns a markdown section for the system prompt, or empty if disabled / no skills.
+func SystemBlock(cwd, home string, maxBytes int) string {
+	lines := PromptSkillLines(cwd, home, maxBytes)
+	if len(lines) == 0 {
 		return ""
 	}
 	var sb strings.Builder
 	sb.WriteString("\n## Skills\n\n")
 	sb.WriteString("When a task matches a skill, call **invoke_skill** with that skill's name to load its full instructions (body of SKILL.md).\n\n")
-	sb.WriteString(body)
+	sb.WriteString(strings.Join(lines, "\n"))
 	sb.WriteByte('\n')
 	return sb.String()
 }

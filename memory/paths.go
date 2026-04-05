@@ -10,6 +10,12 @@ import (
 	"strings"
 )
 
+// DotDir is the per-project configuration directory for oneclaw.
+const DotDir = ".oneclaw"
+
+// AgentInstructionsFile is the repo/user instructions entry filename.
+const AgentInstructionsFile = "AGENT.md"
+
 const entrypointName = "MEMORY.md"
 
 // expandTilde replaces a leading "~/" or "~\" (and bare "~") with home. Other paths are unchanged.

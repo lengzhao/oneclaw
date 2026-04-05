@@ -14,5 +14,7 @@ func DefaultRegistry() *tools.Registry {
 	r.MustRegister(RunAgentTool{})
 	r.MustRegister(ForkContextTool{})
 	r.MustRegister(InvokeSkillTool{})
+	r.MustRegister(TaskCreateTool{})
+	r.MustRegister(TaskUpdateTool{})
 	return r
 }

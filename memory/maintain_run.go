@@ -57,6 +57,7 @@ func RunMaintain(ctx context.Context, layout Layout, client *openai.Client, opt 
 		defer cancel()
 	}
 
+	runTS := time.Now().UTC().Format(time.RFC3339)
 	dateStr := time.Now().Format("2006-01-02")
 	digestHeader := "## Auto-maintained (" + dateStr + ")"
 	minB := maintenanceMinLogBytes()
@@ -111,7 +112,7 @@ func RunMaintain(ctx context.Context, layout Layout, client *openai.Client, opt 
 	cfg := loop.Config{
 		Client:      client,
 		Model:       model,
-		System:      maintenanceSystemPrompt(),
+		System:      maintenanceSystemPrompt(layout.CWD, memPath, dateStr, runTS),
 		MaxTokens:   mt,
 		MaxSteps:    1,
 		Messages:    &msgs,

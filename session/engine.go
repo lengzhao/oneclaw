@@ -15,7 +15,6 @@ import (
 	"github.com/lengzhao/oneclaw/loop"
 	"github.com/lengzhao/oneclaw/memory"
 	"github.com/lengzhao/oneclaw/routing"
-	"github.com/lengzhao/oneclaw/skills"
 	"github.com/lengzhao/oneclaw/subagent"
 	"github.com/lengzhao/oneclaw/toolctx"
 	"github.com/lengzhao/oneclaw/tools"
@@ -25,8 +24,10 @@ import (
 // Engine holds conversation state and configuration for one chat session.
 type Engine struct {
 	Client     openai.Client
-	Model      string
-	System     string
+	Model string
+	// System is optional text appended at the end of the main-thread system prompt (see prompts/templates/main_thread_system.tmpl).
+	// Identity and section order live in that template; leave empty if you do not need extra constraints.
+	System string
 	MaxTokens  int64
 	MaxSteps   int
 	Messages   []openai.ChatCompletionMessageParamUnion
@@ -57,7 +58,7 @@ func NewEngine(cwd string, reg *tools.Registry) *Engine {
 		Model:     string(openai.ChatModelGPT4o),
 		MaxTokens: 8192,
 		MaxSteps:  32,
-		System:    defaultSystem,
+		System:    "",
 		Registry:  reg,
 		CWD:       cwd,
 		SessionID: newSessionID(),
@@ -67,9 +68,6 @@ func NewEngine(cwd string, reg *tools.Registry) *Engine {
 	}
 	return e
 }
-
-const defaultSystem = `You are Oneclaw, a coding agent. Be concise. Use tools when they help answer accurately.
-Working directory for file tools is the session cwd. Prefer read_file before editing.`
 
 // SubmitUser runs one user turn (may involve multiple internal model calls).
 // in.Text is the user message appended to the conversation; other fields are for routing/registry (and future use).
@@ -106,13 +104,7 @@ func (e *Engine) SubmitUser(ctx context.Context, in routing.Inbound) error {
 	if sink != nil {
 		em = routing.NewEmitter(sink, e.SessionID, "")
 	}
-	system := e.System
-	if memOK {
-		system += bundle.SystemSuffix
-	}
-	if herr == nil {
-		system += skills.SystemBlock(e.CWD, home, bg.SkillIndexMaxBytes())
-	}
+	system := e.buildTurnSystem(memOK, bundle, bg, home, herr)
 	cat := subagent.LoadCatalog(e.CWD)
 	tctx.Subagent = &subRunner{eng: e, turnSystem: system, catalog: cat, bg: bg}
 
