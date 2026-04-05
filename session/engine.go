@@ -29,6 +29,9 @@ type Engine struct {
 	MaxTokens  int64
 	MaxSteps   int
 	Messages   []openai.ChatCompletionMessageParamUnion
+	// Transcript is persisted user + assistant pairs: user is appended before the model loop (and
+	// saved when TranscriptPath is set); assistant is appended after a successful RunTurn.
+	Transcript []openai.ChatCompletionMessageParamUnion
 	Registry   *tools.Registry
 	CWD        string
 	CanUseTool tools.CanUseTool
@@ -39,6 +42,8 @@ type Engine struct {
 	TranscriptPath string
 	// RecallState tracks memory recall surfacing across turns (phase B).
 	RecallState memory.RecallState
+	// ChatTransport overrides ONCLAW_CHAT_TRANSPORT when non-empty (from unified config).
+	ChatTransport string
 }
 
 // NewEngine builds an engine with sensible defaults.
@@ -132,9 +137,20 @@ func (e *Engine) SubmitUser(ctx context.Context, in routing.Inbound) error {
 		MemoryAgentMd: bundle.AgentMdBlock,
 		MemoryRecall:  bundle.RecallBlock,
 		Budget:        bg,
+		ChatTransport: e.ChatTransport,
 		ToolTrace:     traceSink,
 		OnToolLogged:  onToolLogged,
+		SlimTranscript: func(assistantText string) {
+			e.Transcript = append(e.Transcript, openai.AssistantMessage(assistantText))
+		},
 	}
+
+	// Claude Code–style: record user turn before query loop so crash/interrupt still leaves the request on disk.
+	e.Transcript = append(e.Transcript, openai.UserMessage(in.Text))
+	if err := e.SaveTranscript(); err != nil {
+		slog.Error("session.transcript_save_user", "err", err)
+	}
+
 	err := loop.RunTurn(ctx, cfg, in)
 	if err != nil {
 		return err
@@ -194,16 +210,17 @@ func (e *Engine) SaveTranscriptTo(path string) error {
 
 // MarshalTranscript returns JSON suitable for disk persistence.
 func (e *Engine) MarshalTranscript() ([]byte, error) {
-	return loop.MarshalMessages(e.Messages)
+	return loop.MarshalMessages(e.Transcript)
 }
 
-// LoadTranscript replaces in-memory messages.
+// LoadTranscript restores Transcript and seeds Messages from it (same as a fresh session after restart).
 func (e *Engine) LoadTranscript(data []byte) error {
 	msgs, err := loop.UnmarshalMessages(data)
 	if err != nil {
 		return err
 	}
-	e.Messages = msgs
+	e.Transcript = msgs
+	e.Messages = append([]openai.ChatCompletionMessageParamUnion(nil), msgs...)
 	slog.Info("transcript loaded", "messages", len(msgs))
 	return nil
 }

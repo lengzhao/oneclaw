@@ -17,7 +17,7 @@ func TestE2E_60_TranscriptRoundTrip(t *testing.T) {
 	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "hi"}); err != nil {
 		t.Fatal(err)
 	}
-	nBefore := len(e.Messages)
+	nBefore := len(e.Transcript)
 	data, err := e.MarshalTranscript()
 	if err != nil {
 		t.Fatal(err)
@@ -26,8 +26,8 @@ func TestE2E_60_TranscriptRoundTrip(t *testing.T) {
 	if err := e2.LoadTranscript(data); err != nil {
 		t.Fatal(err)
 	}
-	if len(e2.Messages) != nBefore {
-		t.Fatalf("want %d msgs, got %d", nBefore, len(e2.Messages))
+	if len(e2.Transcript) != nBefore || len(e2.Messages) != nBefore {
+		t.Fatalf("want %d transcript/messages, got transcript=%d messages=%d", nBefore, len(e2.Transcript), len(e2.Messages))
 	}
 }
 

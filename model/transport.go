@@ -22,12 +22,26 @@ const (
 
 func chatTransportFromEnv() chatTransport {
 	s := strings.ToLower(strings.TrimSpace(os.Getenv("ONCLAW_CHAT_TRANSPORT")))
-	switch s {
+	return parseChatTransportString(s)
+}
+
+func parseChatTransportString(s string) chatTransport {
+	switch strings.ToLower(strings.TrimSpace(s)) {
 	case "stream":
 		return transportStream
 	case "non_stream", "nonstream", "json", "rest":
 		return transportNonStream
+	case "auto", "":
+		return transportAuto
 	default:
 		return transportAuto
 	}
+}
+
+// resolveTransport uses hint when non-empty, otherwise ONCLAW_CHAT_TRANSPORT.
+func resolveTransport(hint string) chatTransport {
+	if strings.TrimSpace(hint) != "" {
+		return parseChatTransportString(hint)
+	}
+	return chatTransportFromEnv()
 }

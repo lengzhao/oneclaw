@@ -9,36 +9,19 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	_ "github.com/lengzhao/conf/autoload"
 
+	"github.com/lengzhao/oneclaw/config"
 	"github.com/lengzhao/oneclaw/logx"
 	"github.com/lengzhao/oneclaw/memory"
 	"github.com/openai/openai-go"
 )
 
-// defaultMaintainLoopInterval returns the sleep between passes when no -once.
-// Env ONCLAW_MAINTAIN_INTERVAL: Go duration (e.g. 30m, 1h). Empty → 1h. 0 / off / false → 0 (run once unless -interval overrides).
-func defaultMaintainLoopInterval() time.Duration {
-	v := strings.TrimSpace(os.Getenv("ONCLAW_MAINTAIN_INTERVAL"))
-	if v == "" {
-		return time.Hour
-	}
-	if v == "0" || strings.EqualFold(v, "off") || strings.EqualFold(v, "false") {
-		return 0
-	}
-	d, err := time.ParseDuration(v)
-	if err != nil || d < 0 {
-		slog.Warn("maintain.invalid_interval_env", "ONCLAW_MAINTAIN_INTERVAL", v, "fallback", "1h")
-		return time.Hour
-	}
-	return d
-}
-
 func main() {
 	cwd := flag.String("cwd", ".", "project working directory (memory layout root)")
+	configPath := flag.String("config", "", "path to extra YAML layer (merged after user and project config)")
 	logLevel := flag.String("log-level", "", "debug|info|warn|error (overrides ONCLAW_LOG_LEVEL)")
 	logFormat := flag.String("log-format", "", "text|json (overrides ONCLAW_LOG_FORMAT)")
 	once := flag.Bool("once", false, "run a single distill pass and exit (overrides interval; use for cron)")
@@ -55,13 +38,6 @@ func main() {
 	})
 	flag.Parse()
 
-	logx.Init(*logLevel, *logFormat)
-
-	if os.Getenv("OPENAI_API_KEY") == "" {
-		slog.Error("set OPENAI_API_KEY")
-		os.Exit(1)
-	}
-
 	absCwd, err := filepath.Abs(*cwd)
 	if err != nil {
 		slog.Error("cwd abs", "err", err)
@@ -73,10 +49,23 @@ func main() {
 		os.Exit(1)
 	}
 
+	cfg, err := config.Load(config.LoadOptions{Cwd: absCwd, Home: home, ExplicitPath: *configPath})
+	if err != nil {
+		slog.Error("config.load", "err", err)
+		os.Exit(1)
+	}
+	config.ApplyEnvDefaults(cfg)
+	logx.Init(cfg.LogLevel(*logLevel), cfg.LogFormat(*logFormat))
+
+	if !cfg.HasAPIKey() {
+		slog.Error("missing API key: set openai.api_key in config or OPENAI_API_KEY")
+		os.Exit(1)
+	}
+
 	layout := memory.DefaultLayout(absCwd, home)
-	client := openai.NewClient()
+	client := openai.NewClient(cfg.OpenAIOptions()...)
 	mainModel := string(openai.ChatModelGPT4o)
-	if m := strings.TrimSpace(os.Getenv("ONCLAW_MODEL")); m != "" {
+	if m := cfg.ChatModel(); m != "" {
 		mainModel = m
 	}
 
@@ -85,7 +74,7 @@ func main() {
 		MaxOutputTokens: 8192,
 		Scheduled:       true,
 	}
-	loopInterval := defaultMaintainLoopInterval()
+	loopInterval := cfg.MaintainLoopInterval()
 	if intervalExplicit {
 		loopInterval = intervalFlag
 	}

@@ -34,6 +34,7 @@ func (r *subRunner) host() *subagent.Host {
 		ParentMessages:       &r.eng.Messages,
 		MaxInheritedMessages: r.bg.InheritedMessageCap(),
 		HistoryBudget:        r.bg,
+		ChatTransport:        r.eng.ChatTransport,
 	}
 }
 

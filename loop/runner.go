@@ -36,10 +36,16 @@ type Config struct {
 	MemoryRecall  string
 	// Budget trims transcript before each model call when Enabled (from budget.FromEnv).
 	Budget budget.Global
+	// ChatTransport overrides ONCLAW_CHAT_TRANSPORT when non-empty (e.g. from config file).
+	ChatTransport string
 	// ToolTrace, when non-nil, records slim per-tool rows for this RunTurn only (not sent to the model).
 	ToolTrace *ToolTraceSink
 	// OnToolLogged, when non-nil, called synchronously after each tool completes (e.g. append-only JSONL).
 	OnToolLogged func(ToolTraceEntry)
+	// SlimTranscript, if non-nil, called once when RunTurn finishes successfully with the final
+	// assistant-visible reply (after any tool rounds). User turn is recorded before the model loop
+	// by the caller (Claude Code–style: recordTranscript before query). Not called on error or abort.
+	SlimTranscript func(assistantText string)
 }
 
 func logOutboundEmit(op string, err error) {
@@ -71,6 +77,12 @@ func RunTurn(ctx context.Context, cfg Config, in routing.Inbound) (err error) {
 	}()
 
 	msgs := cfg.Messages
+	recordSlimTranscript := func() {
+		if cfg.SlimTranscript == nil {
+			return
+		}
+		cfg.SlimTranscript(LastAssistantDisplay(*msgs))
+	}
 	if s := strings.TrimSpace(cfg.MemoryAgentMd); s != "" {
 		*msgs = append(*msgs, openai.UserMessage(s))
 	}
@@ -105,7 +117,7 @@ func RunTurn(ctx context.Context, cfg Config, in routing.Inbound) (err error) {
 			"max_completion_tokens", cfg.MaxTokens,
 		)
 		stepStart := time.Now()
-		completion, err := model.Complete(ctx, cfg.Client, params)
+		completion, err := model.CompleteWithTransport(ctx, cfg.Client, params, cfg.ChatTransport)
 		if err != nil {
 			slog.Error("loop.model.error", "step", step, "model", cfg.Model, "duration_ms", time.Since(stepStart).Milliseconds(), "err", err)
 			return fmt.Errorf("model step %d: %w", step, err)
@@ -131,11 +143,13 @@ func RunTurn(ctx context.Context, cfg Config, in routing.Inbound) (err error) {
 		)
 
 		if choice.FinishReason != "tool_calls" {
+			recordSlimTranscript()
 			return nil
 		}
 
 		calls := collectToolCalls(choice.Message)
 		if len(calls) == 0 {
+			recordSlimTranscript()
 			return nil
 		}
 		slog.Info("loop.tools.batch", "step", step, "n", len(calls), "names", toolCallNames(calls))

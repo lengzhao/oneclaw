@@ -36,6 +36,8 @@ type Host struct {
 	MaxInheritedMessages int
 	// HistoryBudget trims nested transcript each step (usually same as main session).
 	HistoryBudget budget.Global
+	// ChatTransport overrides ONCLAW_CHAT_TRANSPORT when non-empty.
+	ChatTransport string
 }
 
 func (h *Host) maxInherited() int {
@@ -109,6 +111,7 @@ func RunAgent(ctx context.Context, h *Host, parent *toolctx.Context, agentType, 
 		MemoryAgentMd: "",
 		MemoryRecall:  "",
 		Budget:        h.HistoryBudget,
+		ChatTransport: h.ChatTransport,
 	}
 	if err := loop.RunTurn(ctx, cfg, routing.Inbound{Text: task}); err != nil {
 		return "", err
@@ -158,17 +161,18 @@ func RunFork(ctx context.Context, h *Host, parent *toolctx.Context, task string,
 	}
 
 	cfg := loop.Config{
-		Client:      h.Client,
-		Model:       h.Model,
-		System:      h.ParentSystem,
-		MaxTokens:   h.MaxTokens,
-		MaxSteps:    h.MaxSteps,
-		Messages:    &msgs,
-		Registry:    reg,
-		ToolContext: child,
-		CanUseTool:  wrapConservative(h.CanUseTool),
-		Outbound:    nil,
-		Budget:      h.HistoryBudget,
+		Client:        h.Client,
+		Model:         h.Model,
+		System:        h.ParentSystem,
+		MaxTokens:     h.MaxTokens,
+		MaxSteps:      h.MaxSteps,
+		Messages:      &msgs,
+		Registry:      reg,
+		ToolContext:   child,
+		CanUseTool:    wrapConservative(h.CanUseTool),
+		Outbound:      nil,
+		Budget:        h.HistoryBudget,
+		ChatTransport: h.ChatTransport,
 	}
 	if err := loop.RunTurn(ctx, cfg, routing.Inbound{Text: task}); err != nil {
 		return "", err

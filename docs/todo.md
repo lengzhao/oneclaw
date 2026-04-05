@@ -6,11 +6,73 @@
 
 ---
 
+## 优先级原则（全文统一口径）
+
+| 层级 | 含义 | 排序依据 |
+|------|------|----------|
+| **P0** | 安全基线、自我进化闭环缺口、长会话可用性、与 Claude Code 对齐的核心工具/吞吐 | 缺了会阻碍「可信自主运行」或「记忆闭环」或「长对话不崩」 |
+| **P1** | 多厂商/多渠道扩展、**Skills**、策略沉淀、子 Agent 产品化、任务可恢复 | 显著扩展部署面与协作体验，但不阻塞单机 CLI 闭环 |
+| **P2** | 入口体验细化、可选 recall、预算精细化、多实体协作 | 锦上添花或强依赖产品形态 |
+| **后置** | MCP、compact 高级形态、全量遥测 | 刻意控制范围，避免早期复杂度爆炸 |
+
+下方 **统一 backlog** 为排序后的单一真相；其后各节保留阶段验收与历史勾选，便于对照实现。
+
+---
+
+## 统一 backlog（按执行顺序）
+
+> 同层内自上而下；已完成项标 `[x]`，仅作文档锚点。
+
+### P0
+
+1. `[x]` **统一 config 模块（开发/生产同一套）** — 用 `config` 包与**单一加载规则**覆盖开发与线上：默认路径（如项目下 `.oneclaw/config` 或约定文件名）、可选 `--config`、示例/模板与本地覆盖与现在用 `env` 一样顺手，**不削弱开发体验**。敏感项以配置文件为**主真源**，不把「必须 export 进进程 `env`」当作唯一方式，避免自主化后子进程/脚本继承 `env` 导致 API key 泄漏。合并/覆盖顺序（显式路径、项目、用户级等）见 [`config.md`](config.md)。
+2. `[ ]` **模型化维护管道收口** — 读多段 log、topic 合并、强去重（阶段 B7 / 进化闭环未竟部分）。
+3. `[ ]` **语义 compact（最小可用）** — 摘要 + `compact_boundary`（或等价）+ 保留最近 K 轮；不仅 `TrimMessagesToBudget` 丢头。
+4. `[ ]` **受控并行 tool 调用** — 只读可并行，写仍串行；`ParallelToolCalls` 或注册表声明可并行工具集。
+5. `[ ]` **Glob / 列表工具** — `glob` 或 `list_dir`，与 `pathutil` 一致。
+6. `[x]` **全局上下文预算** — `budget` + `loop` 裁剪 + `ApplyTurnBudget`（JSON 字节估算）。
+
+### P1
+
+7. `[ ]` **LLM 类型可扩展** — Provider / Transport 抽象，配置与实现解耦（参考 picoclaw）；宜在 config 定型后接入，避免双重迁移。
+8. `[ ]` **通用 Channel 抽象** — 飞书 / Slack 等可插拔 channel，对齐 [`inbound-routing-design.md`](inbound-routing-design.md)（参考 openclaw/picoclaw）。
+9. `[ ]` **Skills（Claude Code 机制）** — 可发现的能力说明包：目录布局 + `SKILL.md`（或约定文件名）、**元数据**（名称、描述、适用场景）、**渐进式披露**（先注入摘要/索引，相关时再读全文）；与用户 / 项目 / Agent scope 及 **预算**、**审计**（若技能内容落盘或工具改写）对齐；可与 `AGENT.md` / `.oneclaw/rules` 发现链协同或独立根路径（设计待定）。
+10. `[ ]` **行为策略写回** — 规则进 `.oneclaw/rules` / `AGENT.md` 的路径与护栏（与 D2 审计衔接）。
+11. `[ ]` **任务状态工具** — Task 创建/更新或等价落盘，长会话与 resume 对齐进度。
+12. `[ ]` **侧链合并（可选）** — sidechain 结论以 attachment 或 user 摘要合入主 transcript。
+
+### P2
+
+13. `[ ]` **入口编排加厚** — slash、附件、`Inbound` 元信息、本轮可跳过模型请求等（与 Channel 落地后可交叉迭代）。
+14. `[ ]` **D3 向量 recall** — 插件接口，文件仍为真源（阶段 D）。
+15. `[ ]` **预算精度（可选）** — usage / tokenizer 类估算，多模型下裁剪更一致。
+16. `[ ]` **协作模型（teammate / swarm）** — mailbox、长期成员等；按需排期。
+
+### 后置
+
+17. `[ ]` **完整 MCP**、**compact 高级形态**、**全量遥测** — 见「刻意后置」小节。
+
+---
+
 ## 工程基线（开工前）
 
 - [x] 新建 Go 模块仓库；全局使用 `log/slog`；目录不使用 `internal`（按团队约定）
 - [ ] 新功能开发前阅读对应设计：`claude-code-main-flow-analysis.md`、`claude-code-memory-system.md` 等（见 [`README.md`](README.md)）
 - [x] **全局 token / 字节预算**：`budget` + `ONCLAW_MAX_PROMPT_BYTES`（默认 220000）约束注入裁剪与每步 transcript；子 Agent / fork 共用；`ONCLAW_DISABLE_CONTEXT_BUDGET=1` 关闭
+
+---
+
+## 配置、渠道与 LLM 扩展（待办）
+
+> 对标思路：**openclaw / picoclaw**（仓库外参考）；与现有 `routing` 入站/出站、OpenAI 兼容客户端自然衔接。  
+> **优先级**以「统一 backlog」为准：config 为 P0-1；LLM 为 P1-7；Channel 为 P1-8；Skills 为 P1-9。
+
+| 优先级 | 项 | 说明 |
+|--------|-----|------|
+| P0 | **统一 config 模块** | [x] `config` 包：**开发/生产同一套**加载与字段定义，本地默认路径 + 示例 + 可选 `--config`，体验对齐或优于散 `env`；密钥等以**文件为主真源**，避免唯依赖 `env` 被子进程继承泄漏；合并优先级与 env 覆盖规则见 [`config.md`](config.md) |
+| P1 | **LLM 类型可扩展** | [ ] 参考 picoclaw，抽象「聊天补全 / 工具协议」之上的 **Provider** 或 **Transport** 接口，便于接入多厂商（不仅 OpenAI 兼容一种），配置与实现解耦 |
+| P1 | **通用 Channel 抽象** | [ ] 参考 openclaw/picoclaw，将飞书 / Slack 等入站出站做成可插拔 **channel**（统一生命周期、认证、消息映射、`Sink`/`Inbound` 注册），避免各渠道硬编码；与设计 [`inbound-routing-design.md`](inbound-routing-design.md) 一致落地 |
+| P1 | **Skills（Claude Code 机制）** | [ ] 见统一 backlog #9：发现层、元数据、渐进加载、作用域与预算；实现前可补设计短文档于 `docs/` |
 
 ---
 
@@ -58,46 +120,75 @@
 
 - [x] **D1** 维护调度：**独立进程/定时**触发 dream / extract（或 idle 触发）；失败 `slog`；与当前「仅 PostTurn 写 log」区分
 - [x] **D2** 变更审计：memory 写入可追溯（append-only 审计 log，或文档化「依赖 git diff」的流程）
-- [ ] **D3**（可选）向量 recall：插件接口；文件仍为真源
+- [ ] **D3**（可选）向量 recall：插件接口；文件仍为真源 — 优先级见统一 backlog **P2-14**
 
 ---
 
-## 目标导向：自我进化闭环（建议在 D 之前穿插）
+## 目标导向：自我进化闭环（与 backlog 对照）
 
-> 对应 `agent-runtime-golang-plan.md` 第 5 节示意：daily log →（dream）→ memory 平面 → 下一轮注入。
+> 对应 `agent-runtime-golang-plan.md` 第 5 节示意：daily log →（dream）→ memory 平面 → 下一轮注入。  
+> **以下表格按 P0→P1→P2→后置排列**；与「统一 backlog」一一对应，避免重复定义优先级。
 
 | 优先级 | 项 | 说明 |
 |--------|-----|------|
-| P0 | **模型化维护管道** | [x] 回合后 `MaybeMaintain`（见上）；[x] **定时/idle**（`cmd/maintain` 默认常驻 + `ONCLAW_MAINTAIN_INTERVAL`，`-once` / `0` 单次）；[ ] 读多段 log、写 topic / 强去重 |
-| P0 | **全局上下文预算** | [x] `budget` 包 + `loop` 每步裁剪 + 注入 `ApplyTurnBudget`；估算为 **JSON 字节** 非精确 token |
-| P1 | **侧链合并（可选）** | 将 sidechain 中「用户显式关心的结论」以 attachment 或单条 user 摘要合入主 transcript（产品化选项） |
-| P1 | **行为策略写回** | 明确引导/工具：把验证有效的规则写入 `.oneclaw/rules` 或 `AGENT.md` 的路径与护栏（与 D2 审计衔接） |
-| P2 | **D1/D2/D3** | D1/D2 已接；D3 向量 recall 按上表阶段 D |
-| 后置 | 完整 MCP、复杂 compact / 全量遥测 | 保持刻意后置 |
+| P0 | **统一 config 模块** | [x] 见 backlog #1、[`config.md`](config.md) |
+| P0 | **模型化维护管道** | [x] 回合后 `MaybeMaintain`；[x] 定时 `cmd/maintain`；[ ] 多段 log、topic、强去重（backlog #2） |
+| P0 | **语义 compact（最小可用）** | [ ] 见 backlog #3 |
+| P0 | **受控并行 tool 调用** | [ ] 见 backlog #4 |
+| P0 | **Glob / 列表工具** | [ ] 见 backlog #5 |
+| P0 | **全局上下文预算** | [x] 见 backlog #6 |
+| P1 | **LLM 类型可扩展** | [ ] 见 backlog #7 |
+| P1 | **通用 Channel 抽象** | [ ] 见 backlog #8 |
+| P1 | **Skills（Claude Code 机制）** | [ ] 见 backlog #9 |
+| P1 | **行为策略写回** | [ ] 见 backlog #10 |
+| P1 | **任务状态工具** | [ ] 见 backlog #11 |
+| P1 | **侧链合并（可选）** | [ ] 见 backlog #12 |
+| P2 | **入口编排加厚** | [ ] 见 backlog #13 |
+| P2 | **D3 向量 recall** | [ ] 见 backlog #14（阶段 D3） |
+| P2 | **预算精度（可选）** | [ ] 见 backlog #15 |
+| P2 | **协作模型（teammate / swarm）** | [ ] 见 backlog #16 |
+| 后置 | **完整 MCP、compact 高级形态 / 全量遥测** | 见 backlog #17；最小 compact 已在 P0 |
 
 ---
 
 ## 刻意后置（勿在 A 阶段展开）
 
 - [ ] 完整 MCP 客户端与 UI 级权限流
-- [ ] 复杂 compact / 全量遥测
+- [ ] compact **高级形态**（多段摘要、与模型协同的 collapse 策略等；最小 compact 见统一 backlog P0）
+- [ ] 全量遥测
 
 ---
 
 ## 依赖关系（执行顺序）
 
 ```mermaid
-flowchart LR
-  A[阶段 A] --> B[阶段 B]
+flowchart TB
+  subgraph P0["P0 内核"]
+    CFG[统一 config]
+    MAINT[维护管道收口]
+    CMP[最小 compact]
+    PAR[并行只读工具]
+    GLOB[glob / list_dir]
+    CFG --> MAINT
+  end
+  subgraph P1["P1 扩展"]
+    LLM[LLM Provider]
+    CH[Channel 抽象]
+    SK[Skills 发现与注入]
+    CFG --> LLM
+    LLM --> CH
+    B -.-> SK
+  end
+  A[阶段 A 已完成] --> B[阶段 B]
   A --> C[阶段 C]
-  B --> Evo[进化闭环 P0]
-  C --> Evo
+  B --> P0
+  C --> P0
+  P0 --> P1
   B --> D[阶段 D]
   C --> D
-  Evo --> D
 ```
 
-建议：**在补全 P0（模型化维护 + 全局预算）后**，再主攻 D1/D2；向量与 MCP 按产品需要排期。
+建议：**先做 P0 中的统一 config**（开发与生产同一套），再并行推进维护管道与 compact/工具面；**P1 中先 LLM 抽象再 Channel**；**Skills** 可与 memory/规则发现（阶段 B）共用路径约定，独立排期亦可。D3 向量与 MCP 按产品排期。阶段 D1/D2 已接，不阻塞上述排序。
 
 ---
 
@@ -109,5 +200,7 @@ flowchart LR
 | 记忆发现 / 注入 / recall / 在线写 | 高 | 阶段 B |
 | 时间序列沉淀（daily log） | 中 | 有落盘，缺自动蒸馏回索引层 |
 | 子 Agent / fork / 侧链 | 中高 | 阶段 C 主干已有；合并回主会话未做 |
-| 自动进化闭环（log → 整理 → 再注入） | 低 | 需 P0 管道 + 可选 D1 |
+| 自动进化闭环（log → 整理 → 再注入） | 低 | 需 P0 维护收口 + 可选 D1 |
 | 可观测与合规（审计、预算） | 中 | 预算已有；D2 审计 JSONL + 可选 git |
+| 统一配置（开发/生产同源；密钥非 env 唯一） | 中 | `config` 包 + `docs/config.md` |
+| Skills（可发现 / 渐进注入） | 低 | 待 P1，对齐 Claude Code 机制 |

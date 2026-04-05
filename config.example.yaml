@@ -1,0 +1,77 @@
+# 复制到 ~/.oneclaw/config.yaml 或 <cwd>/.oneclaw/config.yaml；合并与优先级见 docs/config.md。
+# 入口 Load 之后会调用 config.ApplyEnvDefaults：仅当某个 ONCLAW_* 尚未设置时，才用 YAML 补全；
+# 不会写入 OPENAI_API_KEY（密钥优先放在 openai.api_key，由客户端选项注入）。
+#
+# 环境变量仍可覆盖非敏感项（如 OPENAI_BASE_URL、ONCLAW_MODEL 等），规则见 docs/config.md。
+# 「关闭类」 features.disable_*：true 为关闭；省略或 false 为开启（与 ONCLAW_DISABLE_* 的 0/1 语义对应）。
+
+# -----------------------------------------------------------------------------
+# OpenAI 兼容 API（openai-go 客户端）
+# -----------------------------------------------------------------------------
+openai:
+  # 推荐在此填写；非空时优先于环境变量 OPENAI_API_KEY
+  api_key: ""
+  # 可选；自定义网关时设置，需包含 /v1/ 后缀。环境变量 OPENAI_BASE_URL 优先于本字段
+  base_url: ""
+  org_id: ""
+  project_id: ""
+
+# -----------------------------------------------------------------------------
+# 模型与会话
+# -----------------------------------------------------------------------------
+model: gpt-4o
+
+chat:
+  # 空或 auto：流式失败则回退非流式；环境变量 ONCLAW_CHAT_TRANSPORT 优先
+  transport: auto
+
+# -----------------------------------------------------------------------------
+# 日志（maintain 可用 CLI：-log-level、-log-format）
+# -----------------------------------------------------------------------------
+log:
+  level: info
+  format: text
+
+# -----------------------------------------------------------------------------
+# 路径（留空则使用各包默认，见 docs/config.md）
+# -----------------------------------------------------------------------------
+paths:
+  # 留空则记忆根目录为 ~/.oneclaw
+  memory_base: ""
+  # 留空：transcript 为 <cwd>/.oneclaw/transcript.json
+  transcript: ""
+  # 留空：按日分文件写入 traces；以 .jsonl 结尾为单文件
+  turn_log_path: ""
+
+# -----------------------------------------------------------------------------
+# 功能开关（true = 关闭对应功能）
+# -----------------------------------------------------------------------------
+features:
+  disable_memory: false
+  disable_auto_memory: false
+  disable_memory_extract: false
+  disable_turn_log: false
+  disable_transcript: false
+  disable_auto_maintenance: false
+  disable_memory_audit: false
+  disable_context_budget: false
+
+# -----------------------------------------------------------------------------
+# 自动维护（将当日 daily log 蒸馏进 MEMORY.md）
+# -----------------------------------------------------------------------------
+maintain:
+  # Go duration；空则默认 1h；0 等价于只跑一轮（与 ONCLAW_MAINTAIN_INTERVAL=0 一致）
+  interval: 1h
+  model: ""
+  scheduled_model: ""
+  max_tokens: 8192
+  min_log_bytes: 200
+  max_log_bytes: 24000
+
+# -----------------------------------------------------------------------------
+# 上下文预算
+# -----------------------------------------------------------------------------
+budget:
+  max_prompt_bytes: 220000
+  min_transcript_messages: 6
+  recall_max_bytes: 12000

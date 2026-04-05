@@ -11,7 +11,12 @@ import (
 
 // Complete calls the chat API. Behavior depends on ONCLAW_CHAT_TRANSPORT (see transport.go).
 func Complete(ctx context.Context, client *openai.Client, params openai.ChatCompletionNewParams) (*openai.ChatCompletion, error) {
-	switch chatTransportFromEnv() {
+	return CompleteWithTransport(ctx, client, params, "")
+}
+
+// CompleteWithTransport uses transportHint when non-empty; otherwise the same rules as Complete.
+func CompleteWithTransport(ctx context.Context, client *openai.Client, params openai.ChatCompletionNewParams, transportHint string) (*openai.ChatCompletion, error) {
+	switch resolveTransport(transportHint) {
 	case transportNonStream:
 		t0 := time.Now()
 		res, err := completeNonStream(ctx, client, params)

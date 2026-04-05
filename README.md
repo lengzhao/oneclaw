@@ -14,15 +14,19 @@ go build -o oneclaw ./cmd/oneclaw
 go build -o maintain ./cmd/maintain
 ```
 
-配置 OpenAI 兼容 API 后启动 REPL（可用 `github.com/lengzhao/conf` 自动加载 `.env` 等，见 [`env.example`](env.example)）：
+配置 OpenAI 兼容 API 后启动 REPL。方式二选一或组合：
+
+- **YAML**（推荐密钥放文件）：复制 [`.oneclaw/config.example.yaml`](.oneclaw/config.example.yaml) 到 `~/.oneclaw/config.yaml` 或 `<项目>/.oneclaw/config.yaml`，填写 `openai.api_key` 等；合并规则见 **[`docs/config.md`](docs/config.md)**。
+- **环境变量**：可用 `github.com/lengzhao/conf` 自动加载 `.env`（见 [`env.example`](env.example)），与 YAML 的优先级见 `docs/config.md`。
 
 ```bash
-export OPENAI_API_KEY=...
-cd /path/to/project   # 工具与会话 cwd 均为当前工作目录
+export OPENAI_API_KEY=...   # 若未在 YAML 中配置 api_key
+cd /path/to/project         # 工具与会话 cwd 均为当前工作目录
 go run ./cmd/oneclaw
+# 可选：go run ./cmd/oneclaw -config ./my-layer.yaml
 ```
 
-`cmd/oneclaw` **不接受命令行参数**。启动时把 `session.Engine.TranscriptPath` 设为 **`ONCLAW_TRANSCRIPT_PATH`**（未设置则 **`<cwd>/.oneclaw/transcript.json`**）；**每轮 `SubmitUser` 成功结束后**会自动写入。关闭落盘：`ONCLAW_DISABLE_TRANSCRIPT=1`（Slack 等渠道自行设置 `Engine.TranscriptPath` 即可）。
+`cmd/oneclaw` 支持 **`-config`**（额外 YAML 层，覆盖顺序见 [`docs/config.md`](docs/config.md)）。Transcript 路径由配置 / **`ONCLAW_TRANSCRIPT_PATH`** 决定（未设置则 **`<cwd>/.oneclaw/transcript.json`**）；**每轮 `SubmitUser` 成功结束后**会自动写入。关闭落盘：`ONCLAW_DISABLE_TRANSCRIPT=1` 或 YAML `features.disable_transcript`（Slack 等渠道自行设置 `Engine.TranscriptPath` 即可）。
 
 常用 REPL 命令：`/exit` 退出前再保存一次；`/save <path>` 另存到指定路径。
 
@@ -87,6 +91,7 @@ go run ./cmd/maintain --cwd . -once
 cmd/oneclaw/     主 CLI / REPL
 cmd/maintain/    定时或单次 memory 蒸馏
 budget/          全局上下文字节预算
+config/          统一 YAML 配置加载与合并（见 docs/config.md）
 loop/            主循环、展示、工具 trace、历史预算等
 memory/          记忆路径、注入、提取、维护、审计、回合日志
 session/         会话引擎与编排
@@ -130,15 +135,16 @@ flowchart LR
 ## 环境与配置
 
 - **Go**：`1.26.1+`（见 [`go.mod`](go.mod)）。
-- **模型**：OpenAI 兼容 HTTP API；必填 `OPENAI_API_KEY`，可选 `OPENAI_BASE_URL`（自定义网关时需含 `/v1/` 后缀）。
+- **模型**：OpenAI 兼容 HTTP API。API key 可在 YAML `openai.api_key` 或环境变量 **`OPENAI_API_KEY`**（至少其一）；可选 **`OPENAI_BASE_URL`**（自定义网关时需含 `/v1/` 后缀，环境变量优先于 YAML 中的 `openai.base_url`）。完整约定见 **[`docs/config.md`](docs/config.md)**。
 
 建议复制示例配置后按需修改：
 
 ```bash
 cp env.example .env
+cp .oneclaw/config.example.yaml .oneclaw/config.yaml   # 可选：项目级 YAML
 ```
 
-**常用变量（完整说明与默认值以 [`env.example`](env.example) 为准）**
+**常用变量（完整说明与默认值以 [`env.example`](env.example) 与 [`docs/config.md`](docs/config.md) 为准）**
 
 | 类别 | 变量示例 |
 |------|----------|
@@ -151,32 +157,40 @@ cp env.example .env
 | 预算 | `ONCLAW_DISABLE_CONTEXT_BUDGET`、`ONCLAW_MAX_PROMPT_BYTES`（未设置时代码默认约 **220000** 字节估算上限）、`ONCLAW_RECALL_MAX_BYTES` 等 |
 | 审计 | `ONCLAW_DISABLE_MEMORY_AUDIT` |
 
-配置加载顺序与 `ONCLAW_DISABLE_*` 语义见 `env.example` 文件头注释。
+YAML 与用户/项目/`-config` 合并、以及 `ApplyEnvDefaults` 与 `ONCLAW_*` 的对应关系见 [`docs/config.md`](docs/config.md)；纯环境变量语义见 `env.example` 文件头注释。
 
 ---
 
 ## 命令行参考
 
-**`cmd/oneclaw`**：无 flag；工作目录为**进程当前目录**；日志与 transcript 见上表环境变量。
+**`cmd/oneclaw`**
+
+| 标志 | 说明 |
+|------|------|
+| `-config` | 可选；额外 YAML 配置层（路径相对于当前工作目录） |
+
+工作目录为**进程当前目录**；日志与 transcript 见上表环境变量或 YAML。
 
 **`cmd/maintain`**
 
 | 标志 | 说明 |
 |------|------|
 | `-cwd` | 项目根（memory 布局根） |
+| `-config` | 可选；额外 YAML 配置层（相对路径相对于 `-cwd`） |
 | `-once` | 只跑一轮蒸馏后退出（适合 cron） |
-| `-interval` | 循环间隔；`0` 等价单次；默认来自 `ONCLAW_MAINTAIN_INTERVAL` |
+| `-interval` | 循环间隔；`0` 等价单次；默认来自配置 / `ONCLAW_MAINTAIN_INTERVAL` |
 
 ---
 
 ## 文档阅读顺序
 
 1. [`docs/README.md`](docs/README.md) — 文档索引  
-2. [`docs/agent-runtime-golang-plan.md`](docs/agent-runtime-golang-plan.md) — 目标与边界  
-3. [`docs/go-runtime-development-plan.md`](docs/go-runtime-development-plan.md) — 分阶段任务  
-4. [`docs/claude-code-memory-system.md`](docs/claude-code-memory-system.md) / [`docs/claude-code-subagent-system.md`](docs/claude-code-subagent-system.md)  
-5. [`docs/inbound-routing-design.md`](docs/inbound-routing-design.md) / [`docs/outbound-events-design.md`](docs/outbound-events-design.md)  
-6. [`docs/prompts/README.md`](docs/prompts/README.md)  
+2. [`docs/config.md`](docs/config.md) — 统一配置文件与环境变量优先级  
+3. [`docs/agent-runtime-golang-plan.md`](docs/agent-runtime-golang-plan.md) — 目标与边界  
+4. [`docs/go-runtime-development-plan.md`](docs/go-runtime-development-plan.md) — 分阶段任务  
+5. [`docs/claude-code-memory-system.md`](docs/claude-code-memory-system.md) / [`docs/claude-code-subagent-system.md`](docs/claude-code-subagent-system.md)  
+6. [`docs/inbound-routing-design.md`](docs/inbound-routing-design.md) / [`docs/outbound-events-design.md`](docs/outbound-events-design.md)  
+7. [`docs/prompts/README.md`](docs/prompts/README.md)  
 
 ---
 
