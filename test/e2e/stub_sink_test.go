@@ -18,12 +18,12 @@ func TestE2E_70_SinkRegistryTextAndDone(t *testing.T) {
 	var mu sync.Mutex
 	var recs []routing.Record
 	reg := routing.NewMapRegistry()
-	reg.Register(routing.SourceCLI, captureSink{recs: &recs, mu: &mu})
+	reg.Register("cli", captureSink{recs: &recs, mu: &mu})
 
 	e := newStubEngine(t, t.TempDir())
 	e.SinkRegistry = reg
 
-	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "hello sink"}); err != nil {
+	if err := e.SubmitUser(context.Background(), routing.Inbound{Source: "cli", Text: "hello sink"}); err != nil {
 		t.Fatal(err)
 	}
 

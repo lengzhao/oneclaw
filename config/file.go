@@ -2,6 +2,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -58,6 +59,45 @@ type File struct {
 		Level  string `yaml:"level"`
 		Format string `yaml:"format"`
 	} `yaml:"log"`
+
+	// Channels lists enabled channel instances (id + type + optional type-specific fields).
+	// When empty after merge, runtime starts every registered channel Spec once using Spec.Key as instance id.
+	Channels []ChannelConfig `yaml:"channels"`
+}
+
+// ChannelConfig is one YAML list entry under `channels:`.
+// ID is the routing instance id (Inbound.Source / SinkRegistry key). Type matches channel.Spec.Key.
+// Other mapping keys are kept in Params for the connector (tokens, webhooks, etc.).
+type ChannelConfig struct {
+	ID     string         `yaml:"id"`
+	Type   string         `yaml:"type"`
+	Params map[string]any `yaml:"-"`
+}
+
+// UnmarshalYAML captures id/type and stores every other key in Params.
+func (c *ChannelConfig) UnmarshalYAML(n *yaml.Node) error {
+	if n.Kind != yaml.MappingNode {
+		return fmt.Errorf("config: channels entry must be a mapping")
+	}
+	var m map[string]any
+	if err := n.Decode(&m); err != nil {
+		return err
+	}
+	if m == nil {
+		return nil
+	}
+	if v, ok := m["id"].(string); ok {
+		c.ID = v
+	}
+	delete(m, "id")
+	if v, ok := m["type"].(string); ok {
+		c.Type = v
+	}
+	delete(m, "type")
+	if len(m) > 0 {
+		c.Params = m
+	}
+	return nil
 }
 
 // OpenAIFile holds OpenAI-compatible client settings. api_key is sensitive; keep in file, not in process env.
@@ -148,6 +188,9 @@ func mergeFile(dst *File, src File) {
 	}
 	if src.Log.Format != "" {
 		dst.Log.Format = src.Log.Format
+	}
+	if len(src.Channels) > 0 {
+		dst.Channels = append([]ChannelConfig(nil), src.Channels...)
 	}
 }
 

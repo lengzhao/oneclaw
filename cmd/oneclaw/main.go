@@ -1,16 +1,18 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"log/slog"
 	"os"
 	"path/filepath"
 
+	"github.com/lengzhao/oneclaw/channel"
+	_ "github.com/lengzhao/oneclaw/channel/cli"
 	"github.com/lengzhao/oneclaw/config"
 	"github.com/lengzhao/oneclaw/logx"
 	"github.com/lengzhao/oneclaw/memory"
 	"github.com/lengzhao/oneclaw/routing"
-	"github.com/lengzhao/oneclaw/routing/cli"
 	"github.com/lengzhao/oneclaw/session"
 	"github.com/lengzhao/oneclaw/tools/builtin"
 	"github.com/openai/openai-go"
@@ -73,8 +75,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := cli.RunREPL(cli.REPLConfig{Engine: eng}); err != nil {
-		slog.Error("cli.repl", "err", err)
+	if _, err := channel.DefaultRegistry().StartAll(context.Background(), channel.Bootstrap{
+		Engine: eng,
+		Config: cfg,
+	}); err != nil {
+		slog.Error("channel.start", "err", err)
 		os.Exit(1)
 	}
 }

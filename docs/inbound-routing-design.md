@@ -89,7 +89,7 @@ type SinkFactory interface {
 }
 ```
 
-**CLI**：子包 `routing/cli` 提供终端 `Sink` 并在 `init` 注册；**HTTP 长连接**：返回写入该 Response 的 `Sink`；**飞书 / Slack**：建议各用 `routing/feishu`、`routing/slack` 子包，在 `init` 或启动时 `RegisterDefaultSink`。
+**CLI**：子包 `channel/cli` 在 `init` 调用 **`channel.RegisterDefault(Spec)`**；实现 **`channel.Connector`**，只通过 **`IO.InboundChan` / `IO.OutboundChan`** 与运行时交互；**`channel` 包**在 **`StartAll`** 内挂 **`chanSink` + `SubmitUser` 循环**；**仅出站、无 Connector** 时仍可单独 **`routing.RegisterDefaultSink`**；**飞书 / Slack**：同样 **`RegisterDefault(Spec)`**，**`Spec.Source`** 与 **`routing.Inbound.Source`** 对齐。
 
 ---
 
@@ -118,5 +118,5 @@ type SinkFactory interface {
 
 ## 7. 实现状态
 
-- **当前仓库**：`routing` 核心 + **`routing/cli`**（`RunREPL` 等）；**`SubmitUser(ctx, in routing.Inbound)`** / **`loop.RunTurn(ctx, cfg, in)`**，用户正文在 **`in.Text`**；`Engine` 按 `in.Source` 取 `Sink`；**未**实现 `WithInbound` / `InboundFromContext`。
+- **当前仓库**：`routing` 核心 + **`channel` 运行时**（**`StartAll`**：`Spec.Source` 非空则注册 **`chanSink`**，**`submitLoop`** 读 **`InboundTurn` → `SubmitUser`**）；**`channel/cli`** 仅 **`Connector.Run(IO)`**；`main`：**`StartAll(ctx, Bootstrap{Engine, Config})`**；**`SubmitUser` / `loop.RunTurn`** 同上；**未**实现 `WithInbound` / `InboundFromContext`。
 - **后续**：HTTP / 飞书 / Slack 等新增 `Source*` 常量、注册对应 `Sink`；需要时再加 **`ctx` 透传**或 **`SinkFactory`**。

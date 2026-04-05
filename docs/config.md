@@ -31,7 +31,7 @@
 | 路径 | `paths.*` | `ONCLAW_MEMORY_BASE`、`ONCLAW_TRANSCRIPT_PATH` 等 |
 | 预算 | `budget.*` | `ONCLAW_MAX_PROMPT_BYTES`、`ONCLAW_MIN_TRANSCRIPT_MESSAGES`；语义 compact：`ONCLAW_COMPACT_SUMMARY_MAX_BYTES`、`ONCLAW_DISABLE_SEMANTIC_COMPACT` |
 | 维护 | `maintain.*` | `ONCLAW_MAINTAIN_INTERVAL`、`ONCLAW_MAINTENANCE_MODEL`；多日 log / topic：`ONCLAW_MAINTENANCE_LOG_DAYS`、`ONCLAW_MAINTENANCE_MAX_COMBINED_LOG_BYTES`、`ONCLAW_MAINTENANCE_MAX_TOPIC_FILES`、`ONCLAW_MAINTENANCE_TOPIC_EXCERPT_BYTES` |
-| 日志 | `log.*` | `ONCLAW_LOG_LEVEL`、`ONCLAW_LOG_FORMAT` |
+| 日志 | `log.*` | `ONCLAW_LOG_LEVEL`、`ONCLAW_LOG_FORMAT`；默认另写 `<cwd>/.oneclaw/logs/YYYY/MM/oneclaw-<时间戳>.log`，`ONCLAW_DISABLE_LOG_FILE=1` 关闭仅写 stderr |
 | 开关 | `features.disable_*` | 对应 `ONCLAW_DISABLE_*`（见示例文件） |
 
 启动时若调用了 `config.ApplyEnvDefaults`，会把「当前仍为空的」`ONCLAW_*` 设为 YAML 中的值，使 `memory`、`budget` 等仍读环境的代码与文件配置一致；**不会**设置 `OPENAI_API_KEY`。

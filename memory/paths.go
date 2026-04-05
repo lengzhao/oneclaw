@@ -82,11 +82,6 @@ func ProjectMemoryDir(cwd string) string {
 	return filepath.Join(cwd, DotDir, "memory")
 }
 
-// LocalMemoryDir returns <cwd>/.oneclaw/memory-local.
-func LocalMemoryDir(cwd string) string {
-	return filepath.Join(cwd, DotDir, "memory-local")
-}
-
 // AgentMemoryDir returns the on-disk directory for an agent type and scope.
 func AgentMemoryDir(cwd, memoryBase, agentType string, scope AgentScope) string {
 	dir := sanitizeDirName(agentType)
@@ -95,8 +90,6 @@ func AgentMemoryDir(cwd, memoryBase, agentType string, scope AgentScope) string 
 		return filepath.Join(memoryBase, "agent-memory", dir)
 	case AgentScopeProject:
 		return filepath.Join(cwd, DotDir, "agent-memory", dir)
-	case AgentScopeLocal:
-		return filepath.Join(cwd, DotDir, "agent-memory-local", dir)
 	default:
 		return filepath.Join(cwd, DotDir, "agent-memory", dir)
 	}
@@ -131,7 +124,6 @@ type AgentScope int
 const (
 	AgentScopeUser AgentScope = iota
 	AgentScopeProject
-	AgentScopeLocal
 )
 
 // Layout holds resolved memory directories for a session cwd.
@@ -140,11 +132,10 @@ type Layout struct {
 	MemoryBase     string
 	User           string
 	Project        string
-	Local          string
 	Auto           string
 	TeamUser       string
 	TeamProject    string
-	AgentDefault   []string // user, project, local roots for agent "default"
+	AgentDefault   []string // user + project agent memory roots for "default"
 	EntrypointName string
 }
 
@@ -157,20 +148,18 @@ func DefaultLayout(cwd, home string) Layout {
 		MemoryBase:     mb,
 		User:           UserMemoryDir(mb),
 		Project:        ProjectMemoryDir(cwd),
-		Local:          LocalMemoryDir(cwd),
 		Auto:           auto,
 		TeamUser:       TeamMemoryDirUser(mb),
 		TeamProject:    TeamMemoryDirProject(cwd),
-		AgentDefault:   agentDefaultTriad(cwd, mb, "default"),
+		AgentDefault:   agentDefaultPair(cwd, mb, "default"),
 		EntrypointName: entrypointName,
 	}
 }
 
-func agentDefaultTriad(cwd, memoryBase, agentType string) []string {
+func agentDefaultPair(cwd, memoryBase, agentType string) []string {
 	return []string{
 		AgentMemoryDir(cwd, memoryBase, agentType, AgentScopeUser),
 		AgentMemoryDir(cwd, memoryBase, agentType, AgentScopeProject),
-		AgentMemoryDir(cwd, memoryBase, agentType, AgentScopeLocal),
 	}
 }
 
@@ -188,7 +177,6 @@ func (l Layout) WriteRoots() []string {
 	}
 	add(l.User)
 	add(l.Project)
-	add(l.Local)
 	if !AutoMemoryDisabled() {
 		add(l.Auto)
 		add(filepath.Join(l.Auto, "logs"))

@@ -28,7 +28,7 @@ go run ./cmd/oneclaw
 
 `cmd/oneclaw` 支持 **`-config`**（额外 YAML 层，覆盖顺序见 [`docs/config.md`](docs/config.md)）。Transcript 路径由配置 / **`ONCLAW_TRANSCRIPT_PATH`** 决定（未设置则 **`<cwd>/.oneclaw/transcript.json`**）；**每轮 `SubmitUser` 成功结束后**会自动写入。关闭落盘：`ONCLAW_DISABLE_TRANSCRIPT=1` 或 YAML `features.disable_transcript`（Slack 等渠道自行设置 `Engine.TranscriptPath` 即可）。
 
-常用 REPL 命令：`/exit` 退出前再保存一次；`/save <path>` 另存到指定路径。
+常用 REPL 命令：`/exit` 退出。对话落盘依赖配置中的 transcript 路径及每轮成功结束后的自动保存（见上段）；另存副本请用外部工具复制该文件。
 
 **Memory 维护**（将 daily log 蒸馏进 `MEMORY.md` 等，默认按间隔循环；单次适合 cron）：
 

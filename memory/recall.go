@@ -97,7 +97,7 @@ func SelectRecall(layout Layout, userText string, state *RecallState, budget int
 
 func listMemoryMarkdownFiles(layout Layout) []string {
 	dirs := []string{
-		layout.User, layout.Project, layout.Local,
+		layout.User, layout.Project,
 		layout.TeamUser, layout.TeamProject,
 	}
 	if !AutoMemoryDisabled() {

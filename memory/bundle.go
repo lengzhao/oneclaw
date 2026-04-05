@@ -33,14 +33,13 @@ func BuildTurn(layout Layout, home, userText string, recall *RecallState, recall
 	eps := []ep{
 		{"user", filepath.Join(layout.User, entrypointName)},
 		{"project", filepath.Join(layout.Project, entrypointName)},
-		{"local", filepath.Join(layout.Local, entrypointName)},
 		{"team (user)", filepath.Join(layout.TeamUser, entrypointName)},
 		{"team (project)", filepath.Join(layout.TeamProject, entrypointName)},
 	}
 	if !AutoMemoryDisabled() {
 		eps = append(eps, ep{"auto", filepath.Join(layout.Auto, entrypointName)})
 	}
-	labels := []string{"user-scope agent", "project-scope agent", "local-scope agent"}
+	labels := []string{"user-scope agent", "project-scope agent"}
 	for i, root := range layout.AgentDefault {
 		label := "agent"
 		if i < len(labels) {
@@ -94,7 +93,6 @@ func BuildTurn(layout Layout, home, userText string, recall *RecallState, recall
 func writeDirList(sb *strings.Builder, layout Layout) {
 	fmt.Fprintf(sb, "- **user** — `%s`\n", layout.User)
 	fmt.Fprintf(sb, "- **project** — `%s`\n", layout.Project)
-	fmt.Fprintf(sb, "- **local** — `%s`\n", layout.Local)
 	if !AutoMemoryDisabled() {
 		fmt.Fprintf(sb, "- **auto** — `%s`\n", layout.Auto)
 	}

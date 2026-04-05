@@ -84,6 +84,14 @@ func (r *Resolved) ChatModel() string {
 	return strings.TrimSpace(r.merged.Model)
 }
 
+// Channels returns merged `channels:` entries. Empty means callers should fall back to “start all registered specs”.
+func (r *Resolved) Channels() []ChannelConfig {
+	if r == nil {
+		return nil
+	}
+	return r.merged.Channels
+}
+
 // ChatTransport returns ONCLAW_CHAT_TRANSPORT if set, else YAML chat.transport, else empty (use library default / env).
 func (r *Resolved) ChatTransport() string {
 	if t := strings.TrimSpace(os.Getenv("ONCLAW_CHAT_TRANSPORT")); t != "" {

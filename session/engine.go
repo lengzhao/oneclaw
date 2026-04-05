@@ -38,6 +38,9 @@ type Engine struct {
 	SessionID  string
 	// SinkRegistry resolves sinks by routing.Inbound.Source. If nil, no outbound emission.
 	SinkRegistry routing.SinkRegistry
+	// SinkFactory builds a per-turn Sink (e.g. bind IM thread). If nil, only SinkRegistry is used.
+	// When non-nil, NewSink runs first; ErrUseRegistrySink falls back to SinkRegistry.
+	SinkFactory routing.SinkFactory
 	// TranscriptPath is where SaveTranscript writes after each successful loop.RunTurn (before PostTurn / MaybeMaintain). Empty disables auto-save.
 	TranscriptPath string
 	// RecallState tracks memory recall surfacing across turns (phase B).
@@ -74,9 +77,6 @@ func (e *Engine) SubmitUser(ctx context.Context, in routing.Inbound) error {
 	if strings.TrimSpace(in.Text) == "" {
 		return fmt.Errorf("session: empty inbound text")
 	}
-	if in.Source == "" {
-		in.Source = routing.SourceCLI
-	}
 
 	slog.Debug("session.submit", "cwd", e.CWD, "model", e.Model, "user_chars", utf8.RuneCountInString(in.Text))
 	bg := budget.FromEnv()
@@ -98,11 +98,11 @@ func (e *Engine) SubmitUser(ctx context.Context, in routing.Inbound) error {
 		slog.Warn("session.user_home", "err", herr)
 	}
 	var em *routing.Emitter
-	if e.SinkRegistry != nil {
-		sink, err := e.SinkRegistry.SinkFor(in.Source)
-		if err != nil {
-			return fmt.Errorf("routing: %w", err)
-		}
+	sink, err := routing.ResolveTurnSink(ctx, e.SinkRegistry, e.SinkFactory, in)
+	if err != nil {
+		return err
+	}
+	if sink != nil {
 		em = routing.NewEmitter(sink, e.SessionID, "")
 	}
 	system := e.System
@@ -151,7 +151,7 @@ func (e *Engine) SubmitUser(ctx context.Context, in routing.Inbound) error {
 		slog.Error("session.transcript_save_user", "err", err)
 	}
 
-	err := loop.RunTurn(ctx, cfg, in)
+	err = loop.RunTurn(ctx, cfg, in)
 	if err != nil {
 		return err
 	}

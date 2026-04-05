@@ -13,7 +13,7 @@
 | **P0** | 安全基线、自我进化闭环缺口、长会话可用性、与 Claude Code 对齐的核心工具/吞吐 | 缺了会阻碍「可信自主运行」或「记忆闭环」或「长对话不崩」 |
 | **P1** | 多厂商/多渠道扩展、**Skills**、策略沉淀、子 Agent 产品化、任务可恢复 | 显著扩展部署面与协作体验，但不阻塞单机 CLI 闭环 |
 | **P2** | 入口体验细化、可选 recall、预算精细化、多实体协作 | 锦上添花或强依赖产品形态 |
-| **后置** | MCP、compact 高级形态、全量遥测 | 刻意控制范围，避免早期复杂度爆炸 |
+| **后置** | LLM Provider/Transport 可扩展、MCP、compact 高级形态、全量遥测 | 刻意控制范围，避免早期复杂度爆炸 |
 
 下方 **统一 backlog** 为排序后的单一真相；其后各节保留阶段验收与历史勾选，便于对照实现。
 
@@ -34,22 +34,22 @@
 
 ### P1
 
-7. `[ ]` **LLM 类型可扩展** — Provider / Transport 抽象，配置与实现解耦（参考 picoclaw）；宜在 config 定型后接入，避免双重迁移。
-8. `[ ]` **通用 Channel 抽象** — 飞书 / Slack 等可插拔 channel，对齐 [`inbound-routing-design.md`](inbound-routing-design.md)（参考 openclaw/picoclaw）。
-9. `[ ]` **Skills（Claude Code 机制）** — 可发现的能力说明包：目录布局 + `SKILL.md`（或约定文件名）、**元数据**（名称、描述、适用场景）、**渐进式披露**（先注入摘要/索引，相关时再读全文）；与用户 / 项目 / Agent scope 及 **预算**、**审计**（若技能内容落盘或工具改写）对齐；可与 `AGENT.md` / `.oneclaw/rules` 发现链协同或独立根路径（设计待定）。
-10. `[ ]` **行为策略写回** — 规则进 `.oneclaw/rules` / `AGENT.md` 的路径与护栏（与 D2 审计衔接）。
-11. `[ ]` **任务状态工具** — Task 创建/更新或等价落盘，长会话与 resume 对齐进度。
-12. `[ ]` **侧链合并（可选）** — sidechain 结论以 attachment 或 user 摘要合入主 transcript。
+7. `[x]` **通用 Channel 抽象** — 飞书 / Slack 等可插拔 channel，对齐 [`inbound-routing-design.md`](inbound-routing-design.md)（参考 openclaw/picoclaw）。
+8. `[ ]` **Skills（Claude Code 机制）** — 可发现的能力说明包：目录布局 + `SKILL.md`（或约定文件名）、**元数据**（名称、描述、适用场景）、**渐进式披露**（先注入摘要/索引，相关时再读全文）；与用户 / 项目 / Agent scope 及 **预算**、**审计**（若技能内容落盘或工具改写）对齐；可与 `AGENT.md` / `.oneclaw/rules` 发现链协同或独立根路径（设计待定）。
+9. `[ ]` **行为策略写回** — 规则进 `.oneclaw/rules` / `AGENT.md` 的路径与护栏（与 D2 审计衔接）。
+10. `[ ]` **任务状态工具** — Task 创建/更新或等价落盘，长会话与 resume 对齐进度。
+11. `[ ]` **侧链合并（可选）** — sidechain 结论以 attachment 或 user 摘要合入主 transcript。
 
 ### P2
 
-13. `[ ]` **入口编排加厚** — slash、附件、`Inbound` 元信息、本轮可跳过模型请求等（与 Channel 落地后可交叉迭代）。
-14. `[ ]` **D3 向量 recall** — 插件接口，文件仍为真源（阶段 D）。
-15. `[ ]` **预算精度（可选）** — usage / tokenizer 类估算，多模型下裁剪更一致。
-16. `[ ]` **协作模型（teammate / swarm）** — mailbox、长期成员等；按需排期。
+12. `[ ]` **入口编排加厚** — slash、附件、`Inbound` 元信息、本轮可跳过模型请求等（与 Channel 落地后可交叉迭代）。
+13. `[ ]` **D3 向量 recall** — 插件接口，文件仍为真源（阶段 D）。
+14. `[ ]` **预算精度（可选）** — usage / tokenizer 类估算，多模型下裁剪更一致。
+15. `[ ]` **协作模型（teammate / swarm）** — mailbox、长期成员等；按需排期。
 
 ### 后置
 
+16. `[ ]` **LLM 类型可扩展** — Provider / Transport 抽象，配置与实现解耦（参考 picoclaw）；宜在 config 定型后接入，避免双重迁移。
 17. `[ ]` **完整 MCP**、**compact 高级形态**、**全量遥测** — 见「刻意后置」小节。
 
 ---
@@ -65,14 +65,14 @@
 ## 配置、渠道与 LLM 扩展（待办）
 
 > 对标思路：**openclaw / picoclaw**（仓库外参考）；与现有 `routing` 入站/出站、OpenAI 兼容客户端自然衔接。  
-> **优先级**以「统一 backlog」为准：config 为 P0-1；LLM 为 P1-7；Channel 为 P1-8；Skills 为 P1-9。
+> **优先级**以「统一 backlog」为准：config 为 P0-1；Channel 为 P1-7；Skills 为 P1-8；LLM 可扩展为后置-16。
 
 | 优先级 | 项 | 说明 |
 |--------|-----|------|
 | P0 | **统一 config 模块** | [x] `config` 包：**开发/生产同一套**加载与字段定义，本地默认路径 + 示例 + 可选 `--config`，体验对齐或优于散 `env`；密钥等以**文件为主真源**，避免唯依赖 `env` 被子进程继承泄漏；合并优先级与 env 覆盖规则见 [`config.md`](config.md) |
-| P1 | **LLM 类型可扩展** | [ ] 参考 picoclaw，抽象「聊天补全 / 工具协议」之上的 **Provider** 或 **Transport** 接口，便于接入多厂商（不仅 OpenAI 兼容一种），配置与实现解耦 |
+| 后置 | **LLM 类型可扩展** | [ ] 参考 picoclaw，抽象「聊天补全 / 工具协议」之上的 **Provider** 或 **Transport** 接口，便于接入多厂商（不仅 OpenAI 兼容一种），配置与实现解耦；见统一 backlog #16 |
 | P1 | **通用 Channel 抽象** | [ ] 参考 openclaw/picoclaw，将飞书 / Slack 等入站出站做成可插拔 **channel**（统一生命周期、认证、消息映射、`Sink`/`Inbound` 注册），避免各渠道硬编码；与设计 [`inbound-routing-design.md`](inbound-routing-design.md) 一致落地 |
-| P1 | **Skills（Claude Code 机制）** | [ ] 见统一 backlog #9：发现层、元数据、渐进加载、作用域与预算；实现前可补设计短文档于 `docs/` |
+| P1 | **Skills（Claude Code 机制）** | [ ] 见统一 backlog #8：发现层、元数据、渐进加载、作用域与预算；实现前可补设计短文档于 `docs/` |
 
 ---
 
@@ -120,7 +120,7 @@
 
 - [x] **D1** 维护调度：**独立进程/定时**触发 dream / extract（或 idle 触发）；失败 `slog`；与当前「仅 PostTurn 写 log」区分
 - [x] **D2** 变更审计：memory 写入可追溯（append-only 审计 log，或文档化「依赖 git diff」的流程）
-- [ ] **D3**（可选）向量 recall：插件接口；文件仍为真源 — 优先级见统一 backlog **P2-14**
+- [ ] **D3**（可选）向量 recall：插件接口；文件仍为真源 — 优先级见统一 backlog **P2-13**
 
 ---
 
@@ -137,22 +137,23 @@
 | P0 | **受控并行 tool 调用** | [ ] 见 backlog #4 |
 | P0 | **Glob / 列表工具** | [ ] 见 backlog #5 |
 | P0 | **全局上下文预算** | [x] 见 backlog #6 |
-| P1 | **LLM 类型可扩展** | [ ] 见 backlog #7 |
-| P1 | **通用 Channel 抽象** | [ ] 见 backlog #8 |
-| P1 | **Skills（Claude Code 机制）** | [ ] 见 backlog #9 |
-| P1 | **行为策略写回** | [ ] 见 backlog #10 |
-| P1 | **任务状态工具** | [ ] 见 backlog #11 |
-| P1 | **侧链合并（可选）** | [ ] 见 backlog #12 |
-| P2 | **入口编排加厚** | [ ] 见 backlog #13 |
-| P2 | **D3 向量 recall** | [ ] 见 backlog #14（阶段 D3） |
-| P2 | **预算精度（可选）** | [ ] 见 backlog #15 |
-| P2 | **协作模型（teammate / swarm）** | [ ] 见 backlog #16 |
+| P1 | **通用 Channel 抽象** | [ ] 见 backlog #7 |
+| P1 | **Skills（Claude Code 机制）** | [ ] 见 backlog #8 |
+| P1 | **行为策略写回** | [ ] 见 backlog #9 |
+| P1 | **任务状态工具** | [ ] 见 backlog #10 |
+| P1 | **侧链合并（可选）** | [ ] 见 backlog #11 |
+| P2 | **入口编排加厚** | [ ] 见 backlog #12 |
+| P2 | **D3 向量 recall** | [ ] 见 backlog #13（阶段 D3） |
+| P2 | **预算精度（可选）** | [ ] 见 backlog #14 |
+| P2 | **协作模型（teammate / swarm）** | [ ] 见 backlog #15 |
+| 后置 | **LLM 类型可扩展** | [ ] 见 backlog #16 |
 | 后置 | **完整 MCP、compact 高级形态 / 全量遥测** | 见 backlog #17；最小 compact 已在 P0 |
 
 ---
 
 ## 刻意后置（勿在 A 阶段展开）
 
+- [ ] **LLM 类型可扩展**（Provider / Transport；见统一 backlog #16）
 - [ ] 完整 MCP 客户端与 UI 级权限流
 - [ ] compact **高级形态**（多段摘要、与模型协同的 collapse 策略等；最小 compact 见统一 backlog P0）
 - [ ] 全量遥测
@@ -172,13 +173,15 @@ flowchart TB
     CFG --> MAINT
   end
   subgraph P1["P1 扩展"]
-    LLM[LLM Provider]
     CH[Channel 抽象]
     SK[Skills 发现与注入]
-    CFG --> LLM
-    LLM --> CH
+    CFG --> CH
     B -.-> SK
   end
+  subgraph POST["后置"]
+    LLM[LLM Provider 抽象]
+  end
+  CFG -.-> LLM
   A[阶段 A 已完成] --> B[阶段 B]
   A --> C[阶段 C]
   B --> P0
@@ -188,7 +191,7 @@ flowchart TB
   C --> D
 ```
 
-建议：**先做 P0 中的统一 config**（开发与生产同一套），再并行推进维护管道与 compact/工具面；**P1 中先 LLM 抽象再 Channel**；**Skills** 可与 memory/规则发现（阶段 B）共用路径约定，独立排期亦可。D3 向量与 MCP 按产品排期。阶段 D1/D2 已接，不阻塞上述排序。
+建议：**先做 P0 中的统一 config**（开发与生产同一套），再并行推进维护管道与 compact/工具面；**Channel / Skills** 等 P1 可与当前 OpenAI 兼容栈并行；**LLM Provider 抽象** 见 backlog 后置（#16），避免过早双重迁移。D3 向量与 MCP 按产品排期。阶段 D1/D2 已接，不阻塞上述排序。
 
 ---
 

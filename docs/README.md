@@ -16,7 +16,7 @@
 |------|------|
 | [config.md](config.md) | 统一 YAML 配置：合并顺序、`--config`、API key 与 `ONCLAW_*` 优先级、`ApplyEnvDefaults` |
 | [outbound-events-design.md](outbound-events-design.md) | 出站事件 envelope、`Record`/`Sink`、CLI/HTTP 行为 |
-| [inbound-routing-design.md](inbound-routing-design.md) | 入站 `Inbound` 字段表、可选 `ctx` 透传、`SinkRegistry`（`routing` 核心 + `routing/cli` 等子包按渠道注册） |
+| [inbound-routing-design.md](inbound-routing-design.md) | 入站 `Inbound` 字段表、可选 `ctx` 透传、`SinkRegistry`（`routing` 核心 + `channel/*` 子包按渠道注册终端 `Sink` 等） |
 
 ## 设计参考（原 Claude Code 分析文）
 

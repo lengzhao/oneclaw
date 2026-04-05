@@ -50,7 +50,7 @@ Emit(ctx, Record) error   // Record = seq + kind + data + 可选 job_id/session_
 ## 3. CLI（怎么算友好）
 
 - **stdout**：只打 **`text`** 的 `content`（和现在「最后助手回复」一致；若流式则连续打印片段）。
-- **stderr**：继续 **slog**；**默认**每条 **`Record`** 再打一行 JSON（与下面 HTTP NDJSON 同形）；终端 sink（`routing/cli`）可把 `JSONEvents` 设为 `false`，则不再写 JSONL，成功结束时用一行 `(turn done)` 代替。
+- **stderr**：继续 **slog**；**默认**每条 **`Record`** 再打一行 JSON（与下面 HTTP NDJSON 同形）；终端由 **`channel/cli`** 读 **`IO.OutboundChan`** 渲染（与旧 `Sink` 行为等价；未写 JSONL 时以 `(turn done)` 提示），则不再写 JSONL，成功结束时用一行 `(turn done)` 代替。
 - **`done`**：`ok=false` 时 stderr 仍会打错误文案（可与 JSONL 并存）。
 
 ---
@@ -96,7 +96,7 @@ sequenceDiagram
 
 ---
 
-*实现状态（仓库内）：`routing` 核心；子包 **`routing/cli`**：`init` 注册 `SourceCLI`（默认 stderr JSONL）、**`RunREPL`** 收消息。`cmd/oneclaw` 组装 `Engine` 后调用 `cli.RunREPL`；飞书/Slack 可仿照增加子包（各自 `RunWebhook` / `RunSocketMode` 等）。HTTP/SSE 可 `RegisterDefaultSink` 或自建 `MapRegistry`。*
+*实现状态（仓库内）：`routing` 核心；**`channel.StartAll`** 为每个 **`Spec`** 建 **`OutboundChan` + `chanSink`**（当 **`Source` 非空**）并注册到 **`routing.DefaultRegistry`**；助手事件经 **`Emitter → chanSink → OutboundChan`** 到 **`Connector`**（如 **`channel/cli`** 读 chan 打终端）。`cmd/oneclaw` 传入 **`Bootstrap{Engine, Config}`**。*
 
 *入站统一封装、`context` 透传、按来源注册表选 `Sink`：见 [inbound-routing-design.md](inbound-routing-design.md)。*
 
