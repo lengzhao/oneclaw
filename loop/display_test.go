@@ -1,8 +1,9 @@
-package session
+package loop_test
 
 import (
 	"testing"
 
+	"github.com/lengzhao/oneclaw/loop"
 	"github.com/openai/openai-go"
 )
 
@@ -11,7 +12,7 @@ func TestLastAssistantDisplay(t *testing.T) {
 		openai.UserMessage("hi"),
 		openai.AssistantMessage("Hello!"),
 	}
-	if got := LastAssistantDisplay(msgs); got != "Hello!" {
+	if got := loop.LastAssistantDisplay(msgs); got != "Hello!" {
 		t.Fatalf("got %q", got)
 	}
 }

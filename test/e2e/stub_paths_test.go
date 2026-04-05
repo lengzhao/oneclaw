@@ -65,6 +65,7 @@ func TestE2E_41_WriteFileUnderUserMemoryRoot(t *testing.T) {
 	}))
 	stub.Enqueue(openaistub.CompletionStop("", "ok"))
 	e2eEnvWithMemory(t, stub)
+	e2eIsolateUserMemory(t, home)
 
 	lay := memory.DefaultLayout(cwd, home)
 	tctx := toolctx.New(cwd, context.Background())
@@ -104,6 +105,7 @@ func TestE2E_42_WriteFileRejectedOutsideRoots(t *testing.T) {
 	}))
 	stub.Enqueue(openaistub.CompletionStop("", "after-deny"))
 	e2eEnvWithMemory(t, stub)
+	e2eIsolateUserMemory(t, home)
 
 	lay := memory.DefaultLayout(cwd, home)
 	tctx := toolctx.New(cwd, context.Background())
@@ -159,6 +161,7 @@ func TestE2E_43_GrepUnderProjectMemoryRoot(t *testing.T) {
 	}))
 	stub.Enqueue(openaistub.CompletionStop("", "found"))
 	e2eEnvWithMemory(t, stub)
+	e2eIsolateUserMemory(t, home)
 
 	lay := memory.DefaultLayout(cwd, home)
 	tctx := toolctx.New(cwd, context.Background())

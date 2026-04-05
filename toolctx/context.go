@@ -22,6 +22,13 @@ type Context struct {
 
 	// MemoryWriteRoots are extra absolute directories where read/write_file may access (memory scopes).
 	MemoryWriteRoots []string
+
+	// SubagentDepth is 0 on the main thread; incremented for each nested run_agent/fork_context.
+	SubagentDepth int
+	// MaxSubagentDepth limits nested agent runs (inclusive of child depth).
+	MaxSubagentDepth int
+	// Subagent runs nested loops when non-nil (phase C).
+	Subagent SubagentRunner
 }
 
 // New builds a tool context. If abort is nil, context.Background() is used.
@@ -34,6 +41,34 @@ func New(cwd string, abort context.Context) *Context {
 		Abort:             abort,
 		ReadFileCache:     make(map[string]string),
 		NestedMemoryPaths: make(map[string]struct{}),
+		MaxSubagentDepth:  3,
+	}
+}
+
+// ChildContext returns an isolated tool context for a nested agent (fresh read cache, same cwd/abort/memory roots).
+func (c *Context) ChildContext() *Context {
+	if c == nil {
+		return New("", context.Background())
+	}
+	child := New(c.CWD, c.Abort)
+	child.MemoryWriteRoots = append([]string(nil), c.MemoryWriteRoots...)
+	child.MaxSubagentDepth = c.MaxSubagentDepth
+	child.Subagent = c.Subagent
+	child.SubagentDepth = c.SubagentDepth + 1
+	return child
+}
+
+// ImportReadCache copies read-through cache entries from parent (fork-style prefix sharing).
+func (c *Context) ImportReadCacheFrom(parent *Context) {
+	if c == nil || parent == nil {
+		return
+	}
+	parent.readFileCacheMu.RLock()
+	defer parent.readFileCacheMu.RUnlock()
+	c.readFileCacheMu.Lock()
+	defer c.readFileCacheMu.Unlock()
+	for k, v := range parent.ReadFileCache {
+		c.ReadFileCache[k] = v
 	}
 }
 

@@ -47,6 +47,18 @@ func (r *Registry) Get(name string) (Tool, bool) {
 	return t, ok
 }
 
+// ToolNames returns sorted registered tool names.
+func (r *Registry) ToolNames() []string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	names := make([]string, 0, len(r.items))
+	for name := range r.items {
+		names = append(names, name)
+	}
+	slices.Sort(names)
+	return names
+}
+
 // OpenAITools builds ChatCompletionToolParam slice for ChatCompletionNewParams.
 // Tool order is sorted by name so requests are stable across processes and runs.
 func (r *Registry) OpenAITools() []openai.ChatCompletionToolParam {

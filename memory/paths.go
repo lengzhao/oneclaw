@@ -12,13 +12,28 @@ import (
 
 const entrypointName = "MEMORY.md"
 
-// MemoryBaseDir resolves the base config/memory directory (~/.oneclaw or remote override).
-func MemoryBaseDir(home string) string {
-	if v := strings.TrimSpace(os.Getenv("CLAUDE_CODE_REMOTE_MEMORY_DIR")); v != "" {
-		return filepath.Clean(v)
+// expandTilde replaces a leading "~/" or "~\" (and bare "~") with home. Other paths are unchanged.
+// Shells expand ~ in .env files, but many loaders pass the string through literally; Go treats "~" as a normal path segment.
+func expandTilde(home, p string) string {
+	if home == "" || p == "" {
+		return p
 	}
+	if p == "~" {
+		return home
+	}
+	if len(p) >= 2 && p[0] == '~' {
+		sep := p[1]
+		if sep == filepath.Separator || sep == '/' || sep == '\\' {
+			return filepath.Join(home, p[2:])
+		}
+	}
+	return p
+}
+
+// MemoryBaseDir resolves the base config/memory directory (~/.oneclaw or ONCLAW_MEMORY_BASE override).
+func MemoryBaseDir(home string) string {
 	if v := strings.TrimSpace(os.Getenv("ONCLAW_MEMORY_BASE")); v != "" {
-		return filepath.Clean(v)
+		return filepath.Clean(expandTilde(home, v))
 	}
 	return filepath.Join(home, DotDir)
 }
@@ -196,9 +211,6 @@ func (l Layout) EnsureDirs() {
 // AutoMemoryDisabled is true only when an explicit opt-out env is set (default: auto memory on).
 func AutoMemoryDisabled() bool {
 	if v := strings.TrimSpace(os.Getenv("ONCLAW_DISABLE_AUTO_MEMORY")); v != "" {
-		return v == "1" || strings.EqualFold(v, "true") || strings.EqualFold(v, "yes")
-	}
-	if v := strings.TrimSpace(os.Getenv("CLAUDE_CODE_DISABLE_AUTO_MEMORY")); v != "" {
 		return v == "1" || strings.EqualFold(v, "true") || strings.EqualFold(v, "yes")
 	}
 	return false

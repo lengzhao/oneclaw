@@ -13,6 +13,7 @@ import (
 func TestE2E_20_MemoryMDInSystemSuffix(t *testing.T) {
 	home := t.TempDir()
 	cwd := t.TempDir()
+	e2eIsolateUserMemory(t, home)
 	lay := memory.DefaultLayout(cwd, home)
 	if err := os.MkdirAll(lay.Project, 0o755); err != nil {
 		t.Fatal(err)
@@ -20,7 +21,7 @@ func TestE2E_20_MemoryMDInSystemSuffix(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(lay.Project, "MEMORY.md"), []byte("E2E20_IDX_MARKER\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	b := memory.BuildTurn(lay, home, "hi", nil)
+	b := memory.BuildTurn(lay, home, "hi", nil, 0)
 	if !strings.Contains(b.SystemSuffix, "E2E20_IDX_MARKER") {
 		t.Fatalf("system suffix missing marker:\n%s", b.SystemSuffix)
 	}
@@ -30,6 +31,7 @@ func TestE2E_20_MemoryMDInSystemSuffix(t *testing.T) {
 func TestE2E_21_MemoryMDLineTruncationWarning(t *testing.T) {
 	home := t.TempDir()
 	cwd := t.TempDir()
+	e2eIsolateUserMemory(t, home)
 	lay := memory.DefaultLayout(cwd, home)
 	if err := os.MkdirAll(lay.Project, 0o755); err != nil {
 		t.Fatal(err)
@@ -42,7 +44,7 @@ func TestE2E_21_MemoryMDLineTruncationWarning(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(lay.Project, "MEMORY.md"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	b := memory.BuildTurn(lay, home, "hi", nil)
+	b := memory.BuildTurn(lay, home, "hi", nil, 0)
 	if !strings.Contains(b.SystemSuffix, "WARNING") || !strings.Contains(b.SystemSuffix, "lines") {
 		t.Fatalf("expected line-cap warning in:\n%s", b.SystemSuffix)
 	}
@@ -52,6 +54,7 @@ func TestE2E_21_MemoryMDLineTruncationWarning(t *testing.T) {
 func TestE2E_22_MemoryMDByteTruncationWarning(t *testing.T) {
 	home := t.TempDir()
 	cwd := t.TempDir()
+	e2eIsolateUserMemory(t, home)
 	lay := memory.DefaultLayout(cwd, home)
 	if err := os.MkdirAll(lay.Project, 0o755); err != nil {
 		t.Fatal(err)
@@ -62,7 +65,7 @@ func TestE2E_22_MemoryMDByteTruncationWarning(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(lay.Project, "MEMORY.md"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	b := memory.BuildTurn(lay, home, "hi", nil)
+	b := memory.BuildTurn(lay, home, "hi", nil, 0)
 	if !strings.Contains(b.SystemSuffix, "WARNING") {
 		t.Fatalf("expected byte-cap warning in:\n%s", b.SystemSuffix)
 	}
@@ -73,8 +76,9 @@ func TestE2E_52_AutoMemoryDisabledOmitsAutoBullet(t *testing.T) {
 	t.Setenv("ONCLAW_DISABLE_AUTO_MEMORY", "1")
 	home := t.TempDir()
 	cwd := t.TempDir()
+	e2eIsolateUserMemory(t, home)
 	lay := memory.DefaultLayout(cwd, home)
-	b := memory.BuildTurn(lay, home, "hi", nil)
+	b := memory.BuildTurn(lay, home, "hi", nil, 0)
 	if strings.Contains(b.SystemSuffix, "**auto**") {
 		t.Fatalf("auto bullet should be omitted: %s", b.SystemSuffix)
 	}

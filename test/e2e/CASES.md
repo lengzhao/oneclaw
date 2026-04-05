@@ -43,6 +43,17 @@
 | E2E-80 | 无 `OPENAI_API_KEY`（真客户端路径，可选） | [ ] | — |
 | E2E-81 | 空用户输入被拒绝 | [x] | `TestE2E_81_EmptyInboundRejected` · `stub_negative_test.go` |
 | E2E-82 | 未知工具名 tool_result | [x] | `TestE2E_82_UnknownToolName` · `stub_negative_test.go` |
+| E2E-90 | `run_agent` 子循环 + sidechain 落盘 | [x] | `TestE2E_StubRunAgentNested` · `stub_subagent_test.go` |
+| E2E-91 | `fork_context` 共享 system | [x] | `TestE2E_StubForkContext` · `stub_subagent_test.go` |
+| E2E-92 | 默认模型维护追加 MEMORY.md（测试中显式放开 `ONCLAW_DISABLE_AUTO_MAINTENANCE`） | [x] | `TestE2E_92_AutoMaintenanceAppends` · `stub_maintain_test.go` |
+| E2E-93 | Memory 审计：daily log 追加后 `memory-write.jsonl` 含 `daily_log_line` | [x] | `TestE2E_93_MemoryAuditDailyLog` · `stub_audit_test.go` |
+| E2E-94 | `ONCLAW_DISABLE_MEMORY_AUDIT=1` 不写审计文件 | [x] | `TestE2E_94_MemoryAuditDisabledNoFile` · `stub_audit_test.go` |
+| E2E-95 | `write_file` 写 project memory 根时审计含 `write_file` | [x] | `TestE2E_95_MemoryAuditWriteFileUnderMemoryRoot` · `stub_audit_test.go` |
+| E2E-96 | `cmd/maintain -once` 子进程 + stub 写回 MEMORY.md | [x] | `TestE2E_96_MaintainCLIOnce` · `stub_maintain_cli_test.go` |
+| E2E-97 | `cmd/maintain` + `ONCLAW_MAINTAIN_INTERVAL=0` 单次退出 | [x] | `TestE2E_97_MaintainCLIIntervalZeroRunsOnce` · `stub_maintain_cli_test.go` |
+| E2E-98 | turn-log 按日分文件；无工具时仍有 `assistant_final` 一行 | [x] | `TestE2E_98_TurnLogAssistantFinalWithoutTools` · `stub_turn_log_test.go` |
+| E2E-99 | `ONCLAW_DISABLE_TURN_LOG=1` 不写 turn-log 文件 | [x] | `TestE2E_99_TurnLogDisabledNoFile` · `stub_turn_log_test.go` |
+| E2E-100 | 每工具一行 `kind=tool` + 回合末 `kind=assistant_final` | [x] | `TestE2E_100_TurnLogToolThenAssistantFinal` · `stub_turn_log_test.go` |
 
 ---
 
@@ -190,6 +201,48 @@
 - **E2E-80**：不设 key 且 **不**走 stub（可选，非默认 CI）。
 - **E2E-81**：`Engine.SubmitUser` 空文本。
 - **E2E-82**：stub 返回未注册工具名；期望 tool 错误消息 + 会话可继续或结束（与 `loop` 一致）。
+
+---
+
+## 10. 子 Agent（阶段 C）
+
+### E2E-90 / E2E-91
+
+- **E2E-90**：stub：`ToolCalls(run_agent)` → 子循环 `CompletionStop` → 主循环 `CompletionStop`；期望主 transcript 末条为父级最终回复；`.oneclaw/sidechain/` 有落盘。
+- **E2E-91**：stub：`ToolCalls(fork_context)` → 子 `CompletionStop` → 主 `CompletionStop`。
+
+### E2E-92
+
+- **前置**：`HOME` 与 cwd；memory 开启；`ONCLAW_DISABLE_AUTO_MAINTENANCE=0`（`e2eEnvWithMemory` 默认会关掉维护以免多耗 stub）；stub 连续两次 `CompletionStop`（主回合 + 维护回合）。
+- **期望**：`<cwd>/.oneclaw/memory/MEMORY.md` 含维护段标记。
+
+---
+
+## 11. Memory 审计与 turn-log（阶段 D2）
+
+### E2E-93～E2E-95
+
+- **E2E-93**：默认开启审计；`SubmitUser` 后 `PostTurn` 写 daily log；断言 `<cwd>/.oneclaw/audit/memory-write.jsonl` 首行 JSON 的 `source=daily_log_line` 且 `path` 为当日 log。
+- **E2E-94**：`ONCLAW_DISABLE_MEMORY_AUDIT=1` 时上述审计文件不存在。
+- **E2E-95**：stub 下发 `write_file` 至 `<cwd>/.oneclaw/memory/...`；审计中至少一行 `source=write_file` 且 `path` 为绝对目标路径。
+
+### E2E-98～E2E-100（turn-log）
+
+- **前置**：`e2eEnvWithMemory`；`ONCLAW_DISABLE_MEMORY_EXTRACT` 未关（与 `ToolTrace` / 即时落盘同源开关）。E2E-98 可设 `ONCLAW_DISABLE_MEMORY_AUDIT=1`。
+- **E2E-98**：stub 仅 `CompletionStop`；默认路径为 `<cwd>/.oneclaw/traces/logs/YYYY/MM/YYYY-MM-DD.jsonl`，含一行 `kind=assistant_final`。
+- **E2E-99**：`ONCLAW_DISABLE_TURN_LOG=1` 时上述当日文件**不**创建；`PostTurn` / daily log 不受影响。
+- **E2E-100**：stub `CompletionToolCalls(read_file)` → `CompletionStop`；当日 JSONL 内先 `kind=tool`（read_file），再 `kind=assistant_final`；**不**写入对话 `Messages`。
+
+---
+
+## 12. 维护 CLI（`cmd/maintain`）
+
+### E2E-96 / E2E-97
+
+- **前置**：预写当日 daily log（字节 ≥ `ONCLAW_MAINTENANCE_MIN_LOG_BYTES`）；stub 一次 `CompletionStop`（维护段 + 唯一标记）；`OPENAI_BASE_URL` 等由 `baseStubTransport` 注入；子进程 `HOME` 为 `t.TempDir()` 以隔离 memory layout。
+- **E2E-96**：`go build ./cmd/maintain` 后执行 `-cwd <tmp> -once`，期望 `MEMORY.md` 含标记。
+- **E2E-97**：同上二进制，不传 `-once`，`ONCLAW_MAINTAIN_INTERVAL=0`，期望仍只跑一轮并写入标记（与 cron 环境一致）。
+- **说明**：`go build` 子进程将 `HOME` 设为包 init 时保存的真实 HOME，避免模块缓存写入 `t.TempDir()` 导致只读文件清理失败。
 
 ---
 

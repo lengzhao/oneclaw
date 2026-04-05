@@ -9,5 +9,7 @@ func DefaultRegistry() *tools.Registry {
 	r.MustRegister(WriteTool{})
 	r.MustRegister(GrepTool{})
 	r.MustRegister(BashTool{})
+	r.MustRegister(RunAgentTool{})
+	r.MustRegister(ForkContextTool{})
 	return r
 }

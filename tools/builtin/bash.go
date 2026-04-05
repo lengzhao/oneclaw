@@ -8,8 +8,8 @@ import (
 	"os/exec"
 	"time"
 
-	"github.com/openai/openai-go"
 	"github.com/lengzhao/oneclaw/toolctx"
+	"github.com/openai/openai-go"
 )
 
 type bashInput struct {
@@ -20,7 +20,7 @@ type bashInput struct {
 // BashTool runs a shell command in the working directory (unsafe; gate with CanUseTool in production).
 type BashTool struct{}
 
-func (BashTool) Name() string        { return "bash" }
+func (BashTool) Name() string          { return "bash" }
 func (BashTool) ConcurrencySafe() bool { return false }
 func (BashTool) Description() string {
 	return "Run a shell command via sh -c in the working directory. Optional timeout_sec (default 30, max 120)."

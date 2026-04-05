@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/openai/openai-go"
 	"github.com/lengzhao/oneclaw/routing"
 	"github.com/lengzhao/oneclaw/tools"
+	"github.com/openai/openai-go"
 )
 
 func TestRunTurnNilMessages(t *testing.T) {

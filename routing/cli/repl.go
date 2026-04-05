@@ -18,8 +18,6 @@ import (
 // REPLConfig drives the terminal message loop.
 type REPLConfig struct {
 	Engine *session.Engine
-	// TranscriptPath is written on exit and on /save (optional).
-	TranscriptPath string
 	// In, Out, Err default to os.Stdin, os.Stdout, os.Stderr.
 	In  io.Reader
 	Out io.Writer
@@ -57,7 +55,9 @@ func RunREPL(cfg REPLConfig) error {
 		case line == "":
 			continue
 		case line == "/exit":
-			saveTranscript(cfg.Engine, cfg.TranscriptPath)
+			if err := cfg.Engine.SaveTranscript(); err != nil {
+				slog.Error("save transcript", "err", err)
+			}
 			return nil
 		case strings.HasPrefix(line, "/save "):
 			path := strings.TrimSpace(strings.TrimPrefix(line, "/save "))
@@ -65,7 +65,11 @@ func RunREPL(cfg REPLConfig) error {
 				fmt.Fprintln(errOut, "usage: /save <path>")
 				continue
 			}
-			saveTranscript(cfg.Engine, path)
+			if err := cfg.Engine.SaveTranscriptTo(path); err != nil {
+				slog.Error("save transcript", "path", path, "err", err)
+			} else {
+				fmt.Fprintf(errOut, "saved transcript to %s\n", path)
+			}
 			continue
 		}
 
@@ -91,22 +95,8 @@ func RunREPL(cfg REPLConfig) error {
 	if err := sc.Err(); err != nil {
 		slog.Error("stdin", "err", err)
 	}
-	saveTranscript(cfg.Engine, cfg.TranscriptPath)
+	if err := cfg.Engine.SaveTranscript(); err != nil {
+		slog.Error("save transcript", "err", err)
+	}
 	return nil
-}
-
-func saveTranscript(eng *session.Engine, path string) {
-	if path == "" {
-		return
-	}
-	b, err := eng.MarshalTranscript()
-	if err != nil {
-		slog.Error("marshal transcript", "err", err)
-		return
-	}
-	if err := os.WriteFile(path, b, 0o644); err != nil {
-		slog.Error("write transcript", "err", err)
-		return
-	}
-	slog.Info("saved transcript", "path", path)
 }

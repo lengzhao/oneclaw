@@ -1,4 +1,4 @@
-package session
+package loop
 
 import (
 	"fmt"
@@ -7,7 +7,7 @@ import (
 	"github.com/openai/openai-go"
 )
 
-// LastAssistantDisplay returns the latest assistant-visible text for CLI/UI.
+// LastAssistantDisplay returns the latest assistant-visible text for CLI/UI and sub-agent results.
 // If the last assistant message only requested tools, it summarizes tool names.
 func LastAssistantDisplay(msgs []openai.ChatCompletionMessageParamUnion) string {
 	for i := len(msgs) - 1; i >= 0; i-- {

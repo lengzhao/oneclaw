@@ -10,9 +10,9 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/openai/openai-go"
 	"github.com/lengzhao/oneclaw/toolctx"
 	"github.com/lengzhao/oneclaw/tools/pathutil"
+	"github.com/openai/openai-go"
 )
 
 const grepMaxMatches = 200
@@ -26,7 +26,7 @@ type grepInput struct {
 // GrepTool searches for a regex pattern in a single file or all files under a directory (non-recursive one level + recursive option simplified: walk with skip dot dirs).
 type GrepTool struct{}
 
-func (GrepTool) Name() string        { return "grep" }
+func (GrepTool) Name() string          { return "grep" }
 func (GrepTool) ConcurrencySafe() bool { return true }
 func (GrepTool) Description() string {
 	return "Search for a regular expression in files under the working directory. Path is a file or directory (directory walk skips .git, node_modules)."

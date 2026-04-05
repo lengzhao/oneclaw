@@ -9,11 +9,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openai/openai-go"
+	"github.com/lengzhao/oneclaw/budget"
 	"github.com/lengzhao/oneclaw/model"
 	"github.com/lengzhao/oneclaw/routing"
 	"github.com/lengzhao/oneclaw/toolctx"
 	"github.com/lengzhao/oneclaw/tools"
+	"github.com/openai/openai-go"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -33,6 +34,12 @@ type Config struct {
 	// MemoryAgentMd / MemoryRecall are optional extra user messages before the real user turn (phase B).
 	MemoryAgentMd string
 	MemoryRecall  string
+	// Budget trims transcript before each model call when Enabled (from budget.FromEnv).
+	Budget budget.Global
+	// ToolTrace, when non-nil, records slim per-tool rows for this RunTurn only (not sent to the model).
+	ToolTrace *ToolTraceSink
+	// OnToolLogged, when non-nil, called synchronously after each tool completes (e.g. append-only JSONL).
+	OnToolLogged func(ToolTraceEntry)
 }
 
 func logOutboundEmit(op string, err error) {
@@ -79,12 +86,13 @@ func RunTurn(ctx context.Context, cfg Config, in routing.Inbound) (err error) {
 		default:
 		}
 
+		ApplyHistoryBudget(cfg.Budget, cfg.System, msgs)
 		reqMsgs := buildRequestMessages(cfg.System, *msgs)
 		params := openai.ChatCompletionNewParams{
 			Model:               cfg.Model,
 			Messages:            reqMsgs,
 			Tools:               cfg.Registry.OpenAITools(),
-			MaxTokens:           openai.Int(cfg.MaxTokens),
+			MaxCompletionTokens: openai.Int(cfg.MaxTokens),
 			ParallelToolCalls:   openai.Bool(false),
 			StreamOptions:       openai.ChatCompletionStreamOptionsParam{IncludeUsage: openai.Bool(true)},
 		}
@@ -94,7 +102,7 @@ func RunTurn(ctx context.Context, cfg Config, in routing.Inbound) (err error) {
 			"model", cfg.Model,
 			"history_messages", len(reqMsgs),
 			"tools", len(params.Tools),
-			"max_tokens", cfg.MaxTokens,
+			"max_completion_tokens", cfg.MaxTokens,
 		)
 		stepStart := time.Now()
 		completion, err := model.Complete(ctx, cfg.Client, params)
@@ -138,7 +146,7 @@ func RunTurn(ctx context.Context, cfg Config, in routing.Inbound) (err error) {
 			}
 		}
 
-		toolMsgs, err := executeToolBatches(ctx, calls, cfg)
+		toolMsgs, err := executeToolBatches(ctx, calls, cfg, step)
 		if err != nil {
 			return err
 		}
@@ -206,7 +214,7 @@ func partitionToolCalls(calls []toolCallInv, reg *tools.Registry) [][]toolCallIn
 	return batches
 }
 
-func executeToolBatches(ctx context.Context, calls []toolCallInv, cfg Config) ([]openai.ChatCompletionMessageParamUnion, error) {
+func executeToolBatches(ctx context.Context, calls []toolCallInv, cfg Config, modelStep int) ([]openai.ChatCompletionMessageParamUnion, error) {
 	batches := partitionToolCalls(calls, cfg.Registry)
 	results := make([]openai.ChatCompletionMessageParamUnion, len(calls))
 	index := 0
@@ -214,7 +222,7 @@ func executeToolBatches(ctx context.Context, calls []toolCallInv, cfg Config) ([
 		start := index
 		if len(batch) == 1 || !concurrentBatch(batch, cfg.Registry) {
 			for _, c := range batch {
-				msg, err := runOneTool(ctx, c, cfg)
+				msg, err := runOneTool(ctx, c, cfg, modelStep)
 				if err != nil {
 					return nil, err
 				}
@@ -228,7 +236,7 @@ func executeToolBatches(ctx context.Context, calls []toolCallInv, cfg Config) ([
 		for i, c := range batch {
 			i, c := i, c
 			g.Go(func() error {
-				msg, err := runOneTool(gctx, c, cfg)
+				msg, err := runOneTool(gctx, c, cfg, modelStep)
 				if err != nil {
 					return err
 				}
@@ -254,11 +262,28 @@ func concurrentBatch(batch []toolCallInv, reg *tools.Registry) bool {
 	return true
 }
 
-func runOneTool(ctx context.Context, c toolCallInv, cfg Config) (openai.ChatCompletionMessageParamUnion, error) {
+func runOneTool(ctx context.Context, c toolCallInv, cfg Config, modelStep int) (openai.ChatCompletionMessageParamUnion, error) {
 	t0 := time.Now()
 	toolEnd := func(ok bool) {
 		if cfg.Outbound != nil {
 			logOutboundEmit("tool_end", cfg.Outbound.ToolEnd(ctx, c.Name, ok))
+		}
+	}
+	emitTool := func(ok bool, errText, out string) {
+		ent := ToolTraceEntry{
+			Step:        modelStep,
+			Name:        c.Name,
+			OK:          ok,
+			Err:         truncateRunes(errText, 200),
+			ArgsPreview: previewArgsJSON(c.Args),
+			OutPreview:  previewToolOut(out),
+			DurationMs:  time.Since(t0).Milliseconds(),
+		}
+		if cfg.ToolTrace != nil {
+			cfg.ToolTrace.Add(ent)
+		}
+		if cfg.OnToolLogged != nil {
+			cfg.OnToolLogged(ent)
 		}
 	}
 	if cfg.CanUseTool != nil {
@@ -266,6 +291,7 @@ func runOneTool(ctx context.Context, c toolCallInv, cfg Config) (openai.ChatComp
 		if !allow {
 			slog.Warn("loop.tool.denied", "tool", c.Name, "tool_use_id", c.ID, "reason", reason)
 			toolEnd(false)
+			emitTool(false, reason, "")
 			return openai.ToolMessage("denied: "+reason, c.ID), nil
 		}
 	}
@@ -273,16 +299,21 @@ func runOneTool(ctx context.Context, c toolCallInv, cfg Config) (openai.ChatComp
 	if !ok {
 		slog.Warn("loop.tool.unknown", "tool", c.Name, "tool_use_id", c.ID)
 		toolEnd(false)
-		return openai.ToolMessage(fmt.Sprintf("unknown tool %q", c.Name), c.ID), nil
+		msg := fmt.Sprintf("unknown tool %q", c.Name)
+		emitTool(false, msg, "")
+		return openai.ToolMessage(msg, c.ID), nil
 	}
 	out, err := tool.Execute(ctx, c.Args, cfg.ToolContext)
 	if err != nil {
 		slog.Warn("loop.tool.error", "tool", c.Name, "tool_use_id", c.ID, "duration_ms", time.Since(t0).Milliseconds(), "err", err)
 		toolEnd(false)
-		return openai.ToolMessage(err.Error(), c.ID), nil
+		errText := err.Error()
+		emitTool(false, errText, "")
+		return openai.ToolMessage(errText, c.ID), nil
 	}
 	slog.Debug("loop.tool.ok", "tool", c.Name, "tool_use_id", c.ID, "duration_ms", time.Since(t0).Milliseconds(), "out_bytes", len(out))
 	toolEnd(true)
+	emitTool(true, "", out)
 	return openai.ToolMessage(out, c.ID), nil
 }
 

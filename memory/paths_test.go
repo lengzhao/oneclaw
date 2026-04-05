@@ -1,0 +1,36 @@
+package memory
+
+import (
+	"path/filepath"
+	"testing"
+)
+
+func TestExpandTilde(t *testing.T) {
+	home := "/Users/someone"
+	cases := []struct {
+		in, want string
+	}{
+		{"", ""},
+		{"/abs", "/abs"},
+		{"~", home},
+		{"~/foo", filepath.Join(home, "foo")},
+		{"~/a/b", filepath.Join(home, "a", "b")},
+		{"~\\w", filepath.Join(home, "w")},
+		{"~other", "~other"},
+	}
+	for _, tc := range cases {
+		got := expandTilde(home, tc.in)
+		if got != tc.want {
+			t.Errorf("expandTilde(%q, %q) = %q; want %q", home, tc.in, got, tc.want)
+		}
+	}
+}
+
+func TestMemoryBaseDir_ExpandsTildeInEnv(t *testing.T) {
+	t.Setenv("ONCLAW_MEMORY_BASE", "~/custom-base")
+	got := MemoryBaseDir("/Users/someone")
+	want := filepath.Join("/Users/someone", "custom-base")
+	if got != filepath.Clean(want) {
+		t.Fatalf("MemoryBaseDir = %q; want %q", got, want)
+	}
+}

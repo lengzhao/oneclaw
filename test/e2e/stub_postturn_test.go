@@ -21,6 +21,7 @@ func TestE2E_50_DailyLogAppendDefault(t *testing.T) {
 	stub := openaistub.New(t)
 	stub.Enqueue(openaistub.CompletionStop("", "assistant line for log"))
 	e2eEnvWithMemory(t, stub)
+	e2eIsolateUserMemory(t, home)
 	e := newStubEngine(t, cwd)
 	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "user line for log"}); err != nil {
 		t.Fatal(err)
@@ -45,6 +46,7 @@ func TestE2E_51_DailyLogDisabledByEnv(t *testing.T) {
 	stub := openaistub.New(t)
 	stub.Enqueue(openaistub.CompletionStop("", "x"))
 	e2eEnvWithMemory(t, stub)
+	e2eIsolateUserMemory(t, home)
 	e := newStubEngine(t, cwd)
 	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "y"}); err != nil {
 		t.Fatal(err)

@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/openai/openai-go"
 	"github.com/lengzhao/oneclaw/toolctx"
 	"github.com/lengzhao/oneclaw/tools"
+	"github.com/openai/openai-go"
 )
 
 type fakeTool struct {

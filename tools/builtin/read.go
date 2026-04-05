@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/openai/openai-go"
 	"github.com/lengzhao/oneclaw/toolctx"
 	"github.com/lengzhao/oneclaw/tools/pathutil"
+	"github.com/openai/openai-go"
 )
 
 const maxReadBytes = 256 * 1024
@@ -20,7 +20,7 @@ type readInput struct {
 // ReadTool reads a text file under the session working directory.
 type ReadTool struct{}
 
-func (ReadTool) Name() string        { return "read_file" }
+func (ReadTool) Name() string          { return "read_file" }
 func (ReadTool) ConcurrencySafe() bool { return true }
 func (ReadTool) Description() string {
 	return "Read file contents from a path under the working directory or under ~/.oneclaw / .oneclaw memory roots. Text only; capped at 256KiB."

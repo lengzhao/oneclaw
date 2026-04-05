@@ -17,7 +17,8 @@ type TurnBundle struct {
 }
 
 // BuildTurn assembles discovery, system memory indices, and recall for this turn.
-func BuildTurn(layout Layout, home, userText string, recall *RecallState) TurnBundle {
+// recallBudget caps SelectRecall output (bytes); if <= 0, MaxSurfacedRecallBytes is used.
+func BuildTurn(layout Layout, home, userText string, recall *RecallState, recallBudget int) TurnBundle {
 	layout.EnsureDirs()
 
 	var sys strings.Builder
@@ -77,7 +78,10 @@ func BuildTurn(layout Layout, home, userText string, recall *RecallState) TurnBu
 	ctx.WriteString("\n</system-reminder>")
 
 	agentMd := strings.TrimSpace(ctx.String())
-	recallBody, nextRecall := SelectRecall(layout, userText, recall, MaxSurfacedRecallBytes)
+	if recallBudget <= 0 {
+		recallBudget = MaxSurfacedRecallBytes
+	}
+	recallBody, nextRecall := SelectRecall(layout, userText, recall, recallBudget)
 
 	return TurnBundle{
 		SystemSuffix:  sys.String(),
@@ -109,4 +113,3 @@ func readTruncatedEntrypoint(abs string) string {
 	}
 	return TruncateEntrypointContent(string(b)).Content
 }
-

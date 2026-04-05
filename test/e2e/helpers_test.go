@@ -1,10 +1,12 @@
 package e2e_test
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/openai/openai-go"
+	"github.com/lengzhao/oneclaw/memory"
 	"github.com/lengzhao/oneclaw/session"
 	"github.com/lengzhao/oneclaw/tools"
 	"github.com/lengzhao/oneclaw/tools/builtin"
@@ -59,11 +61,27 @@ func e2eEnvMinimal(t *testing.T, stub *openaistub.Server) {
 	t.Helper()
 	baseStubTransport(t, stub)
 	t.Setenv("ONCLAW_DISABLE_MEMORY", "1")
+	t.Setenv("ONCLAW_MEMORY_BASE", "")
+}
+
+// e2eIsolateUserMemory pins ONCLAW_MEMORY_BASE to filepath.Join(home, memory.DotDir) so a developer
+// ONCLAW_MEMORY_BASE (e.g. from .env) cannot write under the repo. Call after t.Setenv("HOME", home)
+// and after e2eEnvWithMemory. For home == "", clears the override.
+func e2eIsolateUserMemory(t *testing.T, home string) {
+	t.Helper()
+	if strings.TrimSpace(home) == "" {
+		t.Setenv("ONCLAW_MEMORY_BASE", "")
+		return
+	}
+	t.Setenv("ONCLAW_MEMORY_BASE", filepath.Join(home, memory.DotDir))
 }
 
 // e2eEnvWithMemory keeps stub transport defaults and does not disable memory.
 // Use with t.Setenv("HOME", tmpDir) and mkdir .oneclaw under HOME / cwd as needed.
+// Disables post-turn model maintenance so stub queues need not account for a second API call (production default is maintenance on).
 func e2eEnvWithMemory(t *testing.T, stub *openaistub.Server) {
 	t.Helper()
+	t.Setenv("ONCLAW_MEMORY_BASE", "")
 	baseStubTransport(t, stub)
+	t.Setenv("ONCLAW_DISABLE_AUTO_MAINTENANCE", "1")
 }

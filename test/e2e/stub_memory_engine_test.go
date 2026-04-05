@@ -26,6 +26,7 @@ func TestE2E_10_UserAgentMdInjected(t *testing.T) {
 	stub := openaistub.New(t)
 	stub.Enqueue(openaistub.CompletionStop("", "ok"))
 	e2eEnvWithMemory(t, stub)
+	e2eIsolateUserMemory(t, home)
 	e := newStubEngine(t, t.TempDir())
 	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "ping"}); err != nil {
 		t.Fatal(err)
@@ -46,6 +47,7 @@ func TestE2E_11_ProjectRootAgentMd(t *testing.T) {
 	stub := openaistub.New(t)
 	stub.Enqueue(openaistub.CompletionStop("", "ok"))
 	e2eEnvWithMemory(t, stub)
+	e2eIsolateUserMemory(t, home)
 	e := newStubEngine(t, cwd)
 	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "ping"}); err != nil {
 		t.Fatal(err)
@@ -70,6 +72,7 @@ func TestE2E_12_DotOneclawAgentMdOnly(t *testing.T) {
 	stub := openaistub.New(t)
 	stub.Enqueue(openaistub.CompletionStop("", "ok"))
 	e2eEnvWithMemory(t, stub)
+	e2eIsolateUserMemory(t, home)
 	e := newStubEngine(t, cwd)
 	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "ping"}); err != nil {
 		t.Fatal(err)
@@ -94,6 +97,7 @@ func TestE2E_13_DotOneclawRules(t *testing.T) {
 	stub := openaistub.New(t)
 	stub.Enqueue(openaistub.CompletionStop("", "ok"))
 	e2eEnvWithMemory(t, stub)
+	e2eIsolateUserMemory(t, home)
 	e := newStubEngine(t, cwd)
 	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "ping"}); err != nil {
 		t.Fatal(err)
@@ -121,6 +125,7 @@ func TestE2E_14_WalkUpOrderChildAfterParent(t *testing.T) {
 	stub := openaistub.New(t)
 	stub.Enqueue(openaistub.CompletionStop("", "ok"))
 	e2eEnvWithMemory(t, stub)
+	e2eIsolateUserMemory(t, home)
 	e := newStubEngine(t, child)
 	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "ping"}); err != nil {
 		t.Fatal(err)
@@ -162,6 +167,7 @@ func TestE2E_16_NoHomeDegradesGracefully(t *testing.T) {
 	stub := openaistub.New(t)
 	stub.Enqueue(openaistub.CompletionStop("", "ok"))
 	e2eEnvWithMemory(t, stub)
+	e2eIsolateUserMemory(t, "")
 	e := newStubEngine(t, t.TempDir())
 	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "ping"}); err != nil {
 		t.Fatal(err)
@@ -183,6 +189,7 @@ func TestE2E_30_RecallHit(t *testing.T) {
 	stub := openaistub.New(t)
 	stub.Enqueue(openaistub.CompletionStop("", "ok"))
 	e2eEnvWithMemory(t, stub)
+	e2eIsolateUserMemory(t, home)
 	e := newStubEngine(t, cwd)
 	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "What about zebrarecall_e2e_30?"}); err != nil {
 		t.Fatal(err)
@@ -201,6 +208,7 @@ func TestE2E_31_RecallMissNoAttachment(t *testing.T) {
 	stub := openaistub.New(t)
 	stub.Enqueue(openaistub.CompletionStop("", "ok"))
 	e2eEnvWithMemory(t, stub)
+	e2eIsolateUserMemory(t, home)
 	e := newStubEngine(t, cwd)
 	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "hello plain text only"}); err != nil {
 		t.Fatal(err)
