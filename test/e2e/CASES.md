@@ -58,6 +58,9 @@
 | E2E-102 | 维护强去重：与 `MEMORY.md` 重复的 bullet 被剥后不落盘 | [x] | `TestE2E_102_MaintainDedupeSkipsAppendWhenNoNewBullets` · `stub_maintain_pipeline_e2e_test.go` |
 | E2E-103 | 语义 compact：预算裁剪时首条 chat 请求 user 文本含 `compact_boundary` | [x] | `TestE2E_103_SemanticCompactInChatRequest` · `stub_semantic_compact_e2e_test.go` |
 | E2E-104 | `ONCLAW_DISABLE_SEMANTIC_COMPACT=1` 时首请求 user 侧无 `compact_boundary` | [x] | `TestE2E_104_SemanticCompactDisabledNoBoundaryTag` · `stub_semantic_compact_e2e_test.go` |
+| E2E-105 | Skills：首轮请求 system 含 `## Skills` 与技能名/描述 | [x] | `TestE2E_105_SkillsIndexInSystemPrompt` · `stub_skills_e2e_test.go` |
+| E2E-106 | `invoke_skill` 返回正文 + `skills-recent.json` 记录 | [x] | `TestE2E_106_InvokeSkillToolAndRecentFile` · `stub_skills_e2e_test.go` |
+| E2E-107 | `ONCLAW_DISABLE_SKILLS=1` 时 system 无 Skills 段 | [x] | `TestE2E_107_SkillsDisabledNoSystemSection` · `stub_skills_e2e_test.go` |
 
 ---
 

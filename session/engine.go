@@ -15,6 +15,7 @@ import (
 	"github.com/lengzhao/oneclaw/loop"
 	"github.com/lengzhao/oneclaw/memory"
 	"github.com/lengzhao/oneclaw/routing"
+	"github.com/lengzhao/oneclaw/skills"
 	"github.com/lengzhao/oneclaw/subagent"
 	"github.com/lengzhao/oneclaw/toolctx"
 	"github.com/lengzhao/oneclaw/tools"
@@ -108,6 +109,9 @@ func (e *Engine) SubmitUser(ctx context.Context, in routing.Inbound) error {
 	system := e.System
 	if memOK {
 		system += bundle.SystemSuffix
+	}
+	if herr == nil {
+		system += skills.SystemBlock(e.CWD, home, bg.SkillIndexMaxBytes())
 	}
 	cat := subagent.LoadCatalog(e.CWD)
 	tctx.Subagent = &subRunner{eng: e, turnSystem: system, catalog: cat, bg: bg}

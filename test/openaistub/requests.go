@@ -32,6 +32,32 @@ func ChatRequestUserTextConcat(body []byte) (string, error) {
 	return b.String(), nil
 }
 
+// ChatRequestSystemTextConcat joins string/text content from all messages with role "system".
+func ChatRequestSystemTextConcat(body []byte) (string, error) {
+	var req struct {
+		Messages []struct {
+			Role    string          `json:"role"`
+			Content json.RawMessage `json:"content"`
+		} `json:"messages"`
+	}
+	if err := json.Unmarshal(body, &req); err != nil {
+		return "", err
+	}
+	var b strings.Builder
+	for _, m := range req.Messages {
+		if m.Role != "system" {
+			continue
+		}
+		if s := decodeMessageContent(m.Content); s != "" {
+			if b.Len() > 0 {
+				b.WriteByte('\n')
+			}
+			b.WriteString(s)
+		}
+	}
+	return b.String(), nil
+}
+
 func decodeMessageContent(raw json.RawMessage) string {
 	if len(raw) == 0 {
 		return ""

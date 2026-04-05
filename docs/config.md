@@ -33,6 +33,7 @@
 | 维护 | `maintain.*` | `ONCLAW_MAINTAIN_INTERVAL`、`ONCLAW_MAINTENANCE_MODEL`；多日 log / topic：`ONCLAW_MAINTENANCE_LOG_DAYS`、`ONCLAW_MAINTENANCE_MAX_COMBINED_LOG_BYTES`、`ONCLAW_MAINTENANCE_MAX_TOPIC_FILES`、`ONCLAW_MAINTENANCE_TOPIC_EXCERPT_BYTES` |
 | 日志 | `log.*` | `ONCLAW_LOG_LEVEL`、`ONCLAW_LOG_FORMAT`；默认另写 `<cwd>/.oneclaw/logs/YYYY/MM/oneclaw-<时间戳>.log`，`ONCLAW_DISABLE_LOG_FILE=1` 关闭仅写 stderr |
 | 开关 | `features.disable_*` | 对应 `ONCLAW_DISABLE_*`（见示例文件） |
+| Skills | — | `ONCLAW_DISABLE_SKILLS=1` 关闭系统提示里的 Skills 索引（`invoke_skill` 仍可用）；`ONCLAW_SKILLS_RECENT_PATH` 覆盖 `<cwd>/.oneclaw/skills-recent.json`；`ONCLAW_SKILLS_INDEX_MAX_BYTES` 覆盖索引字节上限（默认约为 `ONCLAW_MAX_PROMPT_BYTES` 的 1%，见 `budget.Global.SkillIndexMaxBytes`） |
 
 启动时若调用了 `config.ApplyEnvDefaults`，会把「当前仍为空的」`ONCLAW_*` 设为 YAML 中的值，使 `memory`、`budget` 等仍读环境的代码与文件配置一致；**不会**设置 `OPENAI_API_KEY`。
 

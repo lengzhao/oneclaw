@@ -35,7 +35,7 @@
 ### P1
 
 7. `[x]` **通用 Channel 抽象** — 飞书 / Slack 等可插拔 channel，对齐 [`inbound-routing-design.md`](inbound-routing-design.md)（参考 openclaw/picoclaw）。
-8. `[ ]` **Skills（Claude Code 机制）** — 可发现的能力说明包：目录布局 + `SKILL.md`（或约定文件名）、**元数据**（名称、描述、适用场景）、**渐进式披露**（先注入摘要/索引，相关时再读全文）；与用户 / 项目 / Agent scope 及 **预算**、**审计**（若技能内容落盘或工具改写）对齐；可与 `AGENT.md` / `.oneclaw/rules` 发现链协同或独立根路径（设计待定）。
+8. `[x]` **Skills（Claude Code 机制）** — 已实现：`skills` 包 + `~/.oneclaw/skills` / `<cwd>/.oneclaw/skills` 下 `<name>/SKILL.md`、系统提示注入索引、`invoke_skill` 拉取全文、`skills-recent.json` LRU（20）排序；细节见 [`claude-code-skills-mechanism.md`](claude-code-skills-mechanism.md) §11 与 `ONCLAW_DISABLE_SKILLS` 等环境变量（`docs/config.md`）。**审计 / 条件 paths / 动态子目录发现** 等待续作。
 9. `[ ]` **行为策略写回** — 规则进 `.oneclaw/rules` / `AGENT.md` 的路径与护栏（与 D2 审计衔接）。
 10. `[ ]` **任务状态工具** — Task 创建/更新或等价落盘，长会话与 resume 对齐进度。
 11. `[ ]` **侧链合并（可选）** — sidechain 结论以 attachment 或 user 摘要合入主 transcript。

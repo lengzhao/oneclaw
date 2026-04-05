@@ -84,6 +84,25 @@ func (g Global) HistoryByteBudget(systemLen int) int {
 	return out
 }
 
+// SkillIndexMaxBytes caps the injected "## Skills" listing (names + short descriptions).
+// Default ~1% of MaxPromptBytes, clamped; disable when context budget is off (large ceiling).
+func (g Global) SkillIndexMaxBytes() int {
+	if !g.Enabled() {
+		return 1 << 30
+	}
+	n := g.MaxPromptBytes / 100
+	if n < 2048 {
+		n = 2048
+	}
+	if n > 24_000 {
+		n = 24_000
+	}
+	if v := getenvInt("ONCLAW_SKILLS_INDEX_MAX_BYTES", 0); v > 0 {
+		return v
+	}
+	return n
+}
+
 // InheritedMessageCap limits fork / run_agent inherit_context tail length.
 func (g Global) InheritedMessageCap() int {
 	if !g.Enabled() {

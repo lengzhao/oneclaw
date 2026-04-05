@@ -13,5 +13,6 @@ func DefaultRegistry() *tools.Registry {
 	r.MustRegister(BashTool{})
 	r.MustRegister(RunAgentTool{})
 	r.MustRegister(ForkContextTool{})
+	r.MustRegister(InvokeSkillTool{})
 	return r
 }

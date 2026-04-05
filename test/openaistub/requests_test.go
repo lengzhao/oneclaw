@@ -12,3 +12,14 @@ func TestChatRequestUserTextConcat_stringContent(t *testing.T) {
 		t.Fatalf("got %q", s)
 	}
 }
+
+func TestChatRequestSystemTextConcat(t *testing.T) {
+	body := []byte(`{"model":"gpt-4o","messages":[{"role":"system","content":"alpha"},{"role":"user","content":"u"},{"role":"system","content":"beta"}]}`)
+	s, err := ChatRequestSystemTextConcat(body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s != "alpha\nbeta" {
+		t.Fatalf("got %q", s)
+	}
+}
