@@ -125,7 +125,15 @@ func DailyLogPath(autoMemoryDir, date string) string {
 	return filepath.Join(autoMemoryDir, "logs", y, m, name)
 }
 
-// AgentScope selects where agent-scoped memory lives.
+// DialogHistoryPath returns <cwd>/.oneclaw/memory/YYYY-MM-DD/dialog_history.json (calendar date, local).
+func (l Layout) DialogHistoryPath(date string) string {
+	date = strings.TrimSpace(date)
+	if len(date) >= 10 {
+		date = date[:10]
+	}
+	return filepath.Join(l.Project, date, "dialog_history.json")
+}
+
 type AgentScope int
 
 const (

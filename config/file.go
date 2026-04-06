@@ -24,9 +24,10 @@ type File struct {
 	} `yaml:"chat"`
 
 	Paths struct {
-		MemoryBase  string `yaml:"memory_base"`
-		Transcript  string `yaml:"transcript"`
-		TurnLogPath string `yaml:"turn_log_path"`
+		MemoryBase         string `yaml:"memory_base"`
+		Transcript         string `yaml:"transcript"`
+		WorkingTranscript  string `yaml:"working_transcript"`
+		TurnLogPath        string `yaml:"turn_log_path"`
 	} `yaml:"paths"`
 
 	Features struct {
@@ -156,6 +157,9 @@ func mergeFile(dst *File, src File) {
 	}
 	if src.Paths.Transcript != "" {
 		dst.Paths.Transcript = src.Paths.Transcript
+	}
+	if src.Paths.WorkingTranscript != "" {
+		dst.Paths.WorkingTranscript = src.Paths.WorkingTranscript
 	}
 	if src.Paths.TurnLogPath != "" {
 		dst.Paths.TurnLogPath = src.Paths.TurnLogPath

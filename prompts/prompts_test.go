@@ -67,4 +67,7 @@ func TestRenderMaintenanceData(t *testing.T) {
 	if !strings.Contains(got2, "consolidation") {
 		t.Fatalf("scheduled template missing consolidation: %q", got2)
 	}
+	if !strings.Contains(got2, "dialog_history.json") {
+		t.Fatalf("scheduled template missing session paths: %q", got2)
+	}
 }

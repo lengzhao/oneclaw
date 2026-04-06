@@ -19,6 +19,13 @@
 | **后置** | LLM 类型可扩展 | Provider / Transport 抽象，配置与实现解耦 |
 | **后置** | 完整 MCP、compact 高级形态、全量遥测 | 刻意控制范围，见「刻意后置」 |
 | **P1 续作** | Skills 加深 | 审计、条件 paths、动态子目录发现等（主干已在 backlog #8 勾选，见 [`claude-code-skills-mechanism.md`](claude-code-skills-mechanism.md)） |
+| **P1 工程** | **subagent 前置去重** | `RunAgent` / `RunFork` 共享校验与 `WithoutMetaTools` 等（见 [`code-simplification-opportunities.md`](code-simplification-opportunities.md) §6.1、统一 backlog **#19**） |
+| **P2 工程** | **channel 出站聚合** | `OutboundChan` 拼 assistant 文本 + 等 `Done` 的共用助手，`statichttp` 先迁（见 [`code-simplification-opportunities.md`](code-simplification-opportunities.md) §5.1、**#20**） |
+| **P2 工程** | **PostTurnInput 单次构建** | `SubmitUser` 尾部 `PostTurn` / `MaybePostTurnMaintain` 共用同一 `PostTurnInput`（见 **#21**） |
+| **P2 工程** | **Emitter `context` 策略统一** | `submitLocalSlashTurn` 与 `loop` 路径上 `Text`/`Done` 所用 ctx 对齐并注释（见 **#22**） |
+| **P3 文档** | **Routing / 渠道文档补全** | `DefaultRegistry` 进程单例语义；`SinkRegistry` vs `SinkFactory`；单 `Engine`+多 source vs `SessionResolver`（见 **#23–#25**） |
+| **P3 文档** | **子 agent 工具可见性说明** | 最终工具表 = catalog ∩ 过滤 − meta（见 **#26**） |
+| **后置/可选** | **`context.Value` 窄接口** | 可选 `OutboundSender`，与全局 Engine 方案二选一（见 [`code-simplification-opportunities.md`](code-simplification-opportunities.md) §8、**#27**） |
 
 **工程习惯**（非代码交付）：新功能开发前阅读对应设计文档（见 [`README.md`](README.md) 索引）——持续执行，不单列为「版本完成」项。
 
@@ -66,10 +73,26 @@
 15. `[ ]` **预算精度（可选）** — usage / tokenizer 类估算，多模型下裁剪更一致。
 16. `[ ]` **协作模型（teammate / swarm）** — mailbox、长期成员等；按需排期。
 
+### 工程简化（可选，详 [`code-simplification-opportunities.md`](code-simplification-opportunities.md)）
+
+19. `[ ]` **subagent 前置去重** — `subagent/run.go`：`RunAgent` / `RunFork` 抽取共享前置（Host/parent/深度/`WithoutMetaTools`），差异留在分支内。
+20. `[ ]` **channel 出站 drain 助手** — 例如从 `OutboundChan` 聚合 `KindText` 至最终 reply 并与 `KindDone`/`done` 同步；`statichttp` 先迁移验证。
+21. `[ ]` **PostTurnInput 构建复用** — `session.Engine.SubmitUser` 末尾对 `memory.PostTurn` 与 `memory.MaybePostTurnMaintain` 共用同一 `PostTurnInput` 变量或 builder。
+22. `[ ]` **Emitter 所用 `context` 统一** — `submitLocalSlashTurn` 与 `loop` defer/`Done` 的 ctx 策略对齐，并在代码注释说明「可取消 vs detach」理由。
+
+### 文档与小修（P3，可与上表并行）
+
+23. `[ ]` **文档：`routing.DefaultRegistry`** — 进程级单例、测试与多实例注意（[`inbound-routing-design.md`](inbound-routing-design.md) 或 `config.md` 交叉一句）。
+24. `[ ]` **文档：`SinkRegistry` vs `SinkFactory`** — 默认主路径 vs 高级 per-turn 绑定（[`inbound-routing-design.md`](inbound-routing-design.md) 或 [`config.md`](config.md)）。
+25. `[ ]` **文档：单 `Engine` vs `SessionResolver`** — 何时多 source 共引擎、何时按 handle 拆引擎（[`code-simplification-opportunities.md`](code-simplification-opportunities.md) §5.2）。
+26. `[ ]` **文档：子 agent 工具表** — catalog 过滤与 meta-tool 剥离的合成规则（[`claude-code-subagent-system.md`](claude-code-subagent-system.md) 或 `subagent` 包注释）。
+
 ### 后置
 
-17. `[ ]` **LLM 类型可扩展** — Provider / Transport 抽象，配置与实现解耦（参考 picoclaw）；宜在 config 定型后接入，避免双重迁移。
-18. `[ ]` **完整 MCP**、**compact 高级形态**、**全量遥测** — 见「刻意后置」小节。
+27. `[ ]` **可选：`context.Value` 挂 `OutboundSender`** — 与 `toolctx.SessionHost.SendMessage` 二选一演进，非与全局 `Engine` 并行两套（见 [`code-simplification-opportunities.md`](code-simplification-opportunities.md) §8）。
+
+28. `[ ]` **LLM 类型可扩展** — Provider / Transport 抽象，配置与实现解耦（参考 picoclaw）；宜在 config 定型后接入，避免双重迁移。
+29. `[ ]` **完整 MCP**、**compact 高级形态**、**全量遥测** — 见「刻意后置」小节。
 
 ---
 
@@ -90,7 +113,7 @@
 | P0 | 统一 config 模块 | [x] 见 backlog #1、[`config.md`](config.md) |
 | P1 | 通用 Channel 抽象 | [x] 见 backlog #7、[`inbound-routing-design.md`](inbound-routing-design.md) |
 | P1 | Skills（Claude Code 机制） | [x] 主干完成；续作见 backlog #8 与「未完成任务一览」 |
-| 后置 | LLM 类型可扩展 | [ ] 见 backlog #17 |
+| 后置 | LLM 类型可扩展 | [ ] 见 backlog #28 |
 
 ---
 
@@ -165,14 +188,15 @@
 | P2 | **D3 向量 recall** | [ ] backlog #14 |
 | P2 | **预算精度（可选）** | [ ] backlog #15 |
 | P2 | **协作模型（teammate / swarm）** | [ ] backlog #16 |
-| 后置 | **LLM 类型可扩展** | [ ] backlog #17 |
-| 后置 | **完整 MCP、compact 高级形态 / 全量遥测** | [ ] backlog #18 |
+| P2/P3 | **工程简化（可选）** | [ ] backlog **#19–#27**（[`code-simplification-opportunities.md`](code-simplification-opportunities.md)） |
+| 后置 | **LLM 类型可扩展** | [ ] backlog #28 |
+| 后置 | **完整 MCP、compact 高级形态 / 全量遥测** | [ ] backlog #29 |
 
 ---
 
 ## 刻意后置（勿在 A 阶段展开）
 
-- [ ] **LLM 类型可扩展**（Provider / Transport；见统一 backlog #17）
+- [ ] **LLM 类型可扩展**（Provider / Transport；见统一 backlog #28）
 - [ ] 完整 MCP 客户端与 UI 级权限流
 - [ ] compact **高级形态**（多段摘要、与模型协同的 collapse 策略等；最小 compact 见统一 backlog P0）
 - [ ] 全量遥测
@@ -211,7 +235,7 @@ flowchart TB
   C --> D
 ```
 
-建议：**先做 P0 中的统一 config**（开发与生产同一套），再并行推进维护管道与 compact/工具面；**Channel / Skills** 等 P1 可与当前 OpenAI 兼容栈并行；**LLM Provider 抽象** 见 backlog 后置（#17），避免过早双重迁移。D3 向量与 MCP 按产品排期。阶段 D1/D2 已接，不阻塞上述排序。
+建议：**先做 P0 中的统一 config**（开发与生产同一套），再并行推进维护管道与 compact/工具面；**Channel / Skills** 等 P1 可与当前 OpenAI 兼容栈并行；**LLM Provider 抽象** 见 backlog 后置（#28），避免过早双重迁移。D3 向量与 MCP 按产品排期。阶段 D1/D2 已接，不阻塞上述排序。工程简化项见 backlog **#19–#27** 与 [`code-simplification-opportunities.md`](code-simplification-opportunities.md)。
 
 ---
 

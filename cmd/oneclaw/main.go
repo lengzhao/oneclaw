@@ -10,6 +10,8 @@ import (
 	"github.com/lengzhao/oneclaw/channel"
 	_ "github.com/lengzhao/oneclaw/channel/cli"
 	_ "github.com/lengzhao/oneclaw/channel/statichttp"
+	_ "github.com/lengzhao/oneclaw/channel/feishu"
+	_ "github.com/lengzhao/oneclaw/channel/slack"
 	"github.com/lengzhao/oneclaw/config"
 	"github.com/lengzhao/oneclaw/logx"
 	"github.com/lengzhao/oneclaw/maintainloop"
@@ -57,6 +59,7 @@ func main() {
 	eng.SinkRegistry = routing.DefaultRegistry()
 
 	eng.TranscriptPath = cfg.TranscriptPath()
+	eng.WorkingTranscriptPath = cfg.WorkingTranscriptPath()
 	if eng.TranscriptPath != "" {
 		if b, err := os.ReadFile(eng.TranscriptPath); err == nil {
 			if err := eng.LoadTranscript(b); err != nil {
@@ -65,6 +68,17 @@ func main() {
 			}
 		} else if !os.IsNotExist(err) {
 			slog.Error("read transcript", "path", eng.TranscriptPath, "err", err)
+			os.Exit(1)
+		}
+	}
+	if eng.WorkingTranscriptPath != "" {
+		if b, err := os.ReadFile(eng.WorkingTranscriptPath); err == nil {
+			if err := eng.LoadWorkingTranscript(b); err != nil {
+				slog.Error("load working transcript", "err", err)
+				os.Exit(1)
+			}
+		} else if !os.IsNotExist(err) {
+			slog.Error("read working transcript", "path", eng.WorkingTranscriptPath, "err", err)
 			os.Exit(1)
 		}
 	}

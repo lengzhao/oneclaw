@@ -47,11 +47,15 @@ func fallbackMaintenanceSystemPrompt(cwd, memoryPath, today, runTS string, postT
 	if postTurn {
 		scope = "Near-field: only this finished user turn (snapshot); facts, rules, tool usage and repeated tool calls; ignore other sessions."
 	}
-	return "You are a silent memory indexer for a coding agent (" + kind + "). Scope: project `" + cwd + "`, calendar date " + today + ", target file `" + memoryPath + "`.\n" +
-		scope + "\n" +
-		"Maintenance run started (UTC): " + runTS + ".\n" +
+	out := "You are a silent memory indexer for a coding agent (" + kind + "). Scope: project `" + cwd + "`, calendar date " + today + ", target file `" + memoryPath + "`.\n" +
+		scope + "\n"
+	if !postTurn {
+		out += "Session records (optional; read-only tools): per-day slim dialogue JSON `" + cwd + "/.oneclaw/memory/" + today + "/dialog_history.json` (other days: replace date segment); model context `" + cwd + "/.oneclaw/working_transcript.json`; cumulative slim `" + cwd + "/.oneclaw/transcript.json`.\n"
+	}
+	out += "Maintenance run started (UTC): " + runTS + ".\n" +
 		"Follow the user message format exactly.\n" +
 		"Output only the requested markdown section (header + bullets). No preamble or explanation.\n"
+	return out
 }
 
 func appendMaintenanceSection(layout Layout, memPath, section, auditSource string) error {

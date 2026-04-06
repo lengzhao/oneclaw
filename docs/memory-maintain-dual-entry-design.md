@@ -50,6 +50,18 @@
 - **`memory.PostTurn`**：仍仅为 **daily log 追加**（信号层），**不是**维护入口之一。
 - 两个维护入口均为 **LLM 维护流水线**，与 `PostTurn` 解耦、顺序上通常 **PostTurn 先、再 MaybePostTurnMaintain**（具体顺序以实现为准）。
 
+### 2.4 本地 slash 旁路（不跑 PostTurn / 维护）
+
+`session.Engine` 在识别为 **本地 slash 命令**时走 `submitLocalSlashTurn`：**不**经过 `loop.RunTurn`，**不**调用 `memory.PostTurn`、**不**调用 `memory.MaybePostTurnMaintain`。这是**刻意设计**，不是遗漏。
+
+| 理由 | 说明 |
+|------|------|
+| 无模型回合 | 无 assistant 生成内容可供「本回合快照」蒸馏；工具轨迹为空或无关 |
+| 信号质量 | 若对 slash 也追加 daily log 并触发近场维护，易把「固定帮助文案」等低价值文本写入维护输入 |
+| 与定时维护的关系 | **定时维护**（`RunScheduledMaintain`）仍可按既有规则读 daily log；slash 未写入的回合**不会**出现在 log 中，符合「旁路不沉淀为可维护信号」的语义 |
+
+若将来产品要求 slash 也参与观测或审计，应**单独**设计（例如只记 transcript、不触发 LLM 维护），而**不是**强行复用完整 `PostTurn` + `MaybePostTurnMaintain` 链。交叉说明见 [code-simplification-opportunities.md](code-simplification-opportunities.md) §2.2。
+
 ---
 
 ## 3. 共享与互斥

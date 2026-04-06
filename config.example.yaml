@@ -57,6 +57,31 @@ channels:
     static_dir: "" # 非空则挂载为 http://<listen>/static/
     # POST /api/chat：application/json 或 multipart；附件落盘 .oneclaw/media/inbound/<UTC-YYYY-MM-DD>/，可按天删目录
 
+  # Slack Socket Mode：id 即 Inbound.Source / Sink 键；需 Slack App 开启 Socket Mode 与对应权限。
+  # - id: slack1
+  #   type: slack
+  #   bot_token: "xoxb-..."   # Bot User OAuth Token
+  #   app_token: "xapp-..."   # App-Level Token（connections:write）
+  #   # allow_from 为空则允许任意用户
+  #   allow_from:
+  #     - "U01234567"
+  #   group_trigger:
+  #     mention_only: false   # true：群内需 @ 机器人才响应
+  #     prefixes: ["!", "/"]   # 非空时群聊仅当以此前缀开头时响应（mention 仍始终响应）
+
+  # 飞书 / Lark 长连接（64 位架构）；is_lark: true 时使用 Lark 国际站 API。
+  # - id: feishu1
+  #   type: feishu
+  #   app_id: "cli_xxx"
+  #   app_secret: "..."
+  #   verification_token: ""  # 事件订阅校验（可选）
+  #   encrypt_key: ""         # 消息加密（可选）
+  #   is_lark: false
+  #   allow_from: []
+  #   group_trigger:
+  #     mention_only: true
+  #     prefixes: []
+
 # -----------------------------------------------------------------------------
 # 功能开关（true = 关闭对应功能）
 # -----------------------------------------------------------------------------

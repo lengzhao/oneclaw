@@ -74,10 +74,10 @@ flowchart TB
 
 ```text
 routing/              # 仅类型与注册表、Emitter、Record（已有）
-channel/              # 新建：channel 父包，放 Channel 生命周期接口（可选）
-channel/feishu/       # 飞书：内嵌 lark SDK + ws 客户端（对标 picoclaw feishu_64），Inbound 映射
-channel/slack/        # Slack：内嵌 slack-go + socketmode（对标 picoclaw slack），Inbound 映射
-cmd/oneclaw/          # 组装：注册 Sink、对各 Channel 调 Start（SDK 在进程内连平台）、加载配置
+channel/              # 运行时 Registry、Connector、IO、与 Engine 的 submit 循环（已有）
+channel/feishu/       # 飞书：lark SDK + ws，注册为 channel.Spec（对标 picoclaw pkg/channels/feishu）
+channel/slack/        # Slack：slack-go + socketmode，注册为 channel.Spec（对标 picoclaw pkg/channels/slack）
+cmd/oneclaw/          # 组装：blank import 注册 IM 包 + channel.StartAll
 ```
 
 **接口边界（建议形态，实现可分阶段）**

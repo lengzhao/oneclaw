@@ -144,6 +144,29 @@ func (r *Resolved) TranscriptPath() string {
 	return abs
 }
 
+// WorkingTranscriptPath is the persisted model context (includes tool rounds and semantic compact summaries).
+// When transcript is disabled, returns empty. Default: <cwd>/.oneclaw/working_transcript.json
+func (r *Resolved) WorkingTranscriptPath() string {
+	if r.transcriptDisabled() {
+		return ""
+	}
+	p := strings.TrimSpace(os.Getenv("ONCLAW_WORKING_TRANSCRIPT_PATH"))
+	if p == "" {
+		p = strings.TrimSpace(r.merged.Paths.WorkingTranscript)
+	}
+	if p == "" {
+		return filepath.Join(r.cwd, memory.DotDir, "working_transcript.json")
+	}
+	if filepath.IsAbs(p) {
+		return filepath.Clean(p)
+	}
+	abs, err := filepath.Abs(filepath.Join(r.cwd, p))
+	if err != nil {
+		return filepath.Join(r.cwd, p)
+	}
+	return abs
+}
+
 func (r *Resolved) transcriptDisabled() bool {
 	if v := strings.TrimSpace(os.Getenv("ONCLAW_DISABLE_TRANSCRIPT")); v == "1" || strings.EqualFold(v, "true") || strings.EqualFold(v, "yes") {
 		return true
@@ -191,6 +214,7 @@ func ApplyEnvDefaults(r *Resolved) {
 	}
 	setIfEmpty("ONCLAW_MEMORY_BASE", strings.TrimSpace(r.merged.Paths.MemoryBase))
 	setIfEmpty("ONCLAW_TRANSCRIPT_PATH", strings.TrimSpace(r.merged.Paths.Transcript))
+	setIfEmpty("ONCLAW_WORKING_TRANSCRIPT_PATH", strings.TrimSpace(r.merged.Paths.WorkingTranscript))
 	setIfEmpty("ONCLAW_TURN_LOG_PATH", strings.TrimSpace(r.merged.Paths.TurnLogPath))
 	setIfEmpty("ONCLAW_MODEL", strings.TrimSpace(r.merged.Model))
 	setIfEmpty("ONCLAW_CHAT_TRANSPORT", strings.TrimSpace(r.merged.Chat.Transport))

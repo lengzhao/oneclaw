@@ -19,6 +19,7 @@
 | [inbound-routing-design.md](inbound-routing-design.md) | 入站 `Inbound` 字段表、可选 `ctx` 透传、`SinkRegistry`（`routing` 核心 + `channel/*` 子包按渠道注册终端 `Sink` 等） |
 | [embedded-maintain-scheduler-design.md](embedded-maintain-scheduler-design.md) | 主进程 **`maintainloop`**：合并 YAML **`maintain.interval` 非空** 时启动；先跑 1 次再周期；**`RunScheduledMaintain`**；**`disable_scheduled_maintenance`**；与 `cmd/maintain` 互斥写盘 |
 | [memory-maintain-dual-entry-design.md](memory-maintain-dual-entry-design.md) | 回合后 vs 定时维护：**两个代码入口**（`RunPostTurnMaintain` / `RunScheduledMaintain`）、开关独立、共享边界与迁移步骤 |
+| [code-simplification-opportunities.md](code-simplification-opportunities.md) | **工程梳理**：可简化代码的路径（session 双路径、`toolctx`、routing、channel、subagent、memory）、优先级与实施顺序（不含具体补丁） |
 
 ## 设计参考（原 Claude Code 分析文）
 

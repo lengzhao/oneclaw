@@ -9,14 +9,12 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 	"unicode/utf8"
 
-	"github.com/lengzhao/oneclaw/budget"
 	"github.com/lengzhao/oneclaw/loop"
 	"github.com/lengzhao/oneclaw/memory"
 	"github.com/lengzhao/oneclaw/routing"
-	"github.com/lengzhao/oneclaw/subagent"
-	"github.com/lengzhao/oneclaw/toolctx"
 	"github.com/lengzhao/oneclaw/tools"
 	"github.com/openai/openai-go"
 )
@@ -45,6 +43,8 @@ type Engine struct {
 	SinkFactory routing.SinkFactory
 	// TranscriptPath is where SaveTranscript writes after each successful loop.RunTurn (before PostTurn / MaybePostTurnMaintain). Empty disables auto-save.
 	TranscriptPath string
+	// WorkingTranscriptPath persists Messages (tool rounds + semantic compact); empty when transcript disabled.
+	WorkingTranscriptPath string
 	// RecallState tracks memory recall surfacing across turns (phase B).
 	RecallState memory.RecallState
 	// ChatTransport overrides ONCLAW_CHAT_TRANSPORT when non-empty (from unified config).
@@ -87,40 +87,18 @@ func (e *Engine) SubmitUser(ctx context.Context, in routing.Inbound) error {
 	preview := combinedInboundPreview(in)
 	slog.Debug("session.submit", "cwd", e.CWD, "model", e.Model, "preview_chars", utf8.RuneCountInString(preview))
 
-	bg := budget.FromEnv()
-	tctx := toolctx.New(e.CWD, ctx)
-	tctx.SendMessage = e.SendMessage
-	home, herr := os.UserHomeDir()
-	if herr == nil {
-		tctx.HomeDir = home
-	}
-	memOK := herr == nil && os.Getenv("ONCLAW_DISABLE_MEMORY") != "1"
-	var traceSink *loop.ToolTraceSink
-	var layout memory.Layout
-	var bundle memory.TurnBundle
-	if memOK {
-		layout = memory.DefaultLayout(e.CWD, home)
-		bundle = memory.BuildTurn(layout, home, preview, &e.RecallState, bg.RecallBytes())
-		memory.ApplyTurnBudget(&bundle, bg)
-		if bundle.UpdatedRecall != nil {
-			e.RecallState = *bundle.UpdatedRecall
-		}
-		tctx.MemoryWriteRoots = layout.WriteRoots()
-	} else if herr != nil {
-		slog.Warn("session.user_home", "err", herr)
-	}
-	var em *routing.Emitter
-	sink, err := routing.ResolveTurnSink(ctx, e.SinkRegistry, e.SinkFactory, in)
+	prep, err := e.prepareSharedTurn(ctx, in, preview, true)
 	if err != nil {
 		return err
 	}
-	if sink != nil {
-		em = routing.NewEmitter(sink, e.SessionID, "")
-	}
-	system := e.buildTurnSystem(memOK, bundle, bg, home, herr)
-	cat := subagent.LoadCatalog(e.CWD)
-	tctx.Subagent = &subRunner{eng: e, turnSystem: system, catalog: cat, bg: bg}
+	bg := prep.bg
+	memOK := prep.memOK
+	layout := prep.layout
+	bundle := prep.bundle
+	em := prep.em
+	system := prep.system
 
+	var traceSink *loop.ToolTraceSink
 	uv := memory.UserTurnPreview(preview)
 	var onToolLogged func(loop.ToolTraceEntry)
 	if memOK && memory.MemoryExtractEnabled() {
@@ -141,7 +119,7 @@ func (e *Engine) SubmitUser(ctx context.Context, in routing.Inbound) error {
 		MaxSteps:              e.MaxSteps,
 		Messages:              &e.Messages,
 		Registry:              e.Registry,
-		ToolContext:           tctx,
+		ToolContext:           prep.tctx,
 		CanUseTool:            e.CanUseTool,
 		Outbound:              em,
 		MemoryAgentMd:         bundle.AgentMdBlock,
@@ -163,6 +141,9 @@ func (e *Engine) SubmitUser(ctx context.Context, in routing.Inbound) error {
 	if err := e.SaveTranscript(); err != nil {
 		slog.Error("session.transcript_save_user", "err", err)
 	}
+	if err := e.SaveWorkingTranscript(); err != nil {
+		slog.Error("session.working_transcript_save_user", "err", err)
+	}
 
 	err = loop.RunTurn(ctx, cfg, in)
 	if err != nil {
@@ -171,6 +152,10 @@ func (e *Engine) SubmitUser(ctx context.Context, in routing.Inbound) error {
 	if err := e.SaveTranscript(); err != nil {
 		slog.Error("session.transcript_save", "err", err)
 	}
+	if err := e.SaveWorkingTranscript(); err != nil {
+		slog.Error("session.working_transcript_save", "err", err)
+	}
+	e.appendDialogHistoryIfComplete()
 	if memOK && memory.MemoryExtractEnabled() {
 		memory.AppendTurnAssistantFinalJSONL(layout, e.SessionID, in.CorrelationID, uv, loop.LastAssistantDisplay(e.Messages))
 	}
@@ -228,38 +213,12 @@ func (e *Engine) SendMessage(ctx context.Context, in routing.Inbound) error {
 
 func (e *Engine) submitLocalSlashTurn(ctx context.Context, in routing.Inbound, reply string) error {
 	slog.Debug("session.submit_local_slash", "cwd", e.CWD)
-	bg := budget.FromEnv()
-	tctx := toolctx.New(e.CWD, ctx)
-	home, herr := os.UserHomeDir()
-	if herr == nil {
-		tctx.HomeDir = home
-	}
-	memOK := herr == nil && os.Getenv("ONCLAW_DISABLE_MEMORY") != "1"
-	var layout memory.Layout
-	var bundle memory.TurnBundle
 	preview := combinedInboundPreview(in)
-	if memOK {
-		layout = memory.DefaultLayout(e.CWD, home)
-		bundle = memory.BuildTurn(layout, home, preview, &e.RecallState, bg.RecallBytes())
-		memory.ApplyTurnBudget(&bundle, bg)
-		if bundle.UpdatedRecall != nil {
-			e.RecallState = *bundle.UpdatedRecall
-		}
-		tctx.MemoryWriteRoots = layout.WriteRoots()
-	} else if herr != nil {
-		slog.Warn("session.user_home", "err", herr)
-	}
-	sink, err := routing.ResolveTurnSink(ctx, e.SinkRegistry, e.SinkFactory, in)
+	prep, err := e.prepareSharedTurn(ctx, in, preview, false)
 	if err != nil {
 		return err
 	}
-	var em *routing.Emitter
-	if sink != nil {
-		em = routing.NewEmitter(sink, e.SessionID, "")
-	}
-	system := e.buildTurnSystem(memOK, bundle, bg, home, herr)
-	cat := subagent.LoadCatalog(e.CWD)
-	tctx.Subagent = &subRunner{eng: e, turnSystem: system, catalog: cat, bg: bg}
+	bundle := prep.bundle
 
 	meta := InboundMetaForModel(in)
 	attMsgs := FormatInboundAttachmentMessages(in.Attachments)
@@ -272,15 +231,20 @@ func (e *Engine) submitLocalSlashTurn(ctx context.Context, in routing.Inbound, r
 	if err := e.SaveTranscript(); err != nil {
 		slog.Error("session.transcript_save_local_slash", "err", err)
 	}
-	if em != nil {
+	if err := e.SaveWorkingTranscript(); err != nil {
+		slog.Error("session.working_transcript_save_local_slash", "err", err)
+	}
+	e.appendDialogHistoryIfComplete()
+	if prep.em != nil {
 		emitCtx := context.Background()
-		if err := em.Text(ctx, reply); err != nil {
+		if err := prep.em.Text(ctx, reply); err != nil {
 			slog.Warn("session.local_slash.emit_text", "err", err)
 		}
-		if err := em.Done(emitCtx, true, ""); err != nil {
+		if err := prep.em.Done(emitCtx, true, ""); err != nil {
 			slog.Warn("session.local_slash.emit_done", "err", err)
 		}
 	}
+	// No memory.PostTurn / MaybePostTurnMaintain: local slash is an intentional bypass (see docs/memory-maintain-dual-entry-design.md §2.4).
 	return nil
 }
 
@@ -298,9 +262,58 @@ func newSessionID() string {
 	return "sess_" + hex.EncodeToString(b[:])
 }
 
+func (e *Engine) appendDialogHistoryIfComplete() {
+	if e.TranscriptPath == "" {
+		return
+	}
+	n := len(e.Transcript)
+	if n < 2 {
+		return
+	}
+	u := e.Transcript[n-2]
+	a := e.Transcript[n-1]
+	if u.OfUser == nil || a.OfAssistant == nil {
+		return
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		slog.Warn("session.dialog_history.home", "err", err)
+		return
+	}
+	layout := memory.DefaultLayout(e.CWD, home)
+	date := time.Now().Format("2006-01-02")
+	if err := memory.AppendDialogHistoryPair(layout, date, u, a); err != nil {
+		slog.Warn("session.dialog_history.append", "err", err)
+	}
+}
+
 // SaveTranscript writes MarshalTranscript to TranscriptPath. No-op if TranscriptPath is empty.
 func (e *Engine) SaveTranscript() error {
 	return e.SaveTranscriptTo(e.TranscriptPath)
+}
+
+// SaveWorkingTranscript writes Messages to WorkingTranscriptPath. No-op if path is empty.
+func (e *Engine) SaveWorkingTranscript() error {
+	return e.SaveWorkingTranscriptTo(e.WorkingTranscriptPath)
+}
+
+// SaveWorkingTranscriptTo writes the current model message list to path. No-op if path is empty.
+func (e *Engine) SaveWorkingTranscriptTo(path string) error {
+	if path == "" {
+		return nil
+	}
+	b, err := loop.MarshalMessages(e.Messages)
+	if err != nil {
+		return fmt.Errorf("marshal working transcript: %w", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("mkdir working transcript dir: %w", err)
+	}
+	if err := os.WriteFile(path, b, 0o644); err != nil {
+		return fmt.Errorf("write working transcript: %w", err)
+	}
+	slog.Debug("working transcript saved", "path", path, "messages", len(e.Messages))
+	return nil
 }
 
 // SaveTranscriptTo writes the current conversation to path. No-op if path is empty.
@@ -336,5 +349,16 @@ func (e *Engine) LoadTranscript(data []byte) error {
 	e.Transcript = msgs
 	e.Messages = append([]openai.ChatCompletionMessageParamUnion(nil), msgs...)
 	slog.Info("transcript loaded", "messages", len(msgs))
+	return nil
+}
+
+// LoadWorkingTranscript replaces Messages only (Transcript unchanged). Used after LoadTranscript to restore compacted context.
+func (e *Engine) LoadWorkingTranscript(data []byte) error {
+	msgs, err := loop.UnmarshalMessages(data)
+	if err != nil {
+		return err
+	}
+	e.Messages = msgs
+	slog.Info("working transcript loaded", "messages", len(msgs))
 	return nil
 }

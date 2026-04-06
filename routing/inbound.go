@@ -18,9 +18,14 @@ type Inbound struct {
 	RawRef        any
 }
 
-// MergeNonEmptyRouting copies Source, SessionKey, UserID, TenantID, CorrelationID, RawRef from src into dst
+// MergeNonEmptyRouting copies Source, SessionKey, UserID, TenantID, CorrelationID, RawRef, Locale from src into dst
 // when the corresponding src field is non-empty (after TrimSpace). Text is intentionally not merged.
-// Used so loop.RunTurn can refresh routing on the tool context without wiping parent metadata (e.g. subagent turns that only pass Text).
+//
+// Attachment rule: if src has no attachments, dst.Attachments is set to nil so nested RunTurn calls (e.g. subagent
+// with Text-only Inbound) do not inherit the parent user turn's attachments on ToolContext.TurnInbound.
+// Call sites typically use toolctx.Context.ApplyTurnInboundToToolContext, which delegates here.
+//
+// See docs/inbound-routing-design.md §2.1.
 func MergeNonEmptyRouting(dst *Inbound, src Inbound) {
 	if dst == nil {
 		return
@@ -46,8 +51,6 @@ func MergeNonEmptyRouting(dst *Inbound, src Inbound) {
 	if s := strings.TrimSpace(src.Locale); s != "" {
 		dst.Locale = s
 	}
-	// Replace attachments each merge: nested RunTurn (e.g. run_agent) passes Text-only Inbound and must
-	// not keep the parent user turn's attachments on ToolContext.TurnInbound.
 	if len(src.Attachments) > 0 {
 		dst.Attachments = append([]Attachment(nil), src.Attachments...)
 	} else {

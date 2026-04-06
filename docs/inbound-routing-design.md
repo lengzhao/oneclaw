@@ -30,6 +30,12 @@
 
 需要时再增加：`reply_token`（IM 即时回复用）等，仍放在 `Inbound` 或子结构中，**不扩散到 `Record`**，除非产品明确要求观测字段出现在事件流里。
 
+### 2.1 ToolContext 上的路由合并（已实现）
+
+- **`loop.RunTurn`** 开头对 `cfg.ToolContext` 调用 **`toolctx.Context.ApplyTurnInboundToToolContext(in)`**，内部为 **`routing.MergeNonEmptyRouting(&TurnInbound, in)`**（`TurnInbound` 位于嵌入的 **`toolctx.SessionHost`**）。
+- **非空字段覆盖**：`Source`、`SessionKey`、`UserID`、`TenantID`、`CorrelationID`、`RawRef`、`Locale` 仅在 `src` 侧非空时写入 `dst`；**`Text` 不参与合并**（正文由会话编排单独处理）。
+- **附件**：若本轮 `in.Attachments` 为空，则将 `ToolContext.TurnInbound.Attachments` **清空**，避免子 Agent 等仅传 `Text` 的嵌套 `RunTurn` 仍携带**父轮用户**的附件元数据。
+
 ---
 
 ## 3. `context` 约定（可选扩展，当前未实现）

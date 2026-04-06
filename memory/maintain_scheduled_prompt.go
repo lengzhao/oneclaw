@@ -39,6 +39,9 @@ func buildScheduledToolUserPrompt(layout Layout, memPath string, p distillConfig
 
 	agentRoot := filepath.Join(layout.CWD, AgentInstructionsFile)
 	agentDot := filepath.Join(layout.CWD, DotDir, AgentInstructionsFile)
+	dialogDay := filepath.Clean(filepath.Join(layout.CWD, DotDir, "memory", dateStr, "dialog_history.json"))
+	workingT := filepath.Clean(filepath.Join(layout.CWD, DotDir, "working_transcript.json"))
+	slimT := filepath.Clean(filepath.Join(layout.CWD, DotDir, "transcript.json"))
 
 	sameDayNote := ""
 	if sameDayDigest {
@@ -56,7 +59,10 @@ func buildScheduledToolUserPrompt(layout Layout, memPath string, p distillConfig
 			"- Today's daily log file: `%s`\n"+
 			"- Project MEMORY.md: `%s`\n"+
 			"- Project topic markdown files (*.md except MEMORY.md): directory `%s`\n"+
-			"- Behavior instructions (read if present; do **not** invent content you did not read): `%s` or `%s`\n\n"+
+			"- Behavior instructions (read if present; do **not** invent content you did not read): `%s` or `%s`\n"+
+			"- Session dialog JSON for calendar day **%s** (slim user/assistant turns): `%s`\n"+
+			"- Working model transcript, optional (tool rows + byte-budget compact recaps): `%s`\n"+
+			"- Cumulative slim transcript, optional: `%s`\n\n"+
 			"%s"+
 			"**Task:** Read what you need via tools. Merge duplicates, update stale rules, and capture durable facts across sessions. "+
 			"Be **terse**: one short sentence per bullet; **do not** paste long paths unless the path itself is the fact; **do not** claim a file exists unless you read it successfully.\n\n"+
@@ -72,6 +78,10 @@ func buildScheduledToolUserPrompt(layout Layout, memPath string, p distillConfig
 		projMemAbs,
 		agentRoot,
 		agentDot,
+		dateStr,
+		dialogDay,
+		workingT,
+		slimT,
 		strings.TrimSpace(scheduledTopicHint(p.maxTopicFiles)),
 		digestHeader,
 	)

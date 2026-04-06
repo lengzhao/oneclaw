@@ -9,9 +9,24 @@ import (
 	"github.com/openai/openai-go"
 )
 
+// SessionHost groups turn-level capabilities wired by session.Engine: routing defaults for tools,
+// proactive outbound, and nested agent runner. Embedded on Context so tools still use tctx.TurnInbound, etc.
+type SessionHost struct {
+	// TurnInbound is the routing metadata for the current SubmitUser turn (e.g. cron add defaults).
+	TurnInbound routing.Inbound
+
+	// SendMessage, when set by the host, delivers proactive outbound notifications (session.Engine.SendMessage).
+	SendMessage func(ctx context.Context, in routing.Inbound) error
+
+	// Subagent runs nested loops when non-nil (run_agent / fork_context).
+	Subagent SubagentRunner
+}
+
 // Context is the Go analogue of ToolUseContext: tools share cwd, abort signal,
-// and optional read cache. NestedMemoryPaths is reserved for phase B (memory).
+// optional read cache, and an embedded SessionHost for routing / outbound / subagents.
 type Context struct {
+	SessionHost
+
 	CWD string
 
 	// HomeDir is the session user's home directory (for audit / policy paths). Empty if unknown.
@@ -22,9 +37,6 @@ type Context struct {
 
 	ReadFileCache   map[string]string
 	readFileCacheMu sync.RWMutex
-
-	// NestedMemoryPaths reserved for future memory path tracking on the tool side.
-	NestedMemoryPaths map[string]struct{}
 
 	// MemoryWriteRoots are extra absolute directories where read/write_file may access (memory scopes).
 	MemoryWriteRoots []string
@@ -38,14 +50,6 @@ type Context struct {
 	SubagentDepth int
 	// MaxSubagentDepth limits nested agent runs (inclusive of child depth).
 	MaxSubagentDepth int
-	// Subagent runs nested loops when non-nil (phase C).
-	Subagent SubagentRunner
-
-	// TurnInbound is the routing metadata for the current SubmitUser turn (e.g. cron add defaults).
-	TurnInbound routing.Inbound
-
-	// SendMessage, when set by the host, delivers proactive outbound notifications (session.Engine.SendMessage).
-	SendMessage func(ctx context.Context, in routing.Inbound) error
 }
 
 // New builds a tool context. If abort is nil, context.Background() is used.
@@ -54,12 +58,20 @@ func New(cwd string, abort context.Context) *Context {
 		abort = context.Background()
 	}
 	return &Context{
-		CWD:               cwd,
-		Abort:             abort,
-		ReadFileCache:     make(map[string]string),
-		NestedMemoryPaths: make(map[string]struct{}),
-		MaxSubagentDepth:  3,
+		CWD:              cwd,
+		Abort:            abort,
+		ReadFileCache:    make(map[string]string),
+		MaxSubagentDepth: 3,
 	}
+}
+
+// ApplyTurnInboundToToolContext merges envelope routing into TurnInbound (see routing.MergeNonEmptyRouting).
+// RunTurn calls this at the start of each turn so tools see Source/SessionKey/… and nested Text-only turns do not keep parent attachments.
+func (c *Context) ApplyTurnInboundToToolContext(in routing.Inbound) {
+	if c == nil {
+		return
+	}
+	routing.MergeNonEmptyRouting(&c.TurnInbound, in)
 }
 
 // ChildContext returns an isolated tool context for a nested agent (fresh read cache, same cwd/abort/memory roots).
@@ -68,13 +80,11 @@ func (c *Context) ChildContext() *Context {
 		return New("", context.Background())
 	}
 	child := New(c.CWD, c.Abort)
+	child.SessionHost = c.SessionHost
 	child.MemoryWriteRoots = append([]string(nil), c.MemoryWriteRoots...)
 	child.HomeDir = c.HomeDir
 	child.MaxSubagentDepth = c.MaxSubagentDepth
-	child.Subagent = c.Subagent
 	child.SubagentDepth = c.SubagentDepth + 1
-	child.TurnInbound = c.TurnInbound
-	child.SendMessage = c.SendMessage
 	return child
 }
 
