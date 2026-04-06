@@ -6,6 +6,24 @@
 
 ---
 
+## 未完成任务一览（相对代码现状）
+
+以下为**尚未在统一 backlog 中勾选**或**明确列为续作**的工作，按优先级归类；细节仍以下方「统一 backlog」为准。
+
+| 优先级 | 项 | 说明 |
+|--------|-----|------|
+| **P2** | ~~入口编排加厚~~（已做主干） | slash 本地命令、`Inbound` 元块、附件、`statichttp`/`InboundTurn` 透传；IM 侧可再迭代 |
+| **P2** | D3 向量 recall | 插件接口，文件仍为真源 |
+| **P2** | 预算精度（可选） | usage / tokenizer 类估算，多模型下裁剪更一致 |
+| **P2** | 协作模型（teammate / swarm） | mailbox、长期成员等；按需排期 |
+| **后置** | LLM 类型可扩展 | Provider / Transport 抽象，配置与实现解耦 |
+| **后置** | 完整 MCP、compact 高级形态、全量遥测 | 刻意控制范围，见「刻意后置」 |
+| **P1 续作** | Skills 加深 | 审计、条件 paths、动态子目录发现等（主干已在 backlog #8 勾选，见 [`claude-code-skills-mechanism.md`](claude-code-skills-mechanism.md)） |
+
+**工程习惯**（非代码交付）：新功能开发前阅读对应设计文档（见 [`README.md`](README.md) 索引）——持续执行，不单列为「版本完成」项。
+
+---
+
 ## 优先级原则（全文统一口径）
 
 | 层级 | 含义 | 排序依据 |
@@ -35,15 +53,15 @@
 ### P1
 
 7. `[x]` **通用 Channel 抽象** — 飞书 / Slack 等可插拔 channel，对齐 [`inbound-routing-design.md`](inbound-routing-design.md)（参考 openclaw/picoclaw）。
-8. `[x]` **Skills（Claude Code 机制）** — 已实现：`skills` 包 + `~/.oneclaw/skills` / `<cwd>/.oneclaw/skills` 下 `<name>/SKILL.md`、系统提示注入索引、`invoke_skill` 拉取全文、`skills-recent.json` LRU（20）排序；细节见 [`claude-code-skills-mechanism.md`](claude-code-skills-mechanism.md) §11 与 `ONCLAW_DISABLE_SKILLS` 等环境变量（`docs/config.md`）。**审计 / 条件 paths / 动态子目录发现** 等待续作。
+8. `[x]` **Skills（Claude Code 机制）** — 已实现：`skills` 包 + `~/.oneclaw/skills` / `<cwd>/.oneclaw/skills` 下 `<name>/SKILL.md`、系统提示注入索引、`invoke_skill` 拉取全文、`skills-recent.json` LRU（20）排序；细节见 [`claude-code-skills-mechanism.md`](claude-code-skills-mechanism.md) §11 与 `ONCLAW_DISABLE_SKILLS` 等环境变量（`docs/config.md`）。**审计 / 条件 paths / 动态子目录发现** 见上文「未完成任务一览」P1 续作。
 9. `[x]` **行为策略写回** — 规则进 `.oneclaw/rules` / `AGENT.md` 的路径与护栏（与 D2 审计衔接）。
 10. `[x]` **任务状态工具** — Task 创建/更新或等价落盘，长会话与 resume 对齐进度。
 11. `[x]` **侧链合并（可选）** — sidechain 结论以 attachment 或 user 摘要合入主 transcript。
-12. `[x]` **Cron / Heartbeat** — **maintain 周期**为 `maintain.interval` / `ONCLAW_MAINTAIN_INTERVAL`（`cmd/maintain` 间隔循环；**已移除**进程内 `maintain.cron` / `-cron`）。其余定时场景：`cron` 工具 + `scheduled_jobs.json`；或部署侧系统 crontab 调 **`maintain -once`**。Channel 内置保活仍不在此条范围。
+12. `[x]` **Cron / Heartbeat** — **maintain 周期**为 `maintain.interval` / `ONCLAW_MAINTAIN_INTERVAL`（`cmd/maintain` 间隔循环；**已移除**进程内 `maintain.cron` / `-cron`）。**主进程内嵌 interval**：YAML 配置 `maintain.interval` 时 `maintainloop` 调 `RunScheduledMaintain`，见 [`embedded-maintain-scheduler-design.md`](embedded-maintain-scheduler-design.md)。其余定时：`cron` 工具 + `scheduled_jobs.json`；或部署侧 crontab 调 **`maintain -once`**。Channel 内置保活仍不在此条范围。
 
 ### P2
 
-13. `[ ]` **入口编排加厚** — slash、附件、`Inbound` 元信息、本轮可跳过模型请求等（与 Channel 落地后可交叉迭代）。
+13. `[x]` **入口编排加厚** — `Inbound`：`Attachments` + `Locale`；模型前注入 `<inbound-context>`（不含 correlation）；附件独立 user 消息；仅附件占位正文；`/help`、`/model`、`/session` 本地应答跳过模型；`channel.InboundTurn` + `statichttp` JSON 已支持。
 14. `[ ]` **D3 向量 recall** — 插件接口，文件仍为真源（阶段 D）。
 15. `[ ]` **预算精度（可选）** — usage / tokenizer 类估算，多模型下裁剪更一致。
 16. `[ ]` **协作模型（teammate / swarm）** — mailbox、长期成员等；按需排期。
@@ -58,22 +76,21 @@
 ## 工程基线（开工前）
 
 - [x] 新建 Go 模块仓库；全局使用 `log/slog`；目录不使用 `internal`（按团队约定）
-- [ ] 新功能开发前阅读对应设计：`claude-code-main-flow-analysis.md`、`claude-code-memory-system.md` 等（见 [`README.md`](README.md)）
 - [x] **全局 token / 字节预算**：`budget` + `ONCLAW_MAX_PROMPT_BYTES`（默认 220000）约束注入裁剪与每步 transcript；子 Agent / fork 共用；`ONCLAW_DISABLE_CONTEXT_BUDGET=1` 关闭
+- 新功能开发前阅读对应设计：`claude-code-main-flow-analysis.md`、`claude-code-memory-system.md` 等（索引见 [`README.md`](README.md)）— **持续实践**，见「未完成任务一览」说明
 
 ---
 
-## 配置、渠道与 LLM 扩展（待办）
+## 配置、渠道与 LLM 扩展（与 backlog 对照）
 
-> 对标思路：**openclaw / picoclaw**（仓库外参考）；与现有 `routing` 入站/出站、OpenAI 兼容客户端自然衔接。  
-> **优先级**以「统一 backlog」为准：config 为 P0-1；Channel 为 P1-7；Skills 为 P1-8；Cron / Heartbeat 为 P1-12；LLM 可扩展为后置-17。
+> 对标思路：**openclaw / picoclaw**（仓库外参考）。**优先级**以「统一 backlog」为准；本表仅作快速跳转。
 
-| 优先级 | 项 | 说明 |
+| 优先级 | 项 | 状态 |
 |--------|-----|------|
-| P0 | **统一 config 模块** | [x] `config` 包：**开发/生产同一套**加载与字段定义，本地默认路径 + 示例 + 可选 `--config`，体验对齐或优于散 `env`；密钥等以**文件为主真源**，避免唯依赖 `env` 被子进程继承泄漏；合并优先级与 env 覆盖规则见 [`config.md`](config.md) |
-| 后置 | **LLM 类型可扩展** | [ ] 参考 picoclaw，抽象「聊天补全 / 工具协议」之上的 **Provider** 或 **Transport** 接口，便于接入多厂商（不仅 OpenAI 兼容一种），配置与实现解耦；见统一 backlog #17 |
-| P1 | **通用 Channel 抽象** | [ ] 参考 openclaw/picoclaw，将飞书 / Slack 等入站出站做成可插拔 **channel**（统一生命周期、认证、消息映射、`Sink`/`Inbound` 注册），避免各渠道硬编码；与设计 [`inbound-routing-design.md`](inbound-routing-design.md) 一致落地 |
-| P1 | **Skills（Claude Code 机制）** | [ ] 见统一 backlog #8：发现层、元数据、渐进加载、作用域与预算；实现前可补设计短文档于 `docs/` |
+| P0 | 统一 config 模块 | [x] 见 backlog #1、[`config.md`](config.md) |
+| P1 | 通用 Channel 抽象 | [x] 见 backlog #7、[`inbound-routing-design.md`](inbound-routing-design.md) |
+| P1 | Skills（Claude Code 机制） | [x] 主干完成；续作见 backlog #8 与「未完成任务一览」 |
+| 后置 | LLM 类型可扩展 | [ ] 见 backlog #17 |
 
 ---
 
@@ -101,7 +118,7 @@
 - [x] **B3** 发现层：自 cwd 向上查找 `AGENT.md`、`.oneclaw/rules/*.md`、memory 根
 - [x] **B5** 注入与 recall：system 前缀拼装；recall → attachment；surfaced 字节上限、路径去重
 - [x] **B6** 在线更新：工具可写 topic、`MEMORY.md`、daily log
-- [x] **B7** extract / dream：**主干已接** — daily log + 回合后 **`MaybePostTurnMaintain`** / **`RunPostTurnMaintain`** 与定时 **`RunScheduledMaintain`**（`cmd/maintain`）；双入口与 `ONCLAW_POST_TURN_*` 见 [`memory-maintain-dual-entry-design.md`](memory-maintain-dual-entry-design.md)。`MaybeMaintain` 为弃用别名。默认 interval 1h；`-once` 或 `0` 单次。模型：`ONCLAW_MAINTENANCE_MODEL` / `ONCLAW_MAINTENANCE_SCHEDULED_MODEL`。写 **project `MEMORY.md`** `## Auto-maintained (日期)`；**待续**：分路径审计 source、定时总开关、主进程内嵌 interval
+- [x] **B7** extract / dream：**主干已接** — daily log + 回合后 **`MaybePostTurnMaintain`** / **`RunPostTurnMaintain`** 与定时 **`RunScheduledMaintain`**（`cmd/maintain` 与 **`maintainloop`**）；双入口与 `ONCLAW_POST_TURN_*` 见 [`memory-maintain-dual-entry-design.md`](memory-maintain-dual-entry-design.md)、[`embedded-maintain-scheduler-design.md`](embedded-maintain-scheduler-design.md)。`MaybeMaintain` 为弃用别名。默认 interval 1h；`-once` 或 `0` 单次。模型：`ONCLAW_MAINTENANCE_MODEL` / `ONCLAW_MAINTENANCE_SCHEDULED_MODEL`。写 **project `MEMORY.md`** `## Auto-maintained (日期)`；D2 审计为 `.oneclaw/audit/memory-write.jsonl`（可按需扩展字段/查询面，非阻塞项）
 
 ---
 
@@ -128,28 +145,28 @@
 ## 目标导向：自我进化闭环（与 backlog 对照）
 
 > 对应 `agent-runtime-golang-plan.md` 第 5 节示意：daily log →（dream）→ memory 平面 → 下一轮注入。  
-> **以下表格按 P0→P1→P2→后置排列**；与「统一 backlog」一一对应，避免重复定义优先级。
+> **以下表格与「统一 backlog」逐项对齐**（避免与上文矛盾）。
 
 | 优先级 | 项 | 说明 |
 |--------|-----|------|
-| P0 | **统一 config 模块** | [x] 见 backlog #1、[`config.md`](config.md) |
-| P0 | **模型化维护管道** | [x] 回合后 `MaybePostTurnMaintain`；[x] 定时 `RunScheduledMaintain` / `cmd/maintain`；[x] 双路径配置与互斥；[x] 多段 log、topic、强去重（backlog #2） |
-| P0 | **语义 compact（最小可用）** | [x] 见 backlog #3（`ApplyHistoryBudget` + `compact_boundary` 摘要 + 尾窗 `MinTailMessages`） |
-| P0 | **受控并行 tool 调用** | [ ] 见 backlog #4 |
-| P0 | **Glob / 列表工具** | [ ] 见 backlog #5 |
-| P0 | **全局上下文预算** | [x] 见 backlog #6 |
-| P1 | **通用 Channel 抽象** | [ ] 见 backlog #7 |
-| P1 | **Skills（Claude Code 机制）** | [ ] 见 backlog #8 |
-| P1 | **行为策略写回** | [x] 见 backlog #9 |
-| P1 | **任务状态工具** | [ ] 见 backlog #10 |
-| P1 | **侧链合并（可选）** | [x] 见 backlog #11 |
-| P1 | **Cron / Heartbeat** | [ ] 见 backlog #12：maintain 仅 interval；agent `cron` 工具与 channel 保活仍待续 |
-| P2 | **入口编排加厚** | [ ] 见 backlog #13 |
-| P2 | **D3 向量 recall** | [ ] 见 backlog #14（阶段 D3） |
-| P2 | **预算精度（可选）** | [ ] 见 backlog #15 |
-| P2 | **协作模型（teammate / swarm）** | [ ] 见 backlog #16 |
-| 后置 | **LLM 类型可扩展** | [ ] 见 backlog #17 |
-| 后置 | **完整 MCP、compact 高级形态 / 全量遥测** | 见 backlog #18；最小 compact 已在 P0 |
+| P0 | **统一 config 模块** | [x] backlog #1 |
+| P0 | **模型化维护管道** | [x] 回合后 + 定时 + 多段 log / topic / 去重（backlog #2） |
+| P0 | **语义 compact（最小可用）** | [x] backlog #3 |
+| P0 | **受控并行 tool 调用** | [x] backlog #4 |
+| P0 | **Glob / 列表工具** | [x] backlog #5 |
+| P0 | **全局上下文预算** | [x] backlog #6 |
+| P1 | **通用 Channel 抽象** | [x] backlog #7 |
+| P1 | **Skills（Claude Code 机制）** | [x] 主干 backlog #8；续作见「未完成任务一览」 |
+| P1 | **行为策略写回** | [x] backlog #9 |
+| P1 | **任务状态工具** | [x] backlog #10 |
+| P1 | **侧链合并（可选）** | [x] backlog #11 |
+| P1 | **Cron / Heartbeat** | [x] backlog #12（`cron` 工具 + `scheduled_jobs`；maintain 双入口 + 内嵌 loop） |
+| P2 | **入口编排加厚** | [x] backlog #13 |
+| P2 | **D3 向量 recall** | [ ] backlog #14 |
+| P2 | **预算精度（可选）** | [ ] backlog #15 |
+| P2 | **协作模型（teammate / swarm）** | [ ] backlog #16 |
+| 后置 | **LLM 类型可扩展** | [ ] backlog #17 |
+| 后置 | **完整 MCP、compact 高级形态 / 全量遥测** | [ ] backlog #18 |
 
 ---
 
@@ -172,6 +189,7 @@ flowchart TB
     CMP[最小 compact]
     PAR[并行只读工具]
     GLOB[glob / list_dir]
+    BUD[全局上下文预算]
     CFG --> MAINT
   end
   subgraph P1["P1 扩展"]
@@ -203,9 +221,9 @@ flowchart TB
 |------|------|------|
 | 对话 + 工具 + transcript | 高 | 阶段 A |
 | 记忆发现 / 注入 / recall / 在线写 | 高 | 阶段 B |
-| 时间序列沉淀（daily log） | 中 | 有落盘，缺自动蒸馏回索引层 |
-| 子 Agent / fork / 侧链 | 中高 | 阶段 C 主干已有；合并回主会话未做 |
-| 自动进化闭环（log → 整理 → 再注入） | 低 | 需 P0 维护收口 + 可选 D1 |
-| 可观测与合规（审计、预算） | 中 | 预算已有；D2 审计 JSONL + 可选 git |
-| 统一配置（开发/生产同源；密钥非 env 唯一） | 中 | `config` 包 + `docs/config.md` |
-| Skills（可发现 / 渐进注入） | 低 | 待 P1，对齐 Claude Code 机制 |
+| 时间序列沉淀（daily log）+ 维护写回 MEMORY | 中高 | Post-turn + 定时 + 可选进程内 loop |
+| 子 Agent / fork / 侧链 | 中高 | 阶段 C；侧链可选合回主会话（`ONCLAW_SIDECCHAIN_MERGE`） |
+| 自动进化闭环（log → 整理 → 再注入） | 中高 | 维护管道与 compact 已接；向量 recall 仍为可选增强 |
+| 可观测与合规（审计、预算） | 中高 | 预算 + D2 JSONL；遥测为后置 |
+| 统一配置（开发/生产同源；密钥非 env 唯一） | 高 | `config` 包 + `docs/config.md` |
+| Skills（可发现 / 渐进注入） | 中高 | 主干已落地；审计/条件路径等见续作 |

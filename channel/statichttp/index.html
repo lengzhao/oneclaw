@@ -13,29 +13,48 @@
     #out { margin-top: 1rem; white-space: pre-wrap; border: 1px solid #8884; border-radius: 6px; padding: 0.75rem; min-height: 4rem; }
     .err { color: #c00; }
     .meta { font-size: 0.85rem; opacity: 0.75; margin-top: 1.5rem; }
+    .row { margin-top: 0.5rem; }
+    input[type=file] { font-size: 0.9rem; max-width: 100%; }
   </style>
 </head>
 <body>
   <h1>oneclaw 本地 HTTP 渠道</h1>
-  <p>向助手发送一条消息（单请求串行，适合本机调试）。</p>
-  <textarea id="msg" placeholder="输入消息…"></textarea>
+  <p>发送消息；可选上传文件（单文件约 4MB 上限）。文件按 <strong>UTC 日期</strong> 落在 <code>.oneclaw/media/inbound/YYYY-MM-DD/</code>，可按天删除旧目录；助手用 <code>read_file</code> 读路径，不把整文件塞进提示词。</p>
+  <textarea id="msg" placeholder="输入消息（可与附件同时发送）…"></textarea>
+  <div class="row">
+    <label for="files">附件（可多选）</label><br />
+    <input type="file" id="files" multiple />
+  </div>
   <div><button type="button" id="send">发送</button></div>
   <div id="out" aria-live="polite"></div>
-  <p class="meta">静态页 + <code>/api/chat</code>；可选额外文件见配置 <code>static_dir</code> → <code>/static/</code>。</p>
+  <p class="meta">JSON：<code>POST /api/chat</code> · <code>Content-Type: application/json</code> · 字段 <code>text</code> / <code>attachments</code> / <code>locale</code>。<br />
+  上传：<code>multipart/form-data</code> · 字段 <code>text</code>、<code>locale</code>、<code>files</code>（重复字段多文件）。可选静态资源 <code>static_dir</code> → <code>/static/</code>。</p>
   <script>
     const out = document.getElementById("out");
     const msg = document.getElementById("msg");
+    const files = document.getElementById("files");
     document.getElementById("send").onclick = async () => {
       const text = msg.value.trim();
-      if (!text) return;
+      const list = files.files;
+      if (!text && list.length === 0) return;
       out.textContent = "…";
       out.classList.remove("err");
       try {
-        const r = await fetch("/api/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text }),
-        });
+        let r;
+        if (list.length === 0) {
+          r = await fetch("/api/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text }),
+          });
+        } else {
+          const fd = new FormData();
+          fd.append("text", text);
+          for (let i = 0; i < list.length; i++) {
+            fd.append("files", list[i], list[i].name);
+          }
+          r = await fetch("/api/chat", { method: "POST", body: fd });
+        }
         const j = await r.json().catch(() => ({}));
         if (!r.ok) {
           out.classList.add("err");

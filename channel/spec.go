@@ -18,12 +18,13 @@ type Bootstrap struct {
 // Params holds type-specific YAML fields from the channels list (excluding id/type).
 type ConnectorConfig struct {
 	Config    *config.Resolved
+	Engine    *session.Engine
 	ChannelID string
 	Params    map[string]any
 }
 
 func connectorConfig(b Bootstrap, channelID string, params map[string]any) ConnectorConfig {
-	return ConnectorConfig{Config: b.Config, ChannelID: channelID, Params: params}
+	return ConnectorConfig{Config: b.Config, Engine: b.Engine, ChannelID: channelID, Params: params}
 }
 
 // Spec registers one connector implementation. Key is the channel type name (YAML channels[].type).

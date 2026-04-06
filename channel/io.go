@@ -19,6 +19,8 @@ const (
 // InboundTurn is one user turn from a connector into the runtime (no Engine/Sink types).
 type InboundTurn struct {
 	Text          string
+	Attachments   []routing.Attachment
+	Locale        string
 	Ctx           context.Context // optional; if nil the router uses its parent ctx
 	SessionKey    string
 	UserID        string

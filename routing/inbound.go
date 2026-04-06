@@ -9,6 +9,8 @@ import "strings"
 type Inbound struct {
 	Source        string
 	Text          string
+	Attachments   []Attachment
+	Locale        string
 	UserID        string
 	TenantID      string
 	SessionKey    string
@@ -40,5 +42,15 @@ func MergeNonEmptyRouting(dst *Inbound, src Inbound) {
 	}
 	if src.RawRef != nil {
 		dst.RawRef = src.RawRef
+	}
+	if s := strings.TrimSpace(src.Locale); s != "" {
+		dst.Locale = s
+	}
+	// Replace attachments each merge: nested RunTurn (e.g. run_agent) passes Text-only Inbound and must
+	// not keep the parent user turn's attachments on ToolContext.TurnInbound.
+	if len(src.Attachments) > 0 {
+		dst.Attachments = append([]Attachment(nil), src.Attachments...)
+	} else {
+		dst.Attachments = nil
 	}
 }

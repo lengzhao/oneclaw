@@ -48,13 +48,14 @@ paths:
 # 省略本段或 channels: []：对每个已注册 Spec 各启一个实例，实例 id 默认为 Spec.Key（与仅配 cli 等价）
 # -----------------------------------------------------------------------------
 channels:
-  - id: cli
-    type: cli
+  # - id: cli
+  #   type: cli
   # 本地静态页渠道：内嵌 HTML + POST /api/chat；仅监听本机。
-  # - id: localweb
-  #   type: statichttp
-  #   listen_addr: "127.0.0.1:8765"
-  #   static_dir: "" # 非空则挂载为 http://<listen>/static/
+  - id: localweb
+    type: statichttp
+    listen_addr: "127.0.0.1:8765"
+    static_dir: "" # 非空则挂载为 http://<listen>/static/
+    # POST /api/chat：application/json 或 multipart；附件落盘 .oneclaw/media/inbound/<UTC-YYYY-MM-DD>/，可按天删目录
 
 # -----------------------------------------------------------------------------
 # 功能开关（true = 关闭对应功能）

@@ -25,6 +25,7 @@ Structured work items are stored at `{{.TasksFilePath}}`. Use `task_create` / `t
 # Actions
 - Read files before editing when needed.
 - Verify your changes when practical.
+- Use **send_message** to proactively notify the user (or another configured channel/thread) with text and optional media paths—e.g. deliverables after generating a file, reminders, or pings when the normal reply stream is not enough. Omit `source` / `session_key` to use the current channel context.
 
 # Using tools
 - Prefer read_file before editing.

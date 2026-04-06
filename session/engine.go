@@ -70,16 +70,26 @@ func NewEngine(cwd string, reg *tools.Registry) *Engine {
 }
 
 // SubmitUser runs one user turn (may involve multiple internal model calls).
-// in.Text is the user message appended to the conversation; other fields are for routing/registry (and future use).
+// in.Text is the primary user line; Attachments add leading user messages. Routing fields feed Sink 选择与可选 <inbound-context>。
 // Cancel ctx to abort in-flight model and tool calls.
 func (e *Engine) SubmitUser(ctx context.Context, in routing.Inbound) error {
-	if strings.TrimSpace(in.Text) == "" {
+	if err := e.prepareInboundAttachments(&in); err != nil {
+		return err
+	}
+	if strings.TrimSpace(in.Text) == "" && len(in.Attachments) == 0 {
 		return fmt.Errorf("session: empty inbound text")
 	}
 
-	slog.Debug("session.submit", "cwd", e.CWD, "model", e.Model, "user_chars", utf8.RuneCountInString(in.Text))
+	if reply, ok := e.trySlashLocalTurn(in); ok {
+		return e.submitLocalSlashTurn(ctx, in, reply)
+	}
+
+	preview := combinedInboundPreview(in)
+	slog.Debug("session.submit", "cwd", e.CWD, "model", e.Model, "preview_chars", utf8.RuneCountInString(preview))
+
 	bg := budget.FromEnv()
 	tctx := toolctx.New(e.CWD, ctx)
+	tctx.SendMessage = e.SendMessage
 	home, herr := os.UserHomeDir()
 	if herr == nil {
 		tctx.HomeDir = home
@@ -90,7 +100,7 @@ func (e *Engine) SubmitUser(ctx context.Context, in routing.Inbound) error {
 	var bundle memory.TurnBundle
 	if memOK {
 		layout = memory.DefaultLayout(e.CWD, home)
-		bundle = memory.BuildTurn(layout, home, in.Text, &e.RecallState, bg.RecallBytes())
+		bundle = memory.BuildTurn(layout, home, preview, &e.RecallState, bg.RecallBytes())
 		memory.ApplyTurnBudget(&bundle, bg)
 		if bundle.UpdatedRecall != nil {
 			e.RecallState = *bundle.UpdatedRecall
@@ -111,41 +121,45 @@ func (e *Engine) SubmitUser(ctx context.Context, in routing.Inbound) error {
 	cat := subagent.LoadCatalog(e.CWD)
 	tctx.Subagent = &subRunner{eng: e, turnSystem: system, catalog: cat, bg: bg}
 
+	uv := memory.UserTurnPreview(preview)
 	var onToolLogged func(loop.ToolTraceEntry)
 	if memOK && memory.MemoryExtractEnabled() {
 		traceSink = &loop.ToolTraceSink{}
 		sid, cid := e.SessionID, in.CorrelationID
-		uv := memory.UserTurnPreview(in.Text)
 		lay := layout
 		onToolLogged = func(ent loop.ToolTraceEntry) {
 			memory.AppendTurnToolLogJSONL(lay, sid, cid, uv, ent)
 		}
 	}
 
+	userLine := ModelUserLine(in.Text, len(in.Attachments) > 0)
 	cfg := loop.Config{
-		Client:        &e.Client,
-		Model:         e.Model,
-		System:        system,
-		MaxTokens:     e.MaxTokens,
-		MaxSteps:      e.MaxSteps,
-		Messages:      &e.Messages,
-		Registry:      e.Registry,
-		ToolContext:   tctx,
-		CanUseTool:    e.CanUseTool,
-		Outbound:      em,
-		MemoryAgentMd: bundle.AgentMdBlock,
-		MemoryRecall:  bundle.RecallBlock,
-		Budget:        bg,
-		ChatTransport: e.ChatTransport,
-		ToolTrace:     traceSink,
-		OnToolLogged:  onToolLogged,
+		Client:                &e.Client,
+		Model:                 e.Model,
+		System:                system,
+		MaxTokens:             e.MaxTokens,
+		MaxSteps:              e.MaxSteps,
+		Messages:              &e.Messages,
+		Registry:              e.Registry,
+		ToolContext:           tctx,
+		CanUseTool:            e.CanUseTool,
+		Outbound:              em,
+		MemoryAgentMd:         bundle.AgentMdBlock,
+		MemoryRecall:          bundle.RecallBlock,
+		InboundMeta:           InboundMetaForModel(in),
+		InboundAttachmentMsgs: FormatInboundAttachmentMessages(in.Attachments),
+		UserLine:              userLine,
+		Budget:                bg,
+		ChatTransport:         e.ChatTransport,
+		ToolTrace:             traceSink,
+		OnToolLogged:          onToolLogged,
 		SlimTranscript: func(assistantText string) {
 			e.Transcript = append(e.Transcript, openai.AssistantMessage(assistantText))
 		},
 	}
 
 	// Claude Code–style: record user turn before query loop so crash/interrupt still leaves the request on disk.
-	e.Transcript = append(e.Transcript, openai.UserMessage(in.Text))
+	e.Transcript = append(e.Transcript, openai.UserMessage(SlimTranscriptUserLine(in)))
 	if err := e.SaveTranscript(); err != nil {
 		slog.Error("session.transcript_save_user", "err", err)
 	}
@@ -158,7 +172,7 @@ func (e *Engine) SubmitUser(ctx context.Context, in routing.Inbound) error {
 		slog.Error("session.transcript_save", "err", err)
 	}
 	if memOK && memory.MemoryExtractEnabled() {
-		memory.AppendTurnAssistantFinalJSONL(layout, e.SessionID, in.CorrelationID, memory.UserTurnPreview(in.Text), loop.LastAssistantDisplay(e.Messages))
+		memory.AppendTurnAssistantFinalJSONL(layout, e.SessionID, in.CorrelationID, uv, loop.LastAssistantDisplay(e.Messages))
 	}
 	if memOK {
 		var tools []loop.ToolTraceEntry
@@ -168,19 +182,114 @@ func (e *Engine) SubmitUser(ctx context.Context, in routing.Inbound) error {
 		memory.PostTurn(layout, memory.PostTurnInput{
 			SessionID:        e.SessionID,
 			CorrelationID:    in.CorrelationID,
-			UserText:         in.Text,
+			UserText:         preview,
 			AssistantVisible: loop.LastAssistantDisplay(e.Messages),
 			Tools:            tools,
 		})
 		memory.MaybePostTurnMaintain(ctx, layout, &e.Client, e.Model, e.MaxTokens, &memory.PostTurnInput{
 			SessionID:        e.SessionID,
 			CorrelationID:    in.CorrelationID,
-			UserText:         in.Text,
+			UserText:         preview,
 			AssistantVisible: loop.LastAssistantDisplay(e.Messages),
 			Tools:            tools,
 		})
 	}
 	return nil
+}
+
+// SendMessage delivers text and/or attachments to the Sink for in.Source without running the model
+// (proactive outbound, similar in spirit to picoclaw Channel.Send + optional media).
+// in.Source must match a registered channel instance id; routing fields (SessionKey, RawRef, …) are passed to SinkFactory like SubmitUser.
+func (e *Engine) SendMessage(ctx context.Context, in routing.Inbound) error {
+	if strings.TrimSpace(in.Source) == "" {
+		return fmt.Errorf("session: SendMessage requires Inbound.Source")
+	}
+	inCopy := in
+	if len(in.Attachments) > 0 {
+		inCopy.Attachments = append([]routing.Attachment(nil), in.Attachments...)
+	}
+	if err := e.prepareInboundAttachments(&inCopy); err != nil {
+		return err
+	}
+	if strings.TrimSpace(inCopy.Text) == "" && len(inCopy.Attachments) == 0 {
+		return fmt.Errorf("session: SendMessage: empty text and attachments")
+	}
+	sink, err := routing.ResolveTurnSink(ctx, e.SinkRegistry, e.SinkFactory, inCopy)
+	if err != nil {
+		return err
+	}
+	if sink == nil {
+		return fmt.Errorf("session: no sink for source %q", inCopy.Source)
+	}
+	jobID := strings.TrimSpace(inCopy.CorrelationID)
+	em := routing.NewEmitter(sink, e.SessionID, jobID)
+	return em.TextWithAttachments(ctx, strings.TrimSpace(inCopy.Text), inCopy.Attachments)
+}
+
+func (e *Engine) submitLocalSlashTurn(ctx context.Context, in routing.Inbound, reply string) error {
+	slog.Debug("session.submit_local_slash", "cwd", e.CWD)
+	bg := budget.FromEnv()
+	tctx := toolctx.New(e.CWD, ctx)
+	home, herr := os.UserHomeDir()
+	if herr == nil {
+		tctx.HomeDir = home
+	}
+	memOK := herr == nil && os.Getenv("ONCLAW_DISABLE_MEMORY") != "1"
+	var layout memory.Layout
+	var bundle memory.TurnBundle
+	preview := combinedInboundPreview(in)
+	if memOK {
+		layout = memory.DefaultLayout(e.CWD, home)
+		bundle = memory.BuildTurn(layout, home, preview, &e.RecallState, bg.RecallBytes())
+		memory.ApplyTurnBudget(&bundle, bg)
+		if bundle.UpdatedRecall != nil {
+			e.RecallState = *bundle.UpdatedRecall
+		}
+		tctx.MemoryWriteRoots = layout.WriteRoots()
+	} else if herr != nil {
+		slog.Warn("session.user_home", "err", herr)
+	}
+	sink, err := routing.ResolveTurnSink(ctx, e.SinkRegistry, e.SinkFactory, in)
+	if err != nil {
+		return err
+	}
+	var em *routing.Emitter
+	if sink != nil {
+		em = routing.NewEmitter(sink, e.SessionID, "")
+	}
+	system := e.buildTurnSystem(memOK, bundle, bg, home, herr)
+	cat := subagent.LoadCatalog(e.CWD)
+	tctx.Subagent = &subRunner{eng: e, turnSystem: system, catalog: cat, bg: bg}
+
+	meta := InboundMetaForModel(in)
+	attMsgs := FormatInboundAttachmentMessages(in.Attachments)
+	userLine := ModelUserLine(in.Text, len(in.Attachments) > 0)
+	loop.AppendTurnUserMessages(&e.Messages, bundle.AgentMdBlock, bundle.RecallBlock, meta, attMsgs, userLine)
+	e.Messages = append(e.Messages, openai.AssistantMessage(reply))
+
+	e.Transcript = append(e.Transcript, openai.UserMessage(SlimTranscriptUserLine(in)))
+	e.Transcript = append(e.Transcript, openai.AssistantMessage(reply))
+	if err := e.SaveTranscript(); err != nil {
+		slog.Error("session.transcript_save_local_slash", "err", err)
+	}
+	if em != nil {
+		emitCtx := context.Background()
+		if err := em.Text(ctx, reply); err != nil {
+			slog.Warn("session.local_slash.emit_text", "err", err)
+		}
+		if err := em.Done(emitCtx, true, ""); err != nil {
+			slog.Warn("session.local_slash.emit_done", "err", err)
+		}
+	}
+	return nil
+}
+
+func (e *Engine) prepareInboundAttachments(in *routing.Inbound) error {
+	if err := ValidateInboundMediaPaths(e.CWD, in.Attachments); err != nil {
+		return err
+	}
+	in.Attachments = routing.NormalizeAttachments(in.Attachments)
+	return PersistInlineAttachmentFiles(e.CWD, &in.Attachments)
 }
 
 func newSessionID() string {

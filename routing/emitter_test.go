@@ -36,3 +36,24 @@ func TestEmitterSeqAndKinds(t *testing.T) {
 		t.Fatalf("last record: %s", cap.lines[3])
 	}
 }
+
+func TestEmitterTextWithAttachments(t *testing.T) {
+	var cap captureSink
+	e := NewEmitter(&cap, "sess_x", "job1")
+	ctx := context.Background()
+	err := e.TextWithAttachments(ctx, "ping", []Attachment{
+		{Name: "a", MIME: "text/plain", Path: ".oneclaw/media/inbound/2026-01-01/x.txt"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cap.lines) != 1 {
+		t.Fatalf("want 1 emit, got %d: %v", len(cap.lines), cap.lines)
+	}
+	if !strings.Contains(cap.lines[0], `"job_id":"job1"`) {
+		t.Fatalf("missing job_id: %s", cap.lines[0])
+	}
+	if !strings.Contains(cap.lines[0], `"attachments"`) || !strings.Contains(cap.lines[0], "x.txt") {
+		t.Fatalf("attachments: %s", cap.lines[0])
+	}
+}

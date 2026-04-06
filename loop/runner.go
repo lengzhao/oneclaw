@@ -34,6 +34,12 @@ type Config struct {
 	// MemoryAgentMd / MemoryRecall are optional extra user messages before the real user turn (phase B).
 	MemoryAgentMd string
 	MemoryRecall  string
+	// InboundMeta is optional channel routing context as a user-shaped block (see session orchestration).
+	InboundMeta string
+	// InboundAttachmentMsgs are formatted attachment bodies, each as its own user message.
+	InboundAttachmentMsgs []string
+	// UserLine is the primary user message after orchestration (e.g. attachment-only placeholder). If empty, TrimSpace(in.Text) is used.
+	UserLine string
 	// Budget trims transcript before each model call when Enabled (from budget.FromEnv).
 	Budget budget.Global
 	// ChatTransport overrides ONCLAW_CHAT_TRANSPORT when non-empty (e.g. from config file).
@@ -86,13 +92,11 @@ func RunTurn(ctx context.Context, cfg Config, in routing.Inbound) (err error) {
 		}
 		cfg.SlimTranscript(LastAssistantDisplay(*msgs))
 	}
-	if s := strings.TrimSpace(cfg.MemoryAgentMd); s != "" {
-		*msgs = append(*msgs, openai.UserMessage(s))
+	userLine := strings.TrimSpace(cfg.UserLine)
+	if userLine == "" {
+		userLine = strings.TrimSpace(in.Text)
 	}
-	if s := strings.TrimSpace(cfg.MemoryRecall); s != "" {
-		*msgs = append(*msgs, openai.UserMessage(s))
-	}
-	*msgs = append(*msgs, openai.UserMessage(in.Text))
+	AppendTurnUserMessages(msgs, cfg.MemoryAgentMd, cfg.MemoryRecall, cfg.InboundMeta, cfg.InboundAttachmentMsgs, userLine)
 
 	for step := 0; step < cfg.MaxSteps; step++ {
 		select {

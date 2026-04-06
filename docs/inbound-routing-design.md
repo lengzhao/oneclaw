@@ -25,8 +25,10 @@
 | `session_key` | string | 否 | 逻辑会话键（IM 线程、话题）；CLI 单进程可省略或用固定值 |
 | `correlation_id` | string | 否 | 请求级 id、飞书 challenge 关联、Slack `event_id` 等，**不进模型** |
 | `raw_ref` | 任意 | 否 | 指向原始请求的轻量引用（如 request id），**勿把整包 body 长期塞在 struct** |
+| `attachments` | `[]Attachment`（内联文本） | 否 | 渠道携带的 UTF-8 片段（如粘贴文件）；引擎格式化为独立 user 消息，见 `routing.Attachment` |
+| `locale` | string | 否 | BCP 47 / 语言偏好；写入可选 `<inbound-context>`，供模型对齐用语 |
 
-需要时再增加：`attachments`、`locale`、`reply_token`（IM 即时回复用）等，仍放在 `Inbound` 或子结构中，**不扩散到 `Record`**，除非产品明确要求观测字段出现在事件流里。
+需要时再增加：`reply_token`（IM 即时回复用）等，仍放在 `Inbound` 或子结构中，**不扩散到 `Record`**，除非产品明确要求观测字段出现在事件流里。
 
 ---
 
@@ -119,4 +121,6 @@ type SinkFactory interface {
 ## 7. 实现状态
 
 - **当前仓库**：`routing` 核心 + **`channel` 运行时**（**`StartAll`**：`Spec.Source` 非空则注册 **`chanSink`**，**`submitLoop`** 读 **`InboundTurn` → `SubmitUser`**）；**`channel/cli`** 仅 **`Connector.Run(IO)`**；`main`：**`StartAll(ctx, Bootstrap{Engine, Config})`**；**`SubmitUser` / `loop.RunTurn`** 同上；**未**实现 `WithInbound` / `InboundFromContext`。
+- **入口编排（加厚）**：`routing.Inbound` 含 **`Attachments` / `Locale`**；`session.Engine` 在记忆块之后注入 **`<inbound-context>`**（**不含** `correlation_id`）；附件为独立 user 消息；**仅附件无正文**时用占位句；内置斜杠 **`/help` / `/model` / `/session`** 由引擎本地应答（**不调用模型**）；**`channel.InboundTurn`** 与 **`statichttp` POST `/api/chat`** 已透传附件与 locale。
+- **`statichttp` `/api/chat`**：`application/json` 与 **`multipart/form-data`** 均可。multipart 字段 **`text`**、**`locale`**、**`files`**（或 **`file`**，可重复）；单文件原始上限 **4MB**，整表上限 **32MB**；上传文件写入 **`<cwd>/.oneclaw/media/inbound/<UTC-YYYY-MM-DD>/`**（`mediastore`，按天分子目录便于清理旧文件），`routing.Inbound.Attachments[].Path` 为相对 cwd 的路径；模型侧 user 消息只给 **`read_file` 路径说明**，不内联文件字节。JSON 内联 `attachments[].text` 由 `session` 在同目录落盘后再走同一套路径提示。
 - **后续**：HTTP / 飞书 / Slack 等新增 `Source*` 常量、注册对应 `Sink`；需要时再加 **`ctx` 透传**或 **`SinkFactory`**。

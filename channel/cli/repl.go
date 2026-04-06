@@ -36,6 +36,7 @@ func printRecord(out, errOut io.Writer, r channel.Record) {
 		if c, _ := r.Data["content"].(string); c != "" {
 			fmt.Fprintln(out, c)
 		}
+		printTextAttachments(out, r.Data["attachments"])
 	case channel.KindTool:
 	case channel.KindDone:
 		ok, _ := r.Data["ok"].(bool)
@@ -50,12 +51,41 @@ func printRecord(out, errOut io.Writer, r channel.Record) {
 	}
 }
 
+func printTextAttachments(out io.Writer, raw any) {
+	arr, ok := raw.([]any)
+	if !ok || len(arr) == 0 {
+		return
+	}
+	for _, item := range arr {
+		m, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		name, _ := m["name"].(string)
+		if name == "" {
+			name = "attachment"
+		}
+		path, _ := m["path"].(string)
+		mime, _ := m["mime"].(string)
+		switch {
+		case path != "":
+			if mime != "" {
+				fmt.Fprintf(out, "[media %s: %s (%s)]\n", name, path, mime)
+			} else {
+				fmt.Fprintf(out, "[media %s: %s]\n", name, path)
+			}
+		case m["text"] != nil:
+			fmt.Fprintf(out, "[inline %s]\n", name)
+		}
+	}
+}
+
 func stdinLoop(ctx context.Context, io channel.IO) error {
 	in := os.Stdin
 	out := os.Stdout
 	errOut := os.Stderr
 
-	fmt.Fprintln(errOut, "oneclaw — type a message, /exit to quit, empty line + Ctrl-D to exit")
+	fmt.Fprintln(errOut, "oneclaw — 输入消息；/help 本地帮助；/exit 退出；空行 + Ctrl-D 退出")
 	sc := bufio.NewScanner(in)
 	var turnSeq int
 	for {

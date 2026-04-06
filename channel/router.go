@@ -33,6 +33,8 @@ func submitOne(parentCtx context.Context, turn InboundTurn, eng *session.Engine,
 	inb := routing.Inbound{
 		Source:        source,
 		Text:          turn.Text,
+		Attachments:   turn.Attachments,
+		Locale:        turn.Locale,
 		SessionKey:    sk,
 		UserID:        turn.UserID,
 		TenantID:      turn.TenantID,

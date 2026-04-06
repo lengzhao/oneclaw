@@ -130,6 +130,7 @@ func RunPostTurnMaintain(ctx context.Context, layout Layout, client *openai.Clie
 }
 
 // MaybePostTurnMaintain runs post-turn maintenance when auto maintenance is enabled (see autoMaintenanceEnabled).
+// ctx is not used for cancellation or deadlines (post-turn runs on context.Background + ONCLAW_POST_TURN_MAINTENANCE_TIMEOUT_SEC).
 func MaybePostTurnMaintain(ctx context.Context, layout Layout, client *openai.Client, mainChatModel string, maxTokens int64, turn *PostTurnInput) {
 	if client == nil || !autoMaintenanceEnabled() {
 		return
@@ -160,10 +161,20 @@ func runDistill(ctx context.Context, layout Layout, client *openai.Client, p dis
 		return
 	}
 
-	runCtx := ctx
+	// Post-turn maintenance must not inherit the user/session context (HTTP disconnect, CLI cancel,
+	// upstream deadlines). Use Background + maintain timeout only. Scheduled runs keep caller ctx so
+	// shutdown can cancel long far-field passes.
+	baseCtx := ctx
+	if p.pathway == pathwayPostTurn {
+		baseCtx = context.Background()
+	}
+
+	runCtx := baseCtx
 	var cancel context.CancelFunc
 	if p.timeout > 0 {
-		runCtx, cancel = context.WithTimeout(ctx, p.timeout)
+		runCtx, cancel = context.WithTimeout(baseCtx, p.timeout)
+	} else if p.pathway == pathwayPostTurn {
+		runCtx, cancel = context.WithTimeout(baseCtx, 120*time.Second)
 	} else if _, ok := ctx.Deadline(); !ok {
 		runCtx, cancel = context.WithTimeout(ctx, 120*time.Second)
 	}

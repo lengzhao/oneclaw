@@ -43,6 +43,9 @@ type Context struct {
 
 	// TurnInbound is the routing metadata for the current SubmitUser turn (e.g. cron add defaults).
 	TurnInbound routing.Inbound
+
+	// SendMessage, when set by the host, delivers proactive outbound notifications (session.Engine.SendMessage).
+	SendMessage func(ctx context.Context, in routing.Inbound) error
 }
 
 // New builds a tool context. If abort is nil, context.Background() is used.
@@ -71,6 +74,7 @@ func (c *Context) ChildContext() *Context {
 	child.Subagent = c.Subagent
 	child.SubagentDepth = c.SubagentDepth + 1
 	child.TurnInbound = c.TurnInbound
+	child.SendMessage = c.SendMessage
 	return child
 }
 

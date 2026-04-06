@@ -65,6 +65,9 @@
 | E2E-109 | `task_create` / `task_update` 落盘；`ONCLAW_DISABLE_TASKS=1` 关闭 system 任务段 | [x] | `TestE2E_109_TaskToolsWriteFileAndDisableHidesBlock` · `stub_tasks_e2e_test.go` |
 | E2E-111 | `cron` add 写入 `scheduled_jobs.json` | [x] | `TestE2E_111_CronToolWritesFile` · `stub_schedule_e2e_test.go` |
 | E2E-112 | 启用中的定时任务出现在 system「Scheduled jobs」段 | [x] | `TestE2E_112_ScheduledJobsBlockInSystemPrompt` · `stub_schedule_e2e_test.go` |
+| E2E-113 | `/help` 本地斜杠不调用模型 | [x] | `TestE2E_113_SlashHelpSkipsModel` · `stub_inbound_orchestration_e2e_test.go` |
+| E2E-114 | `Inbound` meta + 附件进入 user 历史 | [x] | `TestE2E_114_InboundMetaAndAttachmentInHistory` · `stub_inbound_orchestration_e2e_test.go` |
+| E2E-115 | 空正文 + 附件合法 | [x] | `TestE2E_115_EmptyTextWithAttachmentAccepted` · `stub_inbound_orchestration_e2e_test.go` |
 | E2E-113 | 远场 `RunScheduledMaintain`：stub 首次请求 user 为工具型说明（绝对路径），不内嵌 log/topic 全文；`opts.ToolRegistry` 为只读 builtin | [x] | `TestE2E_113_ScheduledMaintainPromptToolOrientedPaths` · `stub_maintain_pipeline_e2e_test.go` |
 
 ---
