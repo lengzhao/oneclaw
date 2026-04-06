@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/openai/openai-go"
 	"github.com/lengzhao/oneclaw/toolctx"
+	"github.com/openai/openai-go"
 )
 
 // Tool is a host-defined tool invoked by the model (OpenAI function calling).

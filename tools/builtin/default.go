@@ -20,3 +20,14 @@ func DefaultRegistry() *tools.Registry {
 	r.MustRegister(CronTool{})
 	return r
 }
+
+// ScheduledMaintainReadRegistry registers read-only tools for memory.RunScheduledMaintain (far-field agent).
+// Lives in builtin so memory does not import this package (import cycle: builtin → memory).
+func ScheduledMaintainReadRegistry() *tools.Registry {
+	r := tools.NewRegistry()
+	r.MustRegister(ReadTool{})
+	r.MustRegister(GrepTool{})
+	r.MustRegister(GlobTool{})
+	r.MustRegister(ListDirTool{})
+	return r
+}

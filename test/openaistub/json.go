@@ -50,9 +50,9 @@ func CompletionToolCalls(model string, toolCalls []map[string]any) []byte {
 				"finish_reason": "tool_calls",
 				"logprobs":      nil,
 				"message": map[string]any{
-					"role":    "assistant",
-					"content": "",
-					"refusal": "",
+					"role":       "assistant",
+					"content":    "",
+					"refusal":    "",
 					"tool_calls": toolCalls,
 				},
 			},

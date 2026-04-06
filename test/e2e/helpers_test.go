@@ -5,12 +5,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/openai/openai-go"
 	"github.com/lengzhao/oneclaw/memory"
 	"github.com/lengzhao/oneclaw/session"
+	"github.com/lengzhao/oneclaw/test/openaistub"
 	"github.com/lengzhao/oneclaw/tools"
 	"github.com/lengzhao/oneclaw/tools/builtin"
-	"github.com/lengzhao/oneclaw/test/openaistub"
+	"github.com/openai/openai-go"
 )
 
 // newStubEngine builds an Engine after stub env is applied; call e2eEnv* before this.

@@ -29,7 +29,7 @@ func TestRenderCompactEnvelope(t *testing.T) {
 }
 
 func TestRenderNilDataUsesEmptyStruct(t *testing.T) {
-	_, err := Render(NameMaintenanceSystem, nil)
+	_, err := Render(NameMaintenanceSystemPostTurn, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,11 +53,18 @@ func TestRenderMaintenanceData(t *testing.T) {
 	d := maintenancePromptData{
 		CWD: "/p", Today: "2026-01-01", MemoryPath: "/p/MEMORY.md", RunTS: "2026-01-01T00:00:00Z",
 	}
-	got, err := Render(NameMaintenanceSystem, d)
+	got, err := Render(NameMaintenanceSystemPostTurn, d)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(got, "/p") || !strings.Contains(got, "silent memory") {
+	if !strings.Contains(got, "/p") || !strings.Contains(got, "silent memory") || !strings.Contains(got, "post-turn") {
 		t.Fatalf("got %q", got)
+	}
+	got2, err := Render(NameMaintenanceSystemScheduled, d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got2, "consolidation") {
+		t.Fatalf("scheduled template missing consolidation: %q", got2)
 	}
 }

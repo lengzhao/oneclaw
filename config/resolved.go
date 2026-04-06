@@ -154,6 +154,16 @@ func (r *Resolved) transcriptDisabled() bool {
 	return false
 }
 
+// EmbeddedScheduledMaintainInterval returns the interval for in-process maintainloop (oneclaw main).
+// It is 0 unless maintain.interval is non-empty in merged YAML (env alone does not enable embedded loop;
+// use cmd/maintain for interval-only-from-env). When non-zero, uses same parsing as MaintainLoopInterval.
+func (r *Resolved) EmbeddedScheduledMaintainInterval() time.Duration {
+	if strings.TrimSpace(r.merged.Maintain.Interval) == "" {
+		return 0
+	}
+	return r.MaintainLoopInterval()
+}
+
 // MaintainLoopInterval parses maintain.interval / ONCLAW_MAINTAIN_INTERVAL (env wins).
 func (r *Resolved) MaintainLoopInterval() time.Duration {
 	v := strings.TrimSpace(os.Getenv("ONCLAW_MAINTAIN_INTERVAL"))
@@ -172,16 +182,6 @@ func (r *Resolved) MaintainLoopInterval() time.Duration {
 		return time.Hour
 	}
 	return d
-}
-
-// MaintainCronSpec returns an optional cron expression for cmd/maintain when using cron mode instead of a fixed interval.
-// Standard 5-field spec (minute hour day-of-month month day-of-week) plus descriptors such as @every 1h (robfig/cron v3).
-// ONCLAW_MAINTAIN_CRON wins over maintain.cron in YAML when non-empty.
-func (r *Resolved) MaintainCronSpec() string {
-	if v := strings.TrimSpace(os.Getenv("ONCLAW_MAINTAIN_CRON")); v != "" {
-		return v
-	}
-	return strings.TrimSpace(r.merged.Maintain.Cron)
 }
 
 // ApplyEnvDefaults sets ONCLAW_* (never OPENAI_API_KEY) when the variable is unset, so existing packages keep working.
@@ -208,9 +208,6 @@ func ApplyEnvDefaults(r *Resolved) {
 	if r.merged.Maintain.Interval != "" {
 		setIfEmpty("ONCLAW_MAINTAIN_INTERVAL", strings.TrimSpace(r.merged.Maintain.Interval))
 	}
-	if r.merged.Maintain.Cron != "" {
-		setIfEmpty("ONCLAW_MAINTAIN_CRON", strings.TrimSpace(r.merged.Maintain.Cron))
-	}
 	if r.merged.Maintain.Model != "" {
 		setIfEmpty("ONCLAW_MAINTENANCE_MODEL", strings.TrimSpace(r.merged.Maintain.Model))
 	}
@@ -227,6 +224,35 @@ func ApplyEnvDefaults(r *Resolved) {
 		setIfEmpty("ONCLAW_MAINTENANCE_MAX_LOG_BYTES", strconv.Itoa(r.merged.Maintain.MaxLogReadBytes))
 	}
 
+	pt := r.merged.Maintain.PostTurn
+	if pt.LogDays != 0 {
+		setIfEmpty("ONCLAW_POST_TURN_MAINTENANCE_LOG_DAYS", strconv.Itoa(pt.LogDays))
+	}
+	if pt.MaxCombinedLogBytes != 0 {
+		setIfEmpty("ONCLAW_POST_TURN_MAINTENANCE_MAX_COMBINED_LOG_BYTES", strconv.Itoa(pt.MaxCombinedLogBytes))
+	}
+	if pt.MaxLogBytes != 0 {
+		setIfEmpty("ONCLAW_POST_TURN_MAINTENANCE_MAX_LOG_BYTES", strconv.Itoa(pt.MaxLogBytes))
+	}
+	if pt.MinLogBytes != 0 {
+		setIfEmpty("ONCLAW_POST_TURN_MAINTENANCE_MIN_LOG_BYTES", strconv.Itoa(pt.MinLogBytes))
+	}
+	if pt.MaxTopicFiles != 0 {
+		setIfEmpty("ONCLAW_POST_TURN_MAINTENANCE_MAX_TOPIC_FILES", strconv.Itoa(pt.MaxTopicFiles))
+	}
+	if pt.TopicExcerptBytes != 0 {
+		setIfEmpty("ONCLAW_POST_TURN_MAINTENANCE_TOPIC_EXCERPT_BYTES", strconv.Itoa(pt.TopicExcerptBytes))
+	}
+	if pt.MemoryPreviewBytes != 0 {
+		setIfEmpty("ONCLAW_POST_TURN_MAINTENANCE_MEMORY_PREVIEW_BYTES", strconv.Itoa(pt.MemoryPreviewBytes))
+	}
+	if pt.TimeoutSeconds != 0 {
+		setIfEmpty("ONCLAW_POST_TURN_MAINTENANCE_TIMEOUT_SEC", strconv.Itoa(pt.TimeoutSeconds))
+	}
+	if pt.MaxTokens != 0 {
+		setIfEmpty("ONCLAW_POST_TURN_MAINTENANCE_MAX_TOKENS", strconv.FormatInt(pt.MaxTokens, 10))
+	}
+
 	if r.merged.Log.Level != "" {
 		setIfEmpty("ONCLAW_LOG_LEVEL", strings.TrimSpace(r.merged.Log.Level))
 	}
@@ -240,6 +266,7 @@ func ApplyEnvDefaults(r *Resolved) {
 	setBoolDisable("ONCLAW_DISABLE_AUTO_MEMORY", r.merged.Features.DisableAutoMemory)
 	setBoolDisable("ONCLAW_DISABLE_MEMORY_EXTRACT", r.merged.Features.DisableMemoryExtract)
 	setBoolDisable("ONCLAW_DISABLE_AUTO_MAINTENANCE", r.merged.Features.DisableAutoMaintenance)
+	setBoolDisable("ONCLAW_DISABLE_SCHEDULED_MAINTENANCE", r.merged.Features.DisableScheduledMaintenance)
 	setBoolDisable("ONCLAW_DISABLE_MEMORY_AUDIT", r.merged.Features.DisableMemoryAudit)
 	setBoolDisable("ONCLAW_DISABLE_CONTEXT_BUDGET", r.merged.Features.DisableContextBudget)
 }

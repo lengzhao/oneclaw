@@ -10,7 +10,7 @@ import (
 	"github.com/lengzhao/oneclaw/prompts"
 )
 
-// MaintainPromptData fills prompts/templates/maintenance_system.tmpl for memory distillation.
+// MaintainPromptData fills maintenance system templates for memory distillation.
 type MaintainPromptData struct {
 	CWD        string // project working directory
 	Today      string // YYYY-MM-DD, same as digest day
@@ -18,24 +18,43 @@ type MaintainPromptData struct {
 	RunTS      string // RFC3339 UTC, wall time of this maintain pass
 }
 
-func maintenanceSystemPrompt(cwd, memoryPath, today, runTS string) string {
+// Audit sources for AppendMemoryAudit when appending Auto-maintained sections.
+const (
+	AuditSourcePostTurnMaintain  = "post_turn_maintain"
+	AuditSourceScheduledMaintain = "scheduled_maintain"
+)
+
+func maintenanceSystemPromptForPathway(p maintainPathway, cwd, memoryPath, today, runTS string) string {
 	d := MaintainPromptData{CWD: cwd, Today: today, MemoryPath: memoryPath, RunTS: runTS}
-	s, err := prompts.Render(prompts.NameMaintenanceSystem, d)
+	name := prompts.NameMaintenanceSystemScheduled
+	if p == pathwayPostTurn {
+		name = prompts.NameMaintenanceSystemPostTurn
+	}
+	s, err := prompts.Render(name, d)
 	if err != nil {
-		slog.Error("memory.prompts.maintenance_system", "err", err)
-		return fallbackMaintenanceSystemPrompt(cwd, memoryPath, today, runTS)
+		slog.Error("memory.prompts.maintenance_system", "pathway", p, "err", err)
+		return fallbackMaintenanceSystemPrompt(cwd, memoryPath, today, runTS, p == pathwayPostTurn)
 	}
 	return s
 }
 
-func fallbackMaintenanceSystemPrompt(cwd, memoryPath, today, runTS string) string {
-	return "You are a silent memory indexer for a coding agent. Scope: project `" + cwd + "`, calendar date " + today + ", target file `" + memoryPath + "`.\n" +
+func fallbackMaintenanceSystemPrompt(cwd, memoryPath, today, runTS string, postTurn bool) string {
+	kind := "consolidation"
+	if postTurn {
+		kind = "post-turn"
+	}
+	scope := "Synthesize across recent logs and MEMORY excerpt; dedupe and refresh stale rules."
+	if postTurn {
+		scope = "Near-field: only this finished user turn (snapshot); facts, rules, tool usage and repeated tool calls; ignore other sessions."
+	}
+	return "You are a silent memory indexer for a coding agent (" + kind + "). Scope: project `" + cwd + "`, calendar date " + today + ", target file `" + memoryPath + "`.\n" +
+		scope + "\n" +
 		"Maintenance run started (UTC): " + runTS + ".\n" +
 		"Follow the user message format exactly.\n" +
 		"Output only the requested markdown section (header + bullets). No preamble or explanation.\n"
 }
 
-func appendMaintenanceSection(layout Layout, memPath, section string) error {
+func appendMaintenanceSection(layout Layout, memPath, section, auditSource string) error {
 	projectDir := layout.Project
 	if err := os.MkdirAll(projectDir, 0o755); err != nil {
 		return err
@@ -50,7 +69,10 @@ func appendMaintenanceSection(layout Layout, memPath, section string) error {
 		if err := os.WriteFile(memPath, []byte(body), 0o644); err != nil {
 			return err
 		}
-		AppendMemoryAudit(layout, memPath, "maintain", []byte(section))
+		if auditSource == "" {
+			auditSource = AuditSourceScheduledMaintain
+		}
+		AppendMemoryAudit(layout, memPath, auditSource, []byte(section))
 		return nil
 	}
 	raw, err := os.ReadFile(memPath)
@@ -68,7 +90,34 @@ func appendMaintenanceSection(layout Layout, memPath, section string) error {
 	if err := os.WriteFile(memPath, []byte(body), 0o644); err != nil {
 		return err
 	}
-	AppendMemoryAudit(layout, memPath, "maintain", []byte(section))
+	if auditSource == "" {
+		auditSource = AuditSourceScheduledMaintain
+	}
+	AppendMemoryAudit(layout, memPath, auditSource, []byte(section))
+	return nil
+}
+
+// writeMergedOrAppendMaintenanceSection replaces today's digest span when hadSpan, otherwise appends (new file or new day).
+func writeMergedOrAppendMaintenanceSection(layout Layout, memPath string, hadSpan bool, spanStart, spanEnd int, existingFile, mergedSection, auditSource string) error {
+	mergedSection = strings.TrimSpace(mergedSection)
+	if !hadSpan {
+		return appendMaintenanceSection(layout, memPath, mergedSection, auditSource)
+	}
+	newBody := existingFile[:spanStart] + mergedSection + existingFile[spanEnd:]
+	if !strings.HasSuffix(newBody, "\n") {
+		newBody += "\n"
+	}
+	projectDir := layout.Project
+	if err := os.MkdirAll(projectDir, 0o755); err != nil {
+		return err
+	}
+	if err := os.WriteFile(memPath, []byte(newBody), 0o644); err != nil {
+		return err
+	}
+	if auditSource == "" {
+		auditSource = AuditSourceScheduledMaintain
+	}
+	AppendMemoryAudit(layout, memPath, auditSource, []byte(mergedSection))
 	return nil
 }
 
@@ -127,6 +176,18 @@ func stripMarkdownFences(s string) string {
 		s = strings.TrimSpace(s[:i])
 	}
 	return strings.TrimSpace(s)
+}
+
+// countMaintenanceBullets counts non-empty lines that start with "- " (markdown bullets) in a maintenance section.
+func countMaintenanceBullets(section string) int {
+	n := 0
+	for _, line := range strings.Split(section, "\n") {
+		s := strings.TrimSpace(line)
+		if len(s) >= 2 && strings.HasPrefix(s, "- ") {
+			n++
+		}
+	}
+	return n
 }
 
 func utf8SafePrefix(s string, maxBytes int) string {

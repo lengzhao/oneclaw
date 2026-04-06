@@ -9,14 +9,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/openai/openai-go"
 	"github.com/lengzhao/oneclaw/loop"
 	"github.com/lengzhao/oneclaw/memory"
 	"github.com/lengzhao/oneclaw/routing"
 	"github.com/lengzhao/oneclaw/tasks"
+	"github.com/lengzhao/oneclaw/test/openaistub"
 	"github.com/lengzhao/oneclaw/toolctx"
 	"github.com/lengzhao/oneclaw/tools/builtin"
-	"github.com/lengzhao/oneclaw/test/openaistub"
+	"github.com/openai/openai-go"
 )
 
 // E2E-108 存在 tasks.json 时 system 含 Task list 与任务摘要。

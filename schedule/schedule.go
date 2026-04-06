@@ -40,9 +40,9 @@ type File struct {
 
 // Job is one scheduled reminder / prompt injection.
 type Job struct {
-	ID           string       `json:"id"`
-	Name         string       `json:"name,omitempty"`
-	Message      string       `json:"message"`
+	ID      string `json:"id"`
+	Name    string `json:"name,omitempty"`
+	Message string `json:"message"`
 	// Enabled is always true for new jobs; false rows are removed on the next write (list/add/remove/collect) so the job list stays small.
 	Enabled      bool         `json:"enabled"`
 	TargetSource string       `json:"target_source"`
@@ -255,14 +255,14 @@ func initialNextRun(spec ScheduleSpec, now time.Time) (time.Time, error) {
 
 // AddInput is the payload for adding a job.
 type AddInput struct {
-	Name          string
-	Message       string
-	TargetSource  string
-	SessionKey    string
-	UserID        string
-	TenantID      string
-	Schedule      ScheduleSpec
-	AtSeconds     int
+	Name         string
+	Message      string
+	TargetSource string
+	SessionKey   string
+	UserID       string
+	TenantID     string
+	Schedule     ScheduleSpec
+	AtSeconds    int
 }
 
 // Add appends a job after validation.
@@ -289,7 +289,9 @@ func Add(cwd string, in AddInput) (string, error) {
 		fileMu.Unlock()
 		return "", err
 	}
-	compactDisabledJobs(f)
+	if rm := compactDisabledJobs(f); rm > 0 {
+		slog.Info("schedule.compacted_disabled", "removed", rm, "path", path)
+	}
 	if len(f.Jobs) >= maxJobs {
 		fileMu.Unlock()
 		return "", fmt.Errorf("too many scheduled jobs (max %d)", maxJobs)
@@ -322,6 +324,15 @@ func Add(cwd string, in AddInput) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	slog.Info("schedule.job_added",
+		"id", id,
+		"name", name,
+		"target", ts,
+		"kind", spec.Kind,
+		"next_run", next.UTC().Format(time.RFC3339),
+		"path", path,
+		"message_preview", truncate(msg, 200),
+	)
 	notifyScheduleWake()
 	return fmt.Sprintf("scheduled job %s (%q) next run %s (file %s)", id, name, next.UTC().Format(time.RFC3339), path), nil
 }
@@ -334,8 +345,8 @@ func truncate(s string, n int) string {
 	return s[:n] + "…"
 }
 
-// compactDisabledJobs removes jobs with Enabled==false from f.Jobs. Returns true if anything was dropped.
-func compactDisabledJobs(f *File) bool {
+// compactDisabledJobs removes jobs with Enabled==false from f.Jobs. Returns how many rows were removed.
+func compactDisabledJobs(f *File) int {
 	n := len(f.Jobs)
 	out := f.Jobs[:0]
 	for _, j := range f.Jobs {
@@ -344,7 +355,7 @@ func compactDisabledJobs(f *File) bool {
 		}
 	}
 	f.Jobs = out
-	return len(f.Jobs) != n
+	return n - len(f.Jobs)
 }
 
 // Remove deletes a job by id.
@@ -363,7 +374,9 @@ func Remove(cwd, jobID string) (string, error) {
 		fileMu.Unlock()
 		return "", err
 	}
-	compactDisabledJobs(f)
+	if rm := compactDisabledJobs(f); rm > 0 {
+		slog.Info("schedule.compacted_disabled", "removed", rm, "path", path)
+	}
 	var out []Job
 	found := false
 	for _, j := range f.Jobs {
@@ -383,6 +396,7 @@ func Remove(cwd, jobID string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	slog.Info("schedule.job_removed", "id", id, "path", path)
 	notifyScheduleWake()
 	return fmt.Sprintf("removed scheduled job %s", id), nil
 }
@@ -399,8 +413,11 @@ func ListText(cwd string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	changed := compactDisabledJobs(f)
-	if changed {
+	removed := compactDisabledJobs(f)
+	if removed > 0 {
+		slog.Info("schedule.compacted_disabled", "removed", removed, "path", path)
+	}
+	if removed > 0 {
 		if err := write(path, f); err != nil {
 			return "", err
 		}
@@ -487,7 +504,11 @@ func CollectDue(cwd, targetSource string, now time.Time) ([]TurnDelivery, error)
 	if err != nil {
 		return nil, err
 	}
-	changed := compactDisabledJobs(f)
+	removed := compactDisabledJobs(f)
+	changed := removed > 0
+	if removed > 0 {
+		slog.Info("schedule.compacted_disabled", "removed", removed, "path", path)
+	}
 	nowUTC := now.UTC()
 	var deliveries []TurnDelivery
 	var out []Job
@@ -501,6 +522,7 @@ func CollectDue(cwd, targetSource string, now time.Time) ([]TurnDelivery, error)
 			out = append(out, j)
 			continue
 		}
+		dueAt := j.NextRun.UTC()
 		firedAt := nowUTC
 		t := firedAt
 		j.LastRun = &t
@@ -517,6 +539,19 @@ func CollectDue(cwd, targetSource string, now time.Time) ([]TurnDelivery, error)
 
 		switch j.Schedule.Kind {
 		case "at":
+			slog.Info("schedule.job_fired",
+				"id", j.ID,
+				"name", j.Name,
+				"kind", "at",
+				"action", "removed_after_fire",
+				"due_at", dueAt.Format(time.RFC3339),
+				"fired_at", firedAt.Format(time.RFC3339),
+				"correlation_id", corr,
+				"target", j.TargetSource,
+				"session_key", j.SessionKey,
+				"message_preview", truncate(j.Message, 200),
+				"path", path,
+			)
 			// one-shot: drop from file so the list does not grow
 		case "every":
 			next, err := NextRunAfter(j.Schedule, firedAt)
@@ -525,6 +560,21 @@ func CollectDue(cwd, targetSource string, now time.Time) ([]TurnDelivery, error)
 			} else {
 				j.NextRun = next.UTC()
 				out = append(out, j)
+				slog.Info("schedule.job_fired",
+					"id", j.ID,
+					"name", j.Name,
+					"kind", "every",
+					"action", "rescheduled",
+					"due_at", dueAt.Format(time.RFC3339),
+					"next_run", j.NextRun.Format(time.RFC3339),
+					"every_seconds", j.Schedule.EverySeconds,
+					"fired_at", firedAt.Format(time.RFC3339),
+					"correlation_id", corr,
+					"target", j.TargetSource,
+					"session_key", j.SessionKey,
+					"message_preview", truncate(j.Message, 200),
+					"path", path,
+				)
 			}
 		case "cron":
 			next, err := NextRunAfter(j.Schedule, firedAt)
@@ -533,6 +583,21 @@ func CollectDue(cwd, targetSource string, now time.Time) ([]TurnDelivery, error)
 			} else {
 				j.NextRun = next.UTC()
 				out = append(out, j)
+				slog.Info("schedule.job_fired",
+					"id", j.ID,
+					"name", j.Name,
+					"kind", "cron",
+					"action", "rescheduled",
+					"due_at", dueAt.Format(time.RFC3339),
+					"next_run", j.NextRun.Format(time.RFC3339),
+					"cron_expr", j.Schedule.CronExpr,
+					"fired_at", firedAt.Format(time.RFC3339),
+					"correlation_id", corr,
+					"target", j.TargetSource,
+					"session_key", j.SessionKey,
+					"message_preview", truncate(j.Message, 200),
+					"path", path,
+				)
 			}
 		default:
 			slog.Warn("schedule.drop_unknown_kind", "id", j.ID, "kind", j.Schedule.Kind)

@@ -7,13 +7,13 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/openai/openai-go"
 	"github.com/lengzhao/oneclaw/loop"
 	"github.com/lengzhao/oneclaw/routing"
+	"github.com/lengzhao/oneclaw/test/openaistub"
 	"github.com/lengzhao/oneclaw/toolctx"
 	"github.com/lengzhao/oneclaw/tools"
 	"github.com/lengzhao/oneclaw/tools/builtin"
-	"github.com/lengzhao/oneclaw/test/openaistub"
+	"github.com/openai/openai-go"
 )
 
 // E2E-01 最小对话（纯文本）

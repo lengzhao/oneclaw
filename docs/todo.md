@@ -39,7 +39,7 @@
 9. `[x]` **行为策略写回** — 规则进 `.oneclaw/rules` / `AGENT.md` 的路径与护栏（与 D2 审计衔接）。
 10. `[x]` **任务状态工具** — Task 创建/更新或等价落盘，长会话与 resume 对齐进度。
 11. `[x]` **侧链合并（可选）** — sidechain 结论以 attachment 或 user 摘要合入主 transcript。
-12. `[ ]` **Cron / Heartbeat** — **Cron（maintain）** `[x]`：`maintain.cron` / `ONCLAW_MAINTAIN_CRON` / `-cron`（[robfig/cron v3](https://pkg.go.dev/github.com/robfig/cron/v3)，SIGINT/SIGTERM 退出）。**Heartbeat**、Channel 侧保活仍待续。
+12. `[x]` **Cron / Heartbeat** — **maintain 周期**为 `maintain.interval` / `ONCLAW_MAINTAIN_INTERVAL`（`cmd/maintain` 间隔循环；**已移除**进程内 `maintain.cron` / `-cron`）。其余定时场景：`cron` 工具 + `scheduled_jobs.json`；或部署侧系统 crontab 调 **`maintain -once`**。Channel 内置保活仍不在此条范围。
 
 ### P2
 
@@ -101,7 +101,7 @@
 - [x] **B3** 发现层：自 cwd 向上查找 `AGENT.md`、`.oneclaw/rules/*.md`、memory 根
 - [x] **B5** 注入与 recall：system 前缀拼装；recall → attachment；surfaced 字节上限、路径去重
 - [x] **B6** 在线更新：工具可写 topic、`MEMORY.md`、daily log
-- [x] **B7** extract / dream：**主干已接** — daily log + **默认开启**的回合后维护 `memory.MaybeMaintain`；**定时**入口 `go run ./cmd/maintain`（默认按 `ONCLAW_MAINTAIN_INTERVAL` 常驻循环，默认 1h；cron 用 `-once` 或间隔 `0`）。维护模型可选：`ONCLAW_MAINTENANCE_MODEL` / `ONCLAW_MAINTENANCE_SCHEDULED_MODEL`（未设则回退主会话模型）。写 **project `MEMORY.md`** `## Auto-maintained (日期)`，按日去重；**已做**：多日 log 拼接（`ONCLAW_MAINTENANCE_LOG_DAYS` 等）、project 下 topic 摘录进提示、对模型输出做 bullet 级强去重
+- [x] **B7** extract / dream：**主干已接** — daily log + 回合后 **`MaybePostTurnMaintain`** / **`RunPostTurnMaintain`** 与定时 **`RunScheduledMaintain`**（`cmd/maintain`）；双入口与 `ONCLAW_POST_TURN_*` 见 [`memory-maintain-dual-entry-design.md`](memory-maintain-dual-entry-design.md)。`MaybeMaintain` 为弃用别名。默认 interval 1h；`-once` 或 `0` 单次。模型：`ONCLAW_MAINTENANCE_MODEL` / `ONCLAW_MAINTENANCE_SCHEDULED_MODEL`。写 **project `MEMORY.md`** `## Auto-maintained (日期)`；**待续**：分路径审计 source、定时总开关、主进程内嵌 interval
 
 ---
 
@@ -133,7 +133,7 @@
 | 优先级 | 项 | 说明 |
 |--------|-----|------|
 | P0 | **统一 config 模块** | [x] 见 backlog #1、[`config.md`](config.md) |
-| P0 | **模型化维护管道** | [x] 回合后 `MaybeMaintain`；[x] 定时 `cmd/maintain`；[x] 多段 log、topic 摘录、输出强去重（backlog #2） |
+| P0 | **模型化维护管道** | [x] 回合后 `MaybePostTurnMaintain`；[x] 定时 `RunScheduledMaintain` / `cmd/maintain`；[x] 双路径配置与互斥；[x] 多段 log、topic、强去重（backlog #2） |
 | P0 | **语义 compact（最小可用）** | [x] 见 backlog #3（`ApplyHistoryBudget` + `compact_boundary` 摘要 + 尾窗 `MinTailMessages`） |
 | P0 | **受控并行 tool 调用** | [ ] 见 backlog #4 |
 | P0 | **Glob / 列表工具** | [ ] 见 backlog #5 |
@@ -143,7 +143,7 @@
 | P1 | **行为策略写回** | [x] 见 backlog #9 |
 | P1 | **任务状态工具** | [ ] 见 backlog #10 |
 | P1 | **侧链合并（可选）** | [x] 见 backlog #11 |
-| P1 | **Cron / Heartbeat** | [ ] 见 backlog #12：maintain 内 cron 已接；心跳 / channel 保活仍待续 |
+| P1 | **Cron / Heartbeat** | [ ] 见 backlog #12：maintain 仅 interval；agent `cron` 工具与 channel 保活仍待续 |
 | P2 | **入口编排加厚** | [ ] 见 backlog #13 |
 | P2 | **D3 向量 recall** | [ ] 见 backlog #14（阶段 D3） |
 | P2 | **预算精度（可选）** | [ ] 见 backlog #15 |

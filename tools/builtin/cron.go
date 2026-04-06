@@ -107,14 +107,14 @@ func (CronTool) Execute(ctx context.Context, input json.RawMessage, tctx *toolct
 		uid := strings.TrimSpace(tctx.TurnInbound.UserID)
 		ten := strings.TrimSpace(tctx.TurnInbound.TenantID)
 		return schedule.Add(tctx.CWD, schedule.AddInput{
-			Name:          in.Name,
-			Message:       in.Message,
-			TargetSource:  ts,
-			SessionKey:    sk,
-			UserID:        uid,
-			TenantID:      ten,
-			Schedule:      spec,
-			AtSeconds:     s.AtSeconds,
+			Name:         in.Name,
+			Message:      in.Message,
+			TargetSource: ts,
+			SessionKey:   sk,
+			UserID:       uid,
+			TenantID:     ten,
+			Schedule:     spec,
+			AtSeconds:    s.AtSeconds,
 		})
 	case "list":
 		return schedule.ListText(tctx.CWD)

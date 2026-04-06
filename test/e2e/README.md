@@ -23,10 +23,10 @@
 | `stub_transcript_test.go` | E2E-60、61 |
 | `stub_postturn_test.go` | E2E-50、51 |
 | `stub_maintain_test.go` | E2E-92 |
-| `stub_maintain_pipeline_e2e_test.go` | E2E-101、102（多日 log / topic / 维护去重） |
+| `stub_maintain_pipeline_e2e_test.go` | E2E-101、102、113（近场仅快照；去重；远场多日 log+topic） |
 | `stub_semantic_compact_e2e_test.go` | E2E-103、104（全局预算语义 compact） |
 | `stub_audit_test.go` | E2E-93～95 |
-| `stub_maintain_cli_test.go` | E2E-96、97、110 |
+| `stub_maintain_cli_test.go` | E2E-96、97 |
 | `stub_schedule_e2e_test.go` | E2E-111、112 |
 | `stub_turn_log_test.go` | E2E-98～100 |
 

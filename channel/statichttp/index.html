@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>oneclaw · 本地页面</title>
+  <style>
+    :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+    body { max-width: 42rem; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; }
+    h1 { font-size: 1.25rem; font-weight: 600; }
+    textarea { width: 100%; min-height: 6rem; box-sizing: border-box; padding: 0.5rem; }
+    button { margin-top: 0.5rem; padding: 0.4rem 0.9rem; cursor: pointer; }
+    #out { margin-top: 1rem; white-space: pre-wrap; border: 1px solid #8884; border-radius: 6px; padding: 0.75rem; min-height: 4rem; }
+    .err { color: #c00; }
+    .meta { font-size: 0.85rem; opacity: 0.75; margin-top: 1.5rem; }
+  </style>
+</head>
+<body>
+  <h1>oneclaw 本地 HTTP 渠道</h1>
+  <p>向助手发送一条消息（单请求串行，适合本机调试）。</p>
+  <textarea id="msg" placeholder="输入消息…"></textarea>
+  <div><button type="button" id="send">发送</button></div>
+  <div id="out" aria-live="polite"></div>
+  <p class="meta">静态页 + <code>/api/chat</code>；可选额外文件见配置 <code>static_dir</code> → <code>/static/</code>。</p>
+  <script>
+    const out = document.getElementById("out");
+    const msg = document.getElementById("msg");
+    document.getElementById("send").onclick = async () => {
+      const text = msg.value.trim();
+      if (!text) return;
+      out.textContent = "…";
+      out.classList.remove("err");
+      try {
+        const r = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text }),
+        });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          out.classList.add("err");
+          out.textContent = j.error || r.statusText || "请求失败";
+          return;
+        }
+        out.textContent = j.reply || "";
+      } catch (e) {
+        out.classList.add("err");
+        out.textContent = String(e);
+      }
+    };
+  </script>
+</body>
+</html>

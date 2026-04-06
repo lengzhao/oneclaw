@@ -35,3 +35,16 @@ func MaintenanceMaxOutputTokens(maxOut int64) int64 {
 	}
 	return n
 }
+
+// maintenanceEffectiveMaxTokens applies ONCLAW_POST_TURN_MAINTENANCE_MAX_TOKENS for post-turn when set, then MaintenanceMaxOutputTokens.
+func maintenanceEffectiveMaxTokens(maxOut int64, postTurn bool) int64 {
+	if postTurn {
+		if v := strings.TrimSpace(os.Getenv("ONCLAW_POST_TURN_MAINTENANCE_MAX_TOKENS")); v != "" {
+			n, err := strconv.ParseInt(v, 10, 64)
+			if err == nil && n > 0 {
+				return n
+			}
+		}
+	}
+	return MaintenanceMaxOutputTokens(maxOut)
+}

@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -17,6 +18,58 @@ func maintenanceLogDays() int {
 		n = 14
 	}
 	return n
+}
+
+// postTurnMaintenanceMinLogBytes: minimum UTF-8 size of formatted Current turn snapshot before running near-field maintain.
+func postTurnMaintenanceMinLogBytes() int {
+	return getenvIntMaint("ONCLAW_POST_TURN_MAINTENANCE_MIN_LOG_BYTES", 200)
+}
+
+func postTurnMaintenanceMemoryPreviewBytes() int {
+	n := getenvIntMaint("ONCLAW_POST_TURN_MAINTENANCE_MEMORY_PREVIEW_BYTES", 4000)
+	if n < 1024 {
+		n = 1024
+	}
+	if n > 24_000 {
+		n = 24_000
+	}
+	return n
+}
+
+func scheduledMaintainTimeout() time.Duration {
+	// Far-field runs are multi-step (read-only tools); be generous so slow APIs rarely hit deadline.
+	return maintenanceTimeoutSeconds("ONCLAW_SCHEDULED_MAINTENANCE_TIMEOUT_SEC", 1800)
+}
+
+func postTurnMaintainTimeout() time.Duration {
+	return maintenanceTimeoutSeconds("ONCLAW_POST_TURN_MAINTENANCE_TIMEOUT_SEC", 60)
+}
+
+// scheduledMaintainMaxSteps caps model↔tool rounds for far-field scheduled maintenance (read-only tools).
+func scheduledMaintainMaxSteps() int {
+	n := getenvIntMaint("ONCLAW_SCHEDULED_MAINTENANCE_MAX_STEPS", 24)
+	if n < 2 {
+		n = 2
+	}
+	if n > 64 {
+		n = 64
+	}
+	return n
+}
+
+func maintenanceTimeoutSeconds(envKey string, defaultSec int) time.Duration {
+	v := strings.TrimSpace(os.Getenv(envKey))
+	if v == "" {
+		return time.Duration(defaultSec) * time.Second
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil || n < 1 {
+		return time.Duration(defaultSec) * time.Second
+	}
+	if n > 3600 {
+		n = 3600
+	}
+	return time.Duration(n) * time.Second
 }
 
 func maintenanceMaxTopicFiles() int {
@@ -79,6 +132,29 @@ func collectRecentDailyLogs(autoDir, anchorDate string, days, minBytesPerFile, m
 		}
 	}
 	return b.String(), includedBytes
+}
+
+// countRecentDailyLogBytes sums raw on-disk bytes for the same calendar-day window as collectRecentDailyLogs (no prompt build).
+func countRecentDailyLogBytes(autoDir, anchorDate string, days, minBytesPerFile int) int {
+	if days < 1 {
+		return 0
+	}
+	t, err := time.ParseInLocation("2006-01-02", anchorDate, time.Local)
+	if err != nil {
+		return 0
+	}
+	sum := 0
+	for d := 0; d < days; d++ {
+		day := t.AddDate(0, 0, -d)
+		ds := day.Format("2006-01-02")
+		p := DailyLogPath(autoDir, ds)
+		data, err := os.ReadFile(p)
+		if err != nil || len(data) < minBytesPerFile {
+			continue
+		}
+		sum += len(data)
+	}
+	return sum
 }
 
 // collectProjectTopicExcerpts lists `*.md` directly under project memory (excluding MEMORY.md)

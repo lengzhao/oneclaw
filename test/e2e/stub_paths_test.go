@@ -8,13 +8,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/openai/openai-go"
 	"github.com/lengzhao/oneclaw/loop"
 	"github.com/lengzhao/oneclaw/memory"
 	"github.com/lengzhao/oneclaw/routing"
+	"github.com/lengzhao/oneclaw/test/openaistub"
 	"github.com/lengzhao/oneclaw/toolctx"
 	"github.com/lengzhao/oneclaw/tools/builtin"
-	"github.com/lengzhao/oneclaw/test/openaistub"
+	"github.com/openai/openai-go"
 )
 
 // E2E-40 write_file 仅依赖 cwd（无 memory 根时路径必须在 cwd 下）

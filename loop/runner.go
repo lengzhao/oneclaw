@@ -110,7 +110,7 @@ func RunTurn(ctx context.Context, cfg Config, in routing.Inbound) (err error) {
 			MaxCompletionTokens: openai.Int(cfg.MaxTokens),
 			// Let the model batch tool calls; executor partitions by Registry.ConcurrencySafe (read parallel, write serial).
 			ParallelToolCalls: openai.Bool(true),
-			StreamOptions:       openai.ChatCompletionStreamOptionsParam{IncludeUsage: openai.Bool(true)},
+			StreamOptions:     openai.ChatCompletionStreamOptionsParam{IncludeUsage: openai.Bool(true)},
 		}
 
 		slog.Info("loop.model.request",

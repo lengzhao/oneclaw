@@ -12,9 +12,12 @@ import (
 
 // Template names for [Render] (basename of files under templates/, as registered by ParseFS).
 const (
-	NameMainThreadSystem  = "main_thread_system"
-	NameMaintenanceSystem = "maintenance_system"
-	NameCompactEnvelope   = "compact_envelope"
+	NameMainThreadSystem = "main_thread_system"
+	// NameMaintenanceSystem is legacy; prefer post-turn / scheduled-specific templates.
+	NameMaintenanceSystem          = "maintenance_system"
+	NameMaintenanceSystemPostTurn  = "maintenance_system_post_turn"
+	NameMaintenanceSystemScheduled = "maintenance_system_scheduled"
+	NameCompactEnvelope            = "compact_envelope"
 )
 
 // TemplateFiles holds all embedded .tmpl assets under templates/ (single place to edit copy).

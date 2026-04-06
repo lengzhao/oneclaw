@@ -60,7 +60,7 @@ func (TaskUpdateTool) Parameters() openai.FunctionParameters {
 		},
 		"metadata": map[string]any{
 			"type":                 "object",
-			"description":        "String metadata merged into the task",
+			"description":          "String metadata merged into the task",
 			"additionalProperties": map[string]any{"type": "string"},
 		},
 	}, []string{"task_id"})

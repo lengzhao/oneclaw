@@ -5,17 +5,17 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/openai/openai-go"
 	"github.com/lengzhao/oneclaw/toolctx"
+	"github.com/openai/openai-go"
 )
 
 type stubTool struct {
 	name string
 }
 
-func (s stubTool) Name() string                       { return s.name }
-func (s stubTool) Description() string                { return s.name }
-func (s stubTool) ConcurrencySafe() bool              { return true }
+func (s stubTool) Name() string          { return s.name }
+func (s stubTool) Description() string   { return s.name }
+func (s stubTool) ConcurrencySafe() bool { return true }
 func (s stubTool) Parameters() openai.FunctionParameters {
 	return openai.FunctionParameters{"type": "object"}
 }

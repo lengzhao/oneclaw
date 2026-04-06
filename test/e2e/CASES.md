@@ -54,7 +54,7 @@
 | E2E-98 | turn-log 按日分文件；无工具时仍有 `assistant_final` 一行 | [x] | `TestE2E_98_TurnLogAssistantFinalWithoutTools` · `stub_turn_log_test.go` |
 | E2E-99 | `ONCLAW_DISABLE_TURN_LOG=1` 不写 turn-log 文件 | [x] | `TestE2E_99_TurnLogDisabledNoFile` · `stub_turn_log_test.go` |
 | E2E-100 | 每工具一行 `kind=tool` + 回合末 `kind=assistant_final` | [x] | `TestE2E_100_TurnLogToolThenAssistantFinal` · `stub_turn_log_test.go` |
-| E2E-101 | 维护管道：stub 捕获的第 2 次请求含多日 daily log + project topic 摘录 | [x] | `TestE2E_101_MaintainPromptMultiDayLogAndTopicExcerpts` · `stub_maintain_pipeline_e2e_test.go` |
+| E2E-101 | 近场维护：第 2 次请求仅含 Current turn 快照 + MEMORY 摘录；不含 daily log / topic | [x] | `TestE2E_101_PostTurnMaintainPromptSessionOnly` · `stub_maintain_pipeline_e2e_test.go` |
 | E2E-102 | 维护强去重：与 `MEMORY.md` 重复的 bullet 被剥后不落盘 | [x] | `TestE2E_102_MaintainDedupeSkipsAppendWhenNoNewBullets` · `stub_maintain_pipeline_e2e_test.go` |
 | E2E-103 | 语义 compact：预算裁剪时首条 chat 请求 user 文本含 `compact_boundary` | [x] | `TestE2E_103_SemanticCompactInChatRequest` · `stub_semantic_compact_e2e_test.go` |
 | E2E-104 | `ONCLAW_DISABLE_SEMANTIC_COMPACT=1` 时首请求 user 侧无 `compact_boundary` | [x] | `TestE2E_104_SemanticCompactDisabledNoBoundaryTag` · `stub_semantic_compact_e2e_test.go` |
@@ -63,9 +63,9 @@
 | E2E-107 | `ONCLAW_DISABLE_SKILLS=1` 时 system 无 Skills 段 | [x] | `TestE2E_107_SkillsDisabledNoSystemSection` · `stub_skills_e2e_test.go` |
 | E2E-108 | 存在 `tasks.json` 时 system 含 Task list 摘要 | [x] | `TestE2E_108_TasksBlockInSystemPrompt` · `stub_tasks_e2e_test.go` |
 | E2E-109 | `task_create` / `task_update` 落盘；`ONCLAW_DISABLE_TASKS=1` 关闭 system 任务段 | [x] | `TestE2E_109_TaskToolsWriteFileAndDisableHidesBlock` · `stub_tasks_e2e_test.go` |
-| E2E-110 | `cmd/maintain -cron` 非法表达式非零退出 | [x] | `TestE2E_110_MaintainCLIInvalidCronExitsNonZero` · `stub_maintain_cli_test.go` |
 | E2E-111 | `cron` add 写入 `scheduled_jobs.json` | [x] | `TestE2E_111_CronToolWritesFile` · `stub_schedule_e2e_test.go` |
 | E2E-112 | 启用中的定时任务出现在 system「Scheduled jobs」段 | [x] | `TestE2E_112_ScheduledJobsBlockInSystemPrompt` · `stub_schedule_e2e_test.go` |
+| E2E-113 | 远场 `RunScheduledMaintain`：stub 首次请求 user 为工具型说明（绝对路径），不内嵌 log/topic 全文；`opts.ToolRegistry` 为只读 builtin | [x] | `TestE2E_113_ScheduledMaintainPromptToolOrientedPaths` · `stub_maintain_pipeline_e2e_test.go` |
 
 ---
 
@@ -228,9 +228,10 @@
 - **前置**：`HOME` 与 cwd；memory 开启；`ONCLAW_DISABLE_AUTO_MAINTENANCE=0`（`e2eEnvWithMemory` 默认会关掉维护以免多耗 stub）；stub 连续两次 `CompletionStop`（主回合 + 维护回合）。
 - **期望**：`<cwd>/.oneclaw/memory/MEMORY.md` 含维护段标记。
 
-### E2E-101～E2E-104（维护管道收口 + 语义 compact）
+### E2E-101～104、113（维护近/远场 + 语义 compact）
 
-- **E2E-101**：`openaistub` 捕获每次 chat 请求体；在 auto memory 根预写**昨日** daily log（≥ min 字节）；`SubmitUser` 产生**今日** log 行；project `.oneclaw/memory/e2e101_topic.md` 含唯一标记。解析**第 2 次**请求的 user 文本：含 `### Daily log`、昨日与今日日期串、昨日/今日标记、topic 文件名与正文标记；`MEMORY.md` 含维护模型输出的新 bullet。
+- **E2E-101**：预写昨日 daily log 与 topic（用于干扰）；`SubmitUser` 后解析**第 2 次**维护请求：须含 `Current turn snapshot`、本轮 user/assistant 标记；**不得**含 `### Daily log`、昨日标记、topic 标记；`MEMORY.md` 含新 bullet。
+- **E2E-113**：`RunScheduledMaintain(..., &ScheduledMaintainOpts{ToolRegistry: builtin.ScheduledMaintainReadRegistry()})`（**按天 LOG_DAYS**，非增量）；预写昨日+今日 log 与 topic（供体量探测）；stub **首次**请求 user 须含 far-field / `read_file` 与 auto 根、今日 log、`MEMORY.md`、project memory 目录的**绝对路径**，且**不得**内嵌 log/topic 标记正文；写回 `MEMORY.md`。
 - **E2E-102**：预写 `MEMORY.md` 含与维护模型输出**同义**的 bullet；维护跑完后文件与种子**完全一致**（强去重后 `no_new_facts_after_dedupe`，不追加 `## Auto-maintained`）。
 - **E2E-103**：`e2eEnvMinimal` + `loop.RunTurn`；预置大量 user 消息 + 较小 `ONCLAW_MAX_PROMPT_BYTES`；**首次**请求的 user 拼接文本含 `compact_boundary`。
 - **E2E-104**：同 E2E-103 体量，但 `ONCLAW_DISABLE_SEMANTIC_COMPACT=1`；首次请求 user 文本**不含** `compact_boundary`（纯丢头裁剪）。
@@ -258,10 +259,9 @@
 
 ### E2E-96 / E2E-97
 
-- **前置**：预写当日 daily log（字节 ≥ `ONCLAW_MAINTENANCE_MIN_LOG_BYTES`）；stub 一次 `CompletionStop`（维护段 + 唯一标记）；`OPENAI_BASE_URL` 等由 `baseStubTransport` 注入；子进程 `HOME` 为 `t.TempDir()` 以隔离 memory layout。
+- **前置**：预写当日 daily log（定时路径读 log）；受 **`ONCLAW_MAINTENANCE_MIN_LOG_BYTES`** 等约束；stub 一次 `CompletionStop`（维护段 + 唯一标记）；`OPENAI_BASE_URL` 等由 `baseStubTransport` 注入；子进程 `HOME` 为 `t.TempDir()` 以隔离 memory layout。
 - **E2E-96**：`go build ./cmd/maintain` 后执行 `-cwd <tmp> -once`，期望 `MEMORY.md` 含标记。
-- **E2E-97**：同上二进制，不传 `-once`，`ONCLAW_MAINTAIN_INTERVAL=0`，期望仍只跑一轮并写入标记（与 cron 环境一致）。
-- **E2E-110**：同上二进制，`-cron` 传入非法表达式；仅需占位 `OPENAI_API_KEY`，期望进程非零退出且日志含维护 cron 解析失败信息。
+- **E2E-97**：同上二进制，不传 `-once`，`ONCLAW_MAINTAIN_INTERVAL=0`，期望仍只跑一轮并写入标记。
 - **说明**：`go build` 子进程将 `HOME` 设为包 init 时保存的真实 HOME，避免模块缓存写入 `t.TempDir()` 导致只读文件清理失败。
 
 ---

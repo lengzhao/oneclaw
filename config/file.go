@@ -30,14 +30,15 @@ type File struct {
 	} `yaml:"paths"`
 
 	Features struct {
-		DisableTranscript      *bool `yaml:"disable_transcript"`
-		DisableMemory          *bool `yaml:"disable_memory"`
-		DisableTurnLog         *bool `yaml:"disable_turn_log"`
-		DisableAutoMemory      *bool `yaml:"disable_auto_memory"`
-		DisableMemoryExtract   *bool `yaml:"disable_memory_extract"`
-		DisableAutoMaintenance *bool `yaml:"disable_auto_maintenance"`
-		DisableMemoryAudit     *bool `yaml:"disable_memory_audit"`
-		DisableContextBudget   *bool `yaml:"disable_context_budget"`
+		DisableTranscript           *bool `yaml:"disable_transcript"`
+		DisableMemory               *bool `yaml:"disable_memory"`
+		DisableTurnLog              *bool `yaml:"disable_turn_log"`
+		DisableAutoMemory           *bool `yaml:"disable_auto_memory"`
+		DisableMemoryExtract        *bool `yaml:"disable_memory_extract"`
+		DisableAutoMaintenance      *bool `yaml:"disable_auto_maintenance"`
+		DisableScheduledMaintenance *bool `yaml:"disable_scheduled_maintenance"`
+		DisableMemoryAudit          *bool `yaml:"disable_memory_audit"`
+		DisableContextBudget        *bool `yaml:"disable_context_budget"`
 	} `yaml:"features"`
 
 	Budget struct {
@@ -48,12 +49,22 @@ type File struct {
 
 	Maintain struct {
 		Interval        string `yaml:"interval"`
-		Cron            string `yaml:"cron"`
 		Model           string `yaml:"model"`
 		ScheduledModel  string `yaml:"scheduled_model"`
 		MaxTokens       int64  `yaml:"max_tokens"`
 		MinLogBytes     int    `yaml:"min_log_bytes"`
 		MaxLogReadBytes int    `yaml:"max_log_bytes"`
+		PostTurn        struct {
+			LogDays             int   `yaml:"log_days"`
+			MaxCombinedLogBytes int   `yaml:"max_combined_log_bytes"`
+			MaxLogBytes         int   `yaml:"max_log_bytes"`
+			MinLogBytes         int   `yaml:"min_log_bytes"`
+			MaxTopicFiles       int   `yaml:"max_topic_files"`
+			TopicExcerptBytes   int   `yaml:"topic_excerpt_bytes"`
+			MemoryPreviewBytes  int   `yaml:"memory_preview_bytes"`
+			TimeoutSeconds      int   `yaml:"timeout_seconds"`
+			MaxTokens           int64 `yaml:"max_tokens"`
+		} `yaml:"post_turn"`
 	} `yaml:"maintain"`
 
 	Log struct {
@@ -155,6 +166,7 @@ func mergeFile(dst *File, src File) {
 	mergeBoolPtr(&dst.Features.DisableAutoMemory, src.Features.DisableAutoMemory)
 	mergeBoolPtr(&dst.Features.DisableMemoryExtract, src.Features.DisableMemoryExtract)
 	mergeBoolPtr(&dst.Features.DisableAutoMaintenance, src.Features.DisableAutoMaintenance)
+	mergeBoolPtr(&dst.Features.DisableScheduledMaintenance, src.Features.DisableScheduledMaintenance)
 	mergeBoolPtr(&dst.Features.DisableMemoryAudit, src.Features.DisableMemoryAudit)
 	mergeBoolPtr(&dst.Features.DisableContextBudget, src.Features.DisableContextBudget)
 	if src.Budget.MaxPromptBytes != 0 {
@@ -168,9 +180,6 @@ func mergeFile(dst *File, src File) {
 	}
 	if src.Maintain.Interval != "" {
 		dst.Maintain.Interval = src.Maintain.Interval
-	}
-	if src.Maintain.Cron != "" {
-		dst.Maintain.Cron = src.Maintain.Cron
 	}
 	if src.Maintain.Model != "" {
 		dst.Maintain.Model = src.Maintain.Model
@@ -186,6 +195,35 @@ func mergeFile(dst *File, src File) {
 	}
 	if src.Maintain.MaxLogReadBytes != 0 {
 		dst.Maintain.MaxLogReadBytes = src.Maintain.MaxLogReadBytes
+	}
+	spt := src.Maintain.PostTurn
+	dpt := &dst.Maintain.PostTurn
+	if spt.LogDays != 0 {
+		dpt.LogDays = spt.LogDays
+	}
+	if spt.MaxCombinedLogBytes != 0 {
+		dpt.MaxCombinedLogBytes = spt.MaxCombinedLogBytes
+	}
+	if spt.MaxLogBytes != 0 {
+		dpt.MaxLogBytes = spt.MaxLogBytes
+	}
+	if spt.MinLogBytes != 0 {
+		dpt.MinLogBytes = spt.MinLogBytes
+	}
+	if spt.MaxTopicFiles != 0 {
+		dpt.MaxTopicFiles = spt.MaxTopicFiles
+	}
+	if spt.TopicExcerptBytes != 0 {
+		dpt.TopicExcerptBytes = spt.TopicExcerptBytes
+	}
+	if spt.MemoryPreviewBytes != 0 {
+		dpt.MemoryPreviewBytes = spt.MemoryPreviewBytes
+	}
+	if spt.TimeoutSeconds != 0 {
+		dpt.TimeoutSeconds = spt.TimeoutSeconds
+	}
+	if spt.MaxTokens != 0 {
+		dpt.MaxTokens = spt.MaxTokens
 	}
 	if src.Log.Level != "" {
 		dst.Log.Level = src.Log.Level

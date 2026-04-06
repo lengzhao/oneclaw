@@ -23,14 +23,14 @@ import (
 
 // Engine holds conversation state and configuration for one chat session.
 type Engine struct {
-	Client     openai.Client
-	Model string
+	Client openai.Client
+	Model  string
 	// System is optional text appended at the end of the main-thread system prompt (see prompts/templates/main_thread_system.tmpl).
 	// Identity and section order live in that template; leave empty if you do not need extra constraints.
-	System string
-	MaxTokens  int64
-	MaxSteps   int
-	Messages   []openai.ChatCompletionMessageParamUnion
+	System    string
+	MaxTokens int64
+	MaxSteps  int
+	Messages  []openai.ChatCompletionMessageParamUnion
 	// Transcript is persisted user + assistant pairs: user is appended before the model loop (and
 	// saved when TranscriptPath is set); assistant is appended after a successful RunTurn.
 	Transcript []openai.ChatCompletionMessageParamUnion
@@ -43,7 +43,7 @@ type Engine struct {
 	// SinkFactory builds a per-turn Sink (e.g. bind IM thread). If nil, only SinkRegistry is used.
 	// When non-nil, NewSink runs first; ErrUseRegistrySink falls back to SinkRegistry.
 	SinkFactory routing.SinkFactory
-	// TranscriptPath is where SaveTranscript writes after each successful loop.RunTurn (before PostTurn / MaybeMaintain). Empty disables auto-save.
+	// TranscriptPath is where SaveTranscript writes after each successful loop.RunTurn (before PostTurn / MaybePostTurnMaintain). Empty disables auto-save.
 	TranscriptPath string
 	// RecallState tracks memory recall surfacing across turns (phase B).
 	RecallState memory.RecallState
@@ -172,7 +172,13 @@ func (e *Engine) SubmitUser(ctx context.Context, in routing.Inbound) error {
 			AssistantVisible: loop.LastAssistantDisplay(e.Messages),
 			Tools:            tools,
 		})
-		memory.MaybeMaintain(ctx, layout, &e.Client, e.Model, e.MaxTokens)
+		memory.MaybePostTurnMaintain(ctx, layout, &e.Client, e.Model, e.MaxTokens, &memory.PostTurnInput{
+			SessionID:        e.SessionID,
+			CorrelationID:    in.CorrelationID,
+			UserText:         in.Text,
+			AssistantVisible: loop.LastAssistantDisplay(e.Messages),
+			Tools:            tools,
+		})
 	}
 	return nil
 }

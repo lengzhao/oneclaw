@@ -104,7 +104,7 @@ func TestAppendMaintenanceSection_Audits(t *testing.T) {
 	lay := DefaultLayout(cwd, home)
 	memPath := filepath.Join(lay.Project, entrypointName)
 	section := "## Auto-maintained (2099-01-01)\n- test bullet\n"
-	if err := appendMaintenanceSection(lay, memPath, section); err != nil {
+	if err := appendMaintenanceSection(lay, memPath, section, AuditSourcePostTurnMaintain); err != nil {
 		t.Fatal(err)
 	}
 	raw, err := os.ReadFile(filepath.Join(cwd, DotDir, "audit", "memory-write.jsonl"))
@@ -116,7 +116,7 @@ func TestAppendMaintenanceSection_Audits(t *testing.T) {
 	if err := json.Unmarshal([]byte(line), &rec); err != nil {
 		t.Fatal(err)
 	}
-	if rec.Source != "maintain" {
+	if rec.Source != AuditSourcePostTurnMaintain {
 		t.Fatalf("got %q", rec.Source)
 	}
 }

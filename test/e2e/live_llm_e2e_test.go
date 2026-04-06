@@ -16,13 +16,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/openai/openai-go"
 	"github.com/lengzhao/oneclaw/config"
 	"github.com/lengzhao/oneclaw/loop"
 	"github.com/lengzhao/oneclaw/memory"
 	"github.com/lengzhao/oneclaw/routing"
 	"github.com/lengzhao/oneclaw/session"
 	"github.com/lengzhao/oneclaw/tools/builtin"
+	"github.com/openai/openai-go"
 )
 
 func testLiveConfigPath(t *testing.T) string {

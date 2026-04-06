@@ -50,6 +50,11 @@ paths:
 channels:
   - id: cli
     type: cli
+  # 本地静态页渠道：内嵌 HTML + POST /api/chat；仅监听本机。
+  # - id: localweb
+  #   type: statichttp
+  #   listen_addr: "127.0.0.1:8765"
+  #   static_dir: "" # 非空则挂载为 http://<listen>/static/
 
 # -----------------------------------------------------------------------------
 # 功能开关（true = 关闭对应功能）
@@ -65,18 +70,24 @@ features:
   disable_context_budget: false
 
 # -----------------------------------------------------------------------------
-# 自动维护（将当日 daily log 蒸馏进 MEMORY.md）
+# 自动维护（将 daily log 蒸馏进 MEMORY.md）
 # -----------------------------------------------------------------------------
+# 代码上分为两入口：回合后 MaybePostTurnMaintain（近场）与定时 RunScheduledMaintain（cmd/maintain / 可选进程内 loop）。
+# 回合后：ONCLAW_POST_TURN_MAINTENANCE_* 或 maintain.post_turn.*（经 ApplyEnvDefaults）。
+# 进程内定时：仅当下面 interval 在 YAML 中非空时 oneclaw 才启动 maintainloop；留空则不启（避免默认多扣 API）。
+# cmd/maintain 仍可在未写 interval 时用默认 1h（见 MaintainLoopInterval）。
+# interval 模式（进程内 loop / cmd/maintain -interval）：远场 daily log 为增量（行内时间戳），状态 .oneclaw/scheduled_maintain_state.json。
+# maintain -once 仍为按天 LOG_DAYS 窗口。
 maintain:
-  # Go duration；空则默认 1h；0 等价于只跑一轮（与 ONCLAW_MAINTAIN_INTERVAL=0 一致）
-  interval: 1h
-  # 可选；非空时 cmd/maintain 使用进程内 cron（robfig/cron v3：5 字段 + @every 等），优先于 interval 循环
-  # cron: "0 * * * *"
+  # interval: 8h
   model: ""
   scheduled_model: ""
   max_tokens: 8192
   min_log_bytes: 200
   max_log_bytes: 24000
+  # post_turn:
+  #   min_log_bytes: 200          # Current turn 快照（格式化后）最小字节，不足则跳过近场维护
+  #   memory_preview_bytes: 4000  # MEMORY.md 摘录上限（去重用）
 
 # -----------------------------------------------------------------------------
 # 上下文预算

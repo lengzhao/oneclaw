@@ -77,30 +77,3 @@ func TestLoad_explicitMissing(t *testing.T) {
 		t.Fatal("expected error")
 	}
 }
-
-func TestMaintainCronSpec_envOverridesYAML(t *testing.T) {
-	home := t.TempDir()
-	cwd := t.TempDir()
-	projDir := filepath.Join(cwd, memory.DotDir)
-	if err := os.MkdirAll(projDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(projDir, "config.yaml"), []byte(`
-maintain:
-  cron: "0 3 * * *"
-`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	r, err := Load(LoadOptions{Home: home, Cwd: cwd})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("ONCLAW_MAINTAIN_CRON", "")
-	if got := r.MaintainCronSpec(); got != "0 3 * * *" {
-		t.Fatalf("yaml: got %q", got)
-	}
-	t.Setenv("ONCLAW_MAINTAIN_CRON", "15 * * * *")
-	if got := r.MaintainCronSpec(); got != "15 * * * *" {
-		t.Fatalf("env: got %q", got)
-	}
-}

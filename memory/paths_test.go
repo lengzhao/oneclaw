@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -23,6 +24,30 @@ func TestExpandTilde(t *testing.T) {
 		if got != tc.want {
 			t.Errorf("expandTilde(%q, %q) = %q; want %q", home, tc.in, got, tc.want)
 		}
+	}
+}
+
+func TestEnsureDefaultAgentMd_CreatesDotOneclaw(t *testing.T) {
+	cwd := t.TempDir()
+	home := t.TempDir()
+	lay := DefaultLayout(cwd, home)
+	EnsureDefaultAgentMd(lay)
+	dot := filepath.Join(cwd, DotDir, AgentInstructionsFile)
+	b, err := os.ReadFile(dot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(b) < 20 {
+		t.Fatalf("unexpected stub: %q", b)
+	}
+	// Idempotent
+	EnsureDefaultAgentMd(lay)
+	b2, err := os.ReadFile(dot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(b2) != string(b) {
+		t.Fatal("second call should not overwrite")
 	}
 }
 

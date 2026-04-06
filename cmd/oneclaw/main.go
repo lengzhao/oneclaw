@@ -9,8 +9,10 @@ import (
 
 	"github.com/lengzhao/oneclaw/channel"
 	_ "github.com/lengzhao/oneclaw/channel/cli"
+	_ "github.com/lengzhao/oneclaw/channel/statichttp"
 	"github.com/lengzhao/oneclaw/config"
 	"github.com/lengzhao/oneclaw/logx"
+	"github.com/lengzhao/oneclaw/maintainloop"
 	"github.com/lengzhao/oneclaw/memory"
 	"github.com/lengzhao/oneclaw/routing"
 	"github.com/lengzhao/oneclaw/session"
@@ -75,7 +77,16 @@ func main() {
 		os.Exit(1)
 	}
 
-	if _, err := channel.DefaultRegistry().StartAll(context.Background(), channel.Bootstrap{
+	rootCtx := context.Background()
+	maintainloop.Start(rootCtx, maintainloop.Params{
+		Interval:          cfg.EmbeddedScheduledMaintainInterval(),
+		Layout:            memory.DefaultLayout(absCwd, home),
+		Client:            &eng.Client,
+		MainModel:         eng.Model,
+		MaxMaintainTokens: eng.MaxTokens,
+	})
+
+	if _, err := channel.DefaultRegistry().StartAll(rootCtx, channel.Bootstrap{
 		Engine: eng,
 		Config: cfg,
 	}); err != nil {

@@ -14,12 +14,13 @@ func TestMaintenanceSystemPromptData(t *testing.T) {
 		MemoryPath: "/proj/repo/.oneclaw/memory/MEMORY.md",
 		RunTS:      "2026-04-05T12:00:00Z",
 	}
-	got, err := prompts.Render(prompts.NameMaintenanceSystem, d)
+	got, err := prompts.Render(prompts.NameMaintenanceSystemPostTurn, d)
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, sub := range []string{
 		"silent memory indexer",
+		"post-turn",
 		"/proj/repo",
 		"2026-04-05",
 		"MEMORY.md",

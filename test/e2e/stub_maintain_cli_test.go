@@ -121,7 +121,7 @@ func TestE2E_96_MaintainCLIOnce(t *testing.T) {
 	}
 }
 
-// E2E-97 cmd/maintain 无 -once 但 ONCLAW_MAINTAIN_INTERVAL=0：单次退出（与 cron 用法一致）
+// E2E-97 cmd/maintain 无 -once 但 ONCLAW_MAINTAIN_INTERVAL=0：单次退出
 func TestE2E_97_MaintainCLIIntervalZeroRunsOnce(t *testing.T) {
 	stub := openaistub.New(t)
 	date := time.Now().Format("2006-01-02")
@@ -163,25 +163,5 @@ func TestE2E_97_MaintainCLIIntervalZeroRunsOnce(t *testing.T) {
 	}
 	if !strings.Contains(string(raw), "E2E97_INTERVAL_ZERO_MARKER") {
 		t.Fatalf("expected marker in:\n%s", string(raw))
-	}
-}
-
-// E2E-110 cmd/maintain -cron 非法表达式：立即非零退出（不依赖 stub）
-func TestE2E_110_MaintainCLIInvalidCronExitsNonZero(t *testing.T) {
-	home := t.TempDir()
-	cwd := t.TempDir()
-	t.Setenv("HOME", home)
-	e2eIsolateUserMemory(t, home)
-
-	bin := buildMaintainBinary(t, repoRoot(t))
-	cmd := exec.Command(bin, "-cwd", cwd, "-cron", "this is not a cron spec")
-	memBase := filepath.Join(home, memory.DotDir)
-	cmd.Env = mergeEnv("HOME", home, "ONCLAW_MEMORY_BASE", memBase, "OPENAI_API_KEY", "sk-test-invalid-cron")
-	out, err := cmd.CombinedOutput()
-	if err == nil {
-		t.Fatalf("expected non-zero exit, output:\n%s", out)
-	}
-	if !strings.Contains(string(out), "memory.maintain.cron_parse") && !strings.Contains(string(out), "error") {
-		t.Fatalf("expected parse error in output, got:\n%s", out)
 	}
 }

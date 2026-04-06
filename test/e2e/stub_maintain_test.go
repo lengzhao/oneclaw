@@ -13,7 +13,7 @@ import (
 	"github.com/lengzhao/oneclaw/test/openaistub"
 )
 
-// E2E-92 模型化维护：回合结束后读 daily log，第二次 stub 请求写回 project MEMORY.md。
+// E2E-92 模型化维护：回合结束后近场维护（Current turn 快照），第二次 stub 请求写回 project MEMORY.md。
 func TestE2E_92_AutoMaintenanceAppends(t *testing.T) {
 	stub := openaistub.New(t)
 	stub.Enqueue(openaistub.CompletionStop("", "main turn ok"))
@@ -28,6 +28,7 @@ func TestE2E_92_AutoMaintenanceAppends(t *testing.T) {
 	t.Setenv("ONCLAW_DISABLE_AUTO_MAINTENANCE", "0")
 	t.Setenv("ONCLAW_MAINTENANCE_MODEL", "gpt-4o")
 	t.Setenv("ONCLAW_MAINTENANCE_MIN_LOG_BYTES", "50")
+	t.Setenv("ONCLAW_POST_TURN_MAINTENANCE_MIN_LOG_BYTES", "50")
 	e2eIsolateUserMemory(t, home)
 
 	e := newStubEngine(t, cwd)

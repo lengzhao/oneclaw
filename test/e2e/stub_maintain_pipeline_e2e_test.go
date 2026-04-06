@@ -11,10 +11,12 @@ import (
 	"github.com/lengzhao/oneclaw/memory"
 	"github.com/lengzhao/oneclaw/routing"
 	"github.com/lengzhao/oneclaw/test/openaistub"
+	"github.com/lengzhao/oneclaw/tools/builtin"
+	"github.com/openai/openai-go"
 )
 
-// E2E-101 维护管道：维护请求的 user 文本含多日 daily log 分段与 project topic 摘录（读请求体断言）。
-func TestE2E_101_MaintainPromptMultiDayLogAndTopicExcerpts(t *testing.T) {
+// E2E-101 近场维护：user prompt 仅含 Current turn snapshot + MEMORY 摘录，不含多日 daily log / project topic（盘中虽有文件也不注入）。
+func TestE2E_101_PostTurnMaintainPromptSessionOnly(t *testing.T) {
 	stub := openaistub.New(t)
 	stub.Enqueue(openaistub.CompletionStop("", "main turn e2e101"))
 	date := time.Now().Format("2006-01-02")
@@ -25,8 +27,7 @@ func TestE2E_101_MaintainPromptMultiDayLogAndTopicExcerpts(t *testing.T) {
 	e2eEnvWithMemory(t, stub)
 	t.Setenv("ONCLAW_DISABLE_AUTO_MAINTENANCE", "0")
 	t.Setenv("ONCLAW_MAINTENANCE_MODEL", "gpt-4o")
-	t.Setenv("ONCLAW_MAINTENANCE_MIN_LOG_BYTES", "30")
-	t.Setenv("ONCLAW_MAINTENANCE_LOG_DAYS", "4")
+	t.Setenv("ONCLAW_POST_TURN_MAINTENANCE_MIN_LOG_BYTES", "30")
 
 	home := t.TempDir()
 	cwd := t.TempDir()
@@ -66,16 +67,25 @@ func TestE2E_101_MaintainPromptMultiDayLogAndTopicExcerpts(t *testing.T) {
 		t.Fatalf("parse maintain request: %v", err)
 	}
 	for _, sub := range []string{
-		"### Daily log " + date,
-		"### Daily log " + yesterday,
-		"E2E101_YESTERDAY_MARKER",
+		"Current turn snapshot",
 		"E2E101_TODAY_MARKER",
-		"e2e101_topic.md",
-		"E2E101_TOPIC_MARKER",
+		"main turn e2e101",
 	} {
 		if !strings.Contains(maintainUser, sub) {
 			n := min(800, len(maintainUser))
 			t.Fatalf("maintain prompt missing %q\n---\n%s", sub, maintainUser[:n])
+		}
+	}
+	for _, sub := range []string{
+		"### Daily log " + date,
+		"### Daily log " + yesterday,
+		"E2E101_YESTERDAY_MARKER",
+		"e2e101_topic.md",
+		"E2E101_TOPIC_MARKER",
+	} {
+		if strings.Contains(maintainUser, sub) {
+			n := min(800, len(maintainUser))
+			t.Fatalf("near-field prompt must not contain %q\n---\n%s", sub, maintainUser[:n])
 		}
 	}
 
@@ -85,6 +95,96 @@ func TestE2E_101_MaintainPromptMultiDayLogAndTopicExcerpts(t *testing.T) {
 		t.Fatalf("read MEMORY.md: %v", err)
 	}
 	if !strings.Contains(string(raw), "E2E101_NEW_FACT") {
+		t.Fatalf("expected new fact in MEMORY.md:\n%s", string(raw))
+	}
+}
+
+// E2E-113 远场维护 RunScheduledMaintain：user 为工具型任务说明（绝对路径），不内嵌 daily log / topic 全文。
+func TestE2E_113_ScheduledMaintainPromptToolOrientedPaths(t *testing.T) {
+	stub := openaistub.New(t)
+	date := time.Now().Format("2006-01-02")
+	yesterday := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
+	section := "## Auto-maintained (" + date + ")\n- E2E103_NEW_FACT\n"
+	stub.Enqueue(openaistub.CompletionStop("", section))
+
+	baseStubTransport(t, stub)
+	t.Setenv("ONCLAW_MAINTENANCE_MODEL", "gpt-4o")
+	t.Setenv("ONCLAW_MAINTENANCE_MIN_LOG_BYTES", "30")
+	t.Setenv("ONCLAW_MAINTENANCE_LOG_DAYS", "4")
+
+	home := t.TempDir()
+	cwd := t.TempDir()
+	t.Setenv("HOME", home)
+	e2eIsolateUserMemory(t, home)
+
+	lay := memory.DefaultLayout(cwd, home)
+	yPath := memory.DailyLogPath(lay.Auto, yesterday)
+	if err := os.MkdirAll(filepath.Dir(yPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	yesterdayBody := strings.Repeat("y", 120) + " E2E103_YESTERDAY_MARKER\n"
+	if err := os.WriteFile(yPath, []byte(yesterdayBody), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	tPath := memory.DailyLogPath(lay.Auto, date)
+	todayBody := strings.Repeat("z", 150) + " E2E103_TODAY_MARKER\n"
+	if err := os.WriteFile(tPath, []byte(todayBody), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	memDir := filepath.Join(cwd, memory.DotDir, "memory")
+	if err := os.MkdirAll(memDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	topicPath := filepath.Join(memDir, "e2e103_topic.md")
+	if err := os.WriteFile(topicPath, []byte("# topic\nE2E103_TOPIC_MARKER body\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	client := openai.NewClient()
+	memory.RunScheduledMaintain(context.Background(), lay, &client, "gpt-4o", 512,
+		&memory.ScheduledMaintainOpts{ToolRegistry: builtin.ScheduledMaintainReadRegistry()})
+
+	bodies := stub.ChatRequestBodies()
+	if len(bodies) < 1 {
+		t.Fatalf("want scheduled maintain chat request, got %d", len(bodies))
+	}
+	maintainUser, err := openaistub.ChatRequestUserTextConcat(bodies[0])
+	if err != nil {
+		t.Fatalf("parse maintain request: %v", err)
+	}
+	memPath := filepath.Join(memDir, "MEMORY.md")
+	todayLog := filepath.Clean(memory.DailyLogPath(lay.Auto, date))
+	for _, sub := range []string{
+		"far-field",
+		"read_file",
+		filepath.Clean(lay.Auto),
+		todayLog,
+		filepath.Clean(memPath),
+		filepath.Clean(lay.Project),
+	} {
+		if !strings.Contains(maintainUser, sub) {
+			n := min(800, len(maintainUser))
+			t.Fatalf("scheduled prompt missing %q\n---\n%s", sub, maintainUser[:n])
+		}
+	}
+	for _, sub := range []string{
+		"### Daily log " + date,
+		"E2E103_YESTERDAY_MARKER",
+		"E2E103_TODAY_MARKER",
+		"E2E103_TOPIC_MARKER",
+	} {
+		if strings.Contains(maintainUser, sub) {
+			n := min(800, len(maintainUser))
+			t.Fatalf("scheduled user prompt must not embed log/topic body %q\n---\n%s", sub, maintainUser[:n])
+		}
+	}
+
+	raw, err := os.ReadFile(memPath)
+	if err != nil {
+		t.Fatalf("read MEMORY.md: %v", err)
+	}
+	if !strings.Contains(string(raw), "E2E103_NEW_FACT") {
 		t.Fatalf("expected new fact in MEMORY.md:\n%s", string(raw))
 	}
 }
@@ -102,6 +202,7 @@ func TestE2E_102_MaintainDedupeSkipsAppendWhenNoNewBullets(t *testing.T) {
 	t.Setenv("ONCLAW_DISABLE_AUTO_MAINTENANCE", "0")
 	t.Setenv("ONCLAW_MAINTENANCE_MODEL", "gpt-4o")
 	t.Setenv("ONCLAW_MAINTENANCE_MIN_LOG_BYTES", "30")
+	t.Setenv("ONCLAW_POST_TURN_MAINTENANCE_MIN_LOG_BYTES", "30")
 
 	home := t.TempDir()
 	cwd := t.TempDir()

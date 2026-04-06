@@ -5,12 +5,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/openai/openai-go"
 	"github.com/lengzhao/oneclaw/loop"
 	"github.com/lengzhao/oneclaw/routing"
+	"github.com/lengzhao/oneclaw/test/openaistub"
 	"github.com/lengzhao/oneclaw/toolctx"
 	"github.com/lengzhao/oneclaw/tools"
-	"github.com/lengzhao/oneclaw/test/openaistub"
+	"github.com/openai/openai-go"
 )
 
 // E2E-81 空用户输入被拒绝

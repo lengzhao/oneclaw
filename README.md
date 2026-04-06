@@ -30,13 +30,11 @@ go run ./cmd/oneclaw
 
 常用 REPL 命令：`/exit` 退出。对话落盘依赖配置中的 transcript 路径及每轮成功结束后的自动保存（见上段）；另存副本请用外部工具复制该文件。
 
-**Memory 维护**（将 daily log 蒸馏进 `MEMORY.md` 等，默认按间隔循环；单次适合系统 crontab；进程内定时也可用 **cron 表达式**）：
+**Memory 维护**（将 daily log 蒸馏进 `MEMORY.md` 等）：**回合后**由 `MaybePostTurnMaintain`（`disable_auto_maintenance`）；**定时**由 **`RunScheduledMaintain`** —— 合并 YAML 里 **`maintain.interval` 非空** 时主进程内 **`maintainloop`** 周期唤醒，**或**用 `cmd/maintain`（`-interval` / `-once`）。关闭后台定时（不挡 `maintain -once`）：`features.disable_scheduled_maintenance` / `ONCLAW_DISABLE_SCHEDULED_MAINTENANCE`。详见 [`docs/config.md`](docs/config.md)、[`docs/memory-maintain-dual-entry-design.md`](docs/memory-maintain-dual-entry-design.md)。
 
 ```bash
 go run ./cmd/maintain --cwd . -once
 # 或覆盖间隔：go run ./cmd/maintain --cwd . -interval 30m
-# 或 cron（5 字段 + @every 等，见 robfig/cron v3）：go run ./cmd/maintain --cwd . -cron "0 * * * *"
-# 配置等价：maintain.cron / ONCLAW_MAINTAIN_CRON；收到 SIGINT/SIGTERM 时退出
 ```
 
 ---
@@ -59,7 +57,7 @@ go run ./cmd/maintain --cwd . -once
 
 1. **文件型记忆平面**持续更新：`MEMORY.md` 索引、topic、daily log（先追加、后整理）。
 2. **规则与策略**可持久化到 `AGENT.md`、`.oneclaw/rules/*.md`、agent 专属 memory。
-3. **维护型子任务**（回合后 `MaybeMaintain` + 独立进程 [`cmd/maintain`](cmd/maintain)）整理日志与既有 memory。
+3. **维护型子任务**（**`MaybePostTurnMaintain`** + **`RunScheduledMaintain`** / [`cmd/maintain`](cmd/maintain)，见 [`docs/memory-maintain-dual-entry-design.md`](docs/memory-maintain-dual-entry-design.md)）整理日志与既有 memory。
 4. **护栏**：全局 prompt 字节预算、工具权限收缩、memory 写入审计（append-only JSONL 等）。
 
 更细的实验与验收思路见 [`docs/self-evolution-plan.md`](docs/self-evolution-plan.md)。任务勾选与阶段验收见 [`docs/todo.md`](docs/todo.md)。
@@ -95,6 +93,7 @@ cmd/maintain/    定时或单次 memory 蒸馏
 budget/          全局上下文字节预算
 config/          统一 YAML 配置加载与合并（见 docs/config.md）
 loop/            主循环、展示、工具 trace、历史预算等
+maintainloop/    主进程内嵌定时维护（YAML `maintain.interval` 非空时启动）
 memory/          记忆路径、注入、提取、维护、审计、回合日志
 session/         会话引擎与编排
 subagent/        子 Agent 运行时
@@ -156,7 +155,7 @@ cp .oneclaw/config.example.yaml .oneclaw/config.yaml   # 可选：项目级 YAML
 | Transcript（REPL 入口） | `ONCLAW_TRANSCRIPT_PATH`、`ONCLAW_DISABLE_TRANSCRIPT` |
 | 传输 | `ONCLAW_CHAT_TRANSPORT`（如 `auto` / `non_stream`） |
 | Memory | `ONCLAW_MEMORY_BASE`、`ONCLAW_DISABLE_MEMORY*`、`ONCLAW_TURN_LOG_PATH` |
-| 维护 | `ONCLAW_DISABLE_AUTO_MAINTENANCE`、`ONCLAW_MAINTAIN_INTERVAL`、`ONCLAW_MAINTAIN_CRON`、`ONCLAW_MAINTENANCE_*` |
+| 维护 | `ONCLAW_DISABLE_AUTO_MAINTENANCE`（仅回合后）、`ONCLAW_MAINTAIN_INTERVAL`、`ONCLAW_MAINTENANCE_*`（定时）、`ONCLAW_POST_TURN_MAINTENANCE_*`（回合后，见 `docs/config.md`） |
 | 定时任务（agent） | `ONCLAW_DISABLE_SCHEDULED_TASKS`、`ONCLAW_SCHEDULE_MIN_SLEEP`、`ONCLAW_SCHEDULE_IDLE_SLEEP`（无任务时的最长等待；任务变更会唤醒调度） |
 | 预算 | `ONCLAW_DISABLE_CONTEXT_BUDGET`、`ONCLAW_MAX_PROMPT_BYTES`（未设置时代码默认约 **220000** 字节估算上限）、`ONCLAW_RECALL_MAX_BYTES` 等 |
 | 审计 | `ONCLAW_DISABLE_MEMORY_AUDIT` |
@@ -181,9 +180,8 @@ YAML 与用户/项目/`-config` 合并、以及 `ApplyEnvDefaults` 与 `ONCLAW_*
 |------|------|
 | `-cwd` | 项目根（memory 布局根） |
 | `-config` | 可选；额外 YAML 配置层（相对路径相对于 `-cwd`） |
-| `-once` | 只跑一轮蒸馏后退出（适合系统 crontab）；优先于 `-cron` 与间隔循环 |
+| `-once` | 只跑一轮蒸馏后退出（适合系统 crontab）；优先于间隔循环 |
 | `-interval` | 循环间隔；`0` 等价单次；默认来自配置 / `ONCLAW_MAINTAIN_INTERVAL` |
-| `-cron` | 非空时按 cron 调度循环运行，直到 SIGINT/SIGTERM；未传则用 `maintain.cron` / `ONCLAW_MAINTAIN_CRON` |
 
 ---
 

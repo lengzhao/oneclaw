@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -236,11 +237,46 @@ func (l Layout) WriteRoots() []string {
 	return out
 }
 
+// defaultAgentMdStub is written when neither project-root nor .oneclaw AGENT.md exists.
+const defaultAgentMdStub = `# Agent instructions
+
+Durable behavior rules for this agent in this repository. Edit freely.
+
+- Prefer accurate, tool-grounded answers; avoid guessing when data is missing.
+
+(This file was created automatically because neither AGENT.md at the project root nor .oneclaw/AGENT.md existed.)
+`
+
+// EnsureDefaultAgentMd creates `<cwd>/.oneclaw/AGENT.md` when no canonical AGENT.md is present.
+func EnsureDefaultAgentMd(l Layout) {
+	if l.CWD == "" {
+		return
+	}
+	root := filepath.Join(l.CWD, AgentInstructionsFile)
+	if st, err := os.Stat(root); err == nil && !st.IsDir() {
+		return
+	}
+	dot := filepath.Join(l.CWD, DotDir, AgentInstructionsFile)
+	if st, err := os.Stat(dot); err == nil && !st.IsDir() {
+		return
+	}
+	if err := os.MkdirAll(filepath.Join(l.CWD, DotDir), 0o755); err != nil {
+		slog.Warn("memory.agent_md.mkdir", "path", filepath.Join(l.CWD, DotDir), "err", err)
+		return
+	}
+	if err := os.WriteFile(dot, []byte(defaultAgentMdStub), 0o644); err != nil {
+		slog.Warn("memory.agent_md.write", "path", dot, "err", err)
+		return
+	}
+	slog.Info("memory.agent_md.created", "path", dot)
+}
+
 // EnsureDirs creates memory directories so Write can succeed without mkdir in the model.
 func (l Layout) EnsureDirs() {
 	for _, d := range l.WriteRoots() {
 		_ = os.MkdirAll(d, 0o755)
 	}
+	EnsureDefaultAgentMd(l)
 }
 
 // AutoMemoryDisabled is true only when an explicit opt-out env is set (default: auto memory on).
