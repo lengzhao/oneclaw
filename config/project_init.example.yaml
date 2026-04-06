@@ -1,5 +1,5 @@
+# 与仓库根 config.example.yaml 保持同步（oneclaw -init 通过 config 包嵌入）。
 # 复制到 ~/.oneclaw/config.yaml 或 <cwd>/.oneclaw/config.yaml；合并与优先级见 docs/config.md。
-# 若修改本文件，请同步更新 config/project_init.example.yaml（供 oneclaw -init 嵌入）。
 # 入口 Load 之后会调用 config.ApplyEnvDefaults：仅当某个 ONCLAW_* 尚未设置时，才用 YAML 补全；
 # 不会写入 OPENAI_API_KEY（密钥优先放在 openai.api_key，由客户端选项注入）。
 #
@@ -27,7 +27,7 @@ chat:
   transport: auto
 
 # -----------------------------------------------------------------------------
-# 日志（oneclaw -maintain-once 可用：-log-level、-log-format；独立 maintain 二进制同理）
+# 日志（oneclaw -maintain-once 可用：-log-level、-log-format）
 # -----------------------------------------------------------------------------
 log:
   level: info

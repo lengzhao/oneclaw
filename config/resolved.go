@@ -179,7 +179,7 @@ func (r *Resolved) transcriptDisabled() bool {
 
 // EmbeddedScheduledMaintainInterval returns the interval for in-process maintainloop (oneclaw main).
 // It is 0 unless maintain.interval is non-empty in merged YAML (env alone does not enable embedded loop;
-// use cmd/maintain for interval-only-from-env). When non-zero, uses same parsing as MaintainLoopInterval.
+// use cmd/maintain for interval-only-from-env; oneclaw -maintain-once is always single pass). When non-zero, uses same parsing as MaintainLoopInterval.
 func (r *Resolved) EmbeddedScheduledMaintainInterval() time.Duration {
 	if strings.TrimSpace(r.merged.Maintain.Interval) == "" {
 		return 0

@@ -49,8 +49,8 @@
 | E2E-93 | Memory 审计：daily log 追加后 `memory-write.jsonl` 含 `daily_log_line` | [x] | `TestE2E_93_MemoryAuditDailyLog` · `stub_audit_test.go` |
 | E2E-94 | `ONCLAW_DISABLE_MEMORY_AUDIT=1` 不写审计文件 | [x] | `TestE2E_94_MemoryAuditDisabledNoFile` · `stub_audit_test.go` |
 | E2E-95 | `write_file` 写 project memory 根时审计含 `write_file` | [x] | `TestE2E_95_MemoryAuditWriteFileUnderMemoryRoot` · `stub_audit_test.go` |
-| E2E-96 | `cmd/maintain -once` 子进程 + stub 写回 MEMORY.md | [x] | `TestE2E_96_MaintainCLIOnce` · `stub_maintain_cli_test.go` |
-| E2E-97 | `cmd/maintain` + `ONCLAW_MAINTAIN_INTERVAL=0` 单次退出 | [x] | `TestE2E_97_MaintainCLIIntervalZeroRunsOnce` · `stub_maintain_cli_test.go` |
+| E2E-96 | `oneclaw -maintain-once` 子进程 + stub 写回 MEMORY.md | [x] | `TestE2E_96_MaintainCLIOnce` · `stub_maintain_cli_test.go` |
+| E2E-97 | `oneclaw -init` 子进程写入项目 `config.yaml` | [x] | `TestE2E_97_OneclawInitWritesProjectConfig` · `stub_maintain_cli_test.go` |
 | E2E-98 | turn-log 按日分文件；无工具时仍有 `assistant_final` 一行 | [x] | `TestE2E_98_TurnLogAssistantFinalWithoutTools` · `stub_turn_log_test.go` |
 | E2E-99 | `ONCLAW_DISABLE_TURN_LOG=1` 不写 turn-log 文件 | [x] | `TestE2E_99_TurnLogDisabledNoFile` · `stub_turn_log_test.go` |
 | E2E-100 | 每工具一行 `kind=tool` + 回合末 `kind=assistant_final` | [x] | `TestE2E_100_TurnLogToolThenAssistantFinal` · `stub_turn_log_test.go` |
@@ -258,14 +258,17 @@
 
 ---
 
-## 12. 维护 CLI（`cmd/maintain`）
+## 12. 维护与初始化 CLI（`cmd/oneclaw`）
 
-### E2E-96 / E2E-97
+### E2E-96
 
 - **前置**：预写当日 daily log（定时路径读 log）；受 **`ONCLAW_MAINTENANCE_MIN_LOG_BYTES`** 等约束；stub 一次 `CompletionStop`（维护段 + 唯一标记）；`OPENAI_BASE_URL` 等由 `baseStubTransport` 注入；子进程 `HOME` 为 `t.TempDir()` 以隔离 memory layout。
-- **E2E-96**：`go build ./cmd/maintain` 后执行 `-cwd <tmp> -once`，期望 `MEMORY.md` 含标记。
-- **E2E-97**：同上二进制，不传 `-once`，`ONCLAW_MAINTAIN_INTERVAL=0`，期望仍只跑一轮并写入标记。
+- **E2E-96**：`go build ./cmd/oneclaw` 后执行 `-cwd <tmp> -maintain-once`，期望 `MEMORY.md` 含标记。
 - **说明**：`go build` 子进程将 `HOME` 设为包 init 时保存的真实 HOME，避免模块缓存写入 `t.TempDir()` 导致只读文件清理失败。
+
+### E2E-97
+
+- **E2E-97**：`go build ./cmd/oneclaw` 后执行 `-cwd <tmp> -init`，期望 `<tmp>/.oneclaw/config.yaml` 存在且含 `openai:`；无需 API。
 
 ---
 

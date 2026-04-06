@@ -107,7 +107,7 @@ type ScheduledMaintainOpts struct {
 
 // RunScheduledMaintain runs the scheduled / far-field distill: a **multi-step agent** with read-only tools
 // (read_file, grep, glob_file_search, list_dir) to inspect daily logs and project memory, then emit markdown.
-// Use from cmd/maintain, embedded interval workers, or jobs. Does not consult disable_auto_maintenance.
+// Use from oneclaw -maintain-once, cmd/maintain, embedded interval workers, or jobs. Does not consult disable_auto_maintenance.
 // Pass opts.Interval when the caller runs on a fixed period (incremental time-window hints + state file).
 // Serialized with RunPostTurnMaintain via maintainPipelineMu.
 func RunScheduledMaintain(ctx context.Context, layout Layout, client *openai.Client, mainChatModel string, maxOutputTokens int64, opts *ScheduledMaintainOpts) {

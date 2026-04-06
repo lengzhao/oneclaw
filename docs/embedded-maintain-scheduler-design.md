@@ -9,8 +9,8 @@
 ### 1.1 行为
 
 - **主进程**：`cmd/oneclaw` 在 `StartAll` 之前调用 **`maintainloop.Start`**；若 **`EmbeddedScheduledMaintainInterval() > 0`** 且未禁用后台定时，则 **立即** 跑一次 **`RunScheduledMaintain`**（带 **`ScheduledMaintainOpts{Interval}`** → **增量 daily log**），再按间隔重复。
-- **启用条件**：合并 YAML 中 **`maintain.interval` 必须非空**（仅环境变量 `ONCLAW_MAINTAIN_INTERVAL` **不足以**启动进程内 loop，避免默认误启；`cmd/maintain` 仍可用 env/默认 **1h**）。
-- **`cmd/maintain`**：interval 循环（同样传 **Interval** → 增量 log）；**`-once`** 不传 Interval → **按天 `LOG_DAYS`** 全量窗口。若 **`ONCLAW_DISABLE_SCHEDULED_MAINTENANCE`** / **`features.disable_scheduled_maintenance`** 为真则**不进入**循环（**`-once` 仍执行**）。
+- **启用条件**：合并 YAML 中 **`maintain.interval` 必须非空**（仅环境变量 `ONCLAW_MAINTAIN_INTERVAL` **不足以**启动进程内 loop，避免默认误启；`cmd/maintain` 仍可用 env/默认 **1h** 做间隔循环）。
+- **`oneclaw -maintain-once`**：单次 **`RunScheduledMaintain`**（`Interval==0`）→ **按天 `LOG_DAYS`** 窗口，适合 crontab。**`cmd/maintain`**：interval 循环（传 **Interval** → 增量 log）；**`-once`** 同上按天窗口。若 **`ONCLAW_DISABLE_SCHEDULED_MAINTENANCE`** / **`features.disable_scheduled_maintenance`** 为真则**不进入**间隔循环（**单次远场仍执行**）。
 
 ### 1.2 目标（验收）
 
@@ -30,7 +30,7 @@
 | 项 | 说明 |
 |----|------|
 | `maintain.interval`（YAML 非空） | 启用进程内 loop；值解析同 `MaintainLoopInterval` |
-| `features.disable_scheduled_maintenance` | 关闭 loop + `cmd/maintain` 间隔循环 |
+| `features.disable_scheduled_maintenance` | 关闭 loop + `cmd/maintain` 间隔循环（**不**挡 **`oneclaw -maintain-once`** / **`maintain -once`**） |
 | `ONCLAW_DISABLE_SCHEDULED_MAINTENANCE` | 同上（经 `ApplyEnvDefaults` 从 YAML 注入） |
 
 ## 4. 与双入口文档的关系

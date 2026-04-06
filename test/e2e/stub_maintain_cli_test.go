@@ -37,10 +37,10 @@ func mergeEnv(pairs ...string) []string {
 	return out
 }
 
-func buildMaintainBinary(t *testing.T, repoRoot string) string {
+func buildOneclawBinary(t *testing.T, repoRoot string) string {
 	t.Helper()
-	bin := filepath.Join(t.TempDir(), "oneclaw_maintain")
-	build := exec.Command("go", "build", "-o", bin, "./cmd/maintain")
+	bin := filepath.Join(t.TempDir(), "oneclaw_e2e")
+	build := exec.Command("go", "build", "-o", bin, "./cmd/oneclaw")
 	build.Dir = repoRoot
 	buildHome := e2eBuildHome
 	if buildHome == "" {
@@ -53,7 +53,7 @@ func buildMaintainBinary(t *testing.T, repoRoot string) string {
 	build.Env = mergeEnv("HOME", buildHome)
 	out, err := build.CombinedOutput()
 	if err != nil {
-		t.Fatalf("go build ./cmd/maintain: %v\n%s", err, out)
+		t.Fatalf("go build ./cmd/oneclaw: %v\n%s", err, out)
 	}
 	return bin
 }
@@ -76,7 +76,7 @@ func repoRoot(t *testing.T) string {
 	}
 }
 
-// E2E-96 cmd/maintain -once：子进程 + stub，一轮蒸馏写入 project MEMORY.md
+// E2E-96 oneclaw -maintain-once：子进程 + stub，一轮蒸馏写入 project MEMORY.md
 func TestE2E_96_MaintainCLIOnce(t *testing.T) {
 	stub := openaistub.New(t)
 	date := time.Now().Format("2006-01-02")
@@ -102,13 +102,13 @@ func TestE2E_96_MaintainCLIOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	bin := buildMaintainBinary(t, repoRoot(t))
-	cmd := exec.Command(bin, "-cwd", cwd, "-once")
+	bin := buildOneclawBinary(t, repoRoot(t))
+	cmd := exec.Command(bin, "-cwd", cwd, "-maintain-once")
 	memBase := filepath.Join(home, memory.DotDir)
 	cmd.Env = mergeEnv("HOME", home, "ONCLAW_MEMORY_BASE", memBase)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		t.Fatalf("maintain -once: %v\n%s", err, out)
+		t.Fatalf("oneclaw -maintain-once: %v\n%s", err, out)
 	}
 
 	memPath := filepath.Join(cwd, memory.DotDir, "memory", "MEMORY.md")
@@ -121,47 +121,26 @@ func TestE2E_96_MaintainCLIOnce(t *testing.T) {
 	}
 }
 
-// E2E-97 cmd/maintain 无 -once 但 ONCLAW_MAINTAIN_INTERVAL=0：单次退出
-func TestE2E_97_MaintainCLIIntervalZeroRunsOnce(t *testing.T) {
-	stub := openaistub.New(t)
-	date := time.Now().Format("2006-01-02")
-	section := "## Auto-maintained (" + date + ")\n- E2E97_INTERVAL_ZERO_MARKER\n"
-	stub.Enqueue(openaistub.CompletionStop("", section))
-	baseStubTransport(t, stub)
-
+// E2E-97 oneclaw -init：子进程写入项目 .oneclaw/config.yaml（无需 API）
+func TestE2E_97_OneclawInitWritesProjectConfig(t *testing.T) {
 	home := t.TempDir()
 	cwd := t.TempDir()
 	t.Setenv("HOME", home)
-	t.Setenv("ONCLAW_MAINTENANCE_MODEL", "gpt-4o")
-	t.Setenv("ONCLAW_MAINTENANCE_MIN_LOG_BYTES", "50")
-	t.Setenv("ONCLAW_MAINTAIN_INTERVAL", "0")
-	e2eIsolateUserMemory(t, home)
 
-	lay := memory.DefaultLayout(cwd, home)
-	logPath := memory.DailyLogPath(lay.Auto, date)
-	if err := os.MkdirAll(filepath.Dir(logPath), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	logBody := strings.Repeat("e2e-97 daily log padding. ", 20)
-	if err := os.WriteFile(logPath, []byte(logBody), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	bin := buildMaintainBinary(t, repoRoot(t))
-	cmd := exec.Command(bin, "-cwd", cwd)
-	memBase := filepath.Join(home, memory.DotDir)
-	cmd.Env = mergeEnv("HOME", home, "ONCLAW_MEMORY_BASE", memBase)
+	bin := buildOneclawBinary(t, repoRoot(t))
+	cmd := exec.Command(bin, "-cwd", cwd, "-init")
+	cmd.Env = mergeEnv("HOME", home, "ONCLAW_LOG_LEVEL", "error")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		t.Fatalf("maintain: %v\n%s", err, out)
+		t.Fatalf("oneclaw -init: %v\n%s", err, out)
 	}
 
-	memPath := filepath.Join(cwd, memory.DotDir, "memory", "MEMORY.md")
-	raw, err := os.ReadFile(memPath)
+	cfgPath := filepath.Join(cwd, memory.DotDir, "config.yaml")
+	raw, err := os.ReadFile(cfgPath)
 	if err != nil {
-		t.Fatalf("MEMORY.md: %v", err)
+		t.Fatalf("config.yaml: %v", err)
 	}
-	if !strings.Contains(string(raw), "E2E97_INTERVAL_ZERO_MARKER") {
-		t.Fatalf("expected marker in:\n%s", string(raw))
+	if !strings.Contains(string(raw), "openai:") {
+		t.Fatalf("expected openai section in:\n%s", string(raw))
 	}
 }

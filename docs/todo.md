@@ -64,7 +64,7 @@
 9. `[x]` **行为策略写回** — 规则进 `.oneclaw/rules` / `AGENT.md` 的路径与护栏（与 D2 审计衔接）。
 10. `[x]` **任务状态工具** — Task 创建/更新或等价落盘，长会话与 resume 对齐进度。
 11. `[x]` **侧链合并（可选）** — sidechain 结论以 attachment 或 user 摘要合入主 transcript。
-12. `[x]` **Cron / Heartbeat** — **maintain 周期**为 `maintain.interval` / `ONCLAW_MAINTAIN_INTERVAL`（`cmd/maintain` 间隔循环；**已移除**进程内 `maintain.cron` / `-cron`）。**主进程内嵌 interval**：YAML 配置 `maintain.interval` 时 `maintainloop` 调 `RunScheduledMaintain`，见 [`embedded-maintain-scheduler-design.md`](embedded-maintain-scheduler-design.md)。其余定时：`cron` 工具 + `scheduled_jobs.json`；或部署侧 crontab 调 **`maintain -once`**。Channel 内置保活仍不在此条范围。
+12. `[x]` **Cron / Heartbeat** — **maintain 周期**为 `maintain.interval` / `ONCLAW_MAINTAIN_INTERVAL`（`cmd/maintain` 间隔循环；**已移除**进程内 `maintain.cron` / `-cron`）。**主进程内嵌 interval**：YAML 配置 `maintain.interval` 时 `maintainloop` 调 `RunScheduledMaintain`，见 [`embedded-maintain-scheduler-design.md`](embedded-maintain-scheduler-design.md)。其余定时：`cron` 工具 + `scheduled_jobs.json`；或部署侧 crontab 调 **`oneclaw -maintain-once`** / **`maintain -once`**。Channel 内置保活仍不在此条范围。
 
 ### P2
 
@@ -141,7 +141,7 @@
 - [x] **B3** 发现层：自 cwd 向上查找 `AGENT.md`、`.oneclaw/rules/*.md`、memory 根
 - [x] **B5** 注入与 recall：system 前缀拼装；recall → attachment；surfaced 字节上限、路径去重
 - [x] **B6** 在线更新：工具可写 topic、`MEMORY.md`、daily log
-- [x] **B7** extract / dream：**主干已接** — daily log + 回合后 **`MaybePostTurnMaintain`** / **`RunPostTurnMaintain`** 与定时 **`RunScheduledMaintain`**（`cmd/maintain` 与 **`maintainloop`**）；双入口与 `ONCLAW_POST_TURN_*` 见 [`memory-maintain-dual-entry-design.md`](memory-maintain-dual-entry-design.md)、[`embedded-maintain-scheduler-design.md`](embedded-maintain-scheduler-design.md)。`MaybeMaintain` 为弃用别名。默认 interval 1h；`-once` 或 `0` 单次。模型：`ONCLAW_MAINTENANCE_MODEL` / `ONCLAW_MAINTENANCE_SCHEDULED_MODEL`。写 **project `MEMORY.md`** `## Auto-maintained (日期)`；D2 审计为 `.oneclaw/audit/memory-write.jsonl`（可按需扩展字段/查询面，非阻塞项）
+- [x] **B7** extract / dream：**主干已接** — daily log + 回合后 **`MaybePostTurnMaintain`** / **`RunPostTurnMaintain`** 与定时 **`RunScheduledMaintain`**（**`oneclaw -maintain-once`** / `cmd/maintain` 与 **`maintainloop`**）；双入口与 `ONCLAW_POST_TURN_*` 见 [`memory-maintain-dual-entry-design.md`](memory-maintain-dual-entry-design.md)、[`embedded-maintain-scheduler-design.md`](embedded-maintain-scheduler-design.md)。`MaybeMaintain` 为弃用别名。默认 interval 1h；`-once` 或 `0` 单次。模型：`ONCLAW_MAINTENANCE_MODEL` / `ONCLAW_MAINTENANCE_SCHEDULED_MODEL`。写 **project `MEMORY.md`** `## Auto-maintained (日期)`；D2 审计为 `.oneclaw/audit/memory-write.jsonl`（可按需扩展字段/查询面，非阻塞项）
 
 ---
 

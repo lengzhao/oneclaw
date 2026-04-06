@@ -9,9 +9,9 @@ import (
 
 	"github.com/lengzhao/oneclaw/channel"
 	_ "github.com/lengzhao/oneclaw/channel/cli"
-	_ "github.com/lengzhao/oneclaw/channel/statichttp"
 	_ "github.com/lengzhao/oneclaw/channel/feishu"
 	_ "github.com/lengzhao/oneclaw/channel/slack"
+	_ "github.com/lengzhao/oneclaw/channel/statichttp"
 	"github.com/lengzhao/oneclaw/config"
 	"github.com/lengzhao/oneclaw/logx"
 	"github.com/lengzhao/oneclaw/maintainloop"
@@ -24,16 +24,21 @@ import (
 
 func main() {
 	configPath := flag.String("config", "", "path to extra YAML layer (merged after ~/.oneclaw/config.yaml and <cwd>/.oneclaw/config.yaml)")
+	cwdFlag := flag.String("cwd", "", "project root directory (default: current working directory)")
+	maintainOnce := flag.Bool("maintain-once", false, "run one scheduled memory distill pass and exit (no channels)")
+	initFlag := flag.Bool("init", false, "create <cwd>/.oneclaw/config.yaml from the built-in example and memory dirs, then exit")
+	logLevel := flag.String("log-level", "", "debug|info|warn|error (overrides ONCLAW_LOG_LEVEL when non-empty)")
+	logFormat := flag.String("log-format", "", "text|json (overrides ONCLAW_LOG_FORMAT when non-empty)")
 	flag.Parse()
 
-	absCwd, err := os.Getwd()
-	if err != nil {
-		slog.Error("getwd", "err", err)
-		os.Exit(1)
+	if *maintainOnce && *initFlag {
+		slog.Error("cli.usage", "err", "use only one of -maintain-once or -init")
+		os.Exit(2)
 	}
-	absCwd, err = filepath.Abs(absCwd)
+
+	absCwd, err := resolveCwd(*cwdFlag)
 	if err != nil {
-		slog.Error("cwd abs", "err", err)
+		slog.Error("cwd", "err", err)
 		os.Exit(1)
 	}
 	home, err := os.UserHomeDir()
@@ -42,13 +47,43 @@ func main() {
 		os.Exit(1)
 	}
 
+	if *initFlag {
+		logx.Init(*logLevel, *logFormat)
+		if err := config.InitWorkspace(absCwd, home); err != nil {
+			slog.Error("init", "err", err)
+			os.Exit(1)
+		}
+		return
+	}
+
 	cfg, err := config.Load(config.LoadOptions{Cwd: absCwd, Home: home, ExplicitPath: *configPath})
 	if err != nil {
 		slog.Error("config.load", "err", err)
 		os.Exit(1)
 	}
 	config.ApplyEnvDefaults(cfg)
-	logx.Init(cfg.LogLevel(""), cfg.LogFormat(""))
+	logx.Init(cfg.LogLevel(*logLevel), cfg.LogFormat(*logFormat))
+
+	if *maintainOnce {
+		if !cfg.HasAPIKey() {
+			slog.Error("missing API key: set openai.api_key in config or OPENAI_API_KEY",
+				"user_config", filepath.Join(home, config.UserRelPath),
+				"project_config", filepath.Join(absCwd, memory.DotDir, "config.yaml"),
+			)
+			os.Exit(1)
+		}
+		client := openai.NewClient(cfg.OpenAIOptions()...)
+		mainModel := string(openai.ChatModelGPT4o)
+		if m := cfg.ChatModel(); m != "" {
+			mainModel = m
+		}
+		maxTok := memory.MaintenanceMaxOutputTokens(8192)
+		reg := builtin.ScheduledMaintainReadRegistry()
+		slog.Info("memory.maintain.scheduled_pass", "reason", "maintain-once", "cwd", absCwd)
+		memory.RunScheduledMaintain(context.Background(), memory.DefaultLayout(absCwd, home), &client, mainModel, maxTok,
+			&memory.ScheduledMaintainOpts{ToolRegistry: reg})
+		return
+	}
 
 	eng := session.NewEngine(absCwd, builtin.DefaultRegistry())
 	eng.Client = openai.NewClient(cfg.OpenAIOptions()...)
@@ -107,4 +142,15 @@ func main() {
 		slog.Error("channel.start", "err", err)
 		os.Exit(1)
 	}
+}
+
+func resolveCwd(flagCwd string) (string, error) {
+	if flagCwd != "" {
+		return filepath.Abs(flagCwd)
+	}
+	wd, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Abs(wd)
 }
