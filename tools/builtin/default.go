@@ -17,5 +17,6 @@ func DefaultRegistry() *tools.Registry {
 	r.MustRegister(InvokeSkillTool{})
 	r.MustRegister(TaskCreateTool{})
 	r.MustRegister(TaskUpdateTool{})
+	r.MustRegister(CronTool{})
 	return r
 }

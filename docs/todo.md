@@ -39,18 +39,19 @@
 9. `[x]` **行为策略写回** — 规则进 `.oneclaw/rules` / `AGENT.md` 的路径与护栏（与 D2 审计衔接）。
 10. `[x]` **任务状态工具** — Task 创建/更新或等价落盘，长会话与 resume 对齐进度。
 11. `[x]` **侧链合并（可选）** — sidechain 结论以 attachment 或 user 摘要合入主 transcript。
+12. `[ ]` **Cron / Heartbeat** — **Cron（maintain）** `[x]`：`maintain.cron` / `ONCLAW_MAINTAIN_CRON` / `-cron`（[robfig/cron v3](https://pkg.go.dev/github.com/robfig/cron/v3)，SIGINT/SIGTERM 退出）。**Heartbeat**、Channel 侧保活仍待续。
 
 ### P2
 
-12. `[ ]` **入口编排加厚** — slash、附件、`Inbound` 元信息、本轮可跳过模型请求等（与 Channel 落地后可交叉迭代）。
-13. `[ ]` **D3 向量 recall** — 插件接口，文件仍为真源（阶段 D）。
-14. `[ ]` **预算精度（可选）** — usage / tokenizer 类估算，多模型下裁剪更一致。
-15. `[ ]` **协作模型（teammate / swarm）** — mailbox、长期成员等；按需排期。
+13. `[ ]` **入口编排加厚** — slash、附件、`Inbound` 元信息、本轮可跳过模型请求等（与 Channel 落地后可交叉迭代）。
+14. `[ ]` **D3 向量 recall** — 插件接口，文件仍为真源（阶段 D）。
+15. `[ ]` **预算精度（可选）** — usage / tokenizer 类估算，多模型下裁剪更一致。
+16. `[ ]` **协作模型（teammate / swarm）** — mailbox、长期成员等；按需排期。
 
 ### 后置
 
-16. `[ ]` **LLM 类型可扩展** — Provider / Transport 抽象，配置与实现解耦（参考 picoclaw）；宜在 config 定型后接入，避免双重迁移。
-17. `[ ]` **完整 MCP**、**compact 高级形态**、**全量遥测** — 见「刻意后置」小节。
+17. `[ ]` **LLM 类型可扩展** — Provider / Transport 抽象，配置与实现解耦（参考 picoclaw）；宜在 config 定型后接入，避免双重迁移。
+18. `[ ]` **完整 MCP**、**compact 高级形态**、**全量遥测** — 见「刻意后置」小节。
 
 ---
 
@@ -65,12 +66,12 @@
 ## 配置、渠道与 LLM 扩展（待办）
 
 > 对标思路：**openclaw / picoclaw**（仓库外参考）；与现有 `routing` 入站/出站、OpenAI 兼容客户端自然衔接。  
-> **优先级**以「统一 backlog」为准：config 为 P0-1；Channel 为 P1-7；Skills 为 P1-8；LLM 可扩展为后置-16。
+> **优先级**以「统一 backlog」为准：config 为 P0-1；Channel 为 P1-7；Skills 为 P1-8；Cron / Heartbeat 为 P1-12；LLM 可扩展为后置-17。
 
 | 优先级 | 项 | 说明 |
 |--------|-----|------|
 | P0 | **统一 config 模块** | [x] `config` 包：**开发/生产同一套**加载与字段定义，本地默认路径 + 示例 + 可选 `--config`，体验对齐或优于散 `env`；密钥等以**文件为主真源**，避免唯依赖 `env` 被子进程继承泄漏；合并优先级与 env 覆盖规则见 [`config.md`](config.md) |
-| 后置 | **LLM 类型可扩展** | [ ] 参考 picoclaw，抽象「聊天补全 / 工具协议」之上的 **Provider** 或 **Transport** 接口，便于接入多厂商（不仅 OpenAI 兼容一种），配置与实现解耦；见统一 backlog #16 |
+| 后置 | **LLM 类型可扩展** | [ ] 参考 picoclaw，抽象「聊天补全 / 工具协议」之上的 **Provider** 或 **Transport** 接口，便于接入多厂商（不仅 OpenAI 兼容一种），配置与实现解耦；见统一 backlog #17 |
 | P1 | **通用 Channel 抽象** | [ ] 参考 openclaw/picoclaw，将飞书 / Slack 等入站出站做成可插拔 **channel**（统一生命周期、认证、消息映射、`Sink`/`Inbound` 注册），避免各渠道硬编码；与设计 [`inbound-routing-design.md`](inbound-routing-design.md) 一致落地 |
 | P1 | **Skills（Claude Code 机制）** | [ ] 见统一 backlog #8：发现层、元数据、渐进加载、作用域与预算；实现前可补设计短文档于 `docs/` |
 
@@ -120,7 +121,7 @@
 
 - [x] **D1** 维护调度：**独立进程/定时**触发 dream / extract（或 idle 触发）；失败 `slog`；与当前「仅 PostTurn 写 log」区分
 - [x] **D2** 变更审计：memory 写入可追溯（append-only 审计 log，或文档化「依赖 git diff」的流程）
-- [ ] **D3**（可选）向量 recall：插件接口；文件仍为真源 — 优先级见统一 backlog **P2-13**
+- [ ] **D3**（可选）向量 recall：插件接口；文件仍为真源 — 优先级见统一 backlog **P2-14**
 
 ---
 
@@ -142,18 +143,19 @@
 | P1 | **行为策略写回** | [x] 见 backlog #9 |
 | P1 | **任务状态工具** | [ ] 见 backlog #10 |
 | P1 | **侧链合并（可选）** | [x] 见 backlog #11 |
-| P2 | **入口编排加厚** | [ ] 见 backlog #12 |
-| P2 | **D3 向量 recall** | [ ] 见 backlog #13（阶段 D3） |
-| P2 | **预算精度（可选）** | [ ] 见 backlog #14 |
-| P2 | **协作模型（teammate / swarm）** | [ ] 见 backlog #15 |
-| 后置 | **LLM 类型可扩展** | [ ] 见 backlog #16 |
-| 后置 | **完整 MCP、compact 高级形态 / 全量遥测** | 见 backlog #17；最小 compact 已在 P0 |
+| P1 | **Cron / Heartbeat** | [ ] 见 backlog #12：maintain 内 cron 已接；心跳 / channel 保活仍待续 |
+| P2 | **入口编排加厚** | [ ] 见 backlog #13 |
+| P2 | **D3 向量 recall** | [ ] 见 backlog #14（阶段 D3） |
+| P2 | **预算精度（可选）** | [ ] 见 backlog #15 |
+| P2 | **协作模型（teammate / swarm）** | [ ] 见 backlog #16 |
+| 后置 | **LLM 类型可扩展** | [ ] 见 backlog #17 |
+| 后置 | **完整 MCP、compact 高级形态 / 全量遥测** | 见 backlog #18；最小 compact 已在 P0 |
 
 ---
 
 ## 刻意后置（勿在 A 阶段展开）
 
-- [ ] **LLM 类型可扩展**（Provider / Transport；见统一 backlog #16）
+- [ ] **LLM 类型可扩展**（Provider / Transport；见统一 backlog #17）
 - [ ] 完整 MCP 客户端与 UI 级权限流
 - [ ] compact **高级形态**（多段摘要、与模型协同的 collapse 策略等；最小 compact 见统一 backlog P0）
 - [ ] 全量遥测
@@ -191,7 +193,7 @@ flowchart TB
   C --> D
 ```
 
-建议：**先做 P0 中的统一 config**（开发与生产同一套），再并行推进维护管道与 compact/工具面；**Channel / Skills** 等 P1 可与当前 OpenAI 兼容栈并行；**LLM Provider 抽象** 见 backlog 后置（#16），避免过早双重迁移。D3 向量与 MCP 按产品排期。阶段 D1/D2 已接，不阻塞上述排序。
+建议：**先做 P0 中的统一 config**（开发与生产同一套），再并行推进维护管道与 compact/工具面；**Channel / Skills** 等 P1 可与当前 OpenAI 兼容栈并行；**LLM Provider 抽象** 见 backlog 后置（#17），避免过早双重迁移。D3 向量与 MCP 按产品排期。阶段 D1/D2 已接，不阻塞上述排序。
 
 ---
 

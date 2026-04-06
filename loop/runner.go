@@ -59,6 +59,9 @@ func RunTurn(ctx context.Context, cfg Config, in routing.Inbound) (err error) {
 	if cfg.Messages == nil {
 		return fmt.Errorf("loop: Config.Messages is nil")
 	}
+	if cfg.ToolContext != nil {
+		routing.MergeNonEmptyRouting(&cfg.ToolContext.TurnInbound, in)
+	}
 	defer func() {
 		emit := cfg.Outbound
 		if emit == nil {

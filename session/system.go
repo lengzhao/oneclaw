@@ -10,6 +10,7 @@ import (
 	"github.com/lengzhao/oneclaw/budget"
 	"github.com/lengzhao/oneclaw/memory"
 	"github.com/lengzhao/oneclaw/prompts"
+	"github.com/lengzhao/oneclaw/schedule"
 	"github.com/lengzhao/oneclaw/skills"
 	"github.com/lengzhao/oneclaw/tasks"
 )
@@ -68,7 +69,11 @@ func (e *Engine) buildTurnSystem(memOK bool, bundle memory.TurnBundle, bg budget
 		slog.Error("session.main_thread_system", "err", err)
 		return fallbackMainThreadSystem(d)
 	}
-	return out
+	out = strings.TrimRight(out, "\n")
+	if sb := schedule.SystemBlock(e.CWD); sb != "" {
+		out += sb + "\n"
+	}
+	return out + "\n"
 }
 
 func fallbackMainThreadSystem(d MainThreadSystemData) string {
@@ -104,5 +109,9 @@ func fallbackMainThreadSystem(d MainThreadSystemData) string {
 		b.WriteString(d.AppendedSystemContext)
 		b.WriteString("\n")
 	}
-	return strings.TrimRight(b.String(), "\n") + "\n"
+	out := strings.TrimRight(b.String(), "\n")
+	if sb := schedule.SystemBlock(d.CWD); sb != "" {
+		out += sb + "\n"
+	}
+	return out + "\n"
 }

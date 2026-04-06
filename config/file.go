@@ -48,6 +48,7 @@ type File struct {
 
 	Maintain struct {
 		Interval        string `yaml:"interval"`
+		Cron            string `yaml:"cron"`
 		Model           string `yaml:"model"`
 		ScheduledModel  string `yaml:"scheduled_model"`
 		MaxTokens       int64  `yaml:"max_tokens"`
@@ -167,6 +168,9 @@ func mergeFile(dst *File, src File) {
 	}
 	if src.Maintain.Interval != "" {
 		dst.Maintain.Interval = src.Maintain.Interval
+	}
+	if src.Maintain.Cron != "" {
+		dst.Maintain.Cron = src.Maintain.Cron
 	}
 	if src.Maintain.Model != "" {
 		dst.Maintain.Model = src.Maintain.Model

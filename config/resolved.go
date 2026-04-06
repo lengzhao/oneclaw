@@ -174,6 +174,16 @@ func (r *Resolved) MaintainLoopInterval() time.Duration {
 	return d
 }
 
+// MaintainCronSpec returns an optional cron expression for cmd/maintain when using cron mode instead of a fixed interval.
+// Standard 5-field spec (minute hour day-of-month month day-of-week) plus descriptors such as @every 1h (robfig/cron v3).
+// ONCLAW_MAINTAIN_CRON wins over maintain.cron in YAML when non-empty.
+func (r *Resolved) MaintainCronSpec() string {
+	if v := strings.TrimSpace(os.Getenv("ONCLAW_MAINTAIN_CRON")); v != "" {
+		return v
+	}
+	return strings.TrimSpace(r.merged.Maintain.Cron)
+}
+
 // ApplyEnvDefaults sets ONCLAW_* (never OPENAI_API_KEY) when the variable is unset, so existing packages keep working.
 func ApplyEnvDefaults(r *Resolved) {
 	if r == nil {
@@ -197,6 +207,9 @@ func ApplyEnvDefaults(r *Resolved) {
 
 	if r.merged.Maintain.Interval != "" {
 		setIfEmpty("ONCLAW_MAINTAIN_INTERVAL", strings.TrimSpace(r.merged.Maintain.Interval))
+	}
+	if r.merged.Maintain.Cron != "" {
+		setIfEmpty("ONCLAW_MAINTAIN_CRON", strings.TrimSpace(r.merged.Maintain.Cron))
 	}
 	if r.merged.Maintain.Model != "" {
 		setIfEmpty("ONCLAW_MAINTENANCE_MODEL", strings.TrimSpace(r.merged.Maintain.Model))

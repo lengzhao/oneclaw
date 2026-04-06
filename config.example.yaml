@@ -70,6 +70,8 @@ features:
 maintain:
   # Go duration；空则默认 1h；0 等价于只跑一轮（与 ONCLAW_MAINTAIN_INTERVAL=0 一致）
   interval: 1h
+  # 可选；非空时 cmd/maintain 使用进程内 cron（robfig/cron v3：5 字段 + @every 等），优先于 interval 循环
+  # cron: "0 * * * *"
   model: ""
   scheduled_model: ""
   max_tokens: 8192

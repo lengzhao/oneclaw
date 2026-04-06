@@ -5,6 +5,7 @@ go 1.26.1
 require (
 	github.com/lengzhao/conf v0.2.5
 	github.com/openai/openai-go v1.12.0
+	github.com/robfig/cron/v3 v3.0.1
 	golang.org/x/sync v0.16.0
 	gopkg.in/yaml.v3 v3.0.1
 )

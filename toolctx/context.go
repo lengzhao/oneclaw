@@ -5,6 +5,7 @@ import (
 	"context"
 	"sync"
 
+	"github.com/lengzhao/oneclaw/routing"
 	"github.com/openai/openai-go"
 )
 
@@ -39,6 +40,9 @@ type Context struct {
 	MaxSubagentDepth int
 	// Subagent runs nested loops when non-nil (phase C).
 	Subagent SubagentRunner
+
+	// TurnInbound is the routing metadata for the current SubmitUser turn (e.g. cron add defaults).
+	TurnInbound routing.Inbound
 }
 
 // New builds a tool context. If abort is nil, context.Background() is used.
@@ -66,6 +70,7 @@ func (c *Context) ChildContext() *Context {
 	child.MaxSubagentDepth = c.MaxSubagentDepth
 	child.Subagent = c.Subagent
 	child.SubagentDepth = c.SubagentDepth + 1
+	child.TurnInbound = c.TurnInbound
 	return child
 }
 

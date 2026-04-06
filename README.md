@@ -30,11 +30,13 @@ go run ./cmd/oneclaw
 
 常用 REPL 命令：`/exit` 退出。对话落盘依赖配置中的 transcript 路径及每轮成功结束后的自动保存（见上段）；另存副本请用外部工具复制该文件。
 
-**Memory 维护**（将 daily log 蒸馏进 `MEMORY.md` 等，默认按间隔循环；单次适合 cron）：
+**Memory 维护**（将 daily log 蒸馏进 `MEMORY.md` 等，默认按间隔循环；单次适合系统 crontab；进程内定时也可用 **cron 表达式**）：
 
 ```bash
 go run ./cmd/maintain --cwd . -once
 # 或覆盖间隔：go run ./cmd/maintain --cwd . -interval 30m
+# 或 cron（5 字段 + @every 等，见 robfig/cron v3）：go run ./cmd/maintain --cwd . -cron "0 * * * *"
+# 配置等价：maintain.cron / ONCLAW_MAINTAIN_CRON；收到 SIGINT/SIGTERM 时退出
 ```
 
 ---
@@ -78,7 +80,7 @@ go run ./cmd/maintain --cwd . -once
 ## 核心能力一览
 
 - **执行循环**：模型 ↔ 工具 ↔ 回灌；流式/非流式；Abort；`log/slog` 日志。
-- **内置工具**：`read_file`、`write_file`、`grep`、`bash`、`run_agent`、`fork_context`（注册表 + schema；只读并行、写串行等保守策略）。
+- **内置工具**：`read_file`、`write_file`、`grep`、`bash`、`run_agent`、`fork_context`、`task_create` / `task_update`、**`cron`**（定时/周期提醒，落盘 `.oneclaw/scheduled_jobs.json`，进程内轮询到期后注入用户消息；对标 picoclaw 的同名能力，简化版不含计划 shell 命令）（注册表 + schema；只读并行、写串行等保守策略）。
 - **Memory**：user / project / local / auto / team / agent 等作用域；发现、注入、recall、回合日志（`ONCLAW_TURN_LOG_*`）与维护管道。
 - **子 Agent**：`.oneclaw/agents/*.md`；嵌套隔离上下文与工具面收缩。
 - **路由抽象**：入站 `Inbound`、出站 `Record` / `Sink`，便于在 CLI 之外接 HTTP / webhook 等（见 `routing/` 与设计文档）。
@@ -97,6 +99,7 @@ memory/          记忆路径、注入、提取、维护、审计、回合日志
 session/         会话引擎与编排
 subagent/        子 Agent 运行时
 routing/         入站/出站与 CLI 适配
+schedule/        agent 定时任务持久化与到期收集
 tools/           工具注册与内置实现
 test/e2e/        端到端与 stub 测试
 docs/            设计与 prompt 参考
@@ -153,7 +156,8 @@ cp .oneclaw/config.example.yaml .oneclaw/config.yaml   # 可选：项目级 YAML
 | Transcript（REPL 入口） | `ONCLAW_TRANSCRIPT_PATH`、`ONCLAW_DISABLE_TRANSCRIPT` |
 | 传输 | `ONCLAW_CHAT_TRANSPORT`（如 `auto` / `non_stream`） |
 | Memory | `ONCLAW_MEMORY_BASE`、`ONCLAW_DISABLE_MEMORY*`、`ONCLAW_TURN_LOG_PATH` |
-| 维护 | `ONCLAW_DISABLE_AUTO_MAINTENANCE`、`ONCLAW_MAINTAIN_INTERVAL`、`ONCLAW_MAINTENANCE_*` |
+| 维护 | `ONCLAW_DISABLE_AUTO_MAINTENANCE`、`ONCLAW_MAINTAIN_INTERVAL`、`ONCLAW_MAINTAIN_CRON`、`ONCLAW_MAINTENANCE_*` |
+| 定时任务（agent） | `ONCLAW_DISABLE_SCHEDULED_TASKS`、`ONCLAW_SCHEDULE_MIN_SLEEP`、`ONCLAW_SCHEDULE_IDLE_SLEEP`（无任务时的最长等待；任务变更会唤醒调度） |
 | 预算 | `ONCLAW_DISABLE_CONTEXT_BUDGET`、`ONCLAW_MAX_PROMPT_BYTES`（未设置时代码默认约 **220000** 字节估算上限）、`ONCLAW_RECALL_MAX_BYTES` 等 |
 | 审计 | `ONCLAW_DISABLE_MEMORY_AUDIT` |
 
@@ -177,8 +181,9 @@ YAML 与用户/项目/`-config` 合并、以及 `ApplyEnvDefaults` 与 `ONCLAW_*
 |------|------|
 | `-cwd` | 项目根（memory 布局根） |
 | `-config` | 可选；额外 YAML 配置层（相对路径相对于 `-cwd`） |
-| `-once` | 只跑一轮蒸馏后退出（适合 cron） |
+| `-once` | 只跑一轮蒸馏后退出（适合系统 crontab）；优先于 `-cron` 与间隔循环 |
 | `-interval` | 循环间隔；`0` 等价单次；默认来自配置 / `ONCLAW_MAINTAIN_INTERVAL` |
+| `-cron` | 非空时按 cron 调度循环运行，直到 SIGINT/SIGTERM；未传则用 `maintain.cron` / `ONCLAW_MAINTAIN_CRON` |
 
 ---
 

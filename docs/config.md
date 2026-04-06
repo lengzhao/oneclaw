@@ -30,11 +30,12 @@
 | 组织 / 项目 | `openai.org_id`、`openai.project_id` | `OPENAI_ORG_ID`、`OPENAI_PROJECT_ID`（环境优先于文件） |
 | 路径 | `paths.*` | `ONCLAW_MEMORY_BASE`、`ONCLAW_TRANSCRIPT_PATH` 等 |
 | 预算 | `budget.*` | `ONCLAW_MAX_PROMPT_BYTES`、`ONCLAW_MIN_TRANSCRIPT_MESSAGES`；语义 compact：`ONCLAW_COMPACT_SUMMARY_MAX_BYTES`、`ONCLAW_DISABLE_SEMANTIC_COMPACT` |
-| 维护 | `maintain.*` | `ONCLAW_MAINTAIN_INTERVAL`、`ONCLAW_MAINTENANCE_MODEL`；多日 log / topic：`ONCLAW_MAINTENANCE_LOG_DAYS`、`ONCLAW_MAINTENANCE_MAX_COMBINED_LOG_BYTES`、`ONCLAW_MAINTENANCE_MAX_TOPIC_FILES`、`ONCLAW_MAINTENANCE_TOPIC_EXCERPT_BYTES` |
+| 维护 | `maintain.*` | `ONCLAW_MAINTAIN_INTERVAL`、`ONCLAW_MAINTAIN_CRON`（与 `maintain.cron`：进程内 cron，优先于 interval）、`ONCLAW_MAINTENANCE_MODEL`；多日 log / topic：`ONCLAW_MAINTENANCE_LOG_DAYS`、`ONCLAW_MAINTENANCE_MAX_COMBINED_LOG_BYTES`、`ONCLAW_MAINTENANCE_MAX_TOPIC_FILES`、`ONCLAW_MAINTENANCE_TOPIC_EXCERPT_BYTES` |
 | 日志 | `log.*` | `ONCLAW_LOG_LEVEL`、`ONCLAW_LOG_FORMAT`；默认另写 `<cwd>/.oneclaw/logs/YYYY/MM/oneclaw-<时间戳>.log`，`ONCLAW_DISABLE_LOG_FILE=1` 关闭仅写 stderr |
 | 开关 | `features.disable_*` | 对应 `ONCLAW_DISABLE_*`（见示例文件） |
 | Skills | — | `ONCLAW_DISABLE_SKILLS=1` 关闭系统提示里的 Skills 索引（`invoke_skill` 仍可用）；`ONCLAW_SKILLS_RECENT_PATH` 覆盖 `<cwd>/.oneclaw/skills-recent.json`；`ONCLAW_SKILLS_INDEX_MAX_BYTES` 覆盖索引字节上限（默认约为 `ONCLAW_MAX_PROMPT_BYTES` 的 1%，见 `budget.Global.SkillIndexMaxBytes`） |
 | 任务列表 | — | `ONCLAW_DISABLE_TASKS=1` 关闭系统提示里的任务摘要，并拒绝 `task_create` / `task_update`；任务文件默认为 `<cwd>/.oneclaw/tasks.json` |
+| 定时任务（agent） | — | `ONCLAW_DISABLE_SCHEDULED_TASKS=1` 关闭系统提示里的 Scheduled jobs 段，并拒绝 `cron` 工具；数据文件 `<cwd>/.oneclaw/scheduled_jobs.json`；调度按**下一触发时间**睡眠（`schedule.NextWakeDuration`），`add`/`remove`/到期执行后会 **notify** 唤醒；`ONCLAW_SCHEDULE_MIN_SLEEP`（Go duration，默认 **1s**，避免过短睡眠空转）、`ONCLAW_SCHEDULE_IDLE_SLEEP`（当前 channel 实例无下一触发点时，默认 **1h**，仍可通过变更任务唤醒） |
 | 行为策略写回 | — | `ONCLAW_DISABLE_BEHAVIOR_POLICY_WRITE=1` 拒绝 `write_behavior_policy`；该工具仅允许写入 `<cwd>/.oneclaw/rules/*.md`、项目或 `.oneclaw/AGENT.md`、用户 `~/.oneclaw/AGENT.md`，写入记入 D2 审计（`source=write_behavior_policy`） |
 | 侧链合并 | — | `ONCLAW_SIDECCHAIN_MERGE`：留空关闭；`1` / `true` / `tool` / `append` 在 `run_agent` / `fork_context` 的 **tool 结果**末尾附加侧链文件路径；`user` 则在同一轮工具输出之后向主 transcript 追加一条 **user** 消息（摘要 + 路径） |
 

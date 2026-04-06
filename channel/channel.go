@@ -114,6 +114,14 @@ func (r *Registry) StartAll(ctx context.Context, boot Bootstrap) ([]Connector, e
 			submitLoop(runCtx, inCh, eng, inst.id)
 		}()
 
+		if err := startSchedulePollerIfEnabled(runCtx, eng.CWD, inst.id, inCh); err != nil {
+			cancel()
+			<-routerDone
+			close(inCh)
+			close(outCh)
+			return nil, err
+		}
+
 		cn, err := s.New(runCtx, connectorConfig(boot, inst.id, inst.params))
 		if err != nil {
 			cancel()

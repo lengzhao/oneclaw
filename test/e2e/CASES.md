@@ -63,6 +63,9 @@
 | E2E-107 | `ONCLAW_DISABLE_SKILLS=1` 时 system 无 Skills 段 | [x] | `TestE2E_107_SkillsDisabledNoSystemSection` · `stub_skills_e2e_test.go` |
 | E2E-108 | 存在 `tasks.json` 时 system 含 Task list 摘要 | [x] | `TestE2E_108_TasksBlockInSystemPrompt` · `stub_tasks_e2e_test.go` |
 | E2E-109 | `task_create` / `task_update` 落盘；`ONCLAW_DISABLE_TASKS=1` 关闭 system 任务段 | [x] | `TestE2E_109_TaskToolsWriteFileAndDisableHidesBlock` · `stub_tasks_e2e_test.go` |
+| E2E-110 | `cmd/maintain -cron` 非法表达式非零退出 | [x] | `TestE2E_110_MaintainCLIInvalidCronExitsNonZero` · `stub_maintain_cli_test.go` |
+| E2E-111 | `cron` add 写入 `scheduled_jobs.json` | [x] | `TestE2E_111_CronToolWritesFile` · `stub_schedule_e2e_test.go` |
+| E2E-112 | 启用中的定时任务出现在 system「Scheduled jobs」段 | [x] | `TestE2E_112_ScheduledJobsBlockInSystemPrompt` · `stub_schedule_e2e_test.go` |
 
 ---
 
@@ -258,6 +261,7 @@
 - **前置**：预写当日 daily log（字节 ≥ `ONCLAW_MAINTENANCE_MIN_LOG_BYTES`）；stub 一次 `CompletionStop`（维护段 + 唯一标记）；`OPENAI_BASE_URL` 等由 `baseStubTransport` 注入；子进程 `HOME` 为 `t.TempDir()` 以隔离 memory layout。
 - **E2E-96**：`go build ./cmd/maintain` 后执行 `-cwd <tmp> -once`，期望 `MEMORY.md` 含标记。
 - **E2E-97**：同上二进制，不传 `-once`，`ONCLAW_MAINTAIN_INTERVAL=0`，期望仍只跑一轮并写入标记（与 cron 环境一致）。
+- **E2E-110**：同上二进制，`-cron` 传入非法表达式；仅需占位 `OPENAI_API_KEY`，期望进程非零退出且日志含维护 cron 解析失败信息。
 - **说明**：`go build` 子进程将 `HOME` 设为包 init 时保存的真实 HOME，避免模块缓存写入 `t.TempDir()` 导致只读文件清理失败。
 
 ---
