@@ -1,7 +1,7 @@
 package config
 
 // MCPFile configures MCP client (external MCP servers whose tools are exposed to the model).
-// See docs in config.example.yaml.
+// See docs in config/project_init.example.yaml.
 type MCPFile struct {
 	// Enabled, when set in a merged layer, turns MCP on. Nil after merge means disabled.
 	Enabled *bool `yaml:"enabled"`

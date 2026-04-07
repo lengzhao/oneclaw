@@ -30,7 +30,7 @@ func main() {
 	configPath := flag.String("config", "", "path to extra YAML layer (merged after ~/.oneclaw/config.yaml and <cwd>/.oneclaw/config.yaml)")
 	cwdFlag := flag.String("cwd", "", "project root directory (default: current working directory)")
 	maintainOnce := flag.Bool("maintain-once", false, "run one scheduled memory distill pass and exit (no channels)")
-	initFlag := flag.Bool("init", false, "create <cwd>/.oneclaw/config.yaml from the built-in example and memory dirs, then exit")
+	initFlag := flag.Bool("init", false, "create <cwd>/.oneclaw; write config.yaml from built-in example if missing, else merge in missing keys without overwriting user values; then exit")
 	logLevel := flag.String("log-level", "", "debug|info|warn|error (overrides config log.level when non-empty)")
 	logFormat := flag.String("log-format", "", "text|json (overrides config log.format when non-empty)")
 	flag.Parse()

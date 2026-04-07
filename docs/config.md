@@ -12,7 +12,7 @@
 
 缺失的文件会被忽略；若 `-config` 指向的路径不存在，启动报错。
 
-**初始化项目**：`oneclaw -init`（可选 `-cwd <dir>`）在 `<cwd>/.oneclaw/config.yaml` **不存在** 时写入内置模板（`config` 包嵌入的 `project_init.example.yaml`，应与根目录 `config.example.yaml` 保持同步），并创建记忆目录；**不**覆盖已有 `config.yaml`。
+**初始化项目**：`oneclaw -init`（可选 `-cwd <dir>`）会创建记忆目录。若 `<cwd>/.oneclaw/config.yaml` **不存在**，则写入内置模板（`config` 包嵌入的 [`project_init.example.yaml`](../config/project_init.example.yaml)）。若**已存在**，则在**保留已有键值**的前提下，把模板里**缺失**的键补进该文件（嵌套 mapping 递归合并；已存在的列表、标量不覆盖）。仅当确有新增键时才会重写文件（重写后 YAML 注释可能丢失）。
 
 ## 敏感项（API Key）
 
@@ -32,7 +32,7 @@
 | `-config` | 额外 YAML 层（见上合并顺序） |
 | `-log-level` | `debug` / `info` / `warn` / `error`，非空时覆盖配置里的 `log.level` |
 | `-log-format` | `text` / `json`，非空时覆盖 `log.format` |
-| `-init` | 初始化 `.oneclaw`，仅用上述日志标志 |
+| `-init` | 初始化 `.oneclaw`；无 `config.yaml` 则写入模板，已有则合并补全缺失键（不覆盖），仅用上述日志标志 |
 | `-maintain-once` | 单次远场维护后退出（需 YAML 中的 API key 等） |
 
 ## YAML 字段速查（无环境变量覆盖）
@@ -98,7 +98,7 @@
 
 ## 示例
 
-仓库内模板：根目录 [`config.example.yaml`](../config.example.yaml)。**`oneclaw -init`** 使用的嵌入副本为 [`config/project_init.example.yaml`](../config/project_init.example.yaml)（请与前者保持内容同步）。
+仓库内唯一示例模板：[`config/project_init.example.yaml`](../config/project_init.example.yaml)（**`oneclaw -init`** 嵌入并写入项目；亦可手动复制为 `~/.oneclaw/config.yaml` 或 `<项目>/.oneclaw/config.yaml`）。
 
 ## 与第三方 autoload 的关系
 

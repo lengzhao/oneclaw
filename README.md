@@ -14,7 +14,7 @@ go build -o oneclaw ./cmd/oneclaw
 # 可选：独立维护进程仍可用 go build -o maintain ./cmd/maintain
 ```
 
-在项目根执行 **`go run ./cmd/oneclaw -init`**（或 `-cwd <dir> -init`）可生成 **`<cwd>/.oneclaw/config.yaml`**（内置模板，已存在则跳过）并创建记忆目录；再按需编辑密钥与渠道。
+在项目根执行 **`go run ./cmd/oneclaw -init`**（或 `-cwd <dir> -init`）可生成或更新 **`<cwd>/.oneclaw/config.yaml`**（无则写入完整内置模板；已有则只补上模板里缺失的键、不覆盖你的配置）并创建记忆目录；再按需编辑密钥与渠道。
 
 配置 OpenAI 兼容 API 后启动 REPL：在 **`~/.oneclaw/config.yaml`** 或 **`<项目>/.oneclaw/config.yaml`**（或 **`-config`** 额外层）中填写 `openai.api_key`、`openai.base_url` 等；合并与 `PushRuntime` 见 **[`docs/config.md`](docs/config.md)**。可选用 `github.com/lengzhao/conf` 加载 `.env` 供**其他**依赖使用，**oneclaw 运行时配置以 YAML 为准**。
 
@@ -136,14 +136,14 @@ flowchart LR
 ## 环境与配置
 
 - **Go**：`1.26.1+`（见 [`go.mod`](go.mod)）。
-- **模型**：OpenAI 兼容 HTTP API。在 YAML 中配置 `openai.api_key`、可选 `openai.base_url`（自定义网关时需含 `/v1/` 后缀）等，见 **[`docs/config.md`](docs/config.md)** 与根目录 [`config.example.yaml`](config.example.yaml)。
+- **模型**：OpenAI 兼容 HTTP API。在 YAML 中配置 `openai.api_key`、可选 `openai.base_url`（自定义网关时需含 `/v1/` 后缀）等，见 **[`docs/config.md`](docs/config.md)** 与 [`config/project_init.example.yaml`](config/project_init.example.yaml)。
 
 建议复制示例配置后按需修改：
 
 ```bash
 cp env.example .env   # 可选：给其他工具用；oneclaw 以 YAML 为准
 go run ./cmd/oneclaw -init
-# 或手动：cp config.example.yaml <项目>/.oneclaw/config.yaml
+# 或手动：cp config/project_init.example.yaml <项目>/.oneclaw/config.yaml
 ```
 
 **常用 YAML 段**：`model`、`chat.transport`、`openai.*`、`paths.*`、`budget.*`、`maintain.*`、`features.disable_*`、`log.*`、`usage.*`、`schedule.*` — 字段说明与默认值见 [`docs/config.md`](docs/config.md)。
@@ -158,7 +158,7 @@ go run ./cmd/oneclaw -init
 |------|------|
 | `-cwd` | 可选；项目根（memory / `.oneclaw/config.yaml` 根；默认当前工作目录） |
 | `-config` | 可选；额外 YAML 配置层（相对路径相对于 `-cwd` 或当前目录） |
-| `-init` | 写入 `<cwd>/.oneclaw/config.yaml`（不存在时）并创建记忆目录，然后退出 |
+| `-init` | 创建记忆目录；`config.yaml` 不存在则写入内置模板，已存在则合并补全缺失键（不覆盖已有值），然后退出 |
 | `-maintain-once` | 单次 `RunScheduledMaintain` 后退出（需 API 密钥；不启动渠道） |
 | `-log-level` / `-log-format` | 可选；覆盖日志（`-maintain-once` / 正常模式在加载配置后生效；`-init` 仅用 CLI 标志） |
 

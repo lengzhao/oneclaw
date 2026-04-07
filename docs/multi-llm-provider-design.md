@@ -125,4 +125,4 @@ Provider interface {
 
 ---
 
-**文档维护**：实现过程中若 YAML 形状或包名与本文不一致，以 `config.example.yaml` 与 `docs/config.md` 为准，并回写本节「对外配置形态」。
+**文档维护**：实现过程中若 YAML 形状或包名与本文不一致，以 `config/project_init.example.yaml` 与 `docs/config.md` 为准，并回写本节「对外配置形态」。
