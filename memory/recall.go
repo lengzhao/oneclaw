@@ -10,6 +10,9 @@ import (
 
 const maxRecallFileBytes = 4_096
 
+// maxRecallTermCount caps unique query terms after tokenization (long paste guardrail).
+const maxRecallTermCount = 384
+
 // SelectRecall returns markdown snippets from memory dirs relevant to userText, respecting budget and dedupe.
 func SelectRecall(layout Layout, userText string, state *RecallState, budget int) (string, *RecallState) {
 	if budget <= 0 {
@@ -128,24 +131,61 @@ func listMemoryMarkdownFiles(layout Layout) []string {
 }
 
 func tokenizeRecall(s string) []string {
-	s = strings.ToLower(s)
-	var cur strings.Builder
 	var out []string
-	flush := func() {
-		t := cur.String()
-		cur.Reset()
+	seen := make(map[string]struct{})
+	add := func(term string) {
+		if term == "" {
+			return
+		}
+		if _, ok := seen[term]; ok {
+			return
+		}
+		if len(out) >= maxRecallTermCount {
+			return
+		}
+		seen[term] = struct{}{}
+		out = append(out, term)
+	}
+
+	var latin strings.Builder
+	var han []rune
+
+	flushLatin := func() {
+		if latin.Len() == 0 {
+			return
+		}
+		t := strings.ToLower(latin.String())
+		latin.Reset()
 		if len(t) > 2 {
-			out = append(out, t)
+			add(t)
 		}
 	}
+	flushHan := func() {
+		if len(han) < 2 {
+			han = han[:0]
+			return
+		}
+		for i := 0; i < len(han)-1; i++ {
+			add(string(han[i : i+2]))
+		}
+		han = han[:0]
+	}
+
 	for _, r := range s {
-		if unicode.IsLetter(r) || unicode.IsNumber(r) {
-			cur.WriteRune(r)
-		} else {
-			flush()
+		switch {
+		case unicode.Is(unicode.Han, r):
+			flushLatin()
+			han = append(han, r)
+		case unicode.IsLetter(r) || unicode.IsNumber(r):
+			flushHan()
+			latin.WriteRune(r)
+		default:
+			flushLatin()
+			flushHan()
 		}
 	}
-	flush()
+	flushLatin()
+	flushHan()
 	return out
 }
 

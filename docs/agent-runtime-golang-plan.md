@@ -39,6 +39,21 @@
 5. **增量提取层**：窄上下文子任务，对应 `extract memories`。
 6. **整理蒸馏层**：读 daily log 与既有 topic，合并去重，对应 `auto dream`。
 
+### 3.1 SelectRecall 的 query 分词（Go 实现约定）
+
+`memory.SelectRecall` 用「用户本轮 `userText` 分词 → 在 memory 根下各 `.md` 中按命中计分」做轻量召回，**不建倒排索引**。为避免纯中文整句被 `unicode.IsLetter` 粘成单一 token（召回几乎不可用），分词规则如下（第一版）：
+
+| 片段 | 规则 |
+|------|------|
+| **汉字（CJK Unified Ideograph）** | 连续汉字块做**重叠 bigram**（块内仅一个汉字时不产生 term；**不**输出单字，避免「的、了」噪声）。 |
+| **拉丁字母与数字** | 与非字母数字字符边界切分；仅当 `len(token) > 2`（**字节长度**，与旧行为一致）时作为 term。 |
+| **去重** | 同一 term 只保留一次（先出现者优先，保证稳定）。 |
+| **上限** | 去重后 term 总数有常量上限（防止极端长输入放大 CPU）；达到上限后不再接受新 term。 |
+
+**评分**仍使用现有 `scoreRecall`（文件名命中权重高于正文）。后续若误召或漏召明显，可再评估 trigram、韩文/假名块同构 n-gram，或引入 Bleve 等索引方案。
+
+实现位置：`memory/recall.go` 中的 `tokenizeRecall`。
+
 ---
 
 ## 4. Agent 子系统（对齐 [`claude-code-main-flow-analysis.md`](claude-code-main-flow-analysis.md)）
