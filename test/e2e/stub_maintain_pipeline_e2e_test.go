@@ -60,6 +60,7 @@ func TestE2E_101_PostTurnMaintainPromptSessionOnly(t *testing.T) {
 	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "E2E101_TODAY_MARKER ping"}); err != nil {
 		t.Fatal(err)
 	}
+	e2eWaitMinChatRequests(t, stub, 2, 5*time.Second)
 
 	bodies := stub.ChatRequestBodies()
 	if len(bodies) < 2 {
@@ -233,6 +234,7 @@ func TestE2E_102_MaintainDedupeSkipsAppendWhenNoNewBullets(t *testing.T) {
 	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "E2E102_USER turn filler text for daily log"}); err != nil {
 		t.Fatal(err)
 	}
+	e2eWaitMinChatRequests(t, stub, 2, 5*time.Second)
 
 	after, err := os.ReadFile(memPath)
 	if err != nil {

@@ -29,7 +29,7 @@
 |----|------|
 | **产品语义** | **仅本回合刚结束**可沉淀的内容：事实、规则、注意事项、工具使用偏好、同一工具多次调用及原因（须在本回合文本/轨迹中可推断）。**不**从其它会话挖新点；daily log 可能含多日多会话，prompt 明确以 **Current turn snapshot** 为主证。 |
 | **建议符号** | `memory.MaybePostTurnMaintain`（门控 + 节流） / `memory.RunPostTurnMaintain`（实际执行一次） |
-| **调用方** | `session.Engine` 在每轮成功 `SubmitUser` 后（与现有 `PostTurn` 写 daily log 之后衔接） |
+| **调用方** | `session.Engine` 在每轮成功 `SubmitUser` 后（`PostTurn` 写 daily log 同步完成；`MaybePostTurnMaintain` 在独立 goroutine 中执行，不阻塞 channel / HTTP 返回） |
 | **开关** | `features.disable_auto_maintenance` **仅**控制此入口 |
 | **输入视野（当前实现）** | **仅当前回合**：**`PostTurnInput`** 快照（user / assistant / 工具轨迹与重复调用摘要）+ **规则 `MEMORY.md` 摘录**（去重语料）；**不**读 daily log、**不**读 project topic。门控：`maintain.post_turn.min_log_bytes`（经 `rtopts`）作用于快照总字节（见 `docs/config.md`） |
 | **输出（当前实现）** | 写入 **`<project>/memory/YYYY-MM-DD.md`** 内 `## Auto-maintained (日期)` 段（**不**向根上 `MEMORY.md` 追加 episodic）；审计 **`post_turn_maintain`**；日志 **`pathway=post_turn`** |

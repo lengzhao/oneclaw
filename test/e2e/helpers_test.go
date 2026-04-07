@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/lengzhao/oneclaw/memory"
 	"github.com/lengzhao/oneclaw/rtopts"
@@ -89,6 +90,18 @@ func e2eIsolateUserMemory(t *testing.T, home string) {
 		s.MemoryBase = filepath.Join(home, memory.DotDir)
 	}
 	rtopts.Set(&s)
+}
+
+// e2eWaitMinChatRequests polls until the stub has recorded at least want POST /v1/chat/completions bodies.
+func e2eWaitMinChatRequests(t *testing.T, stub *openaistub.Server, want int, deadline time.Duration) {
+	t.Helper()
+	deadlineAt := time.Now().Add(deadline)
+	for len(stub.ChatRequestBodies()) < want {
+		if time.Now().After(deadlineAt) {
+			t.Fatalf("timed out after %v waiting for %d chat requests (have %d)", deadline, want, len(stub.ChatRequestBodies()))
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
 }
 
 // e2eEnvWithMemory keeps stub transport defaults and does not disable memory.

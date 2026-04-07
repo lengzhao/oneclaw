@@ -41,7 +41,7 @@ type Engine struct {
 	// SinkFactory builds a per-turn Sink (e.g. bind IM thread). If nil, only SinkRegistry is used.
 	// When non-nil, NewSink runs first; ErrUseRegistrySink falls back to SinkRegistry.
 	SinkFactory routing.SinkFactory
-	// TranscriptPath is where SaveTranscript writes after each successful loop.RunTurn (before PostTurn / MaybePostTurnMaintain). Empty disables auto-save.
+	// TranscriptPath is where SaveTranscript writes after each successful loop.RunTurn (before PostTurn; post-turn maintain runs asynchronously). Empty disables auto-save.
 	TranscriptPath string
 	// WorkingTranscriptPath persists Messages (tool rounds + semantic compact); empty when transcript disabled.
 	WorkingTranscriptPath string
@@ -162,20 +162,23 @@ func (e *Engine) SubmitUser(ctx context.Context, in routing.Inbound) error {
 		if traceSink != nil {
 			tools = traceSink.Snapshot()
 		}
-		memory.PostTurn(layout, memory.PostTurnInput{
+		toolsCopy := append([]loop.ToolTraceEntry(nil), tools...)
+		turnIn := memory.PostTurnInput{
 			SessionID:        e.SessionID,
 			CorrelationID:    in.CorrelationID,
 			UserText:         preview,
 			AssistantVisible: loop.LastAssistantDisplay(e.Messages),
-			Tools:            tools,
-		})
-		memory.MaybePostTurnMaintain(ctx, layout, &e.Client, e.Model, e.MaxTokens, &memory.PostTurnInput{
-			SessionID:        e.SessionID,
-			CorrelationID:    in.CorrelationID,
-			UserText:         preview,
-			AssistantVisible: loop.LastAssistantDisplay(e.Messages),
-			Tools:            tools,
-		})
+			Tools:            toolsCopy,
+		}
+		memory.PostTurn(layout, turnIn)
+		// Post-turn LLM maintain is best-effort and can be slow; do not block channels waiting on HTTP Done.
+		lay := layout
+		client := &e.Client
+		model := e.Model
+		maxTok := e.MaxTokens
+		go func(in memory.PostTurnInput) {
+			memory.MaybePostTurnMaintain(context.Background(), lay, client, model, maxTok, &in)
+		}(turnIn)
 	}
 	return nil
 }

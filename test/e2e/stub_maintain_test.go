@@ -37,6 +37,7 @@ func TestE2E_92_AutoMaintenanceAppends(t *testing.T) {
 	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "hello recallkeyword"}); err != nil {
 		t.Fatal(err)
 	}
+	e2eWaitMinChatRequests(t, stub, 2, 5*time.Second)
 
 	epPath := memory.ProjectEpisodeDailyPath(cwd, date)
 	raw, err := os.ReadFile(epPath)

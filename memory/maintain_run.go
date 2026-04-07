@@ -131,6 +131,7 @@ func RunPostTurnMaintain(ctx context.Context, layout Layout, client *openai.Clie
 
 // MaybePostTurnMaintain runs post-turn maintenance when auto maintenance is enabled (see autoMaintenanceEnabled).
 // ctx is not used for cancellation or deadlines (post-turn runs on context.Background + maintain.post_turn timeout from rtopts).
+// session.Engine invokes this from a goroutine after each successful turn so inbound channels are not blocked.
 func MaybePostTurnMaintain(ctx context.Context, layout Layout, client *openai.Client, mainChatModel string, maxTokens int64, turn *PostTurnInput) {
 	if client == nil || !autoMaintenanceEnabled() {
 		return
