@@ -80,11 +80,9 @@ func RunAgent(ctx context.Context, h *Host, parent *toolctx.Context, agentType, 
 	if err != nil {
 		return "", err
 	}
-	if parent.SubagentDepth >= 1 {
-		reg, err = WithoutMetaTools(reg, "run_agent", "fork_context")
-		if err != nil {
-			return "", err
-		}
+	reg, err = WithoutMetaTools(reg, "run_agent", "fork_context")
+	if err != nil {
+		return "", err
 	}
 
 	child := parent.ChildContext()

@@ -11,7 +11,7 @@ import (
 // TurnBundle is injected into one user turn (system suffix + leading user messages).
 type TurnBundle struct {
 	SystemSuffix  string
-	AgentMdBlock  string // AGENT.md + rules context in <system-reminder> user message
+	AgentMdBlock  string // AGENT.md + rules + MEMORY.md rules + context in <system-reminder> user message
 	RecallBlock   string // user message with attachment header; empty if none
 	UpdatedRecall *RecallState
 }
@@ -25,35 +25,9 @@ func BuildTurn(layout Layout, home, userText string, recall *RecallState, recall
 	sys.WriteString("\n## File-based memory\n\n")
 	sys.WriteString("You have persistent, file-based memory. These directories already exist — write with the Write tool (no need to mkdir first).\n\n")
 	writeDirList(&sys, layout)
-
-	type ep struct {
-		label string
-		path  string
-	}
-	eps := []ep{
-		{"user", filepath.Join(layout.User, entrypointName)},
-		{"project", filepath.Join(layout.Project, entrypointName)},
-		{"team (user)", filepath.Join(layout.TeamUser, entrypointName)},
-		{"team (project)", filepath.Join(layout.TeamProject, entrypointName)},
-	}
-	if !AutoMemoryDisabled() {
-		eps = append(eps, ep{"auto", filepath.Join(layout.Auto, entrypointName)})
-	}
-	labels := []string{"user-scope agent", "project-scope agent"}
-	for i, root := range layout.AgentDefault {
-		label := "agent"
-		if i < len(labels) {
-			label = labels[i]
-		}
-		eps = append(eps, ep{label, filepath.Join(root, entrypointName)})
-	}
-
-	sys.WriteString("### MEMORY.md indices (truncated when large)\n\n")
-	for _, e := range eps {
-		if chunk := readTruncatedEntrypoint(e.path); chunk != "" {
-			sys.WriteString(fmt.Sprintf("#### %s (`%s`)\n\n%s\n\n", e.label, e.path, chunk))
-		}
-	}
+	sys.WriteString("### Memory layout\n\n")
+	sys.WriteString("- **Rules** (`MEMORY.md` at each memory root) are injected below in `<system-reminder>` with AGENT/rules — keep them short.\n")
+	sys.WriteString("- **Episodic** digests and notes are `.md` files in each memory directory (e.g. `.oneclaw/memory/YYYY-MM-DD.md` from maintenance); **recall** searches those files but **skips** root **`MEMORY.md`** (rules — already injected above).\n\n")
 
 	var ctx strings.Builder
 	ctx.WriteString("Codebase and user instructions are shown below. Follow them; they override defaults.\n\n")
@@ -67,9 +41,24 @@ func BuildTurn(layout Layout, home, userText string, recall *RecallState, recall
 		body := LoadMarkdownBody(chunk.Path)
 		ctx.WriteString(fmt.Sprintf("### user rules:%s\n\n%s\n\n", chunk.Path, body))
 	}
+	appendMemoryRulesEntrypoint(&ctx, "user:memory", filepath.Join(layout.User, entrypointName))
 	for _, chunk := range DiscoverProjectInstructions(layout.CWD) {
 		body := LoadMarkdownBody(chunk.Path)
 		ctx.WriteString(fmt.Sprintf("### %s:%s\n\n%s\n\n", chunk.Kind, chunk.Path, body))
+	}
+	appendMemoryRulesEntrypoint(&ctx, "project:memory", filepath.Join(layout.Project, entrypointName))
+	appendMemoryRulesEntrypoint(&ctx, "team (user):memory", filepath.Join(layout.TeamUser, entrypointName))
+	appendMemoryRulesEntrypoint(&ctx, "team (project):memory", filepath.Join(layout.TeamProject, entrypointName))
+	if !AutoMemoryDisabled() {
+		appendMemoryRulesEntrypoint(&ctx, "auto:memory", filepath.Join(layout.Auto, entrypointName))
+	}
+	labels := []string{"agent memory (user-scope)", "agent memory (project-scope)"}
+	for i, root := range layout.AgentDefault {
+		label := "agent memory"
+		if i < len(labels) {
+			label = labels[i]
+		}
+		appendMemoryRulesEntrypoint(&ctx, label+":memory", filepath.Join(root, entrypointName))
 	}
 
 	ctx.WriteString("# currentDate\n\n")
@@ -88,6 +77,14 @@ func BuildTurn(layout Layout, home, userText string, recall *RecallState, recall
 		RecallBlock:   recallBody,
 		UpdatedRecall: nextRecall,
 	}
+}
+
+func appendMemoryRulesEntrypoint(sb *strings.Builder, label, abs string) {
+	chunk := readTruncatedEntrypoint(abs)
+	if chunk == "" {
+		return
+	}
+	sb.WriteString(fmt.Sprintf("### %s (`%s`)\n\n%s\n\n", label, abs, chunk))
 }
 
 func writeDirList(sb *strings.Builder, layout Layout) {

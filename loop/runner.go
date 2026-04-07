@@ -107,10 +107,11 @@ func RunTurn(ctx context.Context, cfg Config, in routing.Inbound) (err error) {
 
 		ApplyHistoryBudget(cfg.Budget, cfg.System, msgs)
 		reqMsgs := buildRequestMessages(cfg.System, *msgs)
+		toolParams := cfg.Registry.OpenAITools()
 		params := openai.ChatCompletionNewParams{
 			Model:               cfg.Model,
 			Messages:            reqMsgs,
-			Tools:               cfg.Registry.OpenAITools(),
+			Tools:               toolParams,
 			MaxCompletionTokens: openai.Int(cfg.MaxTokens),
 			// Let the model batch tool calls; executor partitions by Registry.ConcurrencySafe (read parallel, write serial).
 			ParallelToolCalls: openai.Bool(true),

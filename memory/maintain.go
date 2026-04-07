@@ -3,8 +3,10 @@ package memory
 import (
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/lengzhao/oneclaw/prompts"
@@ -12,10 +14,11 @@ import (
 
 // MaintainPromptData fills maintenance system templates for memory distillation.
 type MaintainPromptData struct {
-	CWD        string // project working directory
-	Today      string // YYYY-MM-DD, same as digest day
-	MemoryPath string // path to project MEMORY.md
-	RunTS      string // RFC3339 UTC, wall time of this maintain pass
+	CWD             string // project working directory
+	Today           string // YYYY-MM-DD, same as digest day
+	MemoryPath      string // episodic digest file for this calendar day (.oneclaw/memory/YYYY-MM-DD.md)
+	RulesMemoryPath string // project MEMORY.md (rules only; excerpt for dedupe)
+	RunTS           string // RFC3339 UTC, wall time of this maintain pass
 }
 
 // Audit sources for AppendMemoryAudit when appending Auto-maintained sections.
@@ -24,8 +27,8 @@ const (
 	AuditSourceScheduledMaintain = "scheduled_maintain"
 )
 
-func maintenanceSystemPromptForPathway(p maintainPathway, cwd, memoryPath, today, runTS string) string {
-	d := MaintainPromptData{CWD: cwd, Today: today, MemoryPath: memoryPath, RunTS: runTS}
+func maintenanceSystemPromptForPathway(p maintainPathway, cwd, episodePath, rulesPath, today, runTS string) string {
+	d := MaintainPromptData{CWD: cwd, Today: today, MemoryPath: episodePath, RulesMemoryPath: rulesPath, RunTS: runTS}
 	name := prompts.NameMaintenanceSystemScheduled
 	if p == pathwayPostTurn {
 		name = prompts.NameMaintenanceSystemPostTurn
@@ -33,21 +36,21 @@ func maintenanceSystemPromptForPathway(p maintainPathway, cwd, memoryPath, today
 	s, err := prompts.Render(name, d)
 	if err != nil {
 		slog.Error("memory.prompts.maintenance_system", "pathway", p, "err", err)
-		return fallbackMaintenanceSystemPrompt(cwd, memoryPath, today, runTS, p == pathwayPostTurn)
+		return fallbackMaintenanceSystemPrompt(cwd, episodePath, rulesPath, today, runTS, p == pathwayPostTurn)
 	}
 	return s
 }
 
-func fallbackMaintenanceSystemPrompt(cwd, memoryPath, today, runTS string, postTurn bool) string {
+func fallbackMaintenanceSystemPrompt(cwd, episodePath, rulesPath, today, runTS string, postTurn bool) string {
 	kind := "consolidation"
 	if postTurn {
 		kind = "post-turn"
 	}
-	scope := "Synthesize across recent logs and MEMORY excerpt; dedupe and refresh stale rules."
+	scope := "Synthesize across recent logs; episodic digest → `" + episodePath + "`; dedupe using rules in `" + rulesPath + "`."
 	if postTurn {
-		scope = "Near-field: only this finished user turn (snapshot); facts, rules, tool usage and repeated tool calls; ignore other sessions."
+		scope = "Near-field: only this finished user turn (snapshot); episodic digest → `" + episodePath + "`; rules excerpt → `" + rulesPath + "` for dedupe."
 	}
-	out := "You are a silent memory indexer for a coding agent (" + kind + "). Scope: project `" + cwd + "`, calendar date " + today + ", target file `" + memoryPath + "`.\n" +
+	out := "You are a silent memory indexer for a coding agent (" + kind + "). Scope: project `" + cwd + "`, calendar date " + today + ", episodic digest `" + episodePath + "`, rules `" + rulesPath + "`.\n" +
 		scope + "\n"
 	if !postTurn {
 		out += "Session records (optional; read-only tools): per-day slim dialogue JSON `" + cwd + "/.oneclaw/memory/" + today + "/dialog_history.json` (other days: replace date segment); model context `" + cwd + "/.oneclaw/working_transcript.json`; cumulative slim `" + cwd + "/.oneclaw/transcript.json`.\n"
@@ -58,15 +61,42 @@ func fallbackMaintenanceSystemPrompt(cwd, memoryPath, today, runTS string, postT
 	return out
 }
 
+func isEpisodeDigestFile(layout Layout, memPath string) bool {
+	clean := filepath.Clean(memPath)
+	projMem := filepath.Clean(ProjectMemoryDir(layout.CWD))
+	if !PathUnderRoot(clean, projMem) {
+		return false
+	}
+	rel, err := filepath.Rel(projMem, clean)
+	if err != nil || strings.Contains(rel, string(filepath.Separator)) {
+		return false
+	}
+	base := filepath.Base(clean)
+	if strings.EqualFold(base, entrypointName) {
+		return false
+	}
+	if !strings.HasSuffix(strings.ToLower(base), ".md") {
+		return false
+	}
+	datePart := strings.TrimSuffix(base, ".md")
+	if len(datePart) != 10 {
+		return false
+	}
+	_, err = time.Parse("2006-01-02", datePart)
+	return err == nil
+}
+
 func appendMaintenanceSection(layout Layout, memPath, section, auditSource string) error {
-	projectDir := layout.Project
-	if err := os.MkdirAll(projectDir, 0o755); err != nil {
+	dir := filepath.Dir(memPath)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
 	section = strings.TrimSpace(section)
 	var b strings.Builder
 	if _, err := os.Stat(memPath); os.IsNotExist(err) {
-		b.WriteString("# MEMORY\n\n")
+		if !isEpisodeDigestFile(layout, memPath) {
+			b.WriteString("# MEMORY\n\n")
+		}
 		b.WriteString(section)
 		b.WriteString("\n")
 		body := b.String()
@@ -111,8 +141,7 @@ func writeMergedOrAppendMaintenanceSection(layout Layout, memPath string, hadSpa
 	if !strings.HasSuffix(newBody, "\n") {
 		newBody += "\n"
 	}
-	projectDir := layout.Project
-	if err := os.MkdirAll(projectDir, 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(memPath), 0o755); err != nil {
 		return err
 	}
 	if err := os.WriteFile(memPath, []byte(newBody), 0o644); err != nil {

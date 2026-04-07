@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/lengzhao/oneclaw/subagent"
 	"github.com/lengzhao/oneclaw/toolctx"
 	"github.com/openai/openai-go"
 )
@@ -16,10 +17,7 @@ type RunAgentTool struct{}
 func (RunAgentTool) Name() string { return "run_agent" }
 
 func (RunAgentTool) Description() string {
-	return `Run a named sub-agent with its own short-lived context and tool surface. ` +
-		`Built-in types: general-purpose, explore. ` +
-		`Add markdown definitions under .oneclaw/agents/*.md (YAML frontmatter: agent_type, description, tools, max_turns). ` +
-		`Set inherit_context true to prepend a trimmed copy of the parent message list (still no mutation of the main transcript).`
+	return subagent.RunAgentToolDescriptionBase
 }
 
 func (RunAgentTool) Parameters() openai.FunctionParameters {

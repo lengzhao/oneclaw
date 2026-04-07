@@ -1,6 +1,8 @@
 package memory
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -84,5 +86,28 @@ func TestTokenizeRecall_termCap(t *testing.T) {
 	terms := tokenizeRecall(b.String())
 	if len(terms) != maxRecallTermCount {
 		t.Fatalf("want %d terms capped, got %d", maxRecallTermCount, len(terms))
+	}
+}
+
+func TestSelectRecall_skipsRootMemoryMdOnly(t *testing.T) {
+	cwd := t.TempDir()
+	home := t.TempDir()
+	lay := DefaultLayout(cwd, home)
+	proj := lay.Project
+	if err := os.MkdirAll(proj, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(proj, "MEMORY.md"), []byte("standing rules secretphrase\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(proj, "2026-04-07.md"), []byte("episodic recallmarker_fact here\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	body, _ := SelectRecall(lay, "recallmarker_fact", nil, 12_000)
+	if !strings.Contains(body, "recallmarker_fact") {
+		t.Fatalf("expected episodic file in recall, got:\n%s", body)
+	}
+	if strings.Contains(body, "secretphrase") {
+		t.Fatalf("root MEMORY.md should not be recalled, got:\n%s", body)
 	}
 }

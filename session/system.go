@@ -12,6 +12,7 @@ import (
 	"github.com/lengzhao/oneclaw/prompts"
 	"github.com/lengzhao/oneclaw/schedule"
 	"github.com/lengzhao/oneclaw/skills"
+	"github.com/lengzhao/oneclaw/subagent"
 	"github.com/lengzhao/oneclaw/tasks"
 )
 
@@ -28,6 +29,8 @@ type MainThreadSystemData struct {
 	MemoryPromptBlock string
 
 	SkillLines []string
+
+	AgentCatalogLines []string
 
 	OptionalMCPSection string
 
@@ -46,7 +49,8 @@ func shellForPrompt() string {
 
 // buildTurnSystem renders the main-thread system prompt (docs/prompts/10-main-thread.md).
 // e.System is appended last as "Additional system context" only; the default identity lives in prompts/templates/main_thread_system.tmpl.
-func (e *Engine) buildTurnSystem(memOK bool, bundle memory.TurnBundle, bg budget.Global, home string, herr error) string {
+// cat lists available run_agent roles (see docs/orchestrator-business-agents.md).
+func (e *Engine) buildTurnSystem(memOK bool, bundle memory.TurnBundle, bg budget.Global, home string, herr error, cat *subagent.Catalog) string {
 	d := MainThreadSystemData{
 		CWD:                   e.CWD,
 		Platform:              runtime.GOOS,
@@ -62,6 +66,9 @@ func (e *Engine) buildTurnSystem(memOK bool, bundle memory.TurnBundle, bg budget
 	d.TasksOmitted = omit
 	if herr == nil {
 		d.SkillLines = skills.PromptSkillLines(e.CWD, home, bg.SkillIndexMaxBytes())
+	}
+	if cat != nil {
+		d.AgentCatalogLines = cat.PromptCatalogLines(bg.SkillIndexMaxBytes())
 	}
 
 	out, err := prompts.Render(prompts.NameMainThreadSystem, d)
@@ -79,6 +86,7 @@ func (e *Engine) buildTurnSystem(memOK bool, bundle memory.TurnBundle, bg budget
 func fallbackMainThreadSystem(d MainThreadSystemData) string {
 	var b strings.Builder
 	b.WriteString("You are Oneclaw, a coding agent. Be concise. Use tools when they help answer accurately.\n")
+	b.WriteString("Project and user rules appear in user messages inside <system-reminder> under # agentMd; when they conflict with these defaults, follow the agentMd / rules content.\n")
 	b.WriteString("Working directory for file tools is ")
 	b.WriteString(d.CWD)
 	b.WriteString(". Prefer read_file before editing.\n")
@@ -102,6 +110,12 @@ func fallbackMainThreadSystem(d MainThreadSystemData) string {
 		b.WriteString("\n## Skills\n\n")
 		b.WriteString("When a task matches a skill, call **invoke_skill** with that skill's name to load its full instructions (body of SKILL.md).\n\n")
 		b.WriteString(strings.Join(d.SkillLines, "\n"))
+		b.WriteString("\n")
+	}
+	if len(d.AgentCatalogLines) > 0 {
+		b.WriteString("\n## Delegated agents (run_agent)\n\n")
+		b.WriteString("Use **run_agent** with `agent_type` from the list below. Prefer delegating domain work; keep the main thread for routing, clarification, and merging results. Each `prompt` should be self-contained (goal, constraints, done criteria). Use `inherit_context` when the sub-agent needs a trimmed slice of the parent conversation.\n\n")
+		b.WriteString(strings.Join(d.AgentCatalogLines, "\n"))
 		b.WriteString("\n")
 	}
 	if d.AppendedSystemContext != "" {

@@ -13,7 +13,7 @@ import (
 )
 
 // Append-only audit of writes under memory WriteRoots, project `.oneclaw/rules`,
-// user `~/.oneclaw/rules`, and canonical `AGENT.md` paths. Log path:
+// user `~/.oneclaw/rules`, and canonical AGENT paths (project `.oneclaw/AGENT.md`, user `~/.oneclaw/AGENT.md`). Log path:
 //   <cwd>/.oneclaw/audit/memory-write.jsonl
 // Each line is a JSON object: ts, source, path, bytes, sha256.
 // Disable with ONCLAW_DISABLE_MEMORY_AUDIT=1/true/yes.

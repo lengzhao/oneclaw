@@ -9,10 +9,11 @@ import (
 
 func TestMaintenanceSystemPromptData(t *testing.T) {
 	d := MaintainPromptData{
-		CWD:        "/proj/repo",
-		Today:      "2026-04-05",
-		MemoryPath: "/proj/repo/.oneclaw/memory/MEMORY.md",
-		RunTS:      "2026-04-05T12:00:00Z",
+		CWD:             "/proj/repo",
+		Today:           "2026-04-05",
+		MemoryPath:      "/proj/repo/.oneclaw/memory/2026-04-05.md",
+		RulesMemoryPath: "/proj/repo/.oneclaw/memory/MEMORY.md",
+		RunTS:           "2026-04-05T12:00:00Z",
 	}
 	got, err := prompts.Render(prompts.NameMaintenanceSystemPostTurn, d)
 	if err != nil {
@@ -23,6 +24,7 @@ func TestMaintenanceSystemPromptData(t *testing.T) {
 		"post-turn",
 		"/proj/repo",
 		"2026-04-05",
+		"2026-04-05.md",
 		"MEMORY.md",
 		"2026-04-05T12:00:00Z",
 		"header + bullets",

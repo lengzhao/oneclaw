@@ -111,12 +111,28 @@ func listMemoryMarkdownFiles(layout Layout) []string {
 	}
 	seen := make(map[string]struct{})
 	var files []string
+	rootClean := func(r string) string {
+		r = filepath.Clean(r)
+		if r == "." {
+			return r
+		}
+		return r
+	}
 	for _, root := range dirs {
+		r0 := rootClean(root)
 		_ = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 			if err != nil || d.IsDir() {
 				return nil
 			}
 			if !strings.EqualFold(filepath.Ext(path), ".md") {
+				return nil
+			}
+			rel, err := filepath.Rel(r0, path)
+			if err != nil {
+				return nil
+			}
+			// Skip rules entrypoint at each memory root (injected via AgentMdBlock); index all other .md files.
+			if !strings.Contains(rel, string(filepath.Separator)) && strings.EqualFold(filepath.Base(path), entrypointName) {
 				return nil
 			}
 			if _, ok := seen[path]; ok {

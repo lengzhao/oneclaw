@@ -31,19 +31,19 @@
 | **建议符号** | `memory.MaybePostTurnMaintain`（门控 + 节流） / `memory.RunPostTurnMaintain`（实际执行一次） |
 | **调用方** | `session.Engine` 在每轮成功 `SubmitUser` 后（与现有 `PostTurn` 写 daily log 之后衔接） |
 | **开关** | `features.disable_auto_maintenance` / `ONCLAW_DISABLE_AUTO_MAINTENANCE` **仅**控制此入口 |
-| **输入视野（当前实现）** | **仅当前回合**：**`PostTurnInput`** 快照（user / assistant / 工具轨迹与重复调用摘要）+ **`MEMORY.md` 摘录**（去重）；**不**读 daily log、**不**读 project topic。门控：`ONCLAW_POST_TURN_MAINTENANCE_MIN_LOG_BYTES` 作用于快照总字节（见 `docs/config.md`） |
-| **输出（当前实现）** | 仍写同一 `## Auto-maintained (日期)`；审计 **`post_turn_maintain`**；日志 **`pathway=post_turn`** |
+| **输入视野（当前实现）** | **仅当前回合**：**`PostTurnInput`** 快照（user / assistant / 工具轨迹与重复调用摘要）+ **规则 `MEMORY.md` 摘录**（去重语料）；**不**读 daily log、**不**读 project topic。门控：`ONCLAW_POST_TURN_MAINTENANCE_MIN_LOG_BYTES` 作用于快照总字节（见 `docs/config.md`） |
+| **输出（当前实现）** | 写入 **`<project>/memory/YYYY-MM-DD.md`** 内 `## Auto-maintained (日期)` 段（**不**向根上 `MEMORY.md` 追加 episodic）；审计 **`post_turn_maintain`**；日志 **`pathway=post_turn`** |
 
 ### 2.2 定时维护（远场 / dream 取向）
 
 | 项 | 约定 |
 |----|------|
-| **产品语义** | **跨会话、跨天**的整体整理：去重/合并、更新或收紧规则、标注过时并由新事实**取代**；面向 `MEMORY.md` 与 topic 的**整体一致性**，而非单回合增量。 |
+| **产品语义** | **跨会话、跨天**的整体整理：去重/合并、更新或收紧**规则**（根上 `MEMORY.md`）、标注过时并由新事实**取代**；面向 **episodic 日文件**、规则 `MEMORY.md` 与 topic 的**整体一致性**，而非单回合增量。 |
 | **建议符号** | `memory.RunScheduledMaintain`（单次蒸馏）；`maintainloop` / `cmd/maintain` 只调此入口 |
 | **调用方** | 主进程内嵌 interval 循环、`cmd/maintain`、未来独立 job |
 | **开关** | **`features.disable_scheduled_maintenance`** / **`ONCLAW_DISABLE_SCHEDULED_MAINTENANCE`**（后台：进程内 loop + `cmd/maintain` 间隔；**不**挡 **`maintain -once`**） |
 | **输入视野（当前实现）** | **interval 定时**：daily log **增量**（行时间戳 + `scheduled_maintain_state.json` 高水位；首次 lookback = interval）。**`-once` 或 `Interval==0`**：按 `ONCLAW_MAINTENANCE_LOG_DAYS` 做日历天 **log 体量探测**；正文由 Agent 经 **`opts.ToolRegistry` 只读工具**（如 `read_file` / `grep` / `glob` / `list_dir`）自读，user prompt 给绝对路径与任务说明。`ToolRegistry==nil` 则跳过远场。字节门控见 `docs/config.md` |
-| **输出（当前实现）** | `## Auto-maintained (日期)`；审计 **`scheduled_maintain`**；**scheduled** system 模板；user prompt 强调 consolidation / supersede |
+| **输出（当前实现）** | 同上，合并写入 **`<project>/memory/YYYY-MM-DD.md`**；审计 **`scheduled_maintain`**；**scheduled** system 模板；user prompt 强调 consolidation / supersede |
 
 ### 2.3 与「写 daily log」的关系
 
@@ -68,20 +68,20 @@
 
 ### 3.1 允许共享（库内部）
 
-- 文件路径解析、`MEMORY.md` 物理追加、bullet 级去重、审计 `AppendMemoryAudit` 的底层辅助。
+- 文件路径解析、**episodic 日文件**合并写入、bullet 级去重、审计 `AppendMemoryAudit` 的底层辅助。
 - `ResolveMaintenanceModel` 可拆为 **PostTurn** 与 **Scheduled** 两套包装函数，或各入口内联清晰条件，避免一个 `scheduled bool` 贯穿全包。
 
 ### 3.2 已分路径的细节
 
 - **数据抓取范围**：**`distillConfig`**（post-turn vs scheduled）。
-- **回合后近场**：**`PostTurnInput`** → **Current turn snapshot**（含 **tools** 与 **repeated_in_this_turn**；`ONCLAW_POST_TURN_MAINTAIN_*_SNAPSHOT_BYTES` 截断）；外加 **MEMORY.md 前缀**；**不**拼接 daily log / topic。
+- **回合后近场**：**`PostTurnInput`** → **Current turn snapshot**（含 **tools** 与 **repeated_in_this_turn**；`ONCLAW_POST_TURN_MAINTAIN_*_SNAPSHOT_BYTES` 截断）；外加 **规则 `MEMORY.md` 前缀**；**不**拼接 daily log / topic。
 - **System 模板**：**`prompts.NameMaintenanceSystemPostTurn`** / **`NameMaintenanceSystemScheduled`**。
-- **门控条件**：当日若已有 `## Auto-maintained (YYYY-MM-DD)`，**不跳过**维护运行；模型输出与当日块 **合并**（去重、保留旧条 + 新条），写回时 **替换**该日 span，避免重复标题段。
+- **门控条件**：当日 episodic 文件中若已有 `## Auto-maintained (YYYY-MM-DD)`，**不跳过**维护运行；模型输出与当日块 **合并**（去重、保留旧条 + 新条），写回时 **替换**该日 span，避免重复标题段。
 - **待续**：定时路径 **transcript** 窄读、**工具**白名单。
 
 ### 3.3 并发
 
-两入口可能同进程交错执行：须 **全局互斥或单 worker** 序列化「会写 `MEMORY.md` / topic 的维护临界区」，避免与主会话其它写 memory 工具竞态（与 [embedded-maintain-scheduler-design.md](embedded-maintain-scheduler-design.md) §4 一致）。
+两入口可能同进程交错执行：须 **全局互斥或单 worker** 序列化「会写 **episodic 日文件** / topic /（工具侧）规则 `MEMORY.md` 的维护临界区」，避免与主会话其它写 memory 工具竞态（与 [embedded-maintain-scheduler-design.md](embedded-maintain-scheduler-design.md) §4 一致）。
 
 ---
 

@@ -25,6 +25,8 @@ func TestMainThreadSystemRender(t *testing.T) {
 	for _, sub := range []string{
 		"# Intro",
 		"# System",
+		"# Rules precedence",
+		"# agentMd",
 		"# Doing tasks",
 		"## Task list (persisted)",
 		"tasks.json",

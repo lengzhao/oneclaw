@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-func buildScheduledToolUserPrompt(layout Layout, memPath string, p distillConfig, statePath, digestHeader, dateStr string, sameDayDigest bool) string {
+func buildScheduledToolUserPrompt(layout Layout, rulesMemPath, episodePath string, p distillConfig, statePath, digestHeader, dateStr string, sameDayDigest bool) string {
 	autoAbs := filepath.Clean(layout.Auto)
 	projMemAbs := filepath.Clean(layout.Project)
 	todayLog := filepath.Clean(DailyLogPath(layout.Auto, dateStr))
@@ -37,7 +37,6 @@ func buildScheduledToolUserPrompt(layout Layout, memPath string, p distillConfig
 		}
 	}
 
-	agentRoot := filepath.Join(layout.CWD, AgentInstructionsFile)
 	agentDot := filepath.Join(layout.CWD, DotDir, AgentInstructionsFile)
 	dialogDay := filepath.Clean(filepath.Join(layout.CWD, DotDir, "memory", dateStr, "dialog_history.json"))
 	workingT := filepath.Clean(filepath.Join(layout.CWD, DotDir, "working_transcript.json"))
@@ -45,39 +44,42 @@ func buildScheduledToolUserPrompt(layout Layout, memPath string, p distillConfig
 
 	sameDayNote := ""
 	if sameDayDigest {
-		sameDayNote = "There is already a **" + digestHeader + "** section for today in MEMORY.md. Your output will be **merged** into it: use the **exact** same first line, then **only net-new or updated** durable bullets (paraphrases of existing same-day lines are redundant).\n\n"
+		sameDayNote = "There is already a **" + digestHeader + "** section for today in the **episodic digest file** (see path below). Your output will be **merged** into it: use the **exact** same first line, then **only net-new or updated** durable bullets (paraphrases of existing same-day lines are redundant).\n\n"
 	}
 
 	return fmt.Sprintf(
 		"%s%s"+
 			"You are in **scheduled / far-field** memory maintenance. Use **read_file**, **grep**, **glob**, and **list_dir** "+
-			"to inspect project memory and **auto daily logs**, then consolidate into MEMORY.md.\n\n"+
-			"**Allowed tools only** (read-only): `read_file`, `grep`, `glob`, `list_dir`. "+
-			"Do **not** call write_file, bash, run_agent, fork_context, cron, task_*, invoke_skill, or any mutating tool.\n\n"+
+			"to inspect project memory and **auto daily logs**. Your **final assistant message** is merged into the **episodic digest** file for today (path below). **`MEMORY.md` holds project rules only** (loaded every turn like AGENT); put **durable episodic facts** in the digest, not in MEMORY.md.\n\n"+
+			"**Allowed tools:** `read_file`, `grep`, `glob`, `list_dir`, and **`write_behavior_policy`** only when durable **instructions** need updating — "+
+			"**`<cwd>/.oneclaw/AGENT.md`**, **`<cwd>/.oneclaw/rules/*.md`**, **`<cwd>/.oneclaw/skills/<name>/SKILL.md`**, **`MEMORY.md`** rules (target `memory`; full-file replace of rules only). "+
+			"Do **not** call `write_file`, bash, run_agent, fork_context, cron, task_*, invoke_skill, or any other tool.\n\n"+
 			"**Paths (absolute):**\n"+
 			"- Auto memory root (daily logs live under `logs/YYYY/MM/YYYY-MM-DD.md`): `%s`\n"+
 			"- Today's daily log file: `%s`\n"+
-			"- Project MEMORY.md: `%s`\n"+
+			"- Project **rules** (`MEMORY.md`): `%s`\n"+
+			"- Today's **episodic digest** (your output is merged here): `%s`\n"+
 			"- Project topic markdown files (*.md except MEMORY.md): directory `%s`\n"+
-			"- Behavior instructions (read if present; do **not** invent content you did not read): `%s` or `%s`\n"+
+			"- Project agent instructions (read if present; do **not** invent content you did not read): `%s`\n"+
 			"- Session dialog JSON for calendar day **%s** (slim user/assistant turns): `%s`\n"+
 			"- Working model transcript, optional (tool rows + byte-budget compact recaps): `%s`\n"+
 			"- Cumulative slim transcript, optional: `%s`\n\n"+
 			"%s"+
-			"**Task:** Read what you need via tools. Merge duplicates, update stale rules, and capture durable facts across sessions. "+
+			"**Task:** Read what you need via tools. Merge duplicates and capture durable **episodic** facts into the digest file. "+
+			"For **standing rules** (how the agent should behave), prefer **`.oneclaw/AGENT.md`**, **rules**, **skills**, or **`MEMORY.md`** via `write_behavior_policy` — keep MEMORY.md compact. "+
 			"Be **terse**: one short sentence per bullet; **do not** paste long paths unless the path itself is the fact; **do not** claim a file exists unless you read it successfully.\n\n"+
 			"**Final assistant message (markdown only):** first line must be **exactly**:\n%s\n\n"+
-			"Then **3–8** bullet lines of **new** or **updated** durable facts, merged rules, or explicit notes that **supersede** stale MEMORY.md lines. "+
-			"Skip pure duplicates of what is already correct in MEMORY.md or topics (paraphrases count). "+
+			"Then **3–8** bullet lines of **new** or **updated** durable **episodic** facts (or explicit notes that obsolete prior digest bullets). "+
+			"Skip pure duplicates of what is already correct in the rules file, today's digest, or topics (paraphrases count). "+
 			"If nothing needs changing, a single line: \"- (no durable entries)\". No preamble before the header; no extra sections after the bullets.",
 		timeHint,
 		sameDayNote,
 		autoAbs,
 		todayLog,
-		filepath.Clean(memPath),
+		filepath.Clean(rulesMemPath),
+		filepath.Clean(episodePath),
 		projMemAbs,
-		agentRoot,
-		agentDot,
+		filepath.Clean(agentDot),
 		dateStr,
 		dialogDay,
 		workingT,

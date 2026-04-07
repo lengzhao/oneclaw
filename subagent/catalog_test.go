@@ -54,3 +54,15 @@ Custom explore body.
 		t.Fatalf("system: %q", d.SystemPrompt)
 	}
 }
+
+func TestPromptCatalogLines_byteBudget(t *testing.T) {
+	cat := LoadCatalog(t.TempDir())
+	lines := cat.PromptCatalogLines(500)
+	if len(lines) < 2 {
+		t.Fatalf("expected at least built-in agents, got %d lines", len(lines))
+	}
+	tight := cat.PromptCatalogLines(30)
+	if len(tight) > len(lines) {
+		t.Fatalf("tighter budget should not yield more lines")
+	}
+}

@@ -7,7 +7,7 @@ import (
 
 // maintenancePromptData mirrors memory.MaintainPromptData (avoid import cycle in this package test).
 type maintenancePromptData struct {
-	CWD, Today, MemoryPath, RunTS string
+	CWD, Today, MemoryPath, RulesMemoryPath, RunTS string
 }
 
 func TestRenderCompactEnvelope(t *testing.T) {
@@ -51,7 +51,9 @@ func TestRenderUnknownTemplate(t *testing.T) {
 
 func TestRenderMaintenanceData(t *testing.T) {
 	d := maintenancePromptData{
-		CWD: "/p", Today: "2026-01-01", MemoryPath: "/p/MEMORY.md", RunTS: "2026-01-01T00:00:00Z",
+		CWD: "/p", Today: "2026-01-01",
+		MemoryPath: "/p/.oneclaw/memory/2026-01-01.md", RulesMemoryPath: "/p/.oneclaw/memory/MEMORY.md",
+		RunTS: "2026-01-01T00:00:00Z",
 	}
 	got, err := Render(NameMaintenanceSystemPostTurn, d)
 	if err != nil {
@@ -64,8 +66,8 @@ func TestRenderMaintenanceData(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(got2, "consolidation") {
-		t.Fatalf("scheduled template missing consolidation: %q", got2)
+	if !strings.Contains(got2, "scheduled") || !strings.Contains(got2, "far-field") {
+		t.Fatalf("scheduled template missing scope: %q", got2)
 	}
 	if !strings.Contains(got2, "dialog_history.json") {
 		t.Fatalf("scheduled template missing session paths: %q", got2)

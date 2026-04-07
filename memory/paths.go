@@ -89,6 +89,21 @@ func ProjectMemoryDir(cwd string) string {
 	return filepath.Join(cwd, DotDir, "memory")
 }
 
+// ProjectMemoryMdPath returns <cwd>/.oneclaw/memory/MEMORY.md (project entrypoint).
+func ProjectMemoryMdPath(cwd string) string {
+	return filepath.Join(ProjectMemoryDir(cwd), entrypointName)
+}
+
+// ProjectEpisodeDailyPath returns <cwd>/.oneclaw/memory/YYYY-MM-DD.md (dateStr at least 10 chars).
+// Auto-maintained episodic digests live next to MEMORY.md; recall includes these files and skips MEMORY.md at the root.
+func ProjectEpisodeDailyPath(cwd, dateYYYYMMDD string) string {
+	dateYYYYMMDD = strings.TrimSpace(dateYYYYMMDD)
+	if len(dateYYYYMMDD) >= 10 {
+		dateYYYYMMDD = dateYYYYMMDD[:10]
+	}
+	return filepath.Join(ProjectMemoryDir(cwd), dateYYYYMMDD+".md")
+}
+
 // AgentMemoryDir returns the on-disk directory for an agent type and scope.
 func AgentMemoryDir(cwd, memoryBase, agentType string, scope AgentScope) string {
 	dir := sanitizeDirName(agentType)
@@ -199,15 +214,16 @@ func (l Layout) AuditWriteRoots() []string {
 	}
 	add(filepath.Join(l.CWD, DotDir, "rules"))
 	add(filepath.Join(l.MemoryBase, "rules"))
+	add(filepath.Join(l.CWD, DotDir, "skills"))
+	add(filepath.Join(l.MemoryBase, "skills"))
 	return out
 }
 
 // IsBehaviorPolicyFile reports whether abs is one of the canonical AGENT.md locations
-// (project root, project .oneclaw, or user memory base).
+// (project `.oneclaw/AGENT.md` or user memory base `~/.oneclaw/AGENT.md`).
 func (l Layout) IsBehaviorPolicyFile(abs string) bool {
 	abs = filepath.Clean(abs)
 	candidates := []string{
-		filepath.Join(l.CWD, AgentInstructionsFile),
 		filepath.Join(l.CWD, DotDir, AgentInstructionsFile),
 		filepath.Join(l.MemoryBase, AgentInstructionsFile),
 	}
@@ -245,31 +261,42 @@ func (l Layout) WriteRoots() []string {
 	return out
 }
 
-// defaultAgentMdStub is written when neither project-root nor .oneclaw AGENT.md exists.
+// defaultAgentMdStub is written when `<cwd>/.oneclaw/AGENT.md` is missing and there is no legacy root AGENT.md to migrate.
 const defaultAgentMdStub = `# Agent instructions
 
 Durable behavior rules for this agent in this repository. Edit freely.
 
 - Prefer accurate, tool-grounded answers; avoid guessing when data is missing.
 
-(This file was created automatically because neither AGENT.md at the project root nor .oneclaw/AGENT.md existed.)
+(This file was created automatically because .oneclaw/AGENT.md did not exist.)
 `
 
-// EnsureDefaultAgentMd creates `<cwd>/.oneclaw/AGENT.md` when no canonical AGENT.md is present.
+// EnsureDefaultAgentMd ensures `<cwd>/.oneclaw/AGENT.md` exists: migrates legacy root `AGENT.md` into `.oneclaw/` when the latter is missing, otherwise writes a stub.
 func EnsureDefaultAgentMd(l Layout) {
 	if l.CWD == "" {
 		return
 	}
-	root := filepath.Join(l.CWD, AgentInstructionsFile)
-	if st, err := os.Stat(root); err == nil && !st.IsDir() {
-		return
-	}
-	dot := filepath.Join(l.CWD, DotDir, AgentInstructionsFile)
+	dotDir := filepath.Join(l.CWD, DotDir)
+	dot := filepath.Join(dotDir, AgentInstructionsFile)
 	if st, err := os.Stat(dot); err == nil && !st.IsDir() {
 		return
 	}
-	if err := os.MkdirAll(filepath.Join(l.CWD, DotDir), 0o755); err != nil {
-		slog.Warn("memory.agent_md.mkdir", "path", filepath.Join(l.CWD, DotDir), "err", err)
+	root := filepath.Join(l.CWD, AgentInstructionsFile)
+	if err := os.MkdirAll(dotDir, 0o755); err != nil {
+		slog.Warn("memory.agent_md.mkdir", "path", dotDir, "err", err)
+		return
+	}
+	if st, err := os.Stat(root); err == nil && !st.IsDir() {
+		raw, rerr := os.ReadFile(root)
+		if rerr != nil {
+			slog.Warn("memory.agent_md.migrate_read", "path", root, "err", rerr)
+			return
+		}
+		if err := os.WriteFile(dot, raw, 0o644); err != nil {
+			slog.Warn("memory.agent_md.migrate_write", "path", dot, "err", err)
+			return
+		}
+		slog.Info("memory.agent_md.migrated_from_root", "from", root, "to", dot)
 		return
 	}
 	if err := os.WriteFile(dot, []byte(defaultAgentMdStub), 0o644); err != nil {

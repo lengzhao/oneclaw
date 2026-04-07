@@ -17,31 +17,34 @@ import (
 
 const maxBehaviorPolicyBytes = 128 * 1024
 
+const skillEntryFile = "SKILL.md"
+
 var ruleNamePattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]*$`)
 
-// WriteBehaviorPolicyTool writes durable behavior rules to `.oneclaw/rules/*.md` or canonical AGENT.md paths only.
+// WriteBehaviorPolicyTool writes scoped project files under the session cwd only: rules, skills, AGENT.md, or project MEMORY.md (no user-global paths).
 type WriteBehaviorPolicyTool struct{}
 
 func (WriteBehaviorPolicyTool) Name() string          { return "write_behavior_policy" }
 func (WriteBehaviorPolicyTool) ConcurrencySafe() bool { return false }
 
 func (WriteBehaviorPolicyTool) Description() string {
-	return "Write behavior rules or agent instructions to allowed locations only: " +
-		"a markdown file under `<cwd>/.oneclaw/rules/`, or project `AGENT.md`, or `<cwd>/.oneclaw/AGENT.md`, " +
-		"or user `~/.oneclaw/AGENT.md`. Use for persistent policies you want injected on future turns. " +
-		"Targets: `project_rule` (requires rule_name, .md), `project_agent_md`, `dot_oneclaw_agent_md`, `user_agent_md`."
+	return "Write scoped project files under the **current working directory** only: " +
+		"`<cwd>/.oneclaw/rules/*.md`, `<cwd>/.oneclaw/AGENT.md`, `<cwd>/.oneclaw/skills/<name>/SKILL.md`, `<cwd>/.oneclaw/memory/MEMORY.md`. " +
+		"Targets: `rule`, `skill`, `agent_md`, `memory` (rule_name for rule/skill only; omit for agent_md and memory). " +
+		"Target `memory` replaces the **entire** project MEMORY.md (**standing rules only**); episodic facts belong in `.oneclaw/memory/YYYY-MM-DD.md` (maintenance merges there). Use `memory` only when intentionally rewriting rules."
 }
 
 func (WriteBehaviorPolicyTool) Parameters() openai.FunctionParameters {
 	return objectSchema(map[string]any{
 		"target": map[string]any{
 			"type":        "string",
-			"description": "project_rule | project_agent_md | dot_oneclaw_agent_md | user_agent_md",
-			"enum":        []string{"project_rule", "project_agent_md", "dot_oneclaw_agent_md", "user_agent_md"},
+			"description": "rule | skill | agent_md | memory",
+			"enum":        []string{"rule", "skill", "agent_md", "memory"},
 		},
 		"rule_name": map[string]any{
-			"type":        "string",
-			"description": "For project_rule only: file name such as editing.md (letters, digits, ._-; .md added if missing)",
+			"type": "string",
+			"description": "For `rule`: file name such as editing.md. For `skill`: skill directory name (e.g. my-skill). " +
+				"Empty for `agent_md` or `memory`.",
 		},
 		"content": map[string]any{
 			"type":        "string",
@@ -55,12 +58,27 @@ func behaviorPolicyWriteDisabled() bool {
 	return v == "1" || strings.EqualFold(v, "true") || strings.EqualFold(v, "yes")
 }
 
-func resolveBehaviorPolicyPath(cwd, home, target, ruleName string) (string, error) {
+func validatedSkillStem(ruleName string) (string, error) {
+	name := strings.TrimSpace(ruleName)
+	if name == "" {
+		return "", fmt.Errorf("rule_name is required")
+	}
+	base := filepath.Base(name)
+	if base != name || strings.Contains(name, "..") {
+		return "", fmt.Errorf("invalid rule_name")
+	}
+	if !ruleNamePattern.MatchString(name) {
+		return "", fmt.Errorf("rule_name has invalid characters")
+	}
+	return name, nil
+}
+
+func resolveBehaviorPolicyPath(cwd, target, ruleName string) (string, error) {
 	switch target {
-	case "project_rule":
+	case "rule":
 		name := strings.TrimSpace(ruleName)
 		if name == "" {
-			return "", fmt.Errorf("rule_name is required for project_rule")
+			return "", fmt.Errorf("rule_name is required for rule")
 		}
 		base := filepath.Base(name)
 		if base != name || strings.Contains(name, "..") {
@@ -78,15 +96,16 @@ func resolveBehaviorPolicyPath(cwd, home, target, ruleName string) (string, erro
 		}
 		dir := filepath.Join(cwd, memory.DotDir, "rules")
 		return filepath.Join(dir, name), nil
-	case "project_agent_md":
-		return filepath.Join(cwd, memory.AgentInstructionsFile), nil
-	case "dot_oneclaw_agent_md":
-		return filepath.Join(cwd, memory.DotDir, memory.AgentInstructionsFile), nil
-	case "user_agent_md":
-		if strings.TrimSpace(home) == "" {
-			return "", fmt.Errorf("user home directory is not available")
+	case "skill":
+		stem, err := validatedSkillStem(ruleName)
+		if err != nil {
+			return "", fmt.Errorf("skill: %w", err)
 		}
-		return filepath.Join(memory.MemoryBaseDir(home), memory.AgentInstructionsFile), nil
+		return filepath.Join(cwd, memory.DotDir, "skills", stem, skillEntryFile), nil
+	case "agent_md":
+		return filepath.Join(cwd, memory.DotDir, memory.AgentInstructionsFile), nil
+	case "memory":
+		return memory.ProjectMemoryMdPath(cwd), nil
 	default:
 		return "", fmt.Errorf("unknown target %q", target)
 	}
@@ -114,16 +133,20 @@ func (WriteBehaviorPolicyTool) Execute(_ context.Context, input json.RawMessage,
 	if !utf8.ValidString(content) {
 		return "", fmt.Errorf("content must be valid UTF-8")
 	}
+	target := strings.TrimSpace(in.Target)
+	if (target == "agent_md" || target == "memory") && strings.TrimSpace(in.RuleName) != "" {
+		return "", fmt.Errorf("rule_name must be empty for target %q", target)
+	}
 	home := tctx.HomeDir
 	if home == "" {
 		home, _ = os.UserHomeDir()
 	}
-	abs, err := resolveBehaviorPolicyPath(tctx.CWD, home, strings.TrimSpace(in.Target), in.RuleName)
+	abs, err := resolveBehaviorPolicyPath(tctx.CWD, target, in.RuleName)
 	if err != nil {
 		return "", err
 	}
 	lay := memory.DefaultLayout(tctx.CWD, home)
-	if err := validatePolicyPath(lay, abs, strings.TrimSpace(in.Target)); err != nil {
+	if err := validatePolicyPath(lay, abs, target); err != nil {
 		return "", err
 	}
 	if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
@@ -140,14 +163,29 @@ func (WriteBehaviorPolicyTool) Execute(_ context.Context, input json.RawMessage,
 func validatePolicyPath(lay memory.Layout, abs, target string) error {
 	abs = filepath.Clean(abs)
 	switch target {
-	case "project_rule":
+	case "rule":
 		rulesDir := filepath.Clean(filepath.Join(lay.CWD, memory.DotDir, "rules"))
 		if !memory.PathUnderRoot(abs, rulesDir) {
 			return fmt.Errorf("internal error: rule path outside .oneclaw/rules")
 		}
-	case "project_agent_md", "dot_oneclaw_agent_md", "user_agent_md":
-		if !lay.IsBehaviorPolicyFile(abs) {
+	case "skill":
+		skillsRoot := filepath.Clean(filepath.Join(lay.CWD, memory.DotDir, "skills"))
+		if !memory.PathUnderRoot(abs, skillsRoot) || filepath.Base(abs) != skillEntryFile {
+			return fmt.Errorf("internal error: skill path outside .oneclaw/skills or wrong file")
+		}
+		rel, err := filepath.Rel(skillsRoot, filepath.Dir(abs))
+		if err != nil || rel == "." || strings.Contains(rel, "..") || strings.Contains(rel, string(filepath.Separator)) {
+			return fmt.Errorf("internal error: skill must be <cwd>/.oneclaw/skills/<name>/SKILL.md")
+		}
+	case "agent_md":
+		want := filepath.Clean(filepath.Join(lay.CWD, memory.DotDir, memory.AgentInstructionsFile))
+		if abs != want {
 			return fmt.Errorf("internal error: agent path mismatch")
+		}
+	case "memory":
+		want := filepath.Clean(memory.ProjectMemoryMdPath(lay.CWD))
+		if abs != want {
+			return fmt.Errorf("internal error: memory entrypoint path mismatch")
 		}
 	default:
 		return fmt.Errorf("unknown target %q", target)

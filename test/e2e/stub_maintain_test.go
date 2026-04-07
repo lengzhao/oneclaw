@@ -3,7 +3,6 @@ package e2e_test
 import (
 	"context"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -13,7 +12,7 @@ import (
 	"github.com/lengzhao/oneclaw/test/openaistub"
 )
 
-// E2E-92 模型化维护：回合结束后近场维护（Current turn 快照），第二次 stub 请求写回 project MEMORY.md。
+// E2E-92 模型化维护：回合结束后近场维护（Current turn 快照），第二次 stub 请求写回 project `.oneclaw/memory/YYYY-MM-DD.md`。
 func TestE2E_92_AutoMaintenanceAppends(t *testing.T) {
 	stub := openaistub.New(t)
 	stub.Enqueue(openaistub.CompletionStop("", "main turn ok"))
@@ -36,10 +35,10 @@ func TestE2E_92_AutoMaintenanceAppends(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	memPath := filepath.Join(cwd, memory.DotDir, "memory", "MEMORY.md")
-	raw, err := os.ReadFile(memPath)
+	epPath := memory.ProjectEpisodeDailyPath(cwd, date)
+	raw, err := os.ReadFile(epPath)
 	if err != nil {
-		t.Fatalf("read MEMORY.md: %v", err)
+		t.Fatalf("read episodic digest: %v", err)
 	}
 	if !strings.Contains(string(raw), "E2E92_MAINTAIN_MARKER") {
 		t.Fatalf("expected maintainer marker in:\n%s", string(raw))

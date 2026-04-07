@@ -9,8 +9,8 @@ import (
 	"github.com/lengzhao/oneclaw/memory"
 )
 
-// E2E-20 project MEMORY.md 出现在 BuildTurn 的 system 后缀中（公开 API 子切面）
-func TestE2E_20_MemoryMDInSystemSuffix(t *testing.T) {
+// E2E-20 project MEMORY.md（规则）出现在 BuildTurn 的 AgentMdBlock 中
+func TestE2E_20_MemoryMDInAgentMdBlock(t *testing.T) {
 	home := t.TempDir()
 	cwd := t.TempDir()
 	e2eIsolateUserMemory(t, home)
@@ -22,12 +22,12 @@ func TestE2E_20_MemoryMDInSystemSuffix(t *testing.T) {
 		t.Fatal(err)
 	}
 	b := memory.BuildTurn(lay, home, "hi", nil, 0)
-	if !strings.Contains(b.SystemSuffix, "E2E20_IDX_MARKER") {
-		t.Fatalf("system suffix missing marker:\n%s", b.SystemSuffix)
+	if !strings.Contains(b.AgentMdBlock, "E2E20_IDX_MARKER") {
+		t.Fatalf("agent md block missing marker:\n%s", b.AgentMdBlock)
 	}
 }
 
-// E2E-21 MEMORY.md 行数截断含 WARNING
+// E2E-21 MEMORY.md 行数截断含 WARNING（注入 AgentMdBlock）
 func TestE2E_21_MemoryMDLineTruncationWarning(t *testing.T) {
 	home := t.TempDir()
 	cwd := t.TempDir()
@@ -45,12 +45,12 @@ func TestE2E_21_MemoryMDLineTruncationWarning(t *testing.T) {
 		t.Fatal(err)
 	}
 	b := memory.BuildTurn(lay, home, "hi", nil, 0)
-	if !strings.Contains(b.SystemSuffix, "WARNING") || !strings.Contains(b.SystemSuffix, "lines") {
-		t.Fatalf("expected line-cap warning in:\n%s", b.SystemSuffix)
+	if !strings.Contains(b.AgentMdBlock, "WARNING") || !strings.Contains(b.AgentMdBlock, "lines") {
+		t.Fatalf("expected line-cap warning in:\n%s", b.AgentMdBlock)
 	}
 }
 
-// E2E-22 MEMORY.md 字节截断含 WARNING
+// E2E-22 MEMORY.md 字节截断含 WARNING（注入 AgentMdBlock）
 func TestE2E_22_MemoryMDByteTruncationWarning(t *testing.T) {
 	home := t.TempDir()
 	cwd := t.TempDir()
@@ -66,8 +66,8 @@ func TestE2E_22_MemoryMDByteTruncationWarning(t *testing.T) {
 		t.Fatal(err)
 	}
 	b := memory.BuildTurn(lay, home, "hi", nil, 0)
-	if !strings.Contains(b.SystemSuffix, "WARNING") {
-		t.Fatalf("expected byte-cap warning in:\n%s", b.SystemSuffix)
+	if !strings.Contains(b.AgentMdBlock, "WARNING") {
+		t.Fatalf("expected byte-cap warning in:\n%s", b.AgentMdBlock)
 	}
 }
 

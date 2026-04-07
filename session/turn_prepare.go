@@ -15,13 +15,14 @@ import (
 // sharedTurnPrep is the common substrate for SubmitUser and submitLocalSlashTurn:
 // tool context, memory bundle, system prompt string, subagent runner, and optional outbound emitter.
 type sharedTurnPrep struct {
-	tctx   *toolctx.Context
-	bg     budget.Global
-	memOK  bool
-	layout memory.Layout
-	bundle memory.TurnBundle
-	em     *routing.Emitter
-	system string
+	tctx    *toolctx.Context
+	bg      budget.Global
+	memOK   bool
+	layout  memory.Layout
+	bundle  memory.TurnBundle
+	em      *routing.Emitter
+	system  string
+	catalog *subagent.Catalog
 }
 
 // prepareSharedTurn builds tctx, memory recall/agent blocks, ResolveTurnSink + Emitter, buildTurnSystem, and subRunner.
@@ -56,8 +57,9 @@ func (e *Engine) prepareSharedTurn(ctx context.Context, in routing.Inbound, prev
 	if sink != nil {
 		p.em = routing.NewEmitter(sink, e.SessionID, "")
 	}
-	p.system = e.buildTurnSystem(p.memOK, p.bundle, p.bg, home, herr)
 	cat := subagent.LoadCatalog(e.CWD)
+	p.catalog = cat
+	p.system = e.buildTurnSystem(p.memOK, p.bundle, p.bg, home, herr, cat)
 	p.tctx.Subagent = &subRunner{eng: e, turnSystem: p.system, catalog: cat, bg: p.bg}
 	return p, nil
 }

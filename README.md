@@ -32,7 +32,7 @@ go run ./cmd/oneclaw
 
 常用 REPL 命令：`/exit` 退出。对话落盘依赖配置中的 transcript 路径及每轮成功结束后的自动保存（见上段）；另存副本请用外部工具复制该文件。
 
-**Memory 维护**（将 daily log 蒸馏进 `MEMORY.md` 等）：**回合后**由 `MaybePostTurnMaintain`（`disable_auto_maintenance`）；**定时**由 **`RunScheduledMaintain`** —— 合并 YAML 里 **`maintain.interval` 非空** 时主进程内 **`maintainloop`** 周期唤醒，**或** **`oneclaw -maintain-once`** / **`cmd/maintain`**（`-interval` / `-once`）。关闭后台定时（不挡单次维护）：`features.disable_scheduled_maintenance` / `ONCLAW_DISABLE_SCHEDULED_MAINTENANCE`。详见 [`docs/config.md`](docs/config.md)、[`docs/memory-maintain-dual-entry-design.md`](docs/memory-maintain-dual-entry-design.md)。
+**Memory 维护**：**回合后**由 `MaybePostTurnMaintain`（`disable_auto_maintenance`）；**定时**由 **`RunScheduledMaintain`** —— 将可整理要点写入 **`<cwd>/.oneclaw/memory/YYYY-MM-DD.md`**；**`<cwd>/.oneclaw/memory/MEMORY.md`** 仅作**规则**（与 `AGENT.md` 类似，进 prompt），不由维护追加大块 episodic 正文。合并 YAML 里 **`maintain.interval` 非空** 时主进程内 **`maintainloop`** 周期唤醒，**或** **`oneclaw -maintain-once`** / **`cmd/maintain`**（`-interval` / `-once`）。关闭后台定时（不挡单次维护）：`features.disable_scheduled_maintenance` / `ONCLAW_DISABLE_SCHEDULED_MAINTENANCE`。详见 [`docs/config.md`](docs/config.md)、[`docs/memory-maintain-dual-entry-design.md`](docs/memory-maintain-dual-entry-design.md)。
 
 ```bash
 go run ./cmd/oneclaw -cwd . -maintain-once
@@ -59,7 +59,7 @@ go run ./cmd/oneclaw -cwd . -maintain-once
 ## 「自我学习 / 进化」在仓库里的含义
 
 1. **文件型记忆平面**持续更新：`MEMORY.md` 索引、topic、daily log（先追加、后整理）。
-2. **规则与策略**可持久化到 `AGENT.md`、`.oneclaw/rules/*.md`、agent 专属 memory。
+2. **规则与策略**可持久化到 `.oneclaw/AGENT.md`、`.oneclaw/rules/*.md`、agent 专属 memory。
 3. **维护型子任务**（**`MaybePostTurnMaintain`** + **`RunScheduledMaintain`** / **`oneclaw -maintain-once`** / [`cmd/maintain`](cmd/maintain)，见 [`docs/memory-maintain-dual-entry-design.md`](docs/memory-maintain-dual-entry-design.md)）整理日志与既有 memory。
 4. **护栏**：全局 prompt 字节预算、工具权限收缩、memory 写入审计（append-only JSONL 等）。
 
@@ -217,7 +217,7 @@ YAML 与用户/项目/`-config` 合并、以及 `ApplyEnvDefaults` 与 `ONCLAW_*
 详见 [`docs/todo.md`](docs/todo.md) 中「目标导向：自我进化闭环」：
 
 - 多段 daily log 整理、topic 合并与强去重  
-- **行为策略写回**：`write_behavior_policy` 工具与 D2 审计扩展（见 `docs/config.md`）  
+- **行为策略写回**：`write_behavior_policy`（由定时远场维护等专用 tool registry 提供，非默认主会话工具）与 D2 审计扩展（见 `docs/config.md`）  
 - 可选：侧链摘要合入主会话、向量 recall 插件  
 
 ---

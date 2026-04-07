@@ -1,14 +1,15 @@
-package subagent
+package subagent_test
 
 import (
 	"testing"
 
+	"github.com/lengzhao/oneclaw/subagent"
 	"github.com/lengzhao/oneclaw/tools/builtin"
 )
 
 func TestFilterRegistry_allowlist(t *testing.T) {
 	parent := builtin.DefaultRegistry()
-	f, err := FilterRegistry(parent, []string{"read_file", "grep"})
+	f, err := subagent.FilterRegistry(parent, []string{"read_file", "grep"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -22,7 +23,7 @@ func TestFilterRegistry_allowlist(t *testing.T) {
 
 func TestWithoutMetaTools(t *testing.T) {
 	parent := builtin.DefaultRegistry()
-	out, err := WithoutMetaTools(parent, "run_agent", "fork_context")
+	out, err := subagent.WithoutMetaTools(parent, "run_agent", "fork_context")
 	if err != nil {
 		t.Fatal(err)
 	}

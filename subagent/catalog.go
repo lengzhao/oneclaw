@@ -1,12 +1,21 @@
 package subagent
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 )
+
+const maxAgentListingDescRunes = 120
+
+// RunAgentToolDescriptionBase is the static OpenAI tool description for run_agent (agent list lives in the main system prompt).
+const RunAgentToolDescriptionBase = `Run a named sub-agent with its own short-lived context and tool surface. ` +
+	`Built-in types: general-purpose, explore. ` +
+	`Add markdown definitions under .oneclaw/agents/*.md (YAML frontmatter: agent_type, description, tools, max_turns). ` +
+	`Set inherit_context true to prepend a trimmed copy of the parent message list (still no mutation of the main transcript).`
 
 // Catalog maps agent_type -> definition (user files override builtins with same name).
 type Catalog struct {
@@ -75,6 +84,62 @@ func (c *Catalog) ListNames() []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+func listingDescForAgent(def Definition) string {
+	desc := strings.TrimSpace(def.Description)
+	if desc == "" {
+		desc = "(no description in frontmatter)"
+	}
+	runes := []rune(desc)
+	if len(runes) > maxAgentListingDescRunes {
+		desc = string(runes[:maxAgentListingDescRunes-1]) + "…"
+	}
+	return desc
+}
+
+func catalogLineFull(def Definition) string {
+	return fmt.Sprintf("- **%s** — %s", def.AgentType, listingDescForAgent(def))
+}
+
+func catalogLineNameOnly(def Definition) string {
+	return fmt.Sprintf("- **%s**", def.AgentType)
+}
+
+// PromptCatalogLines returns markdown bullet lines for the main-thread system prompt (byte budget, UTF-8 length).
+func (c *Catalog) PromptCatalogLines(maxBytes int) []string {
+	if c == nil || maxBytes <= 0 {
+		return nil
+	}
+	names := c.ListNames()
+	if len(names) == 0 {
+		return nil
+	}
+	var lines []string
+	used := 0
+	for _, n := range names {
+		def, ok := c.Get(n)
+		if !ok {
+			continue
+		}
+		full := catalogLineFull(def)
+		short := catalogLineNameOnly(def)
+		var pick string
+		switch {
+		case used+len(full)+1 <= maxBytes:
+			pick = full
+		case used+len(short)+1 <= maxBytes:
+			pick = short
+		default:
+			return lines
+		}
+		if len(lines) > 0 {
+			used++
+		}
+		used += len(pick)
+		lines = append(lines, pick)
+	}
+	return lines
 }
 
 func builtinDefinitions() []Definition {

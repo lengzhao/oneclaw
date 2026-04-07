@@ -25,7 +25,7 @@ const (
 	pathwayScheduled maintainPathway = "scheduled"
 )
 
-// maintainPipelineMu serializes distill passes that append to MEMORY.md (and read inputs they use).
+// maintainPipelineMu serializes distill passes that write project episodic digests and read inputs they use.
 var maintainPipelineMu sync.Mutex
 
 type distillConfig struct {
@@ -100,13 +100,13 @@ type ScheduledMaintainOpts struct {
 	// and caps/overlap from ONCLAW_MAINTENANCE_INCREMENTAL_* (see docs/config.md).
 	// When Interval <= 0 or opts is nil, uses legacy calendar mode: ONCLAW_MAINTENANCE_LOG_DAYS.
 	Interval time.Duration
-	// ToolRegistry must register read-only tools (e.g. builtin.ScheduledMaintainReadRegistry). Required for far-field runs;
+	// ToolRegistry must register far-field tools (e.g. builtin.ScheduledMaintainReadRegistry: reads + write_behavior_policy). Required for far-field runs;
 	// nil skips scheduled maintenance with a log line (avoids memory importing tools/builtin).
 	ToolRegistry *tools.Registry
 }
 
-// RunScheduledMaintain runs the scheduled / far-field distill: a **multi-step agent** with read-only tools
-// (read_file, grep, glob_file_search, list_dir) to inspect daily logs and project memory, then emit markdown.
+// RunScheduledMaintain runs the scheduled / far-field distill: a **multi-step agent** with read tools
+// (read_file, grep, glob, list_dir) plus scoped **write_behavior_policy** when needed, then emits markdown merged into **.oneclaw/memory/YYYY-MM-DD.md** (rules stay in MEMORY.md).
 // Use from oneclaw -maintain-once, cmd/maintain, embedded interval workers, or jobs. Does not consult disable_auto_maintenance.
 // Pass opts.Interval when the caller runs on a fixed period (incremental time-window hints + state file).
 // Serialized with RunPostTurnMaintain via maintainPipelineMu.
@@ -188,9 +188,13 @@ func runDistill(ctx context.Context, layout Layout, client *openai.Client, p dis
 	runTS := time.Now().UTC().Format(time.RFC3339)
 	dateStr := time.Now().Format("2006-01-02")
 	digestHeader := "## Auto-maintained (" + dateStr + ")"
-	memPath := filepath.Join(layout.Project, entrypointName)
+	rulesPath := filepath.Join(layout.Project, entrypointName)
+	episodePath := ProjectEpisodeDailyPath(layout.CWD, dateStr)
 
-	existingBytes, _ := os.ReadFile(memPath)
+	rulesBytes, _ := os.ReadFile(rulesPath)
+	rulesContent := string(rulesBytes)
+
+	existingBytes, _ := os.ReadFile(episodePath)
 	existing := string(existingBytes)
 	spanStart, spanEnd, hadTodayDigest := findSameDayAutoMaintainedSpan(existing, dateStr)
 
@@ -202,7 +206,7 @@ func runDistill(ctx context.Context, layout Layout, client *openai.Client, p dis
 
 	var userPrompt string
 	if p.pathway == pathwayPostTurn {
-		prev := existing
+		prev := rulesContent
 		mprev := p.memoryPreviewBytes
 		if mprev <= 0 {
 			mprev = 8000
@@ -219,19 +223,20 @@ func runDistill(ctx context.Context, layout Layout, client *openai.Client, p dis
 			logPathwaySkip(p.pathway, "turn_snapshot_too_small", "snapshot_bytes", len(postTurnSnap), "min", p.minLogBytes)
 			return
 		}
-		scopeHint := "This is a **post-turn / near-field** pass: **only** the **Current turn snapshot** below plus the MEMORY excerpt (for dedupe). " +
-			"Facts, rules, cautions, tool usage, **repeated tool calls** (reasons only if visible in this turn). " +
+		scopeHint := "This is a **post-turn / near-field** pass: **only** the **Current turn snapshot** below plus the **project MEMORY.md rules excerpt** (for dedupe against standing rules). " +
+			"Facts, cautions, tool usage, **repeated tool calls** (reasons only if visible in this turn). " +
+			"Episodic output is written to the daily digest file (see system prompt), not into MEMORY.md. " +
 			"No daily logs or project topics are included. "
 		turnBlock := "Current turn snapshot (current session only):\n```\n" + postTurnSnap + "\n```\n\n"
-		taskBody := "Then **3–8** short bullet lines (one sentence each; **no** long paragraphs or redundant absolute paths) of **new** durable information from **this turn only** (facts, rules, cautions, tool-usage preferences, repeated tool calls and why **only** if stated or clearly implied in the snapshot). " +
-			"Skip anything already in the MEMORY.md excerpt (paraphrases count as duplicates). " +
+		taskBody := "Then **3–8** short bullet lines (one sentence each; **no** long paragraphs or redundant absolute paths) of **new** durable **episodic** information from **this turn only** (facts, cautions, tool-usage preferences, repeated tool calls and why **only** if stated or clearly implied in the snapshot). " +
+			"Skip anything already in the rules excerpt (paraphrases count as duplicates). " +
 			"If nothing new remains for this turn, a single line: \"- (no durable entries)\". No other sections."
 		sameDayNote := ""
 		if hadTodayDigest {
 			sameDayNote = "Note: **" + digestHeader + "** already exists for today; your bullets will be **merged** into that section (deduped). Use the **exact** same first line, then only **new** durable lines from this turn.\n\n"
 		}
 		userPrompt = fmt.Sprintf(
-			"%s%s%sProject MEMORY.md excerpt (may be empty; use only to avoid duplicating existing bullets):\n```\n%s\n```\n\n"+
+			"%s%s%sProject MEMORY.md **rules** excerpt (may be empty; use only to avoid duplicating standing rules):\n```\n%s\n```\n\n"+
 				"Task: Output markdown only. First line must be exactly:\n%s\n\n%s",
 			scopeHint, sameDayNote, turnBlock, prev, digestHeader, taskBody,
 		)
@@ -255,7 +260,7 @@ func runDistill(ctx context.Context, layout Layout, client *openai.Client, p dis
 			logPathwaySkip(p.pathway, "daily_logs_too_small", "days", p.logDays, "raw_bytes", rawIncluded, "min", p.minLogBytes)
 			return
 		}
-		userPrompt = buildScheduledToolUserPrompt(layout, memPath, p, incrementalStatePath, digestHeader, dateStr, hadTodayDigest)
+		userPrompt = buildScheduledToolUserPrompt(layout, rulesPath, episodePath, p, incrementalStatePath, digestHeader, dateStr, hadTodayDigest)
 	}
 
 	tctx := toolctx.New(layout.CWD, runCtx)
@@ -287,7 +292,7 @@ func runDistill(ctx context.Context, layout Layout, client *openai.Client, p dis
 	cfg := loop.Config{
 		Client:      client,
 		Model:       model,
-		System:      maintenanceSystemPromptForPathway(p.pathway, layout.CWD, memPath, dateStr, runTS),
+		System:      maintenanceSystemPromptForPathway(p.pathway, layout.CWD, episodePath, rulesPath, dateStr, runTS),
 		MaxTokens:   mt,
 		MaxSteps:    maxSteps,
 		Messages:    &msgs,
@@ -309,11 +314,15 @@ func runDistill(ctx context.Context, layout Layout, client *openai.Client, p dis
 		slog.Warn("memory.maintain.missing_header", "model", model, "pathway", p.pathway, "preview", utf8SafePrefix(out, 120))
 		return
 	}
-	withoutToday := existing
+	episodicSansToday := existing
 	if hadTodayDigest {
-		withoutToday = existing[:spanStart] + existing[spanEnd:]
+		episodicSansToday = existing[:spanStart] + existing[spanEnd:]
 	}
-	out = dedupeMaintenanceBullets(out, withoutToday)
+	dedupeCorpus := rulesContent
+	if strings.TrimSpace(episodicSansToday) != "" {
+		dedupeCorpus = rulesContent + "\n" + episodicSansToday
+	}
+	out = dedupeMaintenanceBullets(out, dedupeCorpus)
 	if maintenanceSectionOnlyNoDurable(out) {
 		persistScheduledMaintainSuccess(incrementalStatePath, p)
 		slog.Info("memory.maintain.skip", "reason", "no_new_facts_after_dedupe", "date", dateStr, "pathway", p.pathway,
@@ -321,7 +330,7 @@ func runDistill(ctx context.Context, layout Layout, client *openai.Client, p dis
 			"section_bytes", len(out), "bullets", countMaintenanceBullets(out), "preview", utf8SafePrefix(out, 1024))
 		return
 	}
-	merged := mergeSameDayAutoMaintainedBlocks(existing[spanStart:spanEnd], out, digestHeader, withoutToday)
+	merged := mergeSameDayAutoMaintainedBlocks(existing[spanStart:spanEnd], out, digestHeader, dedupeCorpus)
 	if maintenanceSectionOnlyNoDurable(merged) {
 		persistScheduledMaintainSuccess(incrementalStatePath, p)
 		slog.Info("memory.maintain.skip", "reason", "merge_no_net_bullets", "date", dateStr, "pathway", p.pathway)
@@ -329,15 +338,15 @@ func runDistill(ctx context.Context, layout Layout, client *openai.Client, p dis
 	}
 	if hadTodayDigest && strings.TrimSpace(merged) == strings.TrimSpace(existing[spanStart:spanEnd]) {
 		persistScheduledMaintainSuccess(incrementalStatePath, p)
-		slog.Info("memory.maintain.unchanged", "path", memPath, "date", dateStr, "pathway", p.pathway)
+		slog.Info("memory.maintain.unchanged", "path", episodePath, "date", dateStr, "pathway", p.pathway)
 		return
 	}
 	auditSrc := AuditSourceScheduledMaintain
 	if p.pathway == pathwayPostTurn {
 		auditSrc = AuditSourcePostTurnMaintain
 	}
-	if err := writeMergedOrAppendMaintenanceSection(layout, memPath, hadTodayDigest, spanStart, spanEnd, existing, merged, auditSrc); err != nil {
-		slog.Warn("memory.maintain.write_failed", "path", memPath, "pathway", p.pathway, "err", err)
+	if err := writeMergedOrAppendMaintenanceSection(layout, episodePath, hadTodayDigest, spanStart, spanEnd, existing, merged, auditSrc); err != nil {
+		slog.Warn("memory.maintain.write_failed", "path", episodePath, "pathway", p.pathway, "err", err)
 		return
 	}
 	persistScheduledMaintainSuccess(incrementalStatePath, p)
@@ -346,7 +355,7 @@ func runDistill(ctx context.Context, layout Layout, client *openai.Client, p dis
 		logMsg = "memory.maintain.merged"
 	}
 	slog.Info(logMsg,
-		"path", memPath,
+		"path", episodePath,
 		"date", dateStr,
 		"model", model,
 		"pathway", p.pathway,

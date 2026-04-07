@@ -36,12 +36,16 @@ func TestE2E_10_UserAgentMdInjected(t *testing.T) {
 	}
 }
 
-// E2E-11 项目根 AGENT.md
-func TestE2E_11_ProjectRootAgentMd(t *testing.T) {
+// E2E-11 项目 `.oneclaw/AGENT.md` 注入（不再使用仓库根 AGENT.md）
+func TestE2E_11_ProjectOneclawAgentMd(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	cwd := t.TempDir()
-	if err := os.WriteFile(filepath.Join(cwd, memory.AgentInstructionsFile), []byte("E2E11_ROOT_MARKER\n"), 0o644); err != nil {
+	dot := filepath.Join(cwd, memory.DotDir)
+	if err := os.MkdirAll(dot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dot, memory.AgentInstructionsFile), []byte("E2E11_PROJECT_MARKER\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	stub := openaistub.New(t)
@@ -52,7 +56,7 @@ func TestE2E_11_ProjectRootAgentMd(t *testing.T) {
 	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "ping"}); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(concatUserText(e.Messages), "E2E11_ROOT_MARKER") {
+	if !strings.Contains(concatUserText(e.Messages), "E2E11_PROJECT_MARKER") {
 		t.Fatal(concatUserText(e.Messages))
 	}
 }
@@ -116,10 +120,18 @@ func TestE2E_14_WalkUpOrderChildAfterParent(t *testing.T) {
 	if err := os.MkdirAll(child, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(parent, memory.AgentInstructionsFile), []byte("E2E14_PARENT\n"), 0o644); err != nil {
+	pDot := filepath.Join(parent, memory.DotDir)
+	cDot := filepath.Join(child, memory.DotDir)
+	if err := os.MkdirAll(pDot, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(child, memory.AgentInstructionsFile), []byte("E2E14_CHILD\n"), 0o644); err != nil {
+	if err := os.MkdirAll(cDot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(pDot, memory.AgentInstructionsFile), []byte("E2E14_PARENT\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cDot, memory.AgentInstructionsFile), []byte("E2E14_CHILD\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	stub := openaistub.New(t)
@@ -146,7 +158,11 @@ func TestE2E_15_MemoryDisabledNoAgentInject(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	cwd := t.TempDir()
-	if err := os.WriteFile(filepath.Join(cwd, memory.AgentInstructionsFile), []byte("E2E15_SHOULD_NOT_APPEAR\n"), 0o644); err != nil {
+	dot := filepath.Join(cwd, memory.DotDir)
+	if err := os.MkdirAll(dot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dot, memory.AgentInstructionsFile), []byte("E2E15_SHOULD_NOT_APPEAR\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	stub := openaistub.New(t)

@@ -89,13 +89,13 @@ func TestE2E_101_PostTurnMaintainPromptSessionOnly(t *testing.T) {
 		}
 	}
 
-	memPath := filepath.Join(memDir, "MEMORY.md")
-	raw, err := os.ReadFile(memPath)
+	epPath := memory.ProjectEpisodeDailyPath(cwd, date)
+	raw, err := os.ReadFile(epPath)
 	if err != nil {
-		t.Fatalf("read MEMORY.md: %v", err)
+		t.Fatalf("read episodic digest: %v", err)
 	}
 	if !strings.Contains(string(raw), "E2E101_NEW_FACT") {
-		t.Fatalf("expected new fact in MEMORY.md:\n%s", string(raw))
+		t.Fatalf("expected new fact in daily digest:\n%s", string(raw))
 	}
 }
 
@@ -153,14 +153,17 @@ func TestE2E_113_ScheduledMaintainPromptToolOrientedPaths(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse maintain request: %v", err)
 	}
-	memPath := filepath.Join(memDir, "MEMORY.md")
+	rulesMem := filepath.Join(memDir, "MEMORY.md")
+	epPath := memory.ProjectEpisodeDailyPath(cwd, date)
 	todayLog := filepath.Clean(memory.DailyLogPath(lay.Auto, date))
 	for _, sub := range []string{
 		"far-field",
 		"read_file",
+		"write_behavior_policy",
 		filepath.Clean(lay.Auto),
 		todayLog,
-		filepath.Clean(memPath),
+		filepath.Clean(rulesMem),
+		filepath.Clean(epPath),
 		filepath.Clean(lay.Project),
 	} {
 		if !strings.Contains(maintainUser, sub) {
@@ -180,16 +183,16 @@ func TestE2E_113_ScheduledMaintainPromptToolOrientedPaths(t *testing.T) {
 		}
 	}
 
-	raw, err := os.ReadFile(memPath)
+	raw, err := os.ReadFile(epPath)
 	if err != nil {
-		t.Fatalf("read MEMORY.md: %v", err)
+		t.Fatalf("read episodic digest: %v", err)
 	}
 	if !strings.Contains(string(raw), "E2E103_NEW_FACT") {
-		t.Fatalf("expected new fact in MEMORY.md:\n%s", string(raw))
+		t.Fatalf("expected new fact in daily digest:\n%s", string(raw))
 	}
 }
 
-// E2E-102 维护强去重：MEMORY.md 已有同义 bullet 时，维护输出全被去重则不再追加 Auto-maintained 段。
+// E2E-102 维护强去重：规则 MEMORY.md 已有同义 bullet 时，维护输出全被去重则不再写入 episodic 段。
 func TestE2E_102_MaintainDedupeSkipsAppendWhenNoNewBullets(t *testing.T) {
 	stub := openaistub.New(t)
 	stub.Enqueue(openaistub.CompletionStop("", "main e2e102"))

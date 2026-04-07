@@ -66,7 +66,7 @@ func TestE2E_33_RecallTotalByteBudget(t *testing.T) {
 	keyword := "budcap_e2e_33_kw"
 	for i := 0; i < 6; i++ {
 		body := strings.Repeat("x", 3500) + "\n" + keyword + "\n"
-		p := filepath.Join(memDir, fmt.Sprintf("f%d.md", i))
+		p := filepath.Join(memDir, fmt.Sprintf("budcap_f%d.md", i))
 		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
 			t.Fatal(err)
 		}

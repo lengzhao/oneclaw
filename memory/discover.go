@@ -40,7 +40,6 @@ func DiscoverProjectInstructions(cwd string) []InstructionChunk {
 	var out []InstructionChunk
 	for i := len(chain) - 1; i >= 0; i-- {
 		dir := chain[i]
-		out = append(out, loadInstructionPath(filepath.Join(dir, AgentInstructionsFile), KindProject)...)
 		out = append(out, loadInstructionPath(filepath.Join(dir, DotDir, AgentInstructionsFile), KindProject)...)
 		out = append(out, walkRulesMD(filepath.Join(dir, DotDir, "rules"), KindProject)...)
 	}

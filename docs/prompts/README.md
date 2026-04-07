@@ -66,6 +66,11 @@
 
 ---
 
+## oneclaw（本仓库）主线程补充
+
+- 委派 Agent 目录与编排约定：见仓库根目录 [orchestrator-business-agents.md](../orchestrator-business-agents.md)。
+- 模板文件：`prompts/templates/main_thread_system.tmpl`（`# Delegated agents (run_agent)` 段）。
+
 ## 关键源码入口
 
 - 主线程 system prompt：`src/constants/prompts.ts`

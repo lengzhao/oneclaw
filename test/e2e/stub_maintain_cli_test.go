@@ -76,7 +76,7 @@ func repoRoot(t *testing.T) string {
 	}
 }
 
-// E2E-96 oneclaw -maintain-once：子进程 + stub，一轮蒸馏写入 project MEMORY.md
+// E2E-96 oneclaw -maintain-once：子进程 + stub，一轮蒸馏写入 project `.oneclaw/memory/YYYY-MM-DD.md`
 func TestE2E_96_MaintainCLIOnce(t *testing.T) {
 	stub := openaistub.New(t)
 	date := time.Now().Format("2006-01-02")
@@ -111,10 +111,10 @@ func TestE2E_96_MaintainCLIOnce(t *testing.T) {
 		t.Fatalf("oneclaw -maintain-once: %v\n%s", err, out)
 	}
 
-	memPath := filepath.Join(cwd, memory.DotDir, "memory", "MEMORY.md")
-	raw, err := os.ReadFile(memPath)
+	epPath := memory.ProjectEpisodeDailyPath(cwd, date)
+	raw, err := os.ReadFile(epPath)
 	if err != nil {
-		t.Fatalf("MEMORY.md: %v", err)
+		t.Fatalf("episodic digest: %v", err)
 	}
 	if !strings.Contains(string(raw), "E2E96_CLI_MAINTAIN_MARKER") {
 		t.Fatalf("expected marker in:\n%s", string(raw))

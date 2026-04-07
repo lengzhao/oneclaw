@@ -17,15 +17,15 @@
 | E2E-04 | 写后读（write → read） | [x] | `TestE2E_04_WriteThenRead` · `stub_session_test.go` |
 | E2E-05 | Abort（ctx cancel） | [x] | `TestE2E_05_AbortCanceledContext` · `stub_session_test.go` |
 | E2E-10 | 用户级 `~/.oneclaw/AGENT.md` 注入 | [x] | `TestE2E_10_UserAgentMdInjected` · `stub_memory_engine_test.go` |
-| E2E-11 | 项目根 `AGENT.md` | [x] | `TestE2E_11_ProjectRootAgentMd` · `stub_memory_engine_test.go` |
+| E2E-11 | 项目 `.oneclaw/AGENT.md`（不再读仓库根 `AGENT.md`） | [x] | `TestE2E_11_ProjectOneclawAgentMd` · `stub_memory_engine_test.go` |
 | E2E-12 | 仅 `.oneclaw/AGENT.md` | [x] | `TestE2E_12_DotOneclawAgentMdOnly` · `stub_memory_engine_test.go` |
 | E2E-13 | `.oneclaw/rules/*.md` | [x] | `TestE2E_13_DotOneclawRules` · `stub_memory_engine_test.go` |
 | E2E-14 | 目录向上遍历优先级 | [x] | `TestE2E_14_WalkUpOrderChildAfterParent` · `stub_memory_engine_test.go` |
 | E2E-15 | `ONCLAW_DISABLE_MEMORY=1` 关闭注入 | [x] | `TestE2E_15_MemoryDisabledNoAgentInject` · `stub_memory_engine_test.go` |
 | E2E-16 | `HOME` 不可用时的降级 | [x] | `TestE2E_16_NoHomeDegradesGracefully` · `stub_memory_engine_test.go` |
-| E2E-20 | `MEMORY.md` 索引出现在 system/上下文 | [x] | `TestE2E_20_MemoryMDInSystemSuffix` · `stub_memory_bundle_test.go`（`BuildTurn`） |
-| E2E-21 | `MEMORY.md` 行数截断 + WARNING | [x] | `TestE2E_21_MemoryMDLineTruncationWarning` · `stub_memory_bundle_test.go` |
-| E2E-22 | `MEMORY.md` 字节截断 + WARNING | [x] | `TestE2E_22_MemoryMDByteTruncationWarning` · `stub_memory_bundle_test.go` |
+| E2E-20 | 规则 `MEMORY.md` 出现在 `BuildTurn` 的 `AgentMdBlock`（与 AGENT 同级注入） | [x] | `TestE2E_20_MemoryMDInAgentMdBlock` · `stub_memory_bundle_test.go` |
+| E2E-21 | 规则 `MEMORY.md` 行数截断 + WARNING（`AgentMdBlock`） | [x] | `TestE2E_21_MemoryMDLineTruncationWarning` · `stub_memory_bundle_test.go` |
+| E2E-22 | 规则 `MEMORY.md` 字节截断 + WARNING（`AgentMdBlock`） | [x] | `TestE2E_22_MemoryMDByteTruncationWarning` · `stub_memory_bundle_test.go` |
 | E2E-30 | recall 命中关键词 | [x] | `TestE2E_30_RecallHit` · `stub_memory_engine_test.go` |
 | E2E-31 | recall 未命中无附件 | [x] | `TestE2E_31_RecallMissNoAttachment` · `stub_memory_engine_test.go` |
 | E2E-32 | recall 同路径会话内去重 | [x] | `TestE2E_32_RecallPathDedupSecondTurn` · `stub_recall_more_test.go` |
@@ -45,17 +45,17 @@
 | E2E-82 | 未知工具名 tool_result | [x] | `TestE2E_82_UnknownToolName` · `stub_negative_test.go` |
 | E2E-90 | `run_agent` 子循环 + sidechain 落盘 | [x] | `TestE2E_StubRunAgentNested` · `stub_subagent_test.go` |
 | E2E-91 | `fork_context` 共享 system | [x] | `TestE2E_StubForkContext` · `stub_subagent_test.go` |
-| E2E-92 | 默认模型维护追加 MEMORY.md（测试中显式放开 `ONCLAW_DISABLE_AUTO_MAINTENANCE`） | [x] | `TestE2E_92_AutoMaintenanceAppends` · `stub_maintain_test.go` |
+| E2E-92 | 近场维护写入 `memory/YYYY-MM-DD.md`（测试中显式放开 `ONCLAW_DISABLE_AUTO_MAINTENANCE`） | [x] | `TestE2E_92_AutoMaintenanceAppends` · `stub_maintain_test.go` |
 | E2E-93 | Memory 审计：daily log 追加后 `memory-write.jsonl` 含 `daily_log_line` | [x] | `TestE2E_93_MemoryAuditDailyLog` · `stub_audit_test.go` |
 | E2E-94 | `ONCLAW_DISABLE_MEMORY_AUDIT=1` 不写审计文件 | [x] | `TestE2E_94_MemoryAuditDisabledNoFile` · `stub_audit_test.go` |
 | E2E-95 | `write_file` 写 project memory 根时审计含 `write_file` | [x] | `TestE2E_95_MemoryAuditWriteFileUnderMemoryRoot` · `stub_audit_test.go` |
-| E2E-96 | `oneclaw -maintain-once` 子进程 + stub 写回 MEMORY.md | [x] | `TestE2E_96_MaintainCLIOnce` · `stub_maintain_cli_test.go` |
+| E2E-96 | `oneclaw -maintain-once` 子进程 + stub 写回当日 `memory/YYYY-MM-DD.md` | [x] | `TestE2E_96_MaintainCLIOnce` · `stub_maintain_cli_test.go` |
 | E2E-97 | `oneclaw -init` 子进程写入项目 `config.yaml` | [x] | `TestE2E_97_OneclawInitWritesProjectConfig` · `stub_maintain_cli_test.go` |
 | E2E-98 | turn-log 按日分文件；无工具时仍有 `assistant_final` 一行 | [x] | `TestE2E_98_TurnLogAssistantFinalWithoutTools` · `stub_turn_log_test.go` |
 | E2E-99 | `ONCLAW_DISABLE_TURN_LOG=1` 不写 turn-log 文件 | [x] | `TestE2E_99_TurnLogDisabledNoFile` · `stub_turn_log_test.go` |
 | E2E-100 | 每工具一行 `kind=tool` + 回合末 `kind=assistant_final` | [x] | `TestE2E_100_TurnLogToolThenAssistantFinal` · `stub_turn_log_test.go` |
-| E2E-101 | 近场维护：第 2 次请求仅含 Current turn 快照 + MEMORY 摘录；不含 daily log / topic | [x] | `TestE2E_101_PostTurnMaintainPromptSessionOnly` · `stub_maintain_pipeline_e2e_test.go` |
-| E2E-102 | 维护强去重：与 `MEMORY.md` 重复的 bullet 被剥后不落盘 | [x] | `TestE2E_102_MaintainDedupeSkipsAppendWhenNoNewBullets` · `stub_maintain_pipeline_e2e_test.go` |
+| E2E-101 | 近场维护：第 2 次请求仅含 Current turn 快照 + 规则 `MEMORY.md` 摘录；不含 daily log / topic；写回当日 episodic 日文件 | [x] | `TestE2E_101_PostTurnMaintainPromptSessionOnly` · `stub_maintain_pipeline_e2e_test.go` |
+| E2E-102 | 维护强去重：规则 `MEMORY.md` 已有同义 bullet 时 episodic 不落 `## Auto-maintained` | [x] | `TestE2E_102_MaintainDedupeSkipsAppendWhenNoNewBullets` · `stub_maintain_pipeline_e2e_test.go` |
 | E2E-103 | 语义 compact：预算裁剪时首条 chat 请求 user 文本含 `compact_boundary` | [x] | `TestE2E_103_SemanticCompactInChatRequest` · `stub_semantic_compact_e2e_test.go` |
 | E2E-104 | `ONCLAW_DISABLE_SEMANTIC_COMPACT=1` 时首请求 user 侧无 `compact_boundary` | [x] | `TestE2E_104_SemanticCompactDisabledNoBoundaryTag` · `stub_semantic_compact_e2e_test.go` |
 | E2E-105 | Skills：首轮请求 system 含 `## Skills` 与技能名/描述 | [x] | `TestE2E_105_SkillsIndexInSystemPrompt` · `stub_skills_e2e_test.go` |
@@ -68,6 +68,7 @@
 | E2E-113 | `/help` 本地斜杠不调用模型 | [x] | `TestE2E_113_SlashHelpSkipsModel` · `stub_inbound_orchestration_e2e_test.go` |
 | E2E-114 | `Inbound` meta + 附件进入 user 历史 | [x] | `TestE2E_114_InboundMetaAndAttachmentInHistory` · `stub_inbound_orchestration_e2e_test.go` |
 | E2E-115 | 空正文 + 附件合法 | [x] | `TestE2E_115_EmptyTextWithAttachmentAccepted` · `stub_inbound_orchestration_e2e_test.go` |
+| E2E-116 | Delegated agents：system 含目录段；`run_agent` 工具为静态 description（目录不进工具定义） | [x] | `TestE2E_116_AgentCatalogInSystemAndRunAgentTool` · `stub_agents_catalog_e2e_test.go` |
 | E2E-113 | 远场 `RunScheduledMaintain`：stub 首次请求 user 为工具型说明（绝对路径），不内嵌 log/topic 全文；`opts.ToolRegistry` 为只读 builtin | [x] | `TestE2E_113_ScheduledMaintainPromptToolOrientedPaths` · `stub_maintain_pipeline_e2e_test.go` |
 
 ---
@@ -121,9 +122,9 @@
 - **步骤**：`SubmitUser` 一轮；stub 返回 `CompletionStop`，内容可带该标记或仅断言请求侧。
 - **期望**：注入的 user/meta 消息或 system 后缀中出现该标记（对 `Messages` 或 `memory.BuildTurn` 返回值断言）。
 
-### E2E-11 项目根 AGENT.md
+### E2E-11 项目 `.oneclaw/AGENT.md`
 
-- **前置**：`cwd/AGENT.md` 含 `E2E_MARKER_PROJ_ROOT`。
+- **前置**：`cwd/.oneclaw/AGENT.md` 含项目标记（根目录 `AGENT.md` 不参与注入）。
 - **期望**：注入中出现该标记。
 
 ### E2E-12 仅 `.oneclaw/AGENT.md`
@@ -138,12 +139,12 @@
 
 ### E2E-14 向上遍历优先级
 
-- **前置**：父目录与子目录各放不同 `AGENT.md` 标记；**cwd 为子目录**。
+- **前置**：父目录与子目录各放不同 `.oneclaw/AGENT.md` 标记；**cwd 为子目录**。
 - **期望**：**更靠近 cwd** 的规则在拼接结果中占优（顺序或覆盖语义与 `memory/discover.go` 一致）。
 
 ### E2E-15 关闭 memory
 
-- **前置**：同 E2E-11 文件布局；`t.Setenv("ONCLAW_DISABLE_MEMORY", "1")`。
+- **前置**：`cwd/.oneclaw/AGENT.md` 含不应出现的标记；`t.Setenv("ONCLAW_DISABLE_MEMORY", "1")`。
 - **期望**：注入中**无**项目标记。
 
 ### E2E-16 HOME 不可用
@@ -153,13 +154,13 @@
 
 ---
 
-## 3. MEMORY.md 与截断
+## 3. 规则 MEMORY.md 注入与截断
 
 ### E2E-20 / E2E-21 / E2E-22
 
-- **前置**：在某一 memory 根下放置 `MEMORY.md`（短文本 / >200 行 / 少行大字节）。
+- **前置**：在某一 memory 根下放置规则 `MEMORY.md`（短文本 / >200 行 / 少行大字节）。
 - **步骤**：开启 memory，`BuildTurn` 或完整 `SubmitUser`。
-- **期望**：system 后缀中出现索引片段；截断场景含 **WARNING** 子串（与 `memory/truncate.go` 一致）。
+- **期望**：`AgentMdBlock`（与 AGENT 同级）中出现规则摘录；截断场景含 **WARNING** 子串（与 `memory/truncate.go` 一致）。
 
 ---
 
@@ -167,7 +168,7 @@
 
 ### E2E-30～E2E-33
 
-- **前置**：memory 目录下 `.md` 含与用户问题重叠的词；或故意无重叠；或多样文件测总预算。
+- **前置**：memory 根下 `.md`（recall **不**索引根上 `MEMORY.md`；其它根级 `.md` 与日 digest 均可命中）含与用户问题重叠的词；或故意无重叠；或多样文件测总预算。
 - **步骤**：`BuildTurn`/`SubmitUser` 带特定 `userText`；同一 `RecallState` 多轮测 E2E-32。
 - **期望**：`Attachment: relevant_memories` 出现与否；路径去重；总长度上限。
 
@@ -229,13 +230,13 @@
 ### E2E-92
 
 - **前置**：`HOME` 与 cwd；memory 开启；`ONCLAW_DISABLE_AUTO_MAINTENANCE=0`（`e2eEnvWithMemory` 默认会关掉维护以免多耗 stub）；stub 连续两次 `CompletionStop`（主回合 + 维护回合）。
-- **期望**：`<cwd>/.oneclaw/memory/MEMORY.md` 含维护段标记。
+- **期望**：`<cwd>/.oneclaw/memory/YYYY-MM-DD.md` 含 `## Auto-maintained` 维护段。
 
 ### E2E-101～104、113（维护近/远场 + 语义 compact）
 
-- **E2E-101**：预写昨日 daily log 与 topic（用于干扰）；`SubmitUser` 后解析**第 2 次**维护请求：须含 `Current turn snapshot`、本轮 user/assistant 标记；**不得**含 `### Daily log`、昨日标记、topic 标记；`MEMORY.md` 含新 bullet。
-- **E2E-113**：`RunScheduledMaintain(..., &ScheduledMaintainOpts{ToolRegistry: builtin.ScheduledMaintainReadRegistry()})`（**按天 LOG_DAYS**，非增量）；预写昨日+今日 log 与 topic（供体量探测）；stub **首次**请求 user 须含 far-field / `read_file` 与 auto 根、今日 log、`MEMORY.md`、project memory 目录的**绝对路径**，且**不得**内嵌 log/topic 标记正文；写回 `MEMORY.md`。
-- **E2E-102**：预写 `MEMORY.md` 含与维护模型输出**同义**的 bullet；维护跑完后文件与种子**完全一致**（强去重后 `no_new_facts_after_dedupe`，不追加 `## Auto-maintained`）。
+- **E2E-101**：预写昨日 daily log 与 topic（用于干扰）；`SubmitUser` 后解析**第 2 次**维护请求：须含 `Current turn snapshot`、本轮 user/assistant 标记；**不得**含 `### Daily log`、昨日标记、topic 标记；当日 **`memory/YYYY-MM-DD.md`** 含新 bullet。
+- **E2E-113**（`stub_maintain_pipeline_e2e_test.go`）：`RunScheduledMaintain(..., &ScheduledMaintainOpts{ToolRegistry: builtin.ScheduledMaintainReadRegistry()})`（**按天 LOG_DAYS**，非增量）；预写昨日+今日 log 与 topic（供体量探测）；stub **首次**请求 user 须含 far-field / `read_file` / `write_behavior_policy` 与 auto 根、今日 log、**规则** `MEMORY.md`、**当日 digest 路径**、project memory 目录的**绝对路径**，且**不得**内嵌 log/topic 标记正文；写回当日 **`memory/YYYY-MM-DD.md`**。
+- **E2E-102**：预写规则 `MEMORY.md` 含与维护模型输出**同义**的 bullet；维护后 `MEMORY.md` 与种子一致，且**不**在当日 episodic 文件追加 `## Auto-maintained`（强去重 `no_new_facts_after_dedupe`）。
 - **E2E-103**：`e2eEnvMinimal` + `loop.RunTurn`；预置大量 user 消息 + 较小 `ONCLAW_MAX_PROMPT_BYTES`；**首次**请求的 user 拼接文本含 `compact_boundary`。
 - **E2E-104**：同 E2E-103 体量，但 `ONCLAW_DISABLE_SEMANTIC_COMPACT=1`；首次请求 user 文本**不含** `compact_boundary`（纯丢头裁剪）。
 
@@ -263,7 +264,7 @@
 ### E2E-96
 
 - **前置**：预写当日 daily log（定时路径读 log）；受 **`ONCLAW_MAINTENANCE_MIN_LOG_BYTES`** 等约束；stub 一次 `CompletionStop`（维护段 + 唯一标记）；`OPENAI_BASE_URL` 等由 `baseStubTransport` 注入；子进程 `HOME` 为 `t.TempDir()` 以隔离 memory layout。
-- **E2E-96**：`go build ./cmd/oneclaw` 后执行 `-cwd <tmp> -maintain-once`，期望 `MEMORY.md` 含标记。
+- **E2E-96**：`go build ./cmd/oneclaw` 后执行 `-cwd <tmp> -maintain-once`，期望当日 **`memory/YYYY-MM-DD.md`** 含维护标记。
 - **说明**：`go build` 子进程将 `HOME` 设为包 init 时保存的真实 HOME，避免模块缓存写入 `t.TempDir()` 导致只读文件清理失败。
 
 ### E2E-97
