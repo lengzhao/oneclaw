@@ -2,10 +2,13 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"log/slog"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"syscall"
 
 	"github.com/lengzhao/oneclaw/channel"
 	_ "github.com/lengzhao/oneclaw/channel/cli"
@@ -15,6 +18,7 @@ import (
 	"github.com/lengzhao/oneclaw/config"
 	"github.com/lengzhao/oneclaw/logx"
 	"github.com/lengzhao/oneclaw/maintainloop"
+	"github.com/lengzhao/oneclaw/mcpclient"
 	"github.com/lengzhao/oneclaw/memory"
 	"github.com/lengzhao/oneclaw/routing"
 	"github.com/lengzhao/oneclaw/session"
@@ -95,6 +99,7 @@ func main() {
 
 	eng.TranscriptPath = cfg.TranscriptPath()
 	eng.WorkingTranscriptPath = cfg.WorkingTranscriptPath()
+	eng.WorkingTranscriptMaxMessages = cfg.WorkingTranscriptMaxMessages()
 	if eng.TranscriptPath != "" {
 		if b, err := os.ReadFile(eng.TranscriptPath); err == nil {
 			if err := eng.LoadTranscript(b); err != nil {
@@ -126,7 +131,21 @@ func main() {
 		os.Exit(1)
 	}
 
-	rootCtx := context.Background()
+	rootCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	mcpMgr, mcpNote, err := mcpclient.RegisterIfEnabled(rootCtx, cfg, eng.Registry, absCwd)
+	if err != nil {
+		slog.Error("mcp.register", "err", err)
+		os.Exit(1)
+	}
+	if mcpMgr != nil {
+		defer func() { _ = mcpMgr.Close() }()
+	}
+	if mcpNote != "" {
+		eng.MCPSystemNote = mcpNote
+	}
+
 	maintainloop.Start(rootCtx, maintainloop.Params{
 		Interval:          cfg.EmbeddedScheduledMaintainInterval(),
 		Layout:            memory.DefaultLayout(absCwd, home),
@@ -138,7 +157,7 @@ func main() {
 	if _, err := channel.DefaultRegistry().StartAll(rootCtx, channel.Bootstrap{
 		Engine: eng,
 		Config: cfg,
-	}); err != nil {
+	}); err != nil && !errors.Is(err, context.Canceled) {
 		slog.Error("channel.start", "err", err)
 		os.Exit(1)
 	}

@@ -81,6 +81,30 @@ channels:
   #     prefixes: []
 
 # -----------------------------------------------------------------------------
+# MCP 工具（连接外部 MCP Server；需显式 enabled: true）
+# -----------------------------------------------------------------------------
+# mcp:
+#   enabled: true
+#   max_inline_text_runes: 16384
+#   servers:
+#     demo:
+#       enabled: true
+#       command: npx
+#       args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+#     # 远程 MCP（Streamable HTTP + SSE）：type 可省略（仅有 url 时默认 sse）
+#     # remote:
+#     #   enabled: true
+#     #   type: sse
+#     #   url: "https://example.com/mcp"
+#     #   headers:
+#     #     Authorization: "Bearer <token>"
+#     # 仅请求-响应、不需要独立 SSE 流时用 http（DisableStandaloneSSE）
+#     # remote_http:
+#     #   enabled: true
+#     #   type: http
+#     #   url: "https://example.com/mcp"
+
+# -----------------------------------------------------------------------------
 # 功能开关（true = 关闭对应功能）
 # -----------------------------------------------------------------------------
 features:

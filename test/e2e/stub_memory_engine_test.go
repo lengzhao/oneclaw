@@ -31,8 +31,16 @@ func TestE2E_10_UserAgentMdInjected(t *testing.T) {
 	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "ping"}); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(concatUserText(e.Messages), "E2E10_USER_MARKER") {
-		t.Fatalf("user context:\n%s", concatUserText(e.Messages))
+	bodies := stub.ChatRequestBodies()
+	if len(bodies) < 1 {
+		t.Fatal("expected chat request")
+	}
+	reqText, err := openaistub.ChatRequestUserTextConcat(bodies[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(reqText, "E2E10_USER_MARKER") {
+		t.Fatalf("first request user payload:\n%s", reqText)
 	}
 }
 
@@ -56,8 +64,16 @@ func TestE2E_11_ProjectOneclawAgentMd(t *testing.T) {
 	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "ping"}); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(concatUserText(e.Messages), "E2E11_PROJECT_MARKER") {
-		t.Fatal(concatUserText(e.Messages))
+	bodies := stub.ChatRequestBodies()
+	if len(bodies) < 1 {
+		t.Fatal("expected chat request")
+	}
+	reqText, err := openaistub.ChatRequestUserTextConcat(bodies[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(reqText, "E2E11_PROJECT_MARKER") {
+		t.Fatal(reqText)
 	}
 }
 
@@ -81,8 +97,16 @@ func TestE2E_12_DotOneclawAgentMdOnly(t *testing.T) {
 	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "ping"}); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(concatUserText(e.Messages), "E2E12_DOTONLY_MARKER") {
-		t.Fatal(concatUserText(e.Messages))
+	bodies := stub.ChatRequestBodies()
+	if len(bodies) < 1 {
+		t.Fatal("expected chat request")
+	}
+	reqText, err := openaistub.ChatRequestUserTextConcat(bodies[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(reqText, "E2E12_DOTONLY_MARKER") {
+		t.Fatal(reqText)
 	}
 }
 
@@ -106,8 +130,16 @@ func TestE2E_13_DotOneclawRules(t *testing.T) {
 	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "ping"}); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(concatUserText(e.Messages), "E2E13_RULE_MARKER") {
-		t.Fatal(concatUserText(e.Messages))
+	bodies := stub.ChatRequestBodies()
+	if len(bodies) < 1 {
+		t.Fatal("expected chat request")
+	}
+	reqText, err := openaistub.ChatRequestUserTextConcat(bodies[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(reqText, "E2E13_RULE_MARKER") {
+		t.Fatal(reqText)
 	}
 }
 
@@ -142,7 +174,14 @@ func TestE2E_14_WalkUpOrderChildAfterParent(t *testing.T) {
 	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "ping"}); err != nil {
 		t.Fatal(err)
 	}
-	text := concatUserText(e.Messages)
+	bodies := stub.ChatRequestBodies()
+	if len(bodies) < 1 {
+		t.Fatal("expected chat request")
+	}
+	text, err := openaistub.ChatRequestUserTextConcat(bodies[0])
+	if err != nil {
+		t.Fatal(err)
+	}
 	iP := strings.Index(text, "E2E14_PARENT")
 	iC := strings.Index(text, "E2E14_CHILD")
 	if iP < 0 || iC < 0 {
@@ -210,7 +249,14 @@ func TestE2E_30_RecallHit(t *testing.T) {
 	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "What about zebrarecall_e2e_30?"}); err != nil {
 		t.Fatal(err)
 	}
-	text := concatUserText(e.Messages)
+	bodies := stub.ChatRequestBodies()
+	if len(bodies) < 1 {
+		t.Fatal("expected chat request")
+	}
+	text, err := openaistub.ChatRequestUserTextConcat(bodies[0])
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !strings.Contains(text, "relevant_memories") || !strings.Contains(text, "zebrarecall_e2e_30") {
 		t.Fatalf("got:\n%s", text)
 	}

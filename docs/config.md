@@ -42,7 +42,7 @@
 | 模型 | `model` | 默认聊天模型；空则代码内默认 |
 | 传输 | `chat.transport` | `auto`（先流式、失败再非流式）、`non_stream`、`stream`；兼容网关仅支持非流式时建议 `non_stream` |
 | OpenAI 兼容 | `openai.api_key`、`openai.base_url`、`openai.org_id`、`openai.project_id` | `base_url` 需含 `/v1/` 后缀（若网关要求） |
-| 路径 | `paths.memory_base`、`paths.transcript`、`paths.working_transcript`、`paths.turn_log_path` | 相对路径相对 `-cwd` |
+| 路径 | `paths.memory_base`、`paths.transcript`、`paths.working_transcript`、`paths.working_transcript_max_messages`、`paths.turn_log_path` | 相对路径相对 `-cwd`；主线程在每轮成功 `RunTurn` 后把 **内存 `Messages`** 折叠为**用户可见**（去掉 agentMd / 路由 / recall / compact 注入与 tool 轮次等，与 Claude Code 发请求前的 compact/collapse 同类取舍）；`working_transcript` 与内存同形；`working_transcript_max_messages` 截尾部可见条数，`0` 默认 **30**，负数不限制 |
 | 预算 | `budget.*` | 见下表 |
 | 开关 | `features.disable_*` | `true` 为关闭；省略或 `false` 为开启 |
 | 维护 | `maintain.*` | 定时/远场/回合后参数；`maintain.interval` 非空时主进程内 `maintainloop` 周期唤醒 |
@@ -52,6 +52,7 @@
 | 调度睡眠 | `schedule.min_sleep`、`schedule.idle_sleep` | Agent 定时任务调度用 Go duration 字符串 |
 | 语义 compact | `semantic_compact.summary_max_bytes` | |
 | Skills | `skills.recent_path` | 可选覆盖 skills 最近列表路径 |
+| MCP | `mcp.enabled`、`mcp.servers.<name>.*` | 显式 `mcp.enabled: true` 后连接外部 MCP；`servers` 下每项 `enabled`、`command`+`args`（stdio）或 `url`+`type`（`sse`/`http`），可选 `env`、`env_file`、`headers`；工具以 `mcp_*` 前缀注册 |
 
 **`disable_scheduled_maintenance`**：关闭进程内 `maintainloop` 与 `cmd/maintain` 的 interval 循环；**不**影响 `oneclaw -maintain-once` / `maintain -once`。
 

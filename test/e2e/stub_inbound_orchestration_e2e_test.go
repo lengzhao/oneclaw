@@ -30,7 +30,7 @@ func TestE2E_113_SlashHelpSkipsModel(t *testing.T) {
 	}
 }
 
-// E2E-114 入站 meta + 附件进入 user 历史
+// E2E-114 入站 meta 进入首轮 API 请求；附件路径留在折叠后的 Messages（inbound 不常驻内存以省 token）
 func TestE2E_114_InboundMetaAndAttachmentInHistory(t *testing.T) {
 	stub := openaistub.New(t)
 	stub.Enqueue(openaistub.CompletionStop("", "ok"))
@@ -48,9 +48,20 @@ func TestE2E_114_InboundMetaAndAttachmentInHistory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	bodies := stub.ChatRequestBodies()
+	if len(bodies) < 1 {
+		t.Fatal("expected chat request")
+	}
+	reqText, err := openaistub.ChatRequestUserTextConcat(bodies[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(reqText, "<inbound-context>") || !strings.Contains(reqText, "session_key:") {
+		t.Fatalf("missing inbound meta in first request:\n%s", reqText)
+	}
 	s := concatUserText(e.Messages)
-	if !strings.Contains(s, "<inbound-context>") || !strings.Contains(s, "session_key:") {
-		t.Fatalf("missing inbound meta in:\n%s", s)
+	if strings.Contains(s, "<inbound-context>") {
+		t.Fatalf("inbound meta should not remain in collapsed Messages:\n%s", s)
 	}
 	if !strings.Contains(s, "[Attachment: f.txt") || !strings.Contains(s, "read_file") || !strings.Contains(s, ".oneclaw/media/inbound") {
 		t.Fatalf("expected stored path + read_file hint, got:\n%s", s)

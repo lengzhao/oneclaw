@@ -16,8 +16,9 @@
 | **P2** | D3 向量 recall | 插件接口，文件仍为真源 |
 | **P2** | 预算精度（可选） | usage / tokenizer 类估算，多模型下裁剪更一致 |
 | **P2** | 协作模型（teammate / swarm） | mailbox、长期成员等；按需排期 |
-| **后置** | LLM 类型可扩展 | Provider / Transport 抽象，配置与实现解耦 |
-| **后置** | 完整 MCP、compact 高级形态、全量遥测 | 刻意控制范围，见「刻意后置」 |
+| **后置** | **多 LLM / 多协议**（设计已定） | 见 [`multi-llm-provider-design.md`](multi-llm-provider-design.md）；统一 backlog **#28**（分 Phase 0–3） |
+| **后置** | **MCP 工具**（连接外部 MCP Server） | [x] backlog **#30**（`mcpclient`）；discovery 等见续作 |
+| **后置** | compact 高级形态、全量遥测、MCP 其余（如 UI 级权限流） | 刻意控制范围，见「刻意后置」、backlog **#29** |
 | **P1 续作** | Skills 加深 | 审计、条件 paths、动态子目录发现等（主干已在 backlog #8 勾选，见 [`claude-code-skills-mechanism.md`](claude-code-skills-mechanism.md)） |
 | **P1 工程** | **subagent 前置去重** | `RunAgent` / `RunFork` 共享校验与 `WithoutMetaTools` 等（见 [`code-simplification-opportunities.md`](code-simplification-opportunities.md) §6.1、统一 backlog **#19**） |
 | **P2 工程** | **channel 出站聚合** | `OutboundChan` 拼 assistant 文本 + 等 `Done` 的共用助手，`statichttp` 先迁（见 [`code-simplification-opportunities.md`](code-simplification-opportunities.md) §5.1、**#20**） |
@@ -38,7 +39,7 @@
 | **P0** | 安全基线、自我进化闭环缺口、长会话可用性、与 Claude Code 对齐的核心工具/吞吐 | 缺了会阻碍「可信自主运行」或「记忆闭环」或「长对话不崩」 |
 | **P1** | 多厂商/多渠道扩展、**Skills**、策略沉淀、子 Agent 产品化、任务可恢复 | 显著扩展部署面与协作体验，但不阻塞单机 CLI 闭环 |
 | **P2** | 入口体验细化、可选 recall、预算精细化、多实体协作 | 锦上添花或强依赖产品形态 |
-| **后置** | LLM Provider/Transport 可扩展、MCP、compact 高级形态、全量遥测 | 刻意控制范围，避免早期复杂度爆炸 |
+| **后置** | LLM Provider/Transport 可扩展、**MCP 工具**（#30）、compact 高级形态、全量遥测 | 刻意控制范围，避免早期复杂度爆炸 |
 
 下方 **统一 backlog** 为排序后的单一真相；其后各节保留阶段验收与历史勾选，便于对照实现。
 
@@ -91,8 +92,13 @@
 
 27. `[ ]` **可选：`context.Value` 挂 `OutboundSender`** — 与 `toolctx.SessionHost.SendMessage` 二选一演进，非与全局 `Engine` 并行两套（见 [`code-simplification-opportunities.md`](code-simplification-opportunities.md) §8）。
 
-28. `[ ]` **LLM 类型可扩展** — Provider / Transport 抽象，配置与实现解耦（参考 picoclaw）；宜在 config 定型后接入，避免双重迁移。
-29. `[ ]` **完整 MCP**、**compact 高级形态**、**全量遥测** — 见「刻意后置」小节。
+28. `[ ]` **多 LLM / 多协议（LLM 类型可扩展）** — 设计文档 [`multi-llm-provider-design.md`](multi-llm-provider-design.md)；参考 picoclaw `pkg/providers`。宜在 config 形态敲定后接入，避免双重迁移。建议按阶段验收：
+    - **Phase 0**：`model` 支持 `协议/模型ID` 写法，解析后仍走单一 OpenAI 兼容客户端（仅修正传入 API 的 model 字符串）。
+    - **Phase 1**：引入 `llm.Provider` + `OpenAICompatProvider`；`loop` / `session` / 装配入口改为依赖接口；多协议前缀共用兼容栈时可配默认 `base_url` / 按条目 `api_key`（见设计文「方案 B」）。
+    - **Phase 2**：Anthropic（或 Messages）等非 Chat Completions 形态 provider；边界做消息/工具映射。
+    - **Phase 3**（可选）：Fallback 链、Azure/Bedrock、按 channel 覆盖模型。
+29. `[ ]` **compact 高级形态**、**全量遥测** — 见「刻意后置」小节（与 MCP 工具拆分，避免单条过粗）。
+30. `[x]` **MCP 工具（客户端）** — **主干已接**：`mcpclient` + YAML `mcp.enabled` / `mcp.servers`（stdio、sse、http），工具前缀 `mcp_*`，大结果落盘 `.oneclaw/artifacts/mcp/`，系统提示 `OptionalMCPSection`。**续作**：tool discovery（regex/BM25）、UI 级权限流、二进制结果与 mediastore 对齐、进程内暴露 MCP Server。
 
 ---
 
@@ -113,7 +119,8 @@
 | P0 | 统一 config 模块 | [x] 见 backlog #1、[`config.md`](config.md) |
 | P1 | 通用 Channel 抽象 | [x] 见 backlog #7、[`inbound-routing-design.md`](inbound-routing-design.md) |
 | P1 | Skills（Claude Code 机制） | [x] 主干完成；续作见 backlog #8 与「未完成任务一览」 |
-| 后置 | LLM 类型可扩展 | [ ] 见 backlog #28 |
+| 后置 | 多 LLM / 多协议（LLM 类型可扩展） | [ ] 见 backlog #28、[`multi-llm-provider-design.md`](multi-llm-provider-design.md) |
+| 后置 | MCP 工具（外部 Server → 主线程 tools） | [x] 见 backlog **#30** |
 
 ---
 
@@ -189,15 +196,17 @@
 | P2 | **预算精度（可选）** | [ ] backlog #15 |
 | P2 | **协作模型（teammate / swarm）** | [ ] backlog #16 |
 | P2/P3 | **工程简化（可选）** | [ ] backlog **#19–#27**（[`code-simplification-opportunities.md`](code-simplification-opportunities.md)） |
-| 后置 | **LLM 类型可扩展** | [ ] backlog #28 |
-| 后置 | **完整 MCP、compact 高级形态 / 全量遥测** | [ ] backlog #29 |
+| 后置 | **多 LLM / 多协议** | [ ] backlog #28、[`multi-llm-provider-design.md`](multi-llm-provider-design.md) |
+| 后置 | **MCP 工具** | [x] backlog **#30** |
+| 后置 | **compact 高级形态 / 全量遥测** | [ ] backlog #29 |
 
 ---
 
 ## 刻意后置（勿在 A 阶段展开）
 
-- [ ] **LLM 类型可扩展**（Provider / Transport；见统一 backlog #28）
-- [ ] 完整 MCP 客户端与 UI 级权限流
+- [ ] **多 LLM / 多协议**（`llm.Provider`、分 Phase；见统一 backlog **#28**、[`multi-llm-provider-design.md`](multi-llm-provider-design.md)）
+- [x] **MCP 工具（客户端主干）**：见统一 backlog **#30**
+- [ ] MCP **UI 级权限流**等其余面（可与 #30 分阶段）
 - [ ] compact **高级形态**（多段摘要、与模型协同的 collapse 策略等；最小 compact 见统一 backlog P0）
 - [ ] 全量遥测
 
@@ -223,9 +232,11 @@ flowchart TB
     B -.-> SK
   end
   subgraph POST["后置"]
-    LLM[LLM Provider 抽象]
+    LLM[多 LLM / 多协议]
+    MCP[MCP 工具]
   end
   CFG -.-> LLM
+  CFG -.-> MCP
   A[阶段 A 已完成] --> B[阶段 B]
   A --> C[阶段 C]
   B --> P0
@@ -235,7 +246,7 @@ flowchart TB
   C --> D
 ```
 
-建议：**先做 P0 中的统一 config**（开发与生产同一套），再并行推进维护管道与 compact/工具面；**Channel / Skills** 等 P1 可与当前 OpenAI 兼容栈并行；**LLM Provider 抽象** 见 backlog 后置（#28），避免过早双重迁移。D3 向量与 MCP 按产品排期。阶段 D1/D2 已接，不阻塞上述排序。工程简化项见 backlog **#19–#27** 与 [`code-simplification-opportunities.md`](code-simplification-opportunities.md)。
+建议：**先做 P0 中的统一 config**（开发与生产同一套），再并行推进维护管道与 compact/工具面；**Channel / Skills** 等 P1 可与当前 OpenAI 兼容栈并行；**多 LLM / 多协议**（[`multi-llm-provider-design.md`](multi-llm-provider-design.md)）见 backlog 后置（#28），避免过早双重迁移。D3 向量与 **MCP 工具（#30）** 按产品排期。阶段 D1/D2 已接，不阻塞上述排序。工程简化项见 backlog **#19–#27** 与 [`code-simplification-opportunities.md`](code-simplification-opportunities.md)。
 
 ---
 

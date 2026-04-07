@@ -2,10 +2,12 @@ package channel
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
 	"github.com/lengzhao/oneclaw/routing"
+	"golang.org/x/sync/errgroup"
 )
 
 // Registry holds connector Specs in registration order.
@@ -86,6 +88,9 @@ func instancesToStart(specs []Spec, boot Bootstrap) ([]startInstance, error) {
 }
 
 // StartAll builds IO chans, registers routing.Sink per instance id, runs submitLoop + Connector.Run.
+// Each connector's Run executes concurrently so multiple blocking listeners (e.g. statichttp + feishu)
+// can run in one process. When ctx is cancelled, all connectors are torn down; Wait returns
+// context.Canceled, which StartAll maps to (ran, nil).
 func (r *Registry) StartAll(ctx context.Context, boot Bootstrap) ([]Connector, error) {
 	if boot.Engine == nil {
 		return nil, fmt.Errorf("channel: Bootstrap.Engine is nil")
@@ -100,14 +105,16 @@ func (r *Registry) StartAll(ctx context.Context, boot Bootstrap) ([]Connector, e
 	}
 
 	eng := boot.Engine
+	g, gCtx := errgroup.WithContext(ctx)
 	var ran []Connector
+
 	for _, inst := range instances {
 		s := inst.spec
 		inCh := make(chan InboundTurn, 8)
 		outCh := make(chan routing.Record, 64)
 		routing.RegisterDefaultSink(inst.id, newChanSink(outCh))
 
-		runCtx, cancel := context.WithCancel(ctx)
+		runCtx, cancel := context.WithCancel(gCtx)
 		routerDone := make(chan struct{})
 		go func() {
 			defer close(routerDone)
@@ -132,19 +139,24 @@ func (r *Registry) StartAll(ctx context.Context, boot Bootstrap) ([]Connector, e
 		}
 
 		io := IO{InboundChan: inCh, OutboundChan: outCh}
+		ran = append(ran, cn)
 
-		if err := cn.Run(runCtx, io); err != nil {
+		g.Go(func() error {
+			runErr := cn.Run(runCtx, io)
 			cancel()
 			<-routerDone
 			close(inCh)
 			close(outCh)
-			return nil, fmt.Errorf("channel %q (%q): run: %w", s.Key, inst.id, err)
-		}
-		cancel()
-		<-routerDone
-		close(inCh)
-		close(outCh)
-		ran = append(ran, cn)
+			if runErr != nil {
+				return fmt.Errorf("channel %q (%q): run: %w", s.Key, inst.id, runErr)
+			}
+			return nil
+		})
+	}
+
+	waitErr := g.Wait()
+	if waitErr != nil && !errors.Is(waitErr, context.Canceled) {
+		return nil, waitErr
 	}
 	return ran, nil
 }

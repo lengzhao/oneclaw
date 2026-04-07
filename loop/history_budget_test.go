@@ -33,7 +33,7 @@ func TestApplyHistoryBudget_insertsCompactBoundary(t *testing.T) {
 	if len(msgs) >= before {
 		t.Fatalf("expected trim/compact, before=%d after=%d", before, len(msgs))
 	}
-	u := userMessageText(msgs[0])
+	u := UserMessageText(msgs[0])
 	if !strings.Contains(u, "compact_boundary") {
 		previewLen := 200
 		if len(u) < previewLen {

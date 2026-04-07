@@ -32,6 +32,31 @@ func ChatRequestUserTextConcat(body []byte) (string, error) {
 	return b.String(), nil
 }
 
+// FirstChatUserMessageContaining returns the decoded text of the first user message in a chat
+// completions request whose content contains needle. Used when in-memory history is collapsed
+// but the first API request still carries injections (agentMd, recall, …).
+func FirstChatUserMessageContaining(body []byte, needle string) (text string, ok bool, err error) {
+	var req struct {
+		Messages []struct {
+			Role    string          `json:"role"`
+			Content json.RawMessage `json:"content"`
+		} `json:"messages"`
+	}
+	if err := json.Unmarshal(body, &req); err != nil {
+		return "", false, err
+	}
+	for _, m := range req.Messages {
+		if m.Role != "user" {
+			continue
+		}
+		s := decodeMessageContent(m.Content)
+		if strings.Contains(s, needle) {
+			return s, true, nil
+		}
+	}
+	return "", false, nil
+}
+
 // ChatRequestSystemTextConcat joins string/text content from all messages with role "system".
 func ChatRequestSystemTextConcat(body []byte) (string, error) {
 	var req struct {

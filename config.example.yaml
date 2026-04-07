@@ -38,6 +38,10 @@ paths:
   memory_base: ""
   # 留空：transcript 为 <cwd>/.oneclaw/transcript.json
   transcript: ""
+  # 留空：working_transcript 为 <cwd>/.oneclaw/working_transcript.json（与内存 Messages 一致：用户可见对话，无 tool 轮次）
+  working_transcript: ""
+  # 写入 working_transcript 时最多保留的尾部消息条数；0=默认 30；负数=不限制
+  working_transcript_max_messages: 0
   # 留空：按日分文件写入 traces；以 .jsonl 结尾为单文件
   turn_log_path: ""
 
@@ -79,6 +83,27 @@ channels:
   #   group_trigger:
   #     mention_only: true
   #     prefixes: []
+
+# -----------------------------------------------------------------------------
+# MCP 工具（连接外部 MCP Server；需显式 enabled: true）
+# 实现：github.com/modelcontextprotocol/go-sdk；传输 stdio / sse / http 与 picoclaw 对齐。
+# 工具名注册为 mcp_<server>_<tool>；超长结果可落盘 <cwd>/.oneclaw/artifacts/mcp/
+# -----------------------------------------------------------------------------
+# mcp:
+#   enabled: true
+#   max_inline_text_runes: 16384
+#   servers:
+#     demo:
+#       enabled: true
+#       command: npx
+#       args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+#       # type: stdio          # 可省略（有 command 时默认 stdio）
+#     # remote:
+#     #   enabled: true
+#     #   type: sse            # 或 http（仅请求-响应、无独立 SSE 流）
+#     #   url: "https://example.com/mcp"
+#     #   headers:
+#     #     Authorization: "Bearer ..."
 
 # -----------------------------------------------------------------------------
 # 功能开关（true = 关闭对应功能）

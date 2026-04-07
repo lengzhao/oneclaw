@@ -9,8 +9,8 @@ import (
 	"testing"
 
 	"github.com/lengzhao/oneclaw/memory"
-	"github.com/lengzhao/oneclaw/rtopts"
 	"github.com/lengzhao/oneclaw/routing"
+	"github.com/lengzhao/oneclaw/rtopts"
 	"github.com/lengzhao/oneclaw/test/openaistub"
 )
 
@@ -41,7 +41,14 @@ func TestE2E_32_RecallPathDedupSecondTurn(t *testing.T) {
 	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "recall_dedup_e2e_32 first turn"}); err != nil {
 		t.Fatal(err)
 	}
-	t1 := concatUserText(e.Messages)
+	bodies := stub.ChatRequestBodies()
+	if len(bodies) < 1 {
+		t.Fatal("expected first chat request")
+	}
+	t1, err := openaistub.ChatRequestUserTextConcat(bodies[0])
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !strings.Contains(t1, "relevant_memories") || !strings.Contains(t1, onlyPath) {
 		t.Fatalf("turn1 missing recall:\n%s", t1)
 	}
@@ -49,10 +56,16 @@ func TestE2E_32_RecallPathDedupSecondTurn(t *testing.T) {
 	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "recall_dedup_e2e_32 second turn"}); err != nil {
 		t.Fatal(err)
 	}
-	full := concatUserText(e.Messages)
-	if strings.Count(full, "Attachment: relevant_memories") != 1 {
-		t.Fatalf("expected exactly one recall attachment across two turns; got %d",
-			strings.Count(full, "Attachment: relevant_memories"))
+	bodies = stub.ChatRequestBodies()
+	if len(bodies) < 2 {
+		t.Fatal("expected second chat request")
+	}
+	t2, err := openaistub.ChatRequestUserTextConcat(bodies[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(t2, onlyPath) {
+		t.Fatalf("dedup: second request should not re-surface same path:\n%s", t2)
 	}
 }
 
@@ -82,20 +95,18 @@ func TestE2E_33_RecallTotalByteBudget(t *testing.T) {
 	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: keyword + " please"}); err != nil {
 		t.Fatal(err)
 	}
-	var recallLen int
-	for _, m := range e.Messages {
-		if m.OfUser == nil || !m.OfUser.Content.OfString.Valid() {
-			continue
-		}
-		s := m.OfUser.Content.OfString.Value
-		if strings.Contains(s, "Attachment: relevant_memories") {
-			recallLen = len(s)
-			break
-		}
+	bodies := stub.ChatRequestBodies()
+	if len(bodies) < 1 {
+		t.Fatal("expected chat request")
 	}
-	if recallLen <= 0 {
-		t.Fatal("expected recall user message")
+	recallBlock, ok, err := openaistub.FirstChatUserMessageContaining(bodies[0], "Attachment: relevant_memories")
+	if err != nil {
+		t.Fatal(err)
 	}
+	if !ok {
+		t.Fatal("expected recall user message in first request")
+	}
+	recallLen := len(recallBlock)
 	if recallLen > memory.MaxSurfacedRecallBytes+64 {
 		t.Fatalf("recall message too large: %d > MaxSurfacedRecallBytes+64", recallLen)
 	}

@@ -59,7 +59,8 @@ func fallbackCompactEnvelope(ts, summary string) string {
 		summary + "\n\n[/oneclaw:" + k + "]\n"
 }
 
-func userMessageText(m openai.ChatCompletionMessageParamUnion) string {
+// UserMessageText returns the user-visible UTF-8 text of m, or "" if not a user message.
+func UserMessageText(m openai.ChatCompletionMessageParamUnion) string {
 	if m.OfUser == nil {
 		return ""
 	}
@@ -109,7 +110,7 @@ func buildCompactSummary(dropped []openai.ChatCompletionMessageParamUnion, maxBy
 		}
 		switch {
 		case m.OfUser != nil:
-			t := strings.TrimSpace(userMessageText(m))
+			t := strings.TrimSpace(UserMessageText(m))
 			if t == "" {
 				continue
 			}

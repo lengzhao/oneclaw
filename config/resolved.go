@@ -103,7 +103,16 @@ func (r *Resolved) TranscriptPath() string {
 	return abs
 }
 
-// WorkingTranscriptPath is the persisted model context (includes tool rounds and semantic compact summaries).
+// WorkingTranscriptMaxMessages caps how many tail messages are written to working_transcript.json
+// (after user-visible collapse). 0 means default 30. Negative means no limit.
+func (r *Resolved) WorkingTranscriptMaxMessages() int {
+	if r == nil {
+		return 0
+	}
+	return r.merged.Paths.WorkingTranscriptMaxMessages
+}
+
+// WorkingTranscriptPath persists the user-visible message list (same shape as in-memory Messages after each turn).
 // When transcript is disabled, returns empty. Default: <cwd>/.oneclaw/working_transcript.json
 func (r *Resolved) WorkingTranscriptPath() string {
 	if r.transcriptDisabled() {

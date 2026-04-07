@@ -37,6 +37,19 @@ func LastAssistantDisplay(msgs []openai.ChatCompletionMessageParamUnion) string 
 	return ""
 }
 
+// AssistantParamText returns assistant-visible text (content / structured refusal parts), excluding
+// tool-call metadata. Empty if m is not an assistant message or has no visible text (e.g. tool-only).
+func AssistantParamText(m openai.ChatCompletionMessageParamUnion) string {
+	if m.OfAssistant == nil {
+		return ""
+	}
+	a := m.OfAssistant
+	if a.Refusal.Valid() && strings.TrimSpace(a.Refusal.Value) != "" {
+		return "[refusal] " + strings.TrimSpace(a.Refusal.Value)
+	}
+	return strings.TrimSpace(assistantContentString(a))
+}
+
 func assistantContentString(a *openai.ChatCompletionAssistantMessageParam) string {
 	if a == nil {
 		return ""

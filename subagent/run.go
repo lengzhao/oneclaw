@@ -115,6 +115,7 @@ func RunAgent(ctx context.Context, h *Host, parent *toolctx.Context, agentType, 
 	if err := loop.RunTurn(ctx, cfg, routing.Inbound{Text: task}); err != nil {
 		return "", err
 	}
+	msgs = loop.ToUserVisibleMessages(msgs)
 	scPath, _ := writeSidechain(h.CWD, h.SessionID, agentID, "run_agent", msgs)
 	reply := loop.LastAssistantDisplay(msgs)
 	applySidechainMerge(parent, "run_agent", agentID, scPath, &reply)
@@ -179,6 +180,7 @@ func RunFork(ctx context.Context, h *Host, parent *toolctx.Context, task string,
 	if err := loop.RunTurn(ctx, cfg, routing.Inbound{Text: task}); err != nil {
 		return "", err
 	}
+	msgs = loop.ToUserVisibleMessages(msgs)
 	scPath, _ := writeSidechain(h.CWD, h.SessionID, agentID, "fork_context", msgs)
 	reply := loop.LastAssistantDisplay(msgs)
 	applySidechainMerge(parent, "fork_context", agentID, scPath, &reply)

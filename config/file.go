@@ -24,10 +24,11 @@ type File struct {
 	} `yaml:"chat"`
 
 	Paths struct {
-		MemoryBase         string `yaml:"memory_base"`
-		Transcript         string `yaml:"transcript"`
-		WorkingTranscript  string `yaml:"working_transcript"`
-		TurnLogPath        string `yaml:"turn_log_path"`
+		MemoryBase                   string `yaml:"memory_base"`
+		Transcript                   string `yaml:"transcript"`
+		WorkingTranscript            string `yaml:"working_transcript"`
+		WorkingTranscriptMaxMessages int    `yaml:"working_transcript_max_messages"` // 0=default 30; <0=unlimited
+		TurnLogPath                  string `yaml:"turn_log_path"`
 	} `yaml:"paths"`
 
 	Features struct {
@@ -70,17 +71,17 @@ type File struct {
 		MinLogBytes     int    `yaml:"min_log_bytes"`
 		MaxLogReadBytes int    `yaml:"max_log_bytes"`
 		PostTurn        struct {
-			LogDays             int   `yaml:"log_days"`
-			MaxCombinedLogBytes int   `yaml:"max_combined_log_bytes"`
-			MaxLogBytes         int   `yaml:"max_log_bytes"`
-			MinLogBytes         int   `yaml:"min_log_bytes"`
-			MaxTopicFiles       int   `yaml:"max_topic_files"`
-			TopicExcerptBytes   int   `yaml:"topic_excerpt_bytes"`
-			MemoryPreviewBytes  int   `yaml:"memory_preview_bytes"`
-			TimeoutSeconds      int   `yaml:"timeout_seconds"`
-			MaxTokens           int64 `yaml:"max_tokens"`
-			UserSnapshotBytes   int   `yaml:"user_snapshot_bytes"`
-			AssistantSnapshotBytes int `yaml:"assistant_snapshot_bytes"`
+			LogDays                int   `yaml:"log_days"`
+			MaxCombinedLogBytes    int   `yaml:"max_combined_log_bytes"`
+			MaxLogBytes            int   `yaml:"max_log_bytes"`
+			MinLogBytes            int   `yaml:"min_log_bytes"`
+			MaxTopicFiles          int   `yaml:"max_topic_files"`
+			TopicExcerptBytes      int   `yaml:"topic_excerpt_bytes"`
+			MemoryPreviewBytes     int   `yaml:"memory_preview_bytes"`
+			TimeoutSeconds         int   `yaml:"timeout_seconds"`
+			MaxTokens              int64 `yaml:"max_tokens"`
+			UserSnapshotBytes      int   `yaml:"user_snapshot_bytes"`
+			AssistantSnapshotBytes int   `yaml:"assistant_snapshot_bytes"`
 		} `yaml:"post_turn"`
 		ScheduledTimeoutSeconds int    `yaml:"scheduled_timeout_seconds"`
 		ScheduledMaxSteps       int    `yaml:"scheduled_max_steps"`
@@ -116,6 +117,8 @@ type File struct {
 	// Channels lists enabled channel instances (id + type + optional type-specific fields).
 	// When empty after merge, runtime starts every registered channel Spec once using Spec.Key as instance id.
 	Channels []ChannelConfig `yaml:"channels"`
+
+	MCP MCPFile `yaml:"mcp"`
 }
 
 // ChannelConfig is one YAML list entry under `channels:`.
@@ -200,6 +203,9 @@ func mergeFile(dst *File, src File) {
 	}
 	if src.Paths.WorkingTranscript != "" {
 		dst.Paths.WorkingTranscript = src.Paths.WorkingTranscript
+	}
+	if src.Paths.WorkingTranscriptMaxMessages != 0 {
+		dst.Paths.WorkingTranscriptMaxMessages = src.Paths.WorkingTranscriptMaxMessages
 	}
 	if src.Paths.TurnLogPath != "" {
 		dst.Paths.TurnLogPath = src.Paths.TurnLogPath
@@ -345,6 +351,7 @@ func mergeFile(dst *File, src File) {
 	if len(src.Channels) > 0 {
 		dst.Channels = append([]ChannelConfig(nil), src.Channels...)
 	}
+	mergeMCP(&dst.MCP, src.MCP)
 }
 
 func mergeBoolPtr(dst **bool, src *bool) {

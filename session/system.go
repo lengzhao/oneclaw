@@ -70,6 +70,9 @@ func (e *Engine) buildTurnSystem(memOK bool, bundle memory.TurnBundle, bg budget
 	if cat != nil {
 		d.AgentCatalogLines = cat.PromptCatalogLines(bg.SkillIndexMaxBytes())
 	}
+	if s := strings.TrimSpace(e.MCPSystemNote); s != "" {
+		d.OptionalMCPSection = s
+	}
 
 	out, err := prompts.Render(prompts.NameMainThreadSystem, d)
 	if err != nil {

@@ -16,3 +16,10 @@ func TestLastAssistantDisplay(t *testing.T) {
 		t.Fatalf("got %q", got)
 	}
 }
+
+func TestAssistantParamText_plain(t *testing.T) {
+	m := openai.AssistantMessage("  hi  ")
+	if got := loop.AssistantParamText(m); got != "hi" {
+		t.Fatalf("got %q", got)
+	}
+}

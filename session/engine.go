@@ -28,9 +28,12 @@ type Engine struct {
 	System    string
 	MaxTokens int64
 	MaxSteps  int
-	Messages  []openai.ChatCompletionMessageParamUnion
-	// Transcript is persisted user + assistant pairs: user is appended before the model loop (and
-	// saved when TranscriptPath is set); assistant is appended after a successful RunTurn.
+	// Messages is the live API history. After each successful RunTurn it is collapsed to
+	// user-visible rows only (loop.ToUserVisibleMessages): injections and tool rounds are dropped
+	// to save tokens; facts can be re-fetched with tools or memory recall.
+	Messages []openai.ChatCompletionMessageParamUnion
+	// Transcript is the slim audit log (real user lines + final assistant text per turn), same
+	// visibility rules as Messages; agentMd / inbound / tool rows are not persisted here.
 	Transcript []openai.ChatCompletionMessageParamUnion
 	Registry   *tools.Registry
 	CWD        string
@@ -43,12 +46,16 @@ type Engine struct {
 	SinkFactory routing.SinkFactory
 	// TranscriptPath is where SaveTranscript writes after each successful loop.RunTurn (before PostTurn; post-turn maintain runs asynchronously). Empty disables auto-save.
 	TranscriptPath string
-	// WorkingTranscriptPath persists Messages (tool rounds + semantic compact); empty when transcript disabled.
+	// WorkingTranscriptPath persists Messages (already user-visible in memory after each turn).
 	WorkingTranscriptPath string
+	// WorkingTranscriptMaxMessages is the max tail messages to persist; 0 means default 30; negative means unlimited.
+	WorkingTranscriptMaxMessages int
 	// RecallState tracks memory recall surfacing across turns (phase B).
 	RecallState memory.RecallState
 	// ChatTransport overrides default transport when non-empty (from unified config).
 	ChatTransport string
+	// MCPSystemNote is optional; non-empty injects the MCP section in the main-thread system prompt.
+	MCPSystemNote string
 }
 
 // NewEngine builds an engine with sensible defaults.
@@ -147,6 +154,7 @@ func (e *Engine) SubmitUser(ctx context.Context, in routing.Inbound) error {
 	if err != nil {
 		return err
 	}
+	e.Messages = loop.ToUserVisibleMessages(e.Messages)
 	if err := e.SaveTranscript(); err != nil {
 		slog.Error("session.transcript_save", "err", err)
 	}
@@ -226,6 +234,7 @@ func (e *Engine) submitLocalSlashTurn(ctx context.Context, in routing.Inbound, r
 	userLine := ModelUserLine(in.Text, len(in.Attachments) > 0)
 	loop.AppendTurnUserMessages(&e.Messages, bundle.AgentMdBlock, bundle.RecallBlock, meta, attMsgs, userLine)
 	e.Messages = append(e.Messages, openai.AssistantMessage(reply))
+	e.Messages = loop.ToUserVisibleMessages(e.Messages)
 
 	e.Transcript = append(e.Transcript, openai.UserMessage(SlimTranscriptUserLine(in)))
 	e.Transcript = append(e.Transcript, openai.AssistantMessage(reply))
@@ -303,7 +312,15 @@ func (e *Engine) SaveWorkingTranscriptTo(path string) error {
 	if path == "" {
 		return nil
 	}
-	b, err := loop.MarshalMessages(e.Messages)
+	capN := e.WorkingTranscriptMaxMessages
+	if capN == 0 {
+		capN = 30
+	}
+	msgs := loop.ToUserVisibleMessages(e.Messages)
+	if capN > 0 && len(msgs) > capN {
+		msgs = msgs[len(msgs)-capN:]
+	}
+	b, err := loop.MarshalMessages(msgs)
 	if err != nil {
 		return fmt.Errorf("marshal working transcript: %w", err)
 	}
@@ -313,7 +330,7 @@ func (e *Engine) SaveWorkingTranscriptTo(path string) error {
 	if err := os.WriteFile(path, b, 0o644); err != nil {
 		return fmt.Errorf("write working transcript: %w", err)
 	}
-	slog.Debug("working transcript saved", "path", path, "messages", len(e.Messages))
+	slog.Debug("working transcript saved", "path", path, "messages", len(msgs), "total_in_memory", len(e.Messages))
 	return nil
 }
 
@@ -322,7 +339,8 @@ func (e *Engine) SaveTranscriptTo(path string) error {
 	if path == "" {
 		return nil
 	}
-	b, err := e.MarshalTranscript()
+	e.Transcript = loop.ToUserVisibleMessages(e.Transcript)
+	b, err := loop.MarshalMessages(e.Transcript)
 	if err != nil {
 		return fmt.Errorf("marshal transcript: %w", err)
 	}
@@ -338,7 +356,7 @@ func (e *Engine) SaveTranscriptTo(path string) error {
 
 // MarshalTranscript returns JSON suitable for disk persistence.
 func (e *Engine) MarshalTranscript() ([]byte, error) {
-	return loop.MarshalMessages(e.Transcript)
+	return loop.MarshalMessages(loop.ToUserVisibleMessages(e.Transcript))
 }
 
 // LoadTranscript restores Transcript and seeds Messages from it (same as a fresh session after restart).
@@ -347,9 +365,10 @@ func (e *Engine) LoadTranscript(data []byte) error {
 	if err != nil {
 		return err
 	}
-	e.Transcript = msgs
-	e.Messages = append([]openai.ChatCompletionMessageParamUnion(nil), msgs...)
-	slog.Info("transcript loaded", "messages", len(msgs))
+	clean := loop.ToUserVisibleMessages(msgs)
+	e.Transcript = clean
+	e.Messages = append([]openai.ChatCompletionMessageParamUnion(nil), clean...)
+	slog.Info("transcript loaded", "messages", len(clean))
 	return nil
 }
 
@@ -359,7 +378,7 @@ func (e *Engine) LoadWorkingTranscript(data []byte) error {
 	if err != nil {
 		return err
 	}
-	e.Messages = msgs
-	slog.Info("working transcript loaded", "messages", len(msgs))
+	e.Messages = loop.ToUserVisibleMessages(msgs)
+	slog.Info("working transcript loaded", "messages", len(e.Messages))
 	return nil
 }

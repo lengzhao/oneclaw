@@ -23,3 +23,11 @@ func TestChatRequestSystemTextConcat(t *testing.T) {
 		t.Fatalf("got %q", s)
 	}
 }
+
+func TestFirstChatUserMessageContaining(t *testing.T) {
+	body := []byte(`{"messages":[{"role":"user","content":"a"},{"role":"user","content":"needle here"}]}`)
+	got, ok, err := FirstChatUserMessageContaining(body, "needle")
+	if err != nil || !ok || got != "needle here" {
+		t.Fatalf("ok=%v err=%v got=%q", ok, err, got)
+	}
+}
