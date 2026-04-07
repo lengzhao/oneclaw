@@ -9,6 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/lengzhao/oneclaw/rtopts"
 )
 
 // DotDir is the per-project configuration directory for oneclaw.
@@ -37,9 +39,9 @@ func expandTilde(home, p string) string {
 	return p
 }
 
-// MemoryBaseDir resolves the base config/memory directory (~/.oneclaw or ONCLAW_MEMORY_BASE override).
+// MemoryBaseDir resolves the base config/memory directory (~/.oneclaw or paths.memory_base from config).
 func MemoryBaseDir(home string) string {
-	if v := strings.TrimSpace(os.Getenv("ONCLAW_MEMORY_BASE")); v != "" {
+	if v := strings.TrimSpace(rtopts.Current().MemoryBase); v != "" {
 		return filepath.Clean(expandTilde(home, v))
 	}
 	return filepath.Join(home, DotDir)
@@ -314,10 +316,7 @@ func (l Layout) EnsureDirs() {
 	EnsureDefaultAgentMd(l)
 }
 
-// AutoMemoryDisabled is true only when an explicit opt-out env is set (default: auto memory on).
+// AutoMemoryDisabled reports features.disable_auto_memory from config.
 func AutoMemoryDisabled() bool {
-	if v := strings.TrimSpace(os.Getenv("ONCLAW_DISABLE_AUTO_MEMORY")); v != "" {
-		return v == "1" || strings.EqualFold(v, "true") || strings.EqualFold(v, "yes")
-	}
-	return false
+	return rtopts.Current().DisableAutoMemory
 }

@@ -8,6 +8,7 @@ import (
 	"github.com/lengzhao/oneclaw/budget"
 	"github.com/lengzhao/oneclaw/memory"
 	"github.com/lengzhao/oneclaw/routing"
+	"github.com/lengzhao/oneclaw/rtopts"
 	"github.com/lengzhao/oneclaw/subagent"
 	"github.com/lengzhao/oneclaw/toolctx"
 )
@@ -29,7 +30,7 @@ type sharedTurnPrep struct {
 // wireSendMessage sets tctx.SendMessage when true (full model turns only).
 func (e *Engine) prepareSharedTurn(ctx context.Context, in routing.Inbound, preview string, wireSendMessage bool) (sharedTurnPrep, error) {
 	var p sharedTurnPrep
-	p.bg = budget.FromEnv()
+	p.bg = rtopts.Current().Budget
 	p.tctx = toolctx.New(e.CWD, ctx)
 	if wireSendMessage {
 		p.tctx.SendMessage = e.SendMessage
@@ -38,7 +39,7 @@ func (e *Engine) prepareSharedTurn(ctx context.Context, in routing.Inbound, prev
 	if herr == nil {
 		p.tctx.HomeDir = home
 	}
-	p.memOK = herr == nil && os.Getenv("ONCLAW_DISABLE_MEMORY") != "1"
+	p.memOK = herr == nil && !rtopts.Current().DisableMemory
 	if p.memOK {
 		p.layout = memory.DefaultLayout(e.CWD, home)
 		p.bundle = memory.BuildTurn(p.layout, home, preview, &e.RecallState, p.bg.RecallBytes())

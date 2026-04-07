@@ -17,7 +17,7 @@ import (
 func TestE2E_81_EmptyInboundRejected(t *testing.T) {
 	stub := openaistub.New(t)
 	e2eEnvMinimal(t, stub)
-	e := newStubEngine(t, t.TempDir())
+	e := newStubEngine(t, stub, t.TempDir())
 	err := e.SubmitUser(context.Background(), routing.Inbound{Text: "   "})
 	if err == nil {
 		t.Fatal("expected error")
@@ -37,7 +37,7 @@ func TestE2E_82_UnknownToolName(t *testing.T) {
 	e2eEnvMinimal(t, stub)
 
 	cwd := t.TempDir()
-	client := openai.NewClient()
+	client := openai.NewClient(stubOpenAIOptions(stub)...)
 	msgs := []openai.ChatCompletionMessageParamUnion{}
 	err := loop.RunTurn(context.Background(), loop.Config{
 		Client:      &client,

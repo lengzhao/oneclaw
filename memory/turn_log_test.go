@@ -9,10 +9,14 @@ import (
 	"time"
 
 	"github.com/lengzhao/oneclaw/loop"
+	"github.com/lengzhao/oneclaw/rtopts"
 )
 
 func TestTurnLogPathForDateDefault(t *testing.T) {
-	t.Setenv("ONCLAW_TURN_LOG_PATH", "")
+	t.Cleanup(func() { rtopts.Set(nil) })
+	s := rtopts.DefaultSnapshot()
+	s.TurnLogPath = ""
+	rtopts.Set(&s)
 	lay := Layout{CWD: "/proj/repo"}
 	when := time.Date(2024, 3, 5, 15, 0, 0, 0, time.UTC)
 	got := TurnLogPathForDate(lay, when)
@@ -23,7 +27,10 @@ func TestTurnLogPathForDateDefault(t *testing.T) {
 }
 
 func TestTurnLogPathForDateEnvSingleFile(t *testing.T) {
-	t.Setenv("ONCLAW_TURN_LOG_PATH", "custom/trace.jsonl")
+	t.Cleanup(func() { rtopts.Set(nil) })
+	s := rtopts.DefaultSnapshot()
+	s.TurnLogPath = "custom/trace.jsonl"
+	rtopts.Set(&s)
 	lay := Layout{CWD: "/proj/repo"}
 	when := time.Date(2099, 1, 1, 0, 0, 0, 0, time.UTC)
 	got := TurnLogPathForDate(lay, when)
@@ -34,7 +41,10 @@ func TestTurnLogPathForDateEnvSingleFile(t *testing.T) {
 }
 
 func TestTurnLogPathForDateEnvAbsSingleFile(t *testing.T) {
-	t.Setenv("ONCLAW_TURN_LOG_PATH", "/tmp/abs.jsonl")
+	t.Cleanup(func() { rtopts.Set(nil) })
+	s := rtopts.DefaultSnapshot()
+	s.TurnLogPath = "/tmp/abs.jsonl"
+	rtopts.Set(&s)
 	lay := Layout{CWD: "/proj/repo"}
 	got := TurnLogPathForDate(lay, time.Now())
 	if got != "/tmp/abs.jsonl" {
@@ -43,7 +53,10 @@ func TestTurnLogPathForDateEnvAbsSingleFile(t *testing.T) {
 }
 
 func TestTurnLogPathForDateEnvDirShard(t *testing.T) {
-	t.Setenv("ONCLAW_TURN_LOG_PATH", "/var/log/oneclaw-traces")
+	t.Cleanup(func() { rtopts.Set(nil) })
+	s := rtopts.DefaultSnapshot()
+	s.TurnLogPath = "/var/log/oneclaw-traces"
+	rtopts.Set(&s)
 	lay := Layout{CWD: "/proj/repo"}
 	when := time.Date(2025, 12, 1, 0, 0, 0, 0, time.UTC)
 	got := TurnLogPathForDate(lay, when)
@@ -54,8 +67,11 @@ func TestTurnLogPathForDateEnvDirShard(t *testing.T) {
 }
 
 func TestAppendTurnToolLogJSONLLine(t *testing.T) {
-	t.Setenv("ONCLAW_DISABLE_TURN_LOG", "")
-	t.Setenv("ONCLAW_TURN_LOG_PATH", "")
+	t.Cleanup(func() { rtopts.Set(nil) })
+	s := rtopts.DefaultSnapshot()
+	s.DisableTurnLog = false
+	s.TurnLogPath = ""
+	rtopts.Set(&s)
 	cwd := t.TempDir()
 	lay := Layout{CWD: cwd}
 	AppendTurnToolLogJSONL(lay, "sess_x", "c1", "hi", loop.ToolTraceEntry{Step: 0, Name: "read_file", OK: true})
@@ -75,8 +91,11 @@ func TestAppendTurnToolLogJSONLLine(t *testing.T) {
 }
 
 func TestAppendTurnAssistantFinalJSONLLine(t *testing.T) {
-	t.Setenv("ONCLAW_DISABLE_TURN_LOG", "")
-	t.Setenv("ONCLAW_TURN_LOG_PATH", "")
+	t.Cleanup(func() { rtopts.Set(nil) })
+	s := rtopts.DefaultSnapshot()
+	s.DisableTurnLog = false
+	s.TurnLogPath = ""
+	rtopts.Set(&s)
 	cwd := t.TempDir()
 	lay := Layout{CWD: cwd}
 	AppendTurnAssistantFinalJSONL(lay, "sess_a", "c2", "user q", "final reply text")

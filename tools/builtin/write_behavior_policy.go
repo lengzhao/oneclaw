@@ -11,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/lengzhao/oneclaw/memory"
+	"github.com/lengzhao/oneclaw/rtopts"
 	"github.com/lengzhao/oneclaw/toolctx"
 	"github.com/openai/openai-go"
 )
@@ -54,8 +55,7 @@ func (WriteBehaviorPolicyTool) Parameters() openai.FunctionParameters {
 }
 
 func behaviorPolicyWriteDisabled() bool {
-	v := strings.TrimSpace(os.Getenv("ONCLAW_DISABLE_BEHAVIOR_POLICY_WRITE"))
-	return v == "1" || strings.EqualFold(v, "true") || strings.EqualFold(v, "yes")
+	return rtopts.Current().DisableBehaviorPolicyWrite
 }
 
 func validatedSkillStem(ruleName string) (string, error) {
@@ -113,7 +113,7 @@ func resolveBehaviorPolicyPath(cwd, target, ruleName string) (string, error) {
 
 func (WriteBehaviorPolicyTool) Execute(_ context.Context, input json.RawMessage, tctx *toolctx.Context) (string, error) {
 	if behaviorPolicyWriteDisabled() {
-		return "", fmt.Errorf("write_behavior_policy is disabled (ONCLAW_DISABLE_BEHAVIOR_POLICY_WRITE)")
+		return "", fmt.Errorf("write_behavior_policy is disabled (features.disable_behavior_policy_write in config)")
 	}
 	var in struct {
 		Target   string `json:"target"`

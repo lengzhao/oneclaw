@@ -20,7 +20,7 @@ func TestE2E_70_SinkRegistryTextAndDone(t *testing.T) {
 	reg := routing.NewMapRegistry()
 	reg.Register("cli", captureSink{recs: &recs, mu: &mu})
 
-	e := newStubEngine(t, t.TempDir())
+	e := newStubEngine(t, stub, t.TempDir())
 	e.SinkRegistry = reg
 
 	if err := e.SubmitUser(context.Background(), routing.Inbound{Source: "cli", Text: "hello sink"}); err != nil {

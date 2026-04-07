@@ -23,7 +23,7 @@ func TestE2E_StubTextReply(t *testing.T) {
 	e2eEnvMinimal(t, stub)
 
 	cwd := t.TempDir()
-	client := openai.NewClient()
+	client := openai.NewClient(stubOpenAIOptions(stub)...)
 	msgs := []openai.ChatCompletionMessageParamUnion{}
 	reg := tools.NewRegistry()
 	err := loop.RunTurn(context.Background(), loop.Config{
@@ -65,7 +65,7 @@ func TestE2E_StubToolThenText(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	client := openai.NewClient()
+	client := openai.NewClient(stubOpenAIOptions(stub)...)
 	msgs := []openai.ChatCompletionMessageParamUnion{}
 	reg := builtin.DefaultRegistry()
 

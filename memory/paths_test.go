@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/lengzhao/oneclaw/rtopts"
 )
 
 func TestExpandTilde(t *testing.T) {
@@ -80,7 +82,8 @@ func TestProjectMemoryMdPath(t *testing.T) {
 }
 
 func TestMemoryBaseDir_ExpandsTildeInEnv(t *testing.T) {
-	t.Setenv("ONCLAW_MEMORY_BASE", "~/custom-base")
+	t.Cleanup(func() { rtopts.Set(nil) })
+	rtopts.Set(&rtopts.Snapshot{MemoryBase: "~/custom-base"})
 	got := MemoryBaseDir("/Users/someone")
 	want := filepath.Join("/Users/someone", "custom-base")
 	if got != filepath.Clean(want) {

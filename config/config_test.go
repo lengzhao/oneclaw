@@ -39,7 +39,6 @@ model: from-project
 	if r.ChatModel() != "from-project" {
 		t.Fatalf("model: got %q want from-project", r.ChatModel())
 	}
-	t.Setenv("OPENAI_API_KEY", "")
 	if r.apiKeyResolved() != "user-key" {
 		t.Fatalf("api key: got %q want user-key", r.apiKeyResolved())
 	}

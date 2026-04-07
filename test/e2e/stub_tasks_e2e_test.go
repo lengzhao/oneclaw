@@ -11,6 +11,7 @@ import (
 
 	"github.com/lengzhao/oneclaw/loop"
 	"github.com/lengzhao/oneclaw/memory"
+	"github.com/lengzhao/oneclaw/rtopts"
 	"github.com/lengzhao/oneclaw/routing"
 	"github.com/lengzhao/oneclaw/tasks"
 	"github.com/lengzhao/oneclaw/test/openaistub"
@@ -30,7 +31,7 @@ func TestE2E_108_TasksBlockInSystemPrompt(t *testing.T) {
 	stub.Enqueue(openaistub.CompletionStop("", "ok"))
 	e2eEnvMinimal(t, stub)
 
-	e := newStubEngine(t, cwd)
+	e := newStubEngine(t, stub, cwd)
 	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "ping"}); err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +52,7 @@ func TestE2E_108_TasksBlockInSystemPrompt(t *testing.T) {
 	}
 }
 
-// E2E-109 task_create / task_update 落盘；ONCLAW_DISABLE_TASKS=1 时 system 无 Task list。
+// E2E-109 task_create / task_update 落盘；rtopts.DisableTasks 时 system 无 Task list。
 func TestE2E_109_TaskToolsWriteFileAndDisableHidesBlock(t *testing.T) {
 	cwd := t.TempDir()
 	stub := openaistub.New(t)
@@ -61,7 +62,7 @@ func TestE2E_109_TaskToolsWriteFileAndDisableHidesBlock(t *testing.T) {
 	stub.Enqueue(openaistub.CompletionStop("", "done"))
 	e2eEnvMinimal(t, stub)
 
-	client := openai.NewClient()
+	client := openai.NewClient(stubOpenAIOptions(stub)...)
 	msgs := []openai.ChatCompletionMessageParamUnion{}
 	err := loop.RunTurn(context.Background(), loop.Config{
 		Client:      &client,
@@ -105,7 +106,7 @@ func TestE2E_109_TaskToolsWriteFileAndDisableHidesBlock(t *testing.T) {
 	}))
 	stub2.Enqueue(openaistub.CompletionStop("", "ok"))
 	e2eEnvMinimal(t, stub2)
-	client2 := openai.NewClient()
+	client2 := openai.NewClient(stubOpenAIOptions(stub2)...)
 	msgs2 := []openai.ChatCompletionMessageParamUnion{}
 	err = loop.RunTurn(context.Background(), loop.Config{
 		Client:      &client2,
@@ -125,11 +126,13 @@ func TestE2E_109_TaskToolsWriteFileAndDisableHidesBlock(t *testing.T) {
 		t.Fatalf("expected completed status in file: %s", string(b))
 	}
 
-	t.Setenv("ONCLAW_DISABLE_TASKS", "1")
 	stub3 := openaistub.New(t)
 	stub3.Enqueue(openaistub.CompletionStop("", "ok"))
 	e2eEnvMinimal(t, stub3)
-	e := newStubEngine(t, cwd)
+	s := rtopts.Current()
+	s.DisableTasks = true
+	rtopts.Set(&s)
+	e := newStubEngine(t, stub3, cwd)
 	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "ping"}); err != nil {
 		t.Fatal(err)
 	}

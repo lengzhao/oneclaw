@@ -22,7 +22,7 @@ func TestE2E_StubRunAgentNested(t *testing.T) {
 	e2eEnvMinimal(t, stub)
 
 	cwd := t.TempDir()
-	e := newStubEngine(t, cwd)
+	e := newStubEngine(t, stub, cwd)
 	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "go"}); err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +51,7 @@ func TestE2E_StubForkContext(t *testing.T) {
 	e2eEnvMinimal(t, stub)
 
 	cwd := t.TempDir()
-	e := newStubEngine(t, cwd)
+	e := newStubEngine(t, stub, cwd)
 	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "hi"}); err != nil {
 		t.Fatal(err)
 	}

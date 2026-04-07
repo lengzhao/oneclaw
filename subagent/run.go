@@ -36,7 +36,7 @@ type Host struct {
 	MaxInheritedMessages int
 	// HistoryBudget trims nested transcript each step (usually same as main session).
 	HistoryBudget budget.Global
-	// ChatTransport overrides ONCLAW_CHAT_TRANSPORT when non-empty.
+	// ChatTransport overrides default transport when non-empty.
 	ChatTransport string
 }
 
@@ -104,6 +104,7 @@ func RunAgent(ctx context.Context, h *Host, parent *toolctx.Context, agentType, 
 		Messages:      &msgs,
 		Registry:      reg,
 		ToolContext:   child,
+		SessionID:     h.SessionID,
 		CanUseTool:    h.CanUseTool,
 		Outbound:      nil,
 		MemoryAgentMd: "",
@@ -169,6 +170,7 @@ func RunFork(ctx context.Context, h *Host, parent *toolctx.Context, task string,
 		Messages:      &msgs,
 		Registry:      reg,
 		ToolContext:   child,
+		SessionID:     h.SessionID,
 		CanUseTool:    wrapConservative(h.CanUseTool),
 		Outbound:      nil,
 		Budget:        h.HistoryBudget,

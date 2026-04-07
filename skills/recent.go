@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/lengzhao/oneclaw/memory"
+	"github.com/lengzhao/oneclaw/rtopts"
 )
 
 // RecentEntry is one row in skills-recent.json.
@@ -25,7 +26,7 @@ type RecentFile struct {
 
 // RecentFilePath returns where we persist recent skill usage (project-local by default).
 func RecentFilePath(cwd string) string {
-	if p := strings.TrimSpace(os.Getenv("ONCLAW_SKILLS_RECENT_PATH")); p != "" {
+	if p := strings.TrimSpace(rtopts.Current().SkillsRecent); p != "" {
 		return filepath.Clean(p)
 	}
 	return filepath.Join(cwd, memory.DotDir, "skills-recent.json")

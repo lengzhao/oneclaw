@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/lengzhao/oneclaw/loop"
+	"github.com/lengzhao/oneclaw/rtopts"
 )
 
 // PostTurnInput is one user turn's extract payload (tools are not added to chat history).
@@ -100,8 +101,6 @@ func UserTurnPreview(s string) string {
 	return oneLine(s, 200)
 }
 
-// memoryExtractDisabled: daily log append is on by default; set ONCLAW_DISABLE_MEMORY_EXTRACT=1 to turn off.
 func memoryExtractDisabled() bool {
-	v := strings.TrimSpace(os.Getenv("ONCLAW_DISABLE_MEMORY_EXTRACT"))
-	return v == "1" || strings.EqualFold(v, "true") || strings.EqualFold(v, "yes")
+	return rtopts.Current().DisableMemoryExtract
 }

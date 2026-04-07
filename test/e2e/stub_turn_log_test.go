@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/lengzhao/oneclaw/memory"
+	"github.com/lengzhao/oneclaw/rtopts"
 	"github.com/lengzhao/oneclaw/routing"
 	"github.com/lengzhao/oneclaw/test/openaistub"
 )
@@ -23,17 +24,19 @@ func turnLogPathToday(t *testing.T, cwd, home string) string {
 
 // E2E-98 无工具时仍写入 assistant_final 一行（按日分文件）
 func TestE2E_98_TurnLogAssistantFinalWithoutTools(t *testing.T) {
-	t.Setenv("ONCLAW_DISABLE_MEMORY_EXTRACT", "")
-	t.Setenv("ONCLAW_DISABLE_TURN_LOG", "")
-	t.Setenv("ONCLAW_DISABLE_MEMORY_AUDIT", "1")
 	home := t.TempDir()
 	cwd := t.TempDir()
 	t.Setenv("HOME", home)
 	stub := openaistub.New(t)
 	stub.Enqueue(openaistub.CompletionStop("", "assistant for turn log"))
 	e2eEnvWithMemory(t, stub)
+	s := rtopts.Current()
+	s.DisableMemoryExtract = false
+	s.DisableTurnLog = false
+	s.DisableMemoryAudit = true
+	rtopts.Set(&s)
 	e2eIsolateUserMemory(t, home)
-	e := newStubEngine(t, cwd)
+	e := newStubEngine(t, stub, cwd)
 	if err := e.SubmitUser(context.Background(), routing.Inbound{
 		Text:          "user for turn log",
 		CorrelationID: "corr-98",
@@ -63,9 +66,6 @@ func TestE2E_98_TurnLogAssistantFinalWithoutTools(t *testing.T) {
 
 // E2E-100 工具一行 + 回合结束 assistant_final 一行
 func TestE2E_100_TurnLogToolThenAssistantFinal(t *testing.T) {
-	t.Setenv("ONCLAW_DISABLE_MEMORY_EXTRACT", "")
-	t.Setenv("ONCLAW_DISABLE_TURN_LOG", "")
-	t.Setenv("ONCLAW_DISABLE_MEMORY_AUDIT", "1")
 	home := t.TempDir()
 	cwd := t.TempDir()
 	t.Setenv("HOME", home)
@@ -75,11 +75,16 @@ func TestE2E_100_TurnLogToolThenAssistantFinal(t *testing.T) {
 	}))
 	stub.Enqueue(openaistub.CompletionStop("", "done reading"))
 	e2eEnvWithMemory(t, stub)
+	s100 := rtopts.Current()
+	s100.DisableMemoryExtract = false
+	s100.DisableTurnLog = false
+	s100.DisableMemoryAudit = true
+	rtopts.Set(&s100)
 	e2eIsolateUserMemory(t, home)
 	if err := os.WriteFile(filepath.Join(cwd, "note.txt"), []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	e := newStubEngine(t, cwd)
+	e := newStubEngine(t, stub, cwd)
 	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "read note"}); err != nil {
 		t.Fatal(err)
 	}
@@ -115,18 +120,20 @@ func TestE2E_100_TurnLogToolThenAssistantFinal(t *testing.T) {
 	}
 }
 
-// E2E-99 ONCLAW_DISABLE_TURN_LOG=1 时不创建 turn-log 文件
+// E2E-99 features.disable_turn_log 时不创建 turn-log 文件
 func TestE2E_99_TurnLogDisabledNoFile(t *testing.T) {
-	t.Setenv("ONCLAW_DISABLE_MEMORY_EXTRACT", "")
-	t.Setenv("ONCLAW_DISABLE_TURN_LOG", "1")
 	home := t.TempDir()
 	cwd := t.TempDir()
 	t.Setenv("HOME", home)
 	stub := openaistub.New(t)
 	stub.Enqueue(openaistub.CompletionStop("", "x"))
 	e2eEnvWithMemory(t, stub)
+	s99 := rtopts.Current()
+	s99.DisableMemoryExtract = false
+	s99.DisableTurnLog = true
+	rtopts.Set(&s99)
 	e2eIsolateUserMemory(t, home)
-	eng := newStubEngine(t, cwd)
+	eng := newStubEngine(t, stub, cwd)
 	if err := eng.SubmitUser(context.Background(), routing.Inbound{Text: "y"}); err != nil {
 		t.Fatal(err)
 	}

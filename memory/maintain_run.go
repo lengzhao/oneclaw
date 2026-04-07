@@ -97,8 +97,8 @@ type ScheduledMaintainOpts struct {
 	// Interval is how often the caller invokes RunScheduledMaintain (e.g. maintainloop tick, cmd/maintain -interval).
 	// When Interval > 0, daily logs are collected **incrementally**: only lines whose embedded RFC3339 timestamp
 	// is after the saved high-water mark (from the last successful pass), with a first-run lookback of Interval
-	// and caps/overlap from ONCLAW_MAINTENANCE_INCREMENTAL_* (see docs/config.md).
-	// When Interval <= 0 or opts is nil, uses legacy calendar mode: ONCLAW_MAINTENANCE_LOG_DAYS.
+	// and caps/overlap from YAML maintain.incremental_* (see docs/config.md).
+	// When Interval <= 0 or opts is nil, uses legacy calendar mode: maintain.log_days (rtopts).
 	Interval time.Duration
 	// ToolRegistry must register far-field tools (e.g. builtin.ScheduledMaintainReadRegistry: reads + write_behavior_policy). Required for far-field runs;
 	// nil skips scheduled maintenance with a log line (avoids memory importing tools/builtin).
@@ -130,7 +130,7 @@ func RunPostTurnMaintain(ctx context.Context, layout Layout, client *openai.Clie
 }
 
 // MaybePostTurnMaintain runs post-turn maintenance when auto maintenance is enabled (see autoMaintenanceEnabled).
-// ctx is not used for cancellation or deadlines (post-turn runs on context.Background + ONCLAW_POST_TURN_MAINTENANCE_TIMEOUT_SEC).
+// ctx is not used for cancellation or deadlines (post-turn runs on context.Background + maintain.post_turn timeout from rtopts).
 func MaybePostTurnMaintain(ctx context.Context, layout Layout, client *openai.Client, mainChatModel string, maxTokens int64, turn *PostTurnInput) {
 	if client == nil || !autoMaintenanceEnabled() {
 		return

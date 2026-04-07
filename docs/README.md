@@ -14,7 +14,7 @@
 
 | 文档 | 说明 |
 |------|------|
-| [config.md](config.md) | 统一 YAML 配置：合并顺序、`--config`、API key 与 `ONCLAW_*` 优先级、`ApplyEnvDefaults` |
+| [config.md](config.md) | 统一 YAML 配置：合并顺序、`--config`、API key、`PushRuntime` / `rtopts` |
 | [outbound-events-design.md](outbound-events-design.md) | 出站事件 envelope、`Record`/`Sink`、CLI/HTTP 行为 |
 | [inbound-routing-design.md](inbound-routing-design.md) | 入站 `Inbound` 字段表、可选 `ctx` 透传、`SinkRegistry`（`routing` 核心 + `channel/*` 子包按渠道注册终端 `Sink` 等） |
 | [embedded-maintain-scheduler-design.md](embedded-maintain-scheduler-design.md) | 主进程 **`maintainloop`**：合并 YAML **`maintain.interval` 非空** 时启动；先跑 1 次再周期；**`RunScheduledMaintain`**；**`disable_scheduled_maintenance`**；与 **`oneclaw -maintain-once`** / `cmd/maintain` 互斥写盘 |

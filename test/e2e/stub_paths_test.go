@@ -28,7 +28,7 @@ func TestE2E_40_WriteFileUnderCwdOnly(t *testing.T) {
 	e2eEnvMinimal(t, stub)
 
 	cwd := t.TempDir()
-	client := openai.NewClient()
+	client := openai.NewClient(stubOpenAIOptions(stub)...)
 	msgs := []openai.ChatCompletionMessageParamUnion{}
 	err := loop.RunTurn(context.Background(), loop.Config{
 		Client:      &client,
@@ -71,7 +71,7 @@ func TestE2E_41_WriteFileUnderUserMemoryRoot(t *testing.T) {
 	tctx := toolctx.New(cwd, context.Background())
 	tctx.MemoryWriteRoots = lay.WriteRoots()
 
-	client := openai.NewClient()
+	client := openai.NewClient(stubOpenAIOptions(stub)...)
 	msgs := []openai.ChatCompletionMessageParamUnion{}
 	err = loop.RunTurn(context.Background(), loop.Config{
 		Client:      &client,
@@ -111,7 +111,7 @@ func TestE2E_42_WriteFileRejectedOutsideRoots(t *testing.T) {
 	tctx := toolctx.New(cwd, context.Background())
 	tctx.MemoryWriteRoots = lay.WriteRoots()
 
-	client := openai.NewClient()
+	client := openai.NewClient(stubOpenAIOptions(stub)...)
 	msgs := []openai.ChatCompletionMessageParamUnion{}
 	err := loop.RunTurn(context.Background(), loop.Config{
 		Client:      &client,
@@ -167,7 +167,7 @@ func TestE2E_43_GrepUnderProjectMemoryRoot(t *testing.T) {
 	tctx := toolctx.New(cwd, context.Background())
 	tctx.MemoryWriteRoots = lay.WriteRoots()
 
-	client := openai.NewClient()
+	client := openai.NewClient(stubOpenAIOptions(stub)...)
 	msgs := []openai.ChatCompletionMessageParamUnion{}
 	err := loop.RunTurn(context.Background(), loop.Config{
 		Client:      &client,

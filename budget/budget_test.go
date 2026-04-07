@@ -17,18 +17,18 @@ func TestTruncateUTF8_ascii(t *testing.T) {
 }
 
 func TestRecallBytes_respectsCeil(t *testing.T) {
-	t.Setenv("ONCLAW_DISABLE_CONTEXT_BUDGET", "")
-	t.Setenv("ONCLAW_MAX_PROMPT_BYTES", "900000")
-	t.Setenv("ONCLAW_RECALL_MAX_BYTES", "12000")
-	g := FromEnv()
+	g := Global{
+		MaxPromptBytes:  900_000,
+		MinTailMessages: 6,
+		RecallMaxBytes:  12_000,
+	}
 	if g.RecallBytes() != 12000 {
 		t.Fatalf("RecallBytes=%d want 12000", g.RecallBytes())
 	}
 }
 
-func TestFromEnv_disabled(t *testing.T) {
-	t.Setenv("ONCLAW_DISABLE_CONTEXT_BUDGET", "1")
-	g := FromEnv()
+func TestGlobal_disabled(t *testing.T) {
+	g := Global{MaxPromptBytes: 0, MinTailMessages: 4}
 	if g.Enabled() {
 		t.Fatal("expected disabled")
 	}

@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/lengzhao/oneclaw/rtopts"
 )
 
 const scheduledMaintainStateFile = "scheduled_maintain_state.json"
@@ -61,23 +63,11 @@ type scheduledMaintainStateJSON struct {
 }
 
 func maintenanceIncrementalOverlap() time.Duration {
-	return getenvDurationMaint("ONCLAW_MAINTENANCE_INCREMENTAL_OVERLAP", 2*time.Minute)
+	return rtopts.Current().MaintenanceIncrementalOverlap
 }
 
 func maintenanceIncrementalMaxSpan() time.Duration {
-	return getenvDurationMaint("ONCLAW_MAINTENANCE_INCREMENTAL_MAX_SPAN", 168*time.Hour)
-}
-
-func getenvDurationMaint(key string, def time.Duration) time.Duration {
-	s := strings.TrimSpace(os.Getenv(key))
-	if s == "" {
-		return def
-	}
-	d, err := time.ParseDuration(s)
-	if err != nil || d < 0 {
-		return def
-	}
-	return d
+	return rtopts.Current().MaintenanceIncrementalMaxSpan
 }
 
 func loadScheduledState(path string) (lastWall *time.Time, lineHigh *time.Time, err error) {

@@ -1,18 +1,15 @@
 # 复制到 ~/.oneclaw/config.yaml 或 <cwd>/.oneclaw/config.yaml；合并与优先级见 docs/config.md。
 # 若修改本文件，请同步更新 config/project_init.example.yaml（供 oneclaw -init 嵌入）。
-# 入口 Load 之后会调用 config.ApplyEnvDefaults：仅当某个 ONCLAW_* 尚未设置时，才用 YAML 补全；
-# 不会写入 OPENAI_API_KEY（密钥优先放在 openai.api_key，由客户端选项注入）。
-#
-# 环境变量仍可覆盖非敏感项（如 OPENAI_BASE_URL、ONCLAW_MODEL 等），规则见 docs/config.md。
-# 「关闭类」 features.disable_*：true 为关闭；省略或 false 为开启（与 ONCLAW_DISABLE_* 的 0/1 语义对应）。
+# 入口 Load 后应调用 PushRuntime()：将合并结果写入 rtopts；运行时以 YAML 为准，不读 ONCLAW_* / OPENAI_* 环境变量做配置。
+# 「关闭类」 features.disable_*：true 为关闭；省略或 false 为开启。
 
 # -----------------------------------------------------------------------------
 # OpenAI 兼容 API（openai-go 客户端）
 # -----------------------------------------------------------------------------
 openai:
-  # 推荐在此填写；非空时优先于环境变量 OPENAI_API_KEY
+  # 必填（运行需要）；由 config.OpenAIOptions 注入客户端
   api_key: ""
-  # 可选；自定义网关时设置，需包含 /v1/ 后缀。环境变量 OPENAI_BASE_URL 优先于本字段
+  # 可选；自定义网关时设置，需包含 /v1/ 后缀
   base_url: ""
   org_id: ""
   project_id: ""
@@ -23,7 +20,7 @@ openai:
 model: gpt-4o
 
 chat:
-  # 空或 auto：流式失败则回退非流式；环境变量 ONCLAW_CHAT_TRANSPORT 优先
+  # auto：流式失败则回退非流式；仅支持非流式的网关请用 non_stream
   transport: auto
 
 # -----------------------------------------------------------------------------
@@ -100,7 +97,7 @@ features:
 # 自动维护（将 daily log 蒸馏进 MEMORY.md）
 # -----------------------------------------------------------------------------
 # 代码上分为两入口：回合后 MaybePostTurnMaintain（近场）与定时 RunScheduledMaintain（oneclaw -maintain-once / cmd/maintain / 可选进程内 loop）。
-# 回合后：ONCLAW_POST_TURN_MAINTENANCE_* 或 maintain.post_turn.*（经 ApplyEnvDefaults）。
+# 回合后：maintain.post_turn.*（见 docs/config.md）。
 # 进程内定时：仅当下面 interval 在 YAML 中非空时 oneclaw 才启动 maintainloop；留空则不启（避免默认多扣 API）。
 # 未写 interval 时仍可用 oneclaw -maintain-once、cmd/maintain；间隔默认值见 MaintainLoopInterval。
 # interval 模式（进程内 loop / cmd/maintain -interval）：远场 daily log 为增量（行内时间戳），状态 .oneclaw/scheduled_maintain_state.json。
@@ -117,9 +114,28 @@ maintain:
   #   memory_preview_bytes: 4000  # MEMORY.md 摘录上限（去重用）
 
 # -----------------------------------------------------------------------------
-# 上下文预算
+# 上下文预算（UTF-8 字节；关闭：features.disable_context_budget）
 # -----------------------------------------------------------------------------
 budget:
+  # 整轮上下文「总盘子」上限（含系统提示、注入、历史等一起规划时的基准）。
+  # 与下面二选一：若本项非 0，则直接用字节数；若希望按「token×2」换算，可只写 max_context_tokens、省略本项。
   max_prompt_bytes: 220000
+  # 仅当未配置 max_prompt_bytes（或为 0）时生效：实际字节上限 = 本值 × 2（默认 110000 → 220000 字节，与上面示例等价）。
+  # max_context_tokens: 110000
+  # 裁剪历史时至少保留最近几条消息（user/assistant/tool 一轮可能占多条），避免裁成空对话。
   min_transcript_messages: 6
+  # 本回合注入的「记忆 recall」附件（检索出的片段）总长度上限；另受总上限约 10% 约束，见 docs/config.md。
   recall_max_bytes: 12000
+  # 工作历史（多轮 user/assistant/tool 正文 + 工具名与 arguments）允许占用的 UTF-8 字节上限。
+  # 0 = 自动：约为 max_prompt_bytes 的 42%（不低于 24k），且不超过「总上限 − 当前系统提示长度 − 5% slack」。
+  history_max_bytes: 0
+  # 系统提示里「## File-based memory」等文件记忆说明段（不含主模板其它部分）的最大字节；超出则截断。
+  # 0 = 自动：约为总上限的 20%（不低于 8k）。
+  system_extra_max_bytes: 0
+  # 注入为 user 形的 agentMd（AGENT.md、规则、MEMORY 规则摘要等 <system-reminder> 大块）最大字节；超出则截断。
+  # 0 = 自动：约为总上限的 22%（不低于 8k）。
+  agent_md_max_bytes: 0
+  # 系统提示中「Skills」索引与主线程工具目录列表的合并上限（名称 + 短描述）；0 = 自动约 1%（2k–24k）
+  skill_index_max_bytes: 0
+  # run_agent / fork_context 从父会话继承到子会话的「最近消息条数」上限；0 = 自动按总上限推算（约 max/800，夹在 12–80 条）。
+  inherited_messages: 0

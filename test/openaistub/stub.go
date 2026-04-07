@@ -1,5 +1,5 @@
 // Package openaistub is a minimal OpenAI-compatible HTTP server for integration tests.
-// Point OPENAI_BASE_URL at BaseURL() and set ONCLAW_CHAT_TRANSPORT=non_stream.
+// Use option.WithBaseURL(s.BaseURL()) (see test/e2e stubOpenAIOptions) and rtopts chat.transport non_stream.
 package openaistub
 
 import (

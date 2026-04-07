@@ -27,8 +27,8 @@ func main() {
 	cwdFlag := flag.String("cwd", "", "project root directory (default: current working directory)")
 	maintainOnce := flag.Bool("maintain-once", false, "run one scheduled memory distill pass and exit (no channels)")
 	initFlag := flag.Bool("init", false, "create <cwd>/.oneclaw/config.yaml from the built-in example and memory dirs, then exit")
-	logLevel := flag.String("log-level", "", "debug|info|warn|error (overrides ONCLAW_LOG_LEVEL when non-empty)")
-	logFormat := flag.String("log-format", "", "text|json (overrides ONCLAW_LOG_FORMAT when non-empty)")
+	logLevel := flag.String("log-level", "", "debug|info|warn|error (overrides config log.level when non-empty)")
+	logFormat := flag.String("log-format", "", "text|json (overrides config log.format when non-empty)")
 	flag.Parse()
 
 	if *maintainOnce && *initFlag {
@@ -61,12 +61,12 @@ func main() {
 		slog.Error("config.load", "err", err)
 		os.Exit(1)
 	}
-	config.ApplyEnvDefaults(cfg)
+	cfg.PushRuntime()
 	logx.Init(cfg.LogLevel(*logLevel), cfg.LogFormat(*logFormat))
 
 	if *maintainOnce {
 		if !cfg.HasAPIKey() {
-			slog.Error("missing API key: set openai.api_key in config or OPENAI_API_KEY",
+			slog.Error("missing API key: set openai.api_key in config",
 				"user_config", filepath.Join(home, config.UserRelPath),
 				"project_config", filepath.Join(absCwd, memory.DotDir, "config.yaml"),
 			)
@@ -119,7 +119,7 @@ func main() {
 	}
 
 	if !cfg.HasAPIKey() {
-		slog.Error("missing API key: set openai.api_key in config or OPENAI_API_KEY",
+		slog.Error("missing API key: set openai.api_key in config",
 			"user_config", filepath.Join(home, config.UserRelPath),
 			"project_config", filepath.Join(absCwd, memory.DotDir, "config.yaml"),
 		)

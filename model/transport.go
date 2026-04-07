@@ -1,11 +1,12 @@
 package model
 
 import (
-	"os"
 	"strings"
+
+	"github.com/lengzhao/oneclaw/rtopts"
 )
 
-// Chat transport (OpenAI-compatible). Env: ONCLAW_CHAT_TRANSPORT
+// Chat transport (OpenAI-compatible). Config: chat.transport in oneclaw YAML (via rtopts).
 //
 //   - auto (default): try streaming, then non-streaming on failure (some gateways
 //     e.g. Kimi/Moonshot return broken SSE with empty JSON chunks).
@@ -20,11 +21,6 @@ const (
 	transportNonStream
 )
 
-func chatTransportFromEnv() chatTransport {
-	s := strings.ToLower(strings.TrimSpace(os.Getenv("ONCLAW_CHAT_TRANSPORT")))
-	return parseChatTransportString(s)
-}
-
 func parseChatTransportString(s string) chatTransport {
 	switch strings.ToLower(strings.TrimSpace(s)) {
 	case "stream":
@@ -38,10 +34,10 @@ func parseChatTransportString(s string) chatTransport {
 	}
 }
 
-// resolveTransport uses hint when non-empty, otherwise ONCLAW_CHAT_TRANSPORT.
+// resolveTransport uses hint when non-empty, otherwise chat.transport from config.
 func resolveTransport(hint string) chatTransport {
 	if strings.TrimSpace(hint) != "" {
 		return parseChatTransportString(hint)
 	}
-	return chatTransportFromEnv()
+	return parseChatTransportString(rtopts.Current().ChatTransport)
 }

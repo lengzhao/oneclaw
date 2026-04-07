@@ -39,7 +39,6 @@ func TestValidateExactlyOneSchedule(t *testing.T) {
 }
 
 func TestAddEveryAndCollectDue(t *testing.T) {
-	t.Setenv("ONCLAW_DISABLE_SCHEDULED_TASKS", "")
 	cwd := t.TempDir()
 	spec, err := ScheduleSpec{EverySeconds: 1}.Validate()
 	if err != nil {
@@ -90,7 +89,6 @@ func TestAddEveryAndCollectDue(t *testing.T) {
 }
 
 func TestCollectDueAtRemovesJob(t *testing.T) {
-	t.Setenv("ONCLAW_DISABLE_SCHEDULED_TASKS", "")
 	cwd := t.TempDir()
 	past := time.Now().UTC().Add(-2 * time.Minute)
 	spec, err := ScheduleSpec{AtRFC3339: past.Format(time.RFC3339)}.Validate()
@@ -131,7 +129,6 @@ func TestCollectDueAtRemovesJob(t *testing.T) {
 }
 
 func TestCompactDisabledJobsOnList(t *testing.T) {
-	t.Setenv("ONCLAW_DISABLE_SCHEDULED_TASKS", "")
 	cwd := t.TempDir()
 	path := Path(cwd)
 	dir := filepath.Join(cwd, memory.DotDir)

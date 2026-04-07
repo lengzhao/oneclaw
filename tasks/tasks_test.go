@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lengzhao/oneclaw/memory"
+	"github.com/lengzhao/oneclaw/rtopts"
 )
 
 func TestPath(t *testing.T) {
@@ -18,7 +19,6 @@ func TestPath(t *testing.T) {
 
 func TestCreateAppendAndUpdate(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("ONCLAW_DISABLE_TASKS", "")
 	_, err := Create(dir, false, []CreateInput{{Subject: "first", Status: "pending"}})
 	if err != nil {
 		t.Fatal(err)
@@ -85,7 +85,10 @@ func TestReadMissing(t *testing.T) {
 
 func TestDisabled(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("ONCLAW_DISABLE_TASKS", "1")
+	t.Cleanup(func() { rtopts.Set(nil) })
+	s := rtopts.DefaultSnapshot()
+	s.DisableTasks = true
+	rtopts.Set(&s)
 	if _, err := Create(dir, false, []CreateInput{{Subject: "x"}}); err == nil {
 		t.Fatal("expected error when disabled")
 	}
@@ -96,7 +99,6 @@ func TestDisabled(t *testing.T) {
 
 func TestSystemBlockNonEmpty(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("ONCLAW_DISABLE_TASKS", "")
 	_, err := Create(dir, false, []CreateInput{{Subject: "do thing", Status: "in_progress"}})
 	if err != nil {
 		t.Fatal(err)

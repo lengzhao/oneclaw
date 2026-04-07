@@ -3,12 +3,12 @@ package loop
 import (
 	"fmt"
 	"log/slog"
-	"os"
 	"strings"
 	"time"
 	"unicode/utf8"
 
 	"github.com/lengzhao/oneclaw/prompts"
+	"github.com/lengzhao/oneclaw/rtopts"
 	"github.com/openai/openai-go"
 )
 
@@ -16,18 +16,12 @@ import (
 const compactBoundaryKind = "compact_boundary"
 
 func semanticCompactEnabled() bool {
-	v := strings.TrimSpace(os.Getenv("ONCLAW_DISABLE_SEMANTIC_COMPACT"))
-	return v != "1" && !strings.EqualFold(v, "true") && !strings.EqualFold(v, "yes")
+	return !rtopts.Current().DisableSemanticCompact
 }
 
 func compactSummaryMaxBytes(limit int) int {
-	v := strings.TrimSpace(os.Getenv("ONCLAW_COMPACT_SUMMARY_MAX_BYTES"))
-	if v != "" {
-		var n int
-		_, _ = fmt.Sscanf(v, "%d", &n)
-		if n >= 256 && n <= 64_000 {
-			return n
-		}
+	if n := rtopts.Current().CompactSummaryMaxBytes; n >= 256 && n <= 64_000 {
+		return n
 	}
 	n := limit / 6
 	if n < 1024 {

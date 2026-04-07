@@ -16,7 +16,7 @@ import (
 func TestE2E_113_SlashHelpSkipsModel(t *testing.T) {
 	stub := openaistub.New(t)
 	e2eEnvMinimal(t, stub)
-	e := newStubEngine(t, t.TempDir())
+	e := newStubEngine(t, stub, t.TempDir())
 	err := e.SubmitUser(context.Background(), routing.Inbound{Text: "/help", Source: "cli"})
 	if err != nil {
 		t.Fatal(err)
@@ -35,7 +35,7 @@ func TestE2E_114_InboundMetaAndAttachmentInHistory(t *testing.T) {
 	stub := openaistub.New(t)
 	stub.Enqueue(openaistub.CompletionStop("", "ok"))
 	e2eEnvMinimal(t, stub)
-	e := newStubEngine(t, t.TempDir())
+	e := newStubEngine(t, stub, t.TempDir())
 	err := e.SubmitUser(context.Background(), routing.Inbound{
 		Text:       "see file",
 		Source:     "http",
@@ -65,7 +65,7 @@ func TestE2E_115_EmptyTextWithAttachmentAccepted(t *testing.T) {
 	stub := openaistub.New(t)
 	stub.Enqueue(openaistub.CompletionStop("", "read"))
 	e2eEnvMinimal(t, stub)
-	e := newStubEngine(t, t.TempDir())
+	e := newStubEngine(t, stub, t.TempDir())
 	err := e.SubmitUser(context.Background(), routing.Inbound{
 		Text: "   ",
 		Attachments: []routing.Attachment{

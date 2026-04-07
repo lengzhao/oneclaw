@@ -2,7 +2,7 @@
 
 本文约定：**回合后自动维护**与**定时自动维护**不仅在**开关**上分离，在**代码上也为两个独立入口**，便于各自演进 prompt、可见历史、预算与审计语义，而**不**再通过单一函数 + `Scheduled bool` 分支堆砌逻辑。
 
-**状态**：双入口 + **分路径 system 模板**（`maintenance_system_post_turn` / `maintenance_system_scheduled`）+ **审计 `post_turn_maintain` / `scheduled_maintain`** + **回合后 `PostTurnInput` 快照** + **`maintain.post_turn` YAML → `ONCLAW_POST_TURN_*`** + **`features.disable_scheduled_maintenance`** + **`maintainloop`**（见 [embedded-maintain-scheduler-design.md](embedded-maintain-scheduler-design.md)）。远场维护通过 **`ScheduledMaintainOpts.ToolRegistry`** 注入只读工具（`cmd/maintain` / `maintainloop` 默认 `builtin.ScheduledMaintainReadRegistry`，避免 `memory` 包 import `builtin` 成环）。**待续**：定时路径可选 transcript 窄读。与 Claude Code 范式对照见 [claude-code-memory-system.md](claude-code-memory-system.md) §13 / §15。
+**状态**：双入口 + **分路径 system 模板**（`maintenance_system_post_turn` / `maintenance_system_scheduled`）+ **审计 `post_turn_maintain` / `scheduled_maintain`** + **回合后 `PostTurnInput` 快照** + **`maintain.post_turn` YAML → `PushRuntime`/`rtopts`** + **`features.disable_scheduled_maintenance`** + **`maintainloop`**（见 [embedded-maintain-scheduler-design.md](embedded-maintain-scheduler-design.md)）。远场维护通过 **`ScheduledMaintainOpts.ToolRegistry`** 注入只读工具（`cmd/maintain` / `maintainloop` 默认 `builtin.ScheduledMaintainReadRegistry`，避免 `memory` 包 import `builtin` 成环）。**待续**：定时路径可选 transcript 窄读。与 Claude Code 范式对照见 [claude-code-memory-system.md](claude-code-memory-system.md) §13 / §15。
 
 ---
 
@@ -30,8 +30,8 @@
 | **产品语义** | **仅本回合刚结束**可沉淀的内容：事实、规则、注意事项、工具使用偏好、同一工具多次调用及原因（须在本回合文本/轨迹中可推断）。**不**从其它会话挖新点；daily log 可能含多日多会话，prompt 明确以 **Current turn snapshot** 为主证。 |
 | **建议符号** | `memory.MaybePostTurnMaintain`（门控 + 节流） / `memory.RunPostTurnMaintain`（实际执行一次） |
 | **调用方** | `session.Engine` 在每轮成功 `SubmitUser` 后（与现有 `PostTurn` 写 daily log 之后衔接） |
-| **开关** | `features.disable_auto_maintenance` / `ONCLAW_DISABLE_AUTO_MAINTENANCE` **仅**控制此入口 |
-| **输入视野（当前实现）** | **仅当前回合**：**`PostTurnInput`** 快照（user / assistant / 工具轨迹与重复调用摘要）+ **规则 `MEMORY.md` 摘录**（去重语料）；**不**读 daily log、**不**读 project topic。门控：`ONCLAW_POST_TURN_MAINTENANCE_MIN_LOG_BYTES` 作用于快照总字节（见 `docs/config.md`） |
+| **开关** | `features.disable_auto_maintenance` **仅**控制此入口 |
+| **输入视野（当前实现）** | **仅当前回合**：**`PostTurnInput`** 快照（user / assistant / 工具轨迹与重复调用摘要）+ **规则 `MEMORY.md` 摘录**（去重语料）；**不**读 daily log、**不**读 project topic。门控：`maintain.post_turn.min_log_bytes`（经 `rtopts`）作用于快照总字节（见 `docs/config.md`） |
 | **输出（当前实现）** | 写入 **`<project>/memory/YYYY-MM-DD.md`** 内 `## Auto-maintained (日期)` 段（**不**向根上 `MEMORY.md` 追加 episodic）；审计 **`post_turn_maintain`**；日志 **`pathway=post_turn`** |
 
 ### 2.2 定时维护（远场 / dream 取向）
@@ -41,8 +41,8 @@
 | **产品语义** | **跨会话、跨天**的整体整理：去重/合并、更新或收紧**规则**（根上 `MEMORY.md`）、标注过时并由新事实**取代**；面向 **episodic 日文件**、规则 `MEMORY.md` 与 topic 的**整体一致性**，而非单回合增量。 |
 | **建议符号** | `memory.RunScheduledMaintain`（单次蒸馏）；`maintainloop` / `cmd/maintain` 只调此入口 |
 | **调用方** | 主进程内嵌 interval 循环、`cmd/maintain`、未来独立 job |
-| **开关** | **`features.disable_scheduled_maintenance`** / **`ONCLAW_DISABLE_SCHEDULED_MAINTENANCE`**（后台：进程内 loop + `cmd/maintain` 间隔；**不**挡 **`maintain -once`**） |
-| **输入视野（当前实现）** | **interval 定时**：daily log **增量**（行时间戳 + `scheduled_maintain_state.json` 高水位；首次 lookback = interval）。**`-once` 或 `Interval==0`**：按 `ONCLAW_MAINTENANCE_LOG_DAYS` 做日历天 **log 体量探测**；正文由 Agent 经 **`opts.ToolRegistry` 只读工具**（如 `read_file` / `grep` / `glob` / `list_dir`）自读，user prompt 给绝对路径与任务说明。`ToolRegistry==nil` 则跳过远场。字节门控见 `docs/config.md` |
+| **开关** | **`features.disable_scheduled_maintenance`**（后台：进程内 loop + `cmd/maintain` 间隔；**不**挡 **`maintain -once`**） |
+| **输入视野（当前实现）** | **interval 定时**：daily log **增量**（行时间戳 + `scheduled_maintain_state.json` 高水位；首次 lookback = interval）。**`-once` 或 `Interval==0`**：按 `maintain.log_days`（经 `rtopts`）做日历天 **log 体量探测**；正文由 Agent 经 **`opts.ToolRegistry` 只读工具**（如 `read_file` / `grep` / `glob` / `list_dir`）自读，user prompt 给绝对路径与任务说明。`ToolRegistry==nil` 则跳过远场。字节门控见 `docs/config.md` |
 | **输出（当前实现）** | 同上，合并写入 **`<project>/memory/YYYY-MM-DD.md`**；审计 **`scheduled_maintain`**；**scheduled** system 模板；user prompt 强调 consolidation / supersede |
 
 ### 2.3 与「写 daily log」的关系
@@ -74,7 +74,7 @@
 ### 3.2 已分路径的细节
 
 - **数据抓取范围**：**`distillConfig`**（post-turn vs scheduled）。
-- **回合后近场**：**`PostTurnInput`** → **Current turn snapshot**（含 **tools** 与 **repeated_in_this_turn**；`ONCLAW_POST_TURN_MAINTAIN_*_SNAPSHOT_BYTES` 截断）；外加 **规则 `MEMORY.md` 前缀**；**不**拼接 daily log / topic。
+- **回合后近场**：**`PostTurnInput`** → **Current turn snapshot**（含 **tools** 与 **repeated_in_this_turn**；`maintain.post_turn.user_snapshot_bytes` / `assistant_snapshot_bytes` 经 `rtopts` 截断）；外加 **规则 `MEMORY.md` 前缀**；**不**拼接 daily log / topic。
 - **System 模板**：**`prompts.NameMaintenanceSystemPostTurn`** / **`NameMaintenanceSystemScheduled`**。
 - **门控条件**：当日 episodic 文件中若已有 `## Auto-maintained (YYYY-MM-DD)`，**不跳过**维护运行；模型输出与当日块 **合并**（去重、保留旧条 + 新条），写回时 **替换**该日 span，避免重复标题段。
 - **待续**：定时路径 **transcript** 窄读、**工具**白名单。
@@ -91,8 +91,8 @@
 |-------------|------|
 | `disable_auto_maintenance` | 仅 **回合后** |
 | `disable_scheduled_maintenance` | **后台定时**（`maintainloop`、`cmd/maintain` 间隔） |
-| `maintain.post_turn.*` | 经 `ApplyEnvDefaults` → `ONCLAW_POST_TURN_MAINTENANCE_*`（见 `docs/config.md`） |
-| `maintain.interval`（YAML 非空） | 启用 **`maintainloop`**；**仅 env** 不启进程内 loop |
+| `maintain.post_turn.*` | 经 `PushRuntime` 写入 `rtopts`（见 `docs/config.md`） |
+| `maintain.interval`（YAML 非空） | 启用 **`maintainloop`**；未写 YAML 则不启进程内 loop |
 | `maintain.model` / `scheduled_model` | **PostTurn** vs **Scheduled** 模型链 |
 
 ---

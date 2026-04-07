@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/lengzhao/oneclaw/memory"
+	"github.com/lengzhao/oneclaw/rtopts"
 	"github.com/lengzhao/oneclaw/routing"
 	"github.com/lengzhao/oneclaw/test/openaistub"
 )
@@ -24,16 +25,18 @@ type auditLine struct {
 
 // E2E-93 PostTurn 追加 daily log 后写入审计 JSONL（source=daily_log_line）
 func TestE2E_93_MemoryAuditDailyLog(t *testing.T) {
-	t.Setenv("ONCLAW_DISABLE_MEMORY_EXTRACT", "")
-	t.Setenv("ONCLAW_DISABLE_MEMORY_AUDIT", "")
 	home := t.TempDir()
 	cwd := t.TempDir()
 	t.Setenv("HOME", home)
 	stub := openaistub.New(t)
 	stub.Enqueue(openaistub.CompletionStop("", "assistant line for audit e2e"))
 	e2eEnvWithMemory(t, stub)
+	s := rtopts.Current()
+	s.DisableMemoryExtract = false
+	s.DisableMemoryAudit = false
+	rtopts.Set(&s)
 	e2eIsolateUserMemory(t, home)
-	e := newStubEngine(t, cwd)
+	e := newStubEngine(t, stub, cwd)
 	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "user line for audit e2e"}); err != nil {
 		t.Fatal(err)
 	}
@@ -60,18 +63,20 @@ func TestE2E_93_MemoryAuditDailyLog(t *testing.T) {
 	}
 }
 
-// E2E-94 ONCLAW_DISABLE_MEMORY_AUDIT=1 时不落盘审计文件
+// E2E-94 features.disable_memory_audit 时不落盘审计文件
 func TestE2E_94_MemoryAuditDisabledNoFile(t *testing.T) {
-	t.Setenv("ONCLAW_DISABLE_MEMORY_EXTRACT", "")
-	t.Setenv("ONCLAW_DISABLE_MEMORY_AUDIT", "1")
 	home := t.TempDir()
 	cwd := t.TempDir()
 	t.Setenv("HOME", home)
 	stub := openaistub.New(t)
 	stub.Enqueue(openaistub.CompletionStop("", "x"))
 	e2eEnvWithMemory(t, stub)
+	s := rtopts.Current()
+	s.DisableMemoryExtract = false
+	s.DisableMemoryAudit = true
+	rtopts.Set(&s)
 	e2eIsolateUserMemory(t, home)
-	e := newStubEngine(t, cwd)
+	e := newStubEngine(t, stub, cwd)
 	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "y"}); err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +90,6 @@ func TestE2E_94_MemoryAuditDisabledNoFile(t *testing.T) {
 
 // E2E-95 write_file 写入 memory 根时追加审计（source=write_file）
 func TestE2E_95_MemoryAuditWriteFileUnderMemoryRoot(t *testing.T) {
-	t.Setenv("ONCLAW_DISABLE_MEMORY_AUDIT", "")
 	home := t.TempDir()
 	cwd := t.TempDir()
 	t.Setenv("HOME", home)
@@ -101,8 +105,11 @@ func TestE2E_95_MemoryAuditWriteFileUnderMemoryRoot(t *testing.T) {
 	}))
 	stub.Enqueue(openaistub.CompletionStop("", "ok"))
 	e2eEnvWithMemory(t, stub)
+	s95 := rtopts.Current()
+	s95.DisableMemoryAudit = false
+	rtopts.Set(&s95)
 	e2eIsolateUserMemory(t, home)
-	e := newStubEngine(t, cwd)
+	e := newStubEngine(t, stub, cwd)
 	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "write memory topic"}); err != nil {
 		t.Fatal(err)
 	}

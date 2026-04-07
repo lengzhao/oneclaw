@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/lengzhao/oneclaw/memory"
+	"github.com/lengzhao/oneclaw/rtopts"
 )
 
 // E2E-20 project MEMORY.md（规则）出现在 BuildTurn 的 AgentMdBlock 中
@@ -71,9 +72,12 @@ func TestE2E_22_MemoryMDByteTruncationWarning(t *testing.T) {
 	}
 }
 
-// E2E-52 ONCLAW_DISABLE_AUTO_MEMORY 关闭 auto 在 system 文案中的展示
+// E2E-52 features.disable_auto_memory 关闭 auto 在 system 文案中的展示
 func TestE2E_52_AutoMemoryDisabledOmitsAutoBullet(t *testing.T) {
-	t.Setenv("ONCLAW_DISABLE_AUTO_MEMORY", "1")
+	t.Cleanup(func() { rtopts.Set(nil) })
+	s := rtopts.DefaultSnapshot()
+	s.DisableAutoMemory = true
+	rtopts.Set(&s)
 	home := t.TempDir()
 	cwd := t.TempDir()
 	e2eIsolateUserMemory(t, home)

@@ -9,7 +9,7 @@ import (
 	"github.com/openai/openai-go"
 )
 
-// Complete calls the chat API. Behavior depends on ONCLAW_CHAT_TRANSPORT (see transport.go).
+// Complete calls the chat API. Transport comes from chat.transport in config (see transport.go).
 func Complete(ctx context.Context, client *openai.Client, params openai.ChatCompletionNewParams) (*openai.ChatCompletion, error) {
 	return CompleteWithTransport(ctx, client, params, "")
 }
@@ -52,7 +52,7 @@ func completeAuto(ctx context.Context, client *openai.Client, params openai.Chat
 		"model", params.Model,
 		"duration_ms", time.Since(t0).Milliseconds(),
 		"err", err,
-		"hint", "set ONCLAW_CHAT_TRANSPORT=non_stream to skip streaming and save latency",
+		"hint", "set chat.transport: non_stream in config to skip streaming and save latency",
 	)
 
 	t1 := time.Now()

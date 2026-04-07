@@ -1,49 +1,39 @@
 package memory
 
 import (
-	"os"
-	"strconv"
 	"strings"
+
+	"github.com/lengzhao/oneclaw/rtopts"
 )
 
-// ResolveMaintenanceModel picks the API model for a maintenance distill pass.
-// Post-turn: ONCLAW_MAINTENANCE_MODEL → mainChatModel.
-// Scheduled: ONCLAW_MAINTENANCE_SCHEDULED_MODEL → ONCLAW_MAINTENANCE_MODEL → mainChatModel.
-// override is true when a maintenance-specific env was set (non-empty).
+// ResolveMaintenanceModel picks the API model for a maintenance distill pass from config (maintain.model / scheduled_model).
 func ResolveMaintenanceModel(mainChatModel string, scheduled bool) (model string, override bool) {
 	mainChatModel = strings.TrimSpace(mainChatModel)
+	rt := rtopts.Current()
 	if scheduled {
-		if v := strings.TrimSpace(os.Getenv("ONCLAW_MAINTENANCE_SCHEDULED_MODEL")); v != "" {
+		if v := strings.TrimSpace(rt.MaintenanceScheduledModel); v != "" {
 			return v, true
 		}
 	}
-	if v := strings.TrimSpace(os.Getenv("ONCLAW_MAINTENANCE_MODEL")); v != "" {
+	if v := strings.TrimSpace(rt.MaintenanceModel); v != "" {
 		return v, true
 	}
 	return mainChatModel, false
 }
 
-// MaintenanceMaxOutputTokens returns ONCLAW_MAINTENANCE_MAX_TOKENS if set, otherwise maxOut.
+// MaintenanceMaxOutputTokens returns maintain.max_tokens from config when set, otherwise maxOut.
 func MaintenanceMaxOutputTokens(maxOut int64) int64 {
-	v := strings.TrimSpace(os.Getenv("ONCLAW_MAINTENANCE_MAX_TOKENS"))
-	if v == "" {
-		return maxOut
+	if t := rtopts.Current().MaintenanceMaxTokens; t > 0 {
+		return t
 	}
-	n, err := strconv.ParseInt(v, 10, 64)
-	if err != nil || n <= 0 {
-		return maxOut
-	}
-	return n
+	return maxOut
 }
 
-// maintenanceEffectiveMaxTokens applies ONCLAW_POST_TURN_MAINTENANCE_MAX_TOKENS for post-turn when set, then MaintenanceMaxOutputTokens.
+// maintenanceEffectiveMaxTokens applies post_turn.max_tokens for post-turn when set, then MaintenanceMaxOutputTokens.
 func maintenanceEffectiveMaxTokens(maxOut int64, postTurn bool) int64 {
 	if postTurn {
-		if v := strings.TrimSpace(os.Getenv("ONCLAW_POST_TURN_MAINTENANCE_MAX_TOKENS")); v != "" {
-			n, err := strconv.ParseInt(v, 10, 64)
-			if err == nil && n > 0 {
-				return n
-			}
+		if t := rtopts.Current().PostTurnMaxTokens; t > 0 {
+			return t
 		}
 	}
 	return MaintenanceMaxOutputTokens(maxOut)

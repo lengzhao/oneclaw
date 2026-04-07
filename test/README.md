@@ -3,11 +3,7 @@
 ## 思路
 
 - 使用 **`test/openaistub`** 在本地起 **HTTP 服务**，实现 **`POST /v1/chat/completions`**，返回与 OpenAI 兼容的 JSON。
-- **`openai.NewClient()`** 已通过官方 SDK 的 **`OPENAI_BASE_URL`** 指向 stub 的根路径（含 `/v1/`），**无需改业务代码**。
-- 测试里设置：
-  - `OPENAI_BASE_URL=<stub.BaseURL()>`（例如 `http://127.0.0.1:12345/v1/`）
-  - `OPENAI_API_KEY` 任意非空（stub 不校验）
-  - **`ONCLAW_CHAT_TRANSPORT=non_stream`**（stub 只实现非流式；默认 `auto` 会先走流式，需避免）
+- 使用 **`openai.NewClient(stubOpenAIOptions(stub)...)`**（见 `test/e2e/helpers_test.go`）把 **BaseURL** 与测试用 **API key** 注入客户端；**`baseStubTransport`** 将 **`rtopts`** 的 **`chat.transport`** 设为 **`non_stream`**（stub 只实现非流式，避免 `auto` 先走流式再回退时双次 dequeue）。
 
 ## 运行
 

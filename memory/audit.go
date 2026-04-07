@@ -10,13 +10,15 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/lengzhao/oneclaw/rtopts"
 )
 
 // Append-only audit of writes under memory WriteRoots, project `.oneclaw/rules`,
 // user `~/.oneclaw/rules`, and canonical AGENT paths (project `.oneclaw/AGENT.md`, user `~/.oneclaw/AGENT.md`). Log path:
 //   <cwd>/.oneclaw/audit/memory-write.jsonl
 // Each line is a JSON object: ts, source, path, bytes, sha256.
-// Disable with ONCLAW_DISABLE_MEMORY_AUDIT=1/true/yes.
+// Disable with features.disable_memory_audit in config.
 // Teams that version-control .oneclaw can also rely on git history for forensics.
 
 type auditRecord struct {
@@ -30,8 +32,7 @@ type auditRecord struct {
 var auditMu sync.Mutex
 
 func memoryAuditDisabled() bool {
-	v := strings.TrimSpace(os.Getenv("ONCLAW_DISABLE_MEMORY_AUDIT"))
-	return v == "1" || strings.EqualFold(v, "true") || strings.EqualFold(v, "yes")
+	return rtopts.Current().DisableMemoryAudit
 }
 
 // AppendMemoryAudit appends one JSON line if absPath is under layout.AuditWriteRoots()

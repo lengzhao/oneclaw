@@ -12,21 +12,22 @@ import (
 	"unicode/utf8"
 
 	"github.com/lengzhao/oneclaw/loop"
+	"github.com/lengzhao/oneclaw/rtopts"
 )
 
 const assistantTurnLogMaxRunes = 8000
 
 // TurnLogPathForDate returns the append-only JSONL path for calendar day of `when` (UTC).
 //
-// Default (empty ONCLAW_TURN_LOG_PATH): <cwd>/.oneclaw/traces/logs/YYYY/MM/YYYY-MM-DD.jsonl
+// Default (empty paths.turn_log_path): <cwd>/.oneclaw/traces/logs/YYYY/MM/YYYY-MM-DD.jsonl
 // — same hierarchy style as memory daily logs under logs/YYYY/MM/.
 //
-// ONCLAW_TURN_LOG_PATH:
+// paths.turn_log_path:
 //   - path ending in .jsonl → that single file (no date rotation);
 //   - otherwise → directory root, files at <root>/logs/YYYY/MM/YYYY-MM-DD.jsonl
 //     (relative paths are resolved under session cwd).
 func TurnLogPathForDate(layout Layout, when time.Time) string {
-	p := strings.TrimSpace(os.Getenv("ONCLAW_TURN_LOG_PATH"))
+	p := strings.TrimSpace(rtopts.Current().TurnLogPath)
 	date := when.UTC().Format("2006-01-02")
 	y, m := date[0:4], date[5:7]
 	file := fmt.Sprintf("%s.jsonl", date)
@@ -50,8 +51,7 @@ func TurnLogPathForDate(layout Layout, when time.Time) string {
 }
 
 func turnLogFileDisabled() bool {
-	v := strings.TrimSpace(os.Getenv("ONCLAW_DISABLE_TURN_LOG"))
-	return v == "1" || strings.EqualFold(v, "true") || strings.EqualFold(v, "yes")
+	return rtopts.Current().DisableTurnLog
 }
 
 var turnLogMu sync.Mutex

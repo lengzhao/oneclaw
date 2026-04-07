@@ -8,21 +8,24 @@ import (
 	"time"
 
 	"github.com/lengzhao/oneclaw/memory"
+	"github.com/lengzhao/oneclaw/rtopts"
 	"github.com/lengzhao/oneclaw/routing"
 	"github.com/lengzhao/oneclaw/test/openaistub"
 )
 
 // E2E-50 默认在 auto memory daily log 追加一行
 func TestE2E_50_DailyLogAppendDefault(t *testing.T) {
-	t.Setenv("ONCLAW_DISABLE_MEMORY_EXTRACT", "")
 	home := t.TempDir()
 	cwd := t.TempDir()
 	t.Setenv("HOME", home)
 	stub := openaistub.New(t)
 	stub.Enqueue(openaistub.CompletionStop("", "assistant line for log"))
 	e2eEnvWithMemory(t, stub)
+	s := rtopts.Current()
+	s.DisableMemoryExtract = false
+	rtopts.Set(&s)
 	e2eIsolateUserMemory(t, home)
-	e := newStubEngine(t, cwd)
+	e := newStubEngine(t, stub, cwd)
 	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "user line for log"}); err != nil {
 		t.Fatal(err)
 	}
@@ -37,17 +40,19 @@ func TestE2E_50_DailyLogAppendDefault(t *testing.T) {
 	}
 }
 
-// E2E-51 ONCLAW_DISABLE_MEMORY_EXTRACT=1 不写 daily log
+// E2E-51 features.disable_memory_extract 不写 daily log
 func TestE2E_51_DailyLogDisabledByEnv(t *testing.T) {
-	t.Setenv("ONCLAW_DISABLE_MEMORY_EXTRACT", "1")
 	home := t.TempDir()
 	cwd := t.TempDir()
 	t.Setenv("HOME", home)
 	stub := openaistub.New(t)
 	stub.Enqueue(openaistub.CompletionStop("", "x"))
 	e2eEnvWithMemory(t, stub)
+	s := rtopts.Current()
+	s.DisableMemoryExtract = true
+	rtopts.Set(&s)
 	e2eIsolateUserMemory(t, home)
-	e := newStubEngine(t, cwd)
+	e := newStubEngine(t, stub, cwd)
 	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "y"}); err != nil {
 		t.Fatal(err)
 	}

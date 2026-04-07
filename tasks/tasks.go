@@ -14,6 +14,7 @@ import (
 
 	"github.com/lengzhao/oneclaw/budget"
 	"github.com/lengzhao/oneclaw/memory"
+	"github.com/lengzhao/oneclaw/rtopts"
 )
 
 const fileName = "tasks.json"
@@ -23,10 +24,9 @@ func Path(cwd string) string {
 	return filepath.Join(cwd, memory.DotDir, fileName)
 }
 
-// Disabled reports ONCLAW_DISABLE_TASKS.
+// Disabled reports features.disable_tasks from config.
 func Disabled() bool {
-	v := strings.TrimSpace(os.Getenv("ONCLAW_DISABLE_TASKS"))
-	return v == "1" || strings.EqualFold(v, "true") || strings.EqualFold(v, "yes")
+	return rtopts.Current().DisableTasks
 }
 
 // File is the on-disk JSON shape.
@@ -129,7 +129,7 @@ type CreateInput struct {
 // Create appends tasks or replaces the list when replace is true.
 func Create(cwd string, replace bool, inputs []CreateInput) (string, error) {
 	if Disabled() {
-		return "", fmt.Errorf("tasks are disabled (ONCLAW_DISABLE_TASKS)")
+		return "", fmt.Errorf("tasks are disabled (features.disable_tasks in config)")
 	}
 	path := Path(cwd)
 	fileMu.Lock()
@@ -216,7 +216,7 @@ type UpdatePatch struct {
 // Update mutates a single task.
 func Update(cwd, taskID string, patch UpdatePatch) (string, error) {
 	if Disabled() {
-		return "", fmt.Errorf("tasks are disabled (ONCLAW_DISABLE_TASKS)")
+		return "", fmt.Errorf("tasks are disabled (features.disable_tasks in config)")
 	}
 	id := strings.TrimSpace(taskID)
 	if id == "" {

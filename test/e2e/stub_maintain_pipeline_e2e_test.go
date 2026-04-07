@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/lengzhao/oneclaw/memory"
+	"github.com/lengzhao/oneclaw/rtopts"
 	"github.com/lengzhao/oneclaw/routing"
 	"github.com/lengzhao/oneclaw/test/openaistub"
 	"github.com/lengzhao/oneclaw/tools/builtin"
@@ -25,9 +26,11 @@ func TestE2E_101_PostTurnMaintainPromptSessionOnly(t *testing.T) {
 	stub.Enqueue(openaistub.CompletionStop("", section))
 
 	e2eEnvWithMemory(t, stub)
-	t.Setenv("ONCLAW_DISABLE_AUTO_MAINTENANCE", "0")
-	t.Setenv("ONCLAW_MAINTENANCE_MODEL", "gpt-4o")
-	t.Setenv("ONCLAW_POST_TURN_MAINTENANCE_MIN_LOG_BYTES", "30")
+	s := rtopts.Current()
+	s.DisableAutoMaintenance = false
+	s.MaintenanceModel = "gpt-4o"
+	s.PostTurnMinLogBytes = 30
+	rtopts.Set(&s)
 
 	home := t.TempDir()
 	cwd := t.TempDir()
@@ -53,7 +56,7 @@ func TestE2E_101_PostTurnMaintainPromptSessionOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	e := newStubEngine(t, cwd)
+	e := newStubEngine(t, stub, cwd)
 	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "E2E101_TODAY_MARKER ping"}); err != nil {
 		t.Fatal(err)
 	}
@@ -108,9 +111,11 @@ func TestE2E_113_ScheduledMaintainPromptToolOrientedPaths(t *testing.T) {
 	stub.Enqueue(openaistub.CompletionStop("", section))
 
 	baseStubTransport(t, stub)
-	t.Setenv("ONCLAW_MAINTENANCE_MODEL", "gpt-4o")
-	t.Setenv("ONCLAW_MAINTENANCE_MIN_LOG_BYTES", "30")
-	t.Setenv("ONCLAW_MAINTENANCE_LOG_DAYS", "4")
+	s113 := rtopts.Current()
+	s113.MaintenanceModel = "gpt-4o"
+	s113.MaintenanceMinLogBytes = 30
+	s113.MaintenanceLogDays = 4
+	rtopts.Set(&s113)
 
 	home := t.TempDir()
 	cwd := t.TempDir()
@@ -141,7 +146,7 @@ func TestE2E_113_ScheduledMaintainPromptToolOrientedPaths(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	client := openai.NewClient()
+	client := openai.NewClient(stubOpenAIOptions(stub)...)
 	memory.RunScheduledMaintain(context.Background(), lay, &client, "gpt-4o", 512,
 		&memory.ScheduledMaintainOpts{ToolRegistry: builtin.ScheduledMaintainReadRegistry()})
 
@@ -202,10 +207,12 @@ func TestE2E_102_MaintainDedupeSkipsAppendWhenNoNewBullets(t *testing.T) {
 	stub.Enqueue(openaistub.CompletionStop("", section))
 
 	e2eEnvWithMemory(t, stub)
-	t.Setenv("ONCLAW_DISABLE_AUTO_MAINTENANCE", "0")
-	t.Setenv("ONCLAW_MAINTENANCE_MODEL", "gpt-4o")
-	t.Setenv("ONCLAW_MAINTENANCE_MIN_LOG_BYTES", "30")
-	t.Setenv("ONCLAW_POST_TURN_MAINTENANCE_MIN_LOG_BYTES", "30")
+	s102 := rtopts.Current()
+	s102.DisableAutoMaintenance = false
+	s102.MaintenanceModel = "gpt-4o"
+	s102.MaintenanceMinLogBytes = 30
+	s102.PostTurnMinLogBytes = 30
+	rtopts.Set(&s102)
 
 	home := t.TempDir()
 	cwd := t.TempDir()
@@ -222,7 +229,7 @@ func TestE2E_102_MaintainDedupeSkipsAppendWhenNoNewBullets(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	e := newStubEngine(t, cwd)
+	e := newStubEngine(t, stub, cwd)
 	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "E2E102_USER turn filler text for daily log"}); err != nil {
 		t.Fatal(err)
 	}

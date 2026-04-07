@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/lengzhao/oneclaw/loop"
+	"github.com/lengzhao/oneclaw/rtopts"
 )
 
 // formatMaintainTurnSnapshot builds a bounded text block for the post-turn maintenance user prompt.
@@ -13,8 +14,15 @@ func formatMaintainTurnSnapshot(in *PostTurnInput) string {
 	if in == nil {
 		return ""
 	}
-	maxU := getenvIntMaint("ONCLAW_POST_TURN_MAINTAIN_USER_SNAPSHOT_BYTES", 4000)
-	maxA := getenvIntMaint("ONCLAW_POST_TURN_MAINTAIN_ASSISTANT_SNAPSHOT_BYTES", 8000)
+	rt := rtopts.Current()
+	maxU := rt.PostTurnUserSnapshotBytes
+	maxA := rt.PostTurnAssistantSnapshotBytes
+	if maxU <= 0 {
+		maxU = 4000
+	}
+	if maxA <= 0 {
+		maxA = 8000
+	}
 	if maxU < 200 {
 		maxU = 200
 	}

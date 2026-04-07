@@ -6,28 +6,40 @@ import (
 	"testing"
 
 	"github.com/lengzhao/oneclaw/memory"
+	"github.com/lengzhao/oneclaw/rtopts"
 	"github.com/lengzhao/oneclaw/session"
 	"github.com/lengzhao/oneclaw/test/openaistub"
 	"github.com/lengzhao/oneclaw/tools"
 	"github.com/lengzhao/oneclaw/tools/builtin"
 	"github.com/openai/openai-go"
+	"github.com/openai/openai-go/option"
 )
 
-// newStubEngine builds an Engine after stub env is applied; call e2eEnv* before this.
-func newStubEngine(t *testing.T, cwd string) *session.Engine {
+// stubOpenAIOptions returns client options for openaistub (no process env).
+func stubOpenAIOptions(stub *openaistub.Server) []option.RequestOption {
+	return []option.RequestOption{
+		option.WithAPIKey("sk-test-stub"),
+		option.WithBaseURL(stub.BaseURL()),
+	}
+}
+
+// newStubEngine builds an Engine after e2eEnv*; call e2eEnv* before this.
+func newStubEngine(t *testing.T, stub *openaistub.Server, cwd string) *session.Engine {
 	t.Helper()
 	e := session.NewEngine(cwd, builtin.DefaultRegistry())
 	e.MaxTokens = 512
 	e.MaxSteps = 16
+	e.Client = openai.NewClient(stubOpenAIOptions(stub)...)
 	return e
 }
 
 // newStubEngineWithRegistry like newStubEngine but custom registry (e.g. empty for unknown-tool test).
-func newStubEngineWithRegistry(t *testing.T, cwd string, reg *tools.Registry) *session.Engine {
+func newStubEngineWithRegistry(t *testing.T, stub *openaistub.Server, cwd string, reg *tools.Registry) *session.Engine {
 	t.Helper()
 	e := session.NewEngine(cwd, reg)
 	e.MaxTokens = 512
 	e.MaxSteps = 16
+	e.Client = openai.NewClient(stubOpenAIOptions(stub)...)
 	return e
 }
 
@@ -47,33 +59,36 @@ func concatUserText(msgs []openai.ChatCompletionMessageParamUnion) string {
 	return sb.String()
 }
 
-// baseStubTransport sets OPENAI_BASE_URL, OPENAI_API_KEY, and non-stream transport.
-// Call before openai.NewClient(). Does not touch memory-related env.
-func baseStubTransport(t *testing.T, stub *openaistub.Server) {
+// baseStubTransport sets non-stream chat transport via rtopts (API URL/key go through stubOpenAIOptions).
+func baseStubTransport(t *testing.T, _ *openaistub.Server) {
 	t.Helper()
-	t.Setenv("OPENAI_BASE_URL", stub.BaseURL())
-	t.Setenv("OPENAI_API_KEY", "sk-test-stub")
-	t.Setenv("ONCLAW_CHAT_TRANSPORT", "non_stream")
+	t.Cleanup(func() { rtopts.Set(nil) })
+	s := rtopts.DefaultSnapshot()
+	s.ChatTransport = "non_stream"
+	rtopts.Set(&s)
 }
 
 // e2eEnvMinimal is for tests that should not load file-based memory (faster, fewer moving parts).
 func e2eEnvMinimal(t *testing.T, stub *openaistub.Server) {
 	t.Helper()
 	baseStubTransport(t, stub)
-	t.Setenv("ONCLAW_DISABLE_MEMORY", "1")
-	t.Setenv("ONCLAW_MEMORY_BASE", "")
+	s := rtopts.Current()
+	s.DisableMemory = true
+	s.MemoryBase = ""
+	rtopts.Set(&s)
 }
 
-// e2eIsolateUserMemory pins ONCLAW_MEMORY_BASE to filepath.Join(home, memory.DotDir) so a developer
-// ONCLAW_MEMORY_BASE (e.g. from .env) cannot write under the repo. Call after t.Setenv("HOME", home)
-// and after e2eEnvWithMemory. For home == "", clears the override.
+// e2eIsolateUserMemory pins paths.memory_base to filepath.Join(home, memory.DotDir) so tests stay under tmp HOME.
+// Call after t.Setenv("HOME", home) and after e2eEnvWithMemory. For home == "", clears the override.
 func e2eIsolateUserMemory(t *testing.T, home string) {
 	t.Helper()
+	s := rtopts.Current()
 	if strings.TrimSpace(home) == "" {
-		t.Setenv("ONCLAW_MEMORY_BASE", "")
-		return
+		s.MemoryBase = ""
+	} else {
+		s.MemoryBase = filepath.Join(home, memory.DotDir)
 	}
-	t.Setenv("ONCLAW_MEMORY_BASE", filepath.Join(home, memory.DotDir))
+	rtopts.Set(&s)
 }
 
 // e2eEnvWithMemory keeps stub transport defaults and does not disable memory.
@@ -81,7 +96,9 @@ func e2eIsolateUserMemory(t *testing.T, home string) {
 // Disables post-turn model maintenance so stub queues need not account for a second API call (production default is maintenance on).
 func e2eEnvWithMemory(t *testing.T, stub *openaistub.Server) {
 	t.Helper()
-	t.Setenv("ONCLAW_MEMORY_BASE", "")
 	baseStubTransport(t, stub)
-	t.Setenv("ONCLAW_DISABLE_AUTO_MAINTENANCE", "1")
+	s := rtopts.Current()
+	s.MemoryBase = ""
+	s.DisableAutoMaintenance = true
+	rtopts.Set(&s)
 }

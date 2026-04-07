@@ -1,9 +1,9 @@
 package schedule
 
 import (
-	"os"
-	"strings"
 	"time"
+
+	"github.com/lengzhao/oneclaw/rtopts"
 )
 
 // NextWakeDuration returns how long to sleep until the earliest enabled job for targetSource fires.
@@ -45,27 +45,19 @@ func NextWakeDuration(cwd, targetSource string, now time.Time) (d time.Duration,
 	return minT.Sub(nowUTC), true
 }
 
-// MinTimerSleep is the minimum sleep used with NextWake (avoids sub-second spin). Env ONCLAW_SCHEDULE_MIN_SLEEP (Go duration), default 1s.
+// MinTimerSleep is the minimum sleep used with NextWake (avoids sub-second spin). Config schedule.min_sleep, default 1s.
 func MinTimerSleep() time.Duration {
-	v := strings.TrimSpace(os.Getenv("ONCLAW_SCHEDULE_MIN_SLEEP"))
-	if v == "" {
-		return time.Second
-	}
-	d, err := time.ParseDuration(v)
-	if err != nil || d < 100*time.Millisecond {
+	d := rtopts.Current().ScheduleMinSleep
+	if d < 100*time.Millisecond {
 		return time.Second
 	}
 	return d
 }
 
-// IdleTimerSleep when no scheduled next run exists for this channel. Env ONCLAW_SCHEDULE_IDLE_SLEEP (Go duration), default 1h.
+// IdleTimerSleep when no scheduled next run exists for this channel. Config schedule.idle_sleep, default 1h.
 func IdleTimerSleep() time.Duration {
-	v := strings.TrimSpace(os.Getenv("ONCLAW_SCHEDULE_IDLE_SLEEP"))
-	if v == "" {
-		return time.Hour
-	}
-	d, err := time.ParseDuration(v)
-	if err != nil || d < time.Second {
+	d := rtopts.Current().ScheduleIdleSleep
+	if d < time.Second {
 		return time.Hour
 	}
 	return d

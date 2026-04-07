@@ -8,8 +8,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lengzhao/oneclaw/config"
 	"github.com/lengzhao/oneclaw/memory"
 	"github.com/lengzhao/oneclaw/test/openaistub"
+	"gopkg.in/yaml.v3"
 )
 
 // e2eBuildHome is HOME at package init (before any t.Setenv); go build must not use test HOME=t.TempDir().
@@ -82,15 +84,29 @@ func TestE2E_96_MaintainCLIOnce(t *testing.T) {
 	date := time.Now().Format("2006-01-02")
 	section := "## Auto-maintained (" + date + ")\n- E2E96_CLI_MAINTAIN_MARKER\n"
 	stub.Enqueue(openaistub.CompletionStop("", section))
-	baseStubTransport(t, stub)
 
 	home := t.TempDir()
 	cwd := t.TempDir()
 	t.Setenv("HOME", home)
-	t.Setenv("ONCLAW_MAINTENANCE_MODEL", "gpt-4o")
-	t.Setenv("ONCLAW_MAINTENANCE_MIN_LOG_BYTES", "50")
-	t.Setenv("ONCLAW_MAINTAIN_INTERVAL", "1h")
-	e2eIsolateUserMemory(t, home)
+	memBase := filepath.Join(home, memory.DotDir)
+	if err := os.MkdirAll(filepath.Join(cwd, memory.DotDir), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	var projCfg config.File
+	projCfg.OpenAI.APIKey = "sk-test-stub"
+	projCfg.OpenAI.BaseURL = stub.BaseURL()
+	projCfg.Chat.Transport = "non_stream" // stub: avoid stream+non_stream double dequeue
+	projCfg.Paths.MemoryBase = memBase
+	projCfg.Maintain.Interval = "1h"
+	projCfg.Maintain.Model = "gpt-4o"
+	projCfg.Maintain.MinLogBytes = 50
+	cfgBody, err := yaml.Marshal(&projCfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cwd, memory.DotDir, "config.yaml"), cfgBody, 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	lay := memory.DefaultLayout(cwd, home)
 	logPath := memory.DailyLogPath(lay.Auto, date)
@@ -104,8 +120,7 @@ func TestE2E_96_MaintainCLIOnce(t *testing.T) {
 
 	bin := buildOneclawBinary(t, repoRoot(t))
 	cmd := exec.Command(bin, "-cwd", cwd, "-maintain-once")
-	memBase := filepath.Join(home, memory.DotDir)
-	cmd.Env = mergeEnv("HOME", home, "ONCLAW_MEMORY_BASE", memBase)
+	cmd.Env = mergeEnv("HOME", home)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("oneclaw -maintain-once: %v\n%s", err, out)
@@ -128,8 +143,8 @@ func TestE2E_97_OneclawInitWritesProjectConfig(t *testing.T) {
 	t.Setenv("HOME", home)
 
 	bin := buildOneclawBinary(t, repoRoot(t))
-	cmd := exec.Command(bin, "-cwd", cwd, "-init")
-	cmd.Env = mergeEnv("HOME", home, "ONCLAW_LOG_LEVEL", "error")
+	cmd := exec.Command(bin, "-cwd", cwd, "-init", "-log-level", "error")
+	cmd.Env = mergeEnv("HOME", home)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("oneclaw -init: %v\n%s", err, out)

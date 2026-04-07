@@ -11,7 +11,7 @@ openai:
 model: gpt-4o
 
 chat:
-  # stream | non_stream；与 ONCLAW_CHAT_TRANSPORT 一致
+  # stream | non_stream；stub/CI 建议 non_stream
   transport: non_stream
 
 features:

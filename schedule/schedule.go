@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/lengzhao/oneclaw/memory"
+	"github.com/lengzhao/oneclaw/rtopts"
 	"github.com/robfig/cron/v3"
 )
 
@@ -25,10 +26,9 @@ func Path(cwd string) string {
 	return filepath.Join(cwd, memory.DotDir, fileName)
 }
 
-// Disabled reports ONCLAW_DISABLE_SCHEDULED_TASKS.
+// Disabled reports features.disable_scheduled_tasks from config.
 func Disabled() bool {
-	v := strings.TrimSpace(os.Getenv("ONCLAW_DISABLE_SCHEDULED_TASKS"))
-	return v == "1" || strings.EqualFold(v, "true") || strings.EqualFold(v, "yes")
+	return rtopts.Current().DisableScheduledTasks
 }
 
 // File is the on-disk JSON shape.
@@ -268,7 +268,7 @@ type AddInput struct {
 // Add appends a job after validation.
 func Add(cwd string, in AddInput) (string, error) {
 	if Disabled() {
-		return "", fmt.Errorf("scheduled tasks are disabled (ONCLAW_DISABLE_SCHEDULED_TASKS)")
+		return "", fmt.Errorf("scheduled tasks are disabled (features.disable_scheduled_tasks in config)")
 	}
 	msg := strings.TrimSpace(in.Message)
 	if msg == "" {
@@ -361,7 +361,7 @@ func compactDisabledJobs(f *File) int {
 // Remove deletes a job by id.
 func Remove(cwd, jobID string) (string, error) {
 	if Disabled() {
-		return "", fmt.Errorf("scheduled tasks are disabled (ONCLAW_DISABLE_SCHEDULED_TASKS)")
+		return "", fmt.Errorf("scheduled tasks are disabled (features.disable_scheduled_tasks in config)")
 	}
 	id := strings.TrimSpace(jobID)
 	if id == "" {

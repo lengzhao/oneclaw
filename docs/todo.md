@@ -60,17 +60,17 @@
 ### P1
 
 7. `[x]` **通用 Channel 抽象** — 飞书 / Slack 等可插拔 channel，对齐 [`inbound-routing-design.md`](inbound-routing-design.md)（参考 openclaw/picoclaw）。
-8. `[x]` **Skills（Claude Code 机制）** — 已实现：`skills` 包 + `~/.oneclaw/skills` / `<cwd>/.oneclaw/skills` 下 `<name>/SKILL.md`、系统提示注入索引、`invoke_skill` 拉取全文、`skills-recent.json` LRU（20）排序；细节见 [`claude-code-skills-mechanism.md`](claude-code-skills-mechanism.md) §11 与 `ONCLAW_DISABLE_SKILLS` 等环境变量（`docs/config.md`）。**审计 / 条件 paths / 动态子目录发现** 见上文「未完成任务一览」P1 续作。
+8. `[x]` **Skills（Claude Code 机制）** — 已实现：`skills` 包 + `~/.oneclaw/skills` / `<cwd>/.oneclaw/skills` 下 `<name>/SKILL.md`、系统提示注入索引、`invoke_skill` 拉取全文、`skills-recent.json` LRU（20）排序；开关见 YAML `features.disable_skills`（`docs/config.md`）。**审计 / 条件 paths / 动态子目录发现** 见上文「未完成任务一览」P1 续作。
 9. `[x]` **行为策略写回** — 规则进 `.oneclaw/rules` / `AGENT.md` 的路径与护栏（与 D2 审计衔接）。
 10. `[x]` **任务状态工具** — Task 创建/更新或等价落盘，长会话与 resume 对齐进度。
 11. `[x]` **侧链合并（可选）** — sidechain 结论以 attachment 或 user 摘要合入主 transcript。
-12. `[x]` **Cron / Heartbeat** — **maintain 周期**为 `maintain.interval` / `ONCLAW_MAINTAIN_INTERVAL`（`cmd/maintain` 间隔循环；**已移除**进程内 `maintain.cron` / `-cron`）。**主进程内嵌 interval**：YAML 配置 `maintain.interval` 时 `maintainloop` 调 `RunScheduledMaintain`，见 [`embedded-maintain-scheduler-design.md`](embedded-maintain-scheduler-design.md)。其余定时：`cron` 工具 + `scheduled_jobs.json`；或部署侧 crontab 调 **`oneclaw -maintain-once`** / **`maintain -once`**。Channel 内置保活仍不在此条范围。
+12. `[x]` **Cron / Heartbeat** — **maintain 周期**为 YAML `maintain.interval`（`cmd/maintain` 间隔循环；**已移除**进程内 `maintain.cron` / `-cron`）。**主进程内嵌 interval**：`maintain.interval` 非空时 `maintainloop` 调 `RunScheduledMaintain`，见 [`embedded-maintain-scheduler-design.md`](embedded-maintain-scheduler-design.md)。其余定时：`cron` 工具 + `scheduled_jobs.json`；或部署侧 crontab 调 **`oneclaw -maintain-once`** / **`maintain -once`**。Channel 内置保活仍不在此条范围。
 
 ### P2
 
 13. `[x]` **入口编排加厚** — `Inbound`：`Attachments` + `Locale`；模型前注入 `<inbound-context>`（不含 correlation）；附件独立 user 消息；仅附件占位正文；`/help`、`/model`、`/session` 本地应答跳过模型；`channel.InboundTurn` + `statichttp` JSON 已支持。
 14. `[ ]` **D3 向量 recall** — 插件接口，文件仍为真源（阶段 D）。
-15. `[ ]` **预算精度（可选）** — usage / tokenizer 类估算，多模型下裁剪更一致。
+15. `[x]` **预算精度（可选）** — 上下文按 **UTF-8 字节** 与 YAML `budget.*` 各段上限（`max_context_tokens×2` 等）；**用量与费用** 落盘 `<cwd>/.oneclaw/usage/`，见 [`config.md`](config.md)。
 16. `[ ]` **协作模型（teammate / swarm）** — mailbox、长期成员等；按需排期。
 
 ### 工程简化（可选，详 [`code-simplification-opportunities.md`](code-simplification-opportunities.md)）
@@ -99,7 +99,7 @@
 ## 工程基线（开工前）
 
 - [x] 新建 Go 模块仓库；全局使用 `log/slog`；目录不使用 `internal`（按团队约定）
-- [x] **全局 token / 字节预算**：`budget` + `ONCLAW_MAX_PROMPT_BYTES`（默认 220000）约束注入裁剪与每步 transcript；子 Agent / fork 共用；`ONCLAW_DISABLE_CONTEXT_BUDGET=1` 关闭
+- [x] **全局 token / 字节预算**：`budget` + `PushRuntime`/`rtopts`（默认约 220000 字节）约束注入裁剪与每步 transcript；子 Agent / fork 共用；`features.disable_context_budget` 关闭
 - 新功能开发前阅读对应设计：`claude-code-main-flow-analysis.md`、`claude-code-memory-system.md` 等（索引见 [`README.md`](README.md)）— **持续实践**，见「未完成任务一览」说明
 
 ---
@@ -141,7 +141,7 @@
 - [x] **B3** 发现层：自 cwd 向上查找 `AGENT.md`、`.oneclaw/rules/*.md`、memory 根
 - [x] **B5** 注入与 recall：system 前缀拼装；recall → attachment；surfaced 字节上限、路径去重
 - [x] **B6** 在线更新：工具可写 topic、`MEMORY.md`、daily log
-- [x] **B7** extract / dream：**主干已接** — daily log + 回合后 **`MaybePostTurnMaintain`** / **`RunPostTurnMaintain`** 与定时 **`RunScheduledMaintain`**（**`oneclaw -maintain-once`** / `cmd/maintain` 与 **`maintainloop`**）；双入口与 `ONCLAW_POST_TURN_*` 见 [`memory-maintain-dual-entry-design.md`](memory-maintain-dual-entry-design.md)、[`embedded-maintain-scheduler-design.md`](embedded-maintain-scheduler-design.md)。`MaybeMaintain` 为弃用别名。默认 interval 1h；`-once` 或 `0` 单次。模型：`ONCLAW_MAINTENANCE_MODEL` / `ONCLAW_MAINTENANCE_SCHEDULED_MODEL`。写 **project `MEMORY.md`** `## Auto-maintained (日期)`；D2 审计为 `.oneclaw/audit/memory-write.jsonl`（可按需扩展字段/查询面，非阻塞项）
+- [x] **B7** extract / dream：**主干已接** — daily log + 回合后 **`MaybePostTurnMaintain`** / **`RunPostTurnMaintain`** 与定时 **`RunScheduledMaintain`**（**`oneclaw -maintain-once`** / `cmd/maintain` 与 **`maintainloop`**）；双入口与 `maintain.post_turn.*` / `rtopts` 见 [`memory-maintain-dual-entry-design.md`](memory-maintain-dual-entry-design.md)、[`embedded-maintain-scheduler-design.md`](embedded-maintain-scheduler-design.md)。`MaybeMaintain` 为弃用别名。默认 interval 1h；`-once` 或 `0` 单次。模型：YAML `maintain.model` / `maintain.scheduled_model`。写 **project `MEMORY.md`** `## Auto-maintained (日期)`；D2 审计为 `.oneclaw/audit/memory-write.jsonl`（可按需扩展字段/查询面，非阻塞项）
 
 ---
 
@@ -152,7 +152,7 @@
 - [x] **C1** Agent 定义加载：`.oneclaw/agents/*.md` + 内置 `general-purpose` / `explore`
 - [x] **C2** 嵌套调用：`run_agent` 内独立 `loop.RunTurn`；子级 `ToolUseContext` 默认隔离（独立读缓存、深度计数）
 - [x] **C3** Fork：`fork_context` 共享本回合父级 `ParentSystem` + 裁剪父消息尾部
-- [x] **C4** sidechain transcript：`.oneclaw/sidechain/*.jsonl` 落盘；**可选合并回主会话** — `ONCLAW_SIDECCHAIN_MERGE`（tool / user 模式，见 `docs/config.md`）
+- [x] **C4** sidechain transcript：`.oneclaw/sidechain/*.jsonl` 落盘；**可选合并回主会话** — YAML `sidechain_merge`（tool / user 模式，见 `docs/config.md`）
 - [x] **C5** 权限：`fork_context` 子路径禁 `bash`；嵌套时剥离 `run_agent`/`fork_context`；`run_agent` 仍走父级 `CanUseTool`（未单独做「子 Agent 一律更严」的二次策略，可按 Agent 类型加强）
 
 ---
@@ -246,7 +246,7 @@ flowchart TB
 | 对话 + 工具 + transcript | 高 | 阶段 A |
 | 记忆发现 / 注入 / recall / 在线写 | 高 | 阶段 B |
 | 时间序列沉淀（daily log）+ 维护写回 MEMORY | 中高 | Post-turn + 定时 + 可选进程内 loop |
-| 子 Agent / fork / 侧链 | 中高 | 阶段 C；侧链可选合回主会话（`ONCLAW_SIDECCHAIN_MERGE`） |
+| 子 Agent / fork / 侧链 | 中高 | 阶段 C；侧链可选合回主会话（`sidechain_merge`） |
 | 自动进化闭环（log → 整理 → 再注入） | 中高 | 维护管道与 compact 已接；向量 recall 仍为可选增强 |
 | 可观测与合规（审计、预算） | 中高 | 预算 + D2 JSONL；遥测为后置 |
 | 统一配置（开发/生产同源；密钥非 env 唯一） | 高 | `config` 包 + `docs/config.md` |

@@ -21,7 +21,7 @@
 
 - 数据来源：`subagent.LoadCatalog(cwd)`（内置 `general-purpose`、`explore` + `.oneclaw/agents/*.md` 覆盖同名）。
 - 展示形态：与 Skills 索引类似，**每条一行**：`agent_type` + 截断后的 `description`；**不**注入各 Agent markdown 正文（正文仅在子循环 system 中使用）。
-- 字节预算：与 **Skills 索引**共用同一套上限逻辑（`budget.Global.SkillIndexMaxBytes()`，可由 `ONCLAW_SKILLS_INDEX_MAX_BYTES` 覆盖），避免主 system 膨胀。
+- 字节预算：与 **Skills 索引**共用同一套上限逻辑（`budget.Global.SkillIndexMaxBytes()`，来自 YAML `budget.skill_index_max_bytes` / `PushRuntime`），避免主 system 膨胀。
 
 ### 2.2 Tool：`run_agent` 的 description 动态附录
 
@@ -78,7 +78,7 @@ flowchart LR
 ## 7. 已知边界
 
 - **`fork_context`**：主线程发起时仍可能保留 `run_agent`（与「业务子 Agent」路径不同）。若产品上要完全禁止「fork 再委派」，需在 `RunFork` 工具面或 `CanUseTool` 层单独收紧。
-- **预算**：Agent 目录与 Skills 共享 `SkillIndexMaxBytes`；若需独立旋钮，可新增 `ONCLAW_AGENT_CATALOG_MAX_BYTES` 等环境变量（当前未实现）。
+- **预算**：Agent 目录与 Skills 共享 `SkillIndexMaxBytes`；若需独立旋钮，可新增 YAML 字段（如专用 catalog 上限，当前未实现）。
 
 ---
 

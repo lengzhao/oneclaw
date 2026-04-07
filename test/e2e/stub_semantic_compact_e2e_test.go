@@ -7,6 +7,7 @@ import (
 
 	"github.com/lengzhao/oneclaw/budget"
 	"github.com/lengzhao/oneclaw/loop"
+	"github.com/lengzhao/oneclaw/rtopts"
 	"github.com/lengzhao/oneclaw/routing"
 	"github.com/lengzhao/oneclaw/test/openaistub"
 	"github.com/lengzhao/oneclaw/toolctx"
@@ -19,14 +20,23 @@ func TestE2E_103_SemanticCompactInChatRequest(t *testing.T) {
 	stub := openaistub.New(t)
 	stub.Enqueue(openaistub.CompletionStop("", "e2e103 done"))
 	e2eEnvMinimal(t, stub)
-
-	t.Setenv("ONCLAW_MAX_PROMPT_BYTES", "52000")
-	t.Setenv("ONCLAW_MIN_TRANSCRIPT_MESSAGES", "4")
-	t.Setenv("ONCLAW_DISABLE_SEMANTIC_COMPACT", "")
+	s := rtopts.Current()
+	s.Budget = budget.Global{
+		MaxPromptBytes:    52_000,
+		MinTailMessages:   4,
+		RecallMaxBytes:    12_000,
+		HistoryMaxBytes:   0,
+		SystemExtraMaxBytes: 0,
+		AgentMdMaxBytes:   0,
+		SkillIndexBytes:   0,
+		InheritedMessages: 0,
+	}
+	s.DisableSemanticCompact = false
+	rtopts.Set(&s)
 
 	cwd := t.TempDir()
 	ctx := context.Background()
-	client := openai.NewClient()
+	client := openai.NewClient(stubOpenAIOptions(stub)...)
 	msgs := make([]openai.ChatCompletionMessageParamUnion, 0, 160)
 	for range 150 {
 		msgs = append(msgs, openai.UserMessage(strings.Repeat("q", 920)))
@@ -41,7 +51,7 @@ func TestE2E_103_SemanticCompactInChatRequest(t *testing.T) {
 		Messages:    &msgs,
 		Registry:    builtin.DefaultRegistry(),
 		ToolContext: toolctx.New(cwd, ctx),
-		Budget:      budget.FromEnv(),
+		Budget:      rtopts.Current().Budget,
 	}, routing.Inbound{Text: "E2E103_FINAL_USER"})
 	if err != nil {
 		t.Fatal(err)
@@ -60,19 +70,28 @@ func TestE2E_103_SemanticCompactInChatRequest(t *testing.T) {
 	}
 }
 
-// E2E-104 关闭 ONCLAW_DISABLE_SEMANTIC_COMPACT 时仅裁剪：首请求 user 文本不出现 compact_boundary（仍可能因预算丢头）。
+// E2E-104 开启 disable_semantic_compact 时仅裁剪：首请求 user 文本不出现 compact_boundary（仍可能因预算丢头）。
 func TestE2E_104_SemanticCompactDisabledNoBoundaryTag(t *testing.T) {
 	stub := openaistub.New(t)
 	stub.Enqueue(openaistub.CompletionStop("", "e2e104 done"))
 	e2eEnvMinimal(t, stub)
-
-	t.Setenv("ONCLAW_MAX_PROMPT_BYTES", "52000")
-	t.Setenv("ONCLAW_MIN_TRANSCRIPT_MESSAGES", "4")
-	t.Setenv("ONCLAW_DISABLE_SEMANTIC_COMPACT", "1")
+	s := rtopts.Current()
+	s.Budget = budget.Global{
+		MaxPromptBytes:    52_000,
+		MinTailMessages:   4,
+		RecallMaxBytes:    12_000,
+		HistoryMaxBytes:   0,
+		SystemExtraMaxBytes: 0,
+		AgentMdMaxBytes:   0,
+		SkillIndexBytes:   0,
+		InheritedMessages: 0,
+	}
+	s.DisableSemanticCompact = true
+	rtopts.Set(&s)
 
 	cwd := t.TempDir()
 	ctx := context.Background()
-	client := openai.NewClient()
+	client := openai.NewClient(stubOpenAIOptions(stub)...)
 	msgs := make([]openai.ChatCompletionMessageParamUnion, 0, 160)
 	for range 150 {
 		msgs = append(msgs, openai.UserMessage(strings.Repeat("r", 920)))
@@ -87,7 +106,7 @@ func TestE2E_104_SemanticCompactDisabledNoBoundaryTag(t *testing.T) {
 		Messages:    &msgs,
 		Registry:    builtin.DefaultRegistry(),
 		ToolContext: toolctx.New(cwd, ctx),
-		Budget:      budget.FromEnv(),
+		Budget:      rtopts.Current().Budget,
 	}, routing.Inbound{Text: "E2E104_FINAL_USER"})
 	if err != nil {
 		t.Fatal(err)

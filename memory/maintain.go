@@ -4,12 +4,12 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
 
 	"github.com/lengzhao/oneclaw/prompts"
+	"github.com/lengzhao/oneclaw/rtopts"
 )
 
 // MaintainPromptData fills maintenance system templates for memory distillation.
@@ -154,44 +154,20 @@ func writeMergedOrAppendMaintenanceSection(layout Layout, memPath string, hadSpa
 	return nil
 }
 
-// autoMaintenanceEnabled: on by default; set ONCLAW_DISABLE_AUTO_MAINTENANCE=1/true/yes to turn off.
 func autoMaintenanceEnabled() bool {
-	v := strings.TrimSpace(os.Getenv("ONCLAW_DISABLE_AUTO_MAINTENANCE"))
-	if v == "1" || strings.EqualFold(v, "true") || strings.EqualFold(v, "yes") {
-		return false
-	}
-	return true
+	return !rtopts.Current().DisableAutoMaintenance
 }
 
 func maintenanceMinLogBytes() int {
-	return getenvIntMaint("ONCLAW_MAINTENANCE_MIN_LOG_BYTES", 200)
+	return rtopts.Current().MaintenanceMinLogBytes
 }
 
 func maintenanceMaxLogRead() int {
-	return getenvIntMaint("ONCLAW_MAINTENANCE_MAX_LOG_BYTES", 24_000)
+	return rtopts.Current().MaintenanceMaxLogRead
 }
 
 func maintenanceMaxCombinedLogBytes() int {
-	n := getenvIntMaint("ONCLAW_MAINTENANCE_MAX_COMBINED_LOG_BYTES", 48_000)
-	if n < 1024 {
-		n = 1024
-	}
-	if n > 256_000 {
-		n = 256_000
-	}
-	return n
-}
-
-func getenvIntMaint(key string, def int) int {
-	v := strings.TrimSpace(os.Getenv(key))
-	if v == "" {
-		return def
-	}
-	n, err := strconv.Atoi(v)
-	if err != nil {
-		return def
-	}
-	return n
+	return rtopts.Current().MaintenanceMaxCombinedLogBytes
 }
 
 func stripMarkdownFences(s string) string {

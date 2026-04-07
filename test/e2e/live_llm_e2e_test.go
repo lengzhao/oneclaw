@@ -19,6 +19,7 @@ import (
 	"github.com/lengzhao/oneclaw/config"
 	"github.com/lengzhao/oneclaw/loop"
 	"github.com/lengzhao/oneclaw/memory"
+	"github.com/lengzhao/oneclaw/rtopts"
 	"github.com/lengzhao/oneclaw/routing"
 	"github.com/lengzhao/oneclaw/session"
 	"github.com/lengzhao/oneclaw/tools/builtin"
@@ -60,7 +61,6 @@ func loadLiveResolved(t *testing.T, cfgPath string, cwd, home string) *config.Re
 
 func newLiveEngine(t *testing.T, r *config.Resolved, cwd string) *session.Engine {
 	t.Helper()
-	config.ApplyEnvDefaults(r)
 	e := session.NewEngine(cwd, builtin.DefaultRegistry())
 	e.Client = openai.NewClient(r.OpenAIOptions()...)
 	if m := r.ChatModel(); m != "" {
@@ -89,9 +89,12 @@ func TestLiveLLM_ChatRoundTrip(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("OPENAI_BASE_URL", "")
-	t.Setenv("ONCLAW_DISABLE_MEMORY", "1")
 
 	r := loadLiveResolved(t, cfgPath, cwd, home)
+	r.PushRuntime()
+	s := rtopts.Current()
+	s.DisableMemory = true
+	rtopts.Set(&s)
 	e := newLiveEngine(t, r, cwd)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
@@ -124,14 +127,15 @@ func TestLiveLLM_DailyLogExtract(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("OPENAI_BASE_URL", "")
-	t.Setenv("ONCLAW_MEMORY_BASE", filepath.Join(home, memory.DotDir))
 
 	r := loadLiveResolved(t, cfgPath, cwd, home)
-	config.ApplyEnvDefaults(r)
-	// 覆盖：本测需要 memory + extract；自动维护是否调用由 live_llm.config 的 disable_auto_maintenance 决定（示例为 false）
-	t.Setenv("ONCLAW_DISABLE_MEMORY", "")
-	t.Setenv("ONCLAW_DISABLE_MEMORY_EXTRACT", "")
-	t.Setenv("ONCLAW_DISABLE_AUTO_MEMORY", "")
+	r.PushRuntime()
+	s2 := rtopts.Current()
+	s2.MemoryBase = filepath.Join(home, memory.DotDir)
+	s2.DisableMemory = false
+	s2.DisableMemoryExtract = false
+	s2.DisableAutoMemory = false
+	rtopts.Set(&s2)
 
 	e := newLiveEngine(t, r, cwd)
 

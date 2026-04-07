@@ -4,13 +4,14 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
+
+	"github.com/lengzhao/oneclaw/rtopts"
 )
 
 func maintenanceLogDays() int {
-	n := getenvIntMaint("ONCLAW_MAINTENANCE_LOG_DAYS", 3)
+	n := rtopts.Current().MaintenanceLogDays
 	if n < 1 {
 		n = 1
 	}
@@ -22,11 +23,11 @@ func maintenanceLogDays() int {
 
 // postTurnMaintenanceMinLogBytes: minimum UTF-8 size of formatted Current turn snapshot before running near-field maintain.
 func postTurnMaintenanceMinLogBytes() int {
-	return getenvIntMaint("ONCLAW_POST_TURN_MAINTENANCE_MIN_LOG_BYTES", 200)
+	return rtopts.Current().PostTurnMinLogBytes
 }
 
 func postTurnMaintenanceMemoryPreviewBytes() int {
-	n := getenvIntMaint("ONCLAW_POST_TURN_MAINTENANCE_MEMORY_PREVIEW_BYTES", 4000)
+	n := rtopts.Current().PostTurnMemoryPreviewBytes
 	if n < 1024 {
 		n = 1024
 	}
@@ -37,17 +38,16 @@ func postTurnMaintenanceMemoryPreviewBytes() int {
 }
 
 func scheduledMaintainTimeout() time.Duration {
-	// Far-field runs are multi-step (read-only tools); be generous so slow APIs rarely hit deadline.
-	return maintenanceTimeoutSeconds("ONCLAW_SCHEDULED_MAINTENANCE_TIMEOUT_SEC", 1800)
+	return rtopts.Current().ScheduledMaintainTimeout
 }
 
 func postTurnMaintainTimeout() time.Duration {
-	return maintenanceTimeoutSeconds("ONCLAW_POST_TURN_MAINTENANCE_TIMEOUT_SEC", 60)
+	return rtopts.Current().PostTurnMaintainTimeout
 }
 
 // scheduledMaintainMaxSteps caps model↔tool rounds for far-field scheduled maintenance (read-only tools).
 func scheduledMaintainMaxSteps() int {
-	n := getenvIntMaint("ONCLAW_SCHEDULED_MAINTENANCE_MAX_STEPS", 24)
+	n := rtopts.Current().ScheduledMaintainMaxSteps
 	if n < 2 {
 		n = 2
 	}
@@ -57,23 +57,8 @@ func scheduledMaintainMaxSteps() int {
 	return n
 }
 
-func maintenanceTimeoutSeconds(envKey string, defaultSec int) time.Duration {
-	v := strings.TrimSpace(os.Getenv(envKey))
-	if v == "" {
-		return time.Duration(defaultSec) * time.Second
-	}
-	n, err := strconv.Atoi(v)
-	if err != nil || n < 1 {
-		return time.Duration(defaultSec) * time.Second
-	}
-	if n > 3600 {
-		n = 3600
-	}
-	return time.Duration(n) * time.Second
-}
-
 func maintenanceMaxTopicFiles() int {
-	n := getenvIntMaint("ONCLAW_MAINTENANCE_MAX_TOPIC_FILES", 12)
+	n := rtopts.Current().MaintenanceMaxTopicFiles
 	if n < 0 {
 		n = 0
 	}
@@ -84,7 +69,7 @@ func maintenanceMaxTopicFiles() int {
 }
 
 func maintenanceTopicExcerptBytes() int {
-	n := getenvIntMaint("ONCLAW_MAINTENANCE_TOPIC_EXCERPT_BYTES", 2048)
+	n := rtopts.Current().MaintenanceTopicExcerptBytes
 	if n < 256 {
 		n = 256
 	}

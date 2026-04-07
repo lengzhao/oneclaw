@@ -40,16 +40,30 @@ type File struct {
 		DisableScheduledMaintenance *bool `yaml:"disable_scheduled_maintenance"`
 		DisableMemoryAudit          *bool `yaml:"disable_memory_audit"`
 		DisableContextBudget        *bool `yaml:"disable_context_budget"`
+		DisableUsageLedger          *bool `yaml:"disable_usage_ledger"`
+		UsageEstimateCost           *bool `yaml:"usage_estimate_cost"`
+		DisableBehaviorPolicyWrite  *bool `yaml:"disable_behavior_policy_write"`
+		DisableScheduledTasks       *bool `yaml:"disable_scheduled_tasks"`
+		DisableSemanticCompact      *bool `yaml:"disable_semantic_compact"`
+		DisableSkills               *bool `yaml:"disable_skills"`
+		DisableTasks                *bool `yaml:"disable_tasks"`
 	} `yaml:"features"`
 
 	Budget struct {
+		MaxContextTokens      int `yaml:"max_context_tokens"` // ×2 → byte budget when max_prompt_bytes unset
 		MaxPromptBytes        int `yaml:"max_prompt_bytes"`
 		MinTranscriptMessages int `yaml:"min_transcript_messages"`
 		RecallMaxBytes        int `yaml:"recall_max_bytes"`
+		HistoryMaxBytes       int `yaml:"history_max_bytes"`
+		SystemExtraMaxBytes   int `yaml:"system_extra_max_bytes"`
+		AgentMdMaxBytes       int `yaml:"agent_md_max_bytes"`
+		SkillIndexMaxBytes    int `yaml:"skill_index_max_bytes"`
+		InheritedMessages     int `yaml:"inherited_messages"`
 	} `yaml:"budget"`
 
 	Maintain struct {
 		Interval        string `yaml:"interval"`
+		LogDays         int    `yaml:"log_days"` // calendar-mode window for scheduled maintain; 0 = default 3
 		Model           string `yaml:"model"`
 		ScheduledModel  string `yaml:"scheduled_model"`
 		MaxTokens       int64  `yaml:"max_tokens"`
@@ -65,13 +79,39 @@ type File struct {
 			MemoryPreviewBytes  int   `yaml:"memory_preview_bytes"`
 			TimeoutSeconds      int   `yaml:"timeout_seconds"`
 			MaxTokens           int64 `yaml:"max_tokens"`
+			UserSnapshotBytes   int   `yaml:"user_snapshot_bytes"`
+			AssistantSnapshotBytes int `yaml:"assistant_snapshot_bytes"`
 		} `yaml:"post_turn"`
+		ScheduledTimeoutSeconds int    `yaml:"scheduled_timeout_seconds"`
+		ScheduledMaxSteps       int    `yaml:"scheduled_max_steps"`
+		IncrementalOverlap      string `yaml:"incremental_overlap"`
+		IncrementalMaxSpan      string `yaml:"incremental_max_span"`
 	} `yaml:"maintain"`
 
 	Log struct {
 		Level  string `yaml:"level"`
 		Format string `yaml:"format"`
 	} `yaml:"log"`
+
+	SidechainMerge string `yaml:"sidechain_merge"`
+
+	Usage struct {
+		DefaultInputPerMtok  float64 `yaml:"default_input_per_mtok"`
+		DefaultOutputPerMtok float64 `yaml:"default_output_per_mtok"`
+	} `yaml:"usage"`
+
+	Schedule struct {
+		MinSleep  string `yaml:"min_sleep"`
+		IdleSleep string `yaml:"idle_sleep"`
+	} `yaml:"schedule"`
+
+	SemanticCompact struct {
+		SummaryMaxBytes int `yaml:"summary_max_bytes"`
+	} `yaml:"semantic_compact"`
+
+	Skills struct {
+		RecentPath string `yaml:"recent_path"`
+	} `yaml:"skills"`
 
 	// Channels lists enabled channel instances (id + type + optional type-specific fields).
 	// When empty after merge, runtime starts every registered channel Spec once using Spec.Key as instance id.
@@ -173,6 +213,16 @@ func mergeFile(dst *File, src File) {
 	mergeBoolPtr(&dst.Features.DisableScheduledMaintenance, src.Features.DisableScheduledMaintenance)
 	mergeBoolPtr(&dst.Features.DisableMemoryAudit, src.Features.DisableMemoryAudit)
 	mergeBoolPtr(&dst.Features.DisableContextBudget, src.Features.DisableContextBudget)
+	mergeBoolPtr(&dst.Features.DisableUsageLedger, src.Features.DisableUsageLedger)
+	mergeBoolPtr(&dst.Features.UsageEstimateCost, src.Features.UsageEstimateCost)
+	mergeBoolPtr(&dst.Features.DisableBehaviorPolicyWrite, src.Features.DisableBehaviorPolicyWrite)
+	mergeBoolPtr(&dst.Features.DisableScheduledTasks, src.Features.DisableScheduledTasks)
+	mergeBoolPtr(&dst.Features.DisableSemanticCompact, src.Features.DisableSemanticCompact)
+	mergeBoolPtr(&dst.Features.DisableSkills, src.Features.DisableSkills)
+	mergeBoolPtr(&dst.Features.DisableTasks, src.Features.DisableTasks)
+	if src.Budget.MaxContextTokens != 0 {
+		dst.Budget.MaxContextTokens = src.Budget.MaxContextTokens
+	}
 	if src.Budget.MaxPromptBytes != 0 {
 		dst.Budget.MaxPromptBytes = src.Budget.MaxPromptBytes
 	}
@@ -182,8 +232,26 @@ func mergeFile(dst *File, src File) {
 	if src.Budget.RecallMaxBytes != 0 {
 		dst.Budget.RecallMaxBytes = src.Budget.RecallMaxBytes
 	}
+	if src.Budget.HistoryMaxBytes != 0 {
+		dst.Budget.HistoryMaxBytes = src.Budget.HistoryMaxBytes
+	}
+	if src.Budget.SystemExtraMaxBytes != 0 {
+		dst.Budget.SystemExtraMaxBytes = src.Budget.SystemExtraMaxBytes
+	}
+	if src.Budget.AgentMdMaxBytes != 0 {
+		dst.Budget.AgentMdMaxBytes = src.Budget.AgentMdMaxBytes
+	}
+	if src.Budget.SkillIndexMaxBytes != 0 {
+		dst.Budget.SkillIndexMaxBytes = src.Budget.SkillIndexMaxBytes
+	}
+	if src.Budget.InheritedMessages != 0 {
+		dst.Budget.InheritedMessages = src.Budget.InheritedMessages
+	}
 	if src.Maintain.Interval != "" {
 		dst.Maintain.Interval = src.Maintain.Interval
+	}
+	if src.Maintain.LogDays != 0 {
+		dst.Maintain.LogDays = src.Maintain.LogDays
 	}
 	if src.Maintain.Model != "" {
 		dst.Maintain.Model = src.Maintain.Model
@@ -229,11 +297,50 @@ func mergeFile(dst *File, src File) {
 	if spt.MaxTokens != 0 {
 		dpt.MaxTokens = spt.MaxTokens
 	}
+	if spt.UserSnapshotBytes != 0 {
+		dpt.UserSnapshotBytes = spt.UserSnapshotBytes
+	}
+	if spt.AssistantSnapshotBytes != 0 {
+		dpt.AssistantSnapshotBytes = spt.AssistantSnapshotBytes
+	}
+	if src.Maintain.ScheduledTimeoutSeconds != 0 {
+		dst.Maintain.ScheduledTimeoutSeconds = src.Maintain.ScheduledTimeoutSeconds
+	}
+	if src.Maintain.ScheduledMaxSteps != 0 {
+		dst.Maintain.ScheduledMaxSteps = src.Maintain.ScheduledMaxSteps
+	}
+	if src.Maintain.IncrementalOverlap != "" {
+		dst.Maintain.IncrementalOverlap = src.Maintain.IncrementalOverlap
+	}
+	if src.Maintain.IncrementalMaxSpan != "" {
+		dst.Maintain.IncrementalMaxSpan = src.Maintain.IncrementalMaxSpan
+	}
 	if src.Log.Level != "" {
 		dst.Log.Level = src.Log.Level
 	}
 	if src.Log.Format != "" {
 		dst.Log.Format = src.Log.Format
+	}
+	if src.SidechainMerge != "" {
+		dst.SidechainMerge = src.SidechainMerge
+	}
+	if src.Usage.DefaultInputPerMtok > 0 {
+		dst.Usage.DefaultInputPerMtok = src.Usage.DefaultInputPerMtok
+	}
+	if src.Usage.DefaultOutputPerMtok > 0 {
+		dst.Usage.DefaultOutputPerMtok = src.Usage.DefaultOutputPerMtok
+	}
+	if src.Schedule.MinSleep != "" {
+		dst.Schedule.MinSleep = src.Schedule.MinSleep
+	}
+	if src.Schedule.IdleSleep != "" {
+		dst.Schedule.IdleSleep = src.Schedule.IdleSleep
+	}
+	if src.SemanticCompact.SummaryMaxBytes != 0 {
+		dst.SemanticCompact.SummaryMaxBytes = src.SemanticCompact.SummaryMaxBytes
+	}
+	if src.Skills.RecentPath != "" {
+		dst.Skills.RecentPath = src.Skills.RecentPath
 	}
 	if len(src.Channels) > 0 {
 		dst.Channels = append([]ChannelConfig(nil), src.Channels...)

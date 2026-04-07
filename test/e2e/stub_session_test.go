@@ -23,7 +23,7 @@ func TestE2E_02_MultiTurnSameSession(t *testing.T) {
 	e2eEnvMinimal(t, stub)
 
 	cwd := t.TempDir()
-	client := openai.NewClient()
+	client := openai.NewClient(stubOpenAIOptions(stub)...)
 	msgs := []openai.ChatCompletionMessageParamUnion{}
 	cfg := loop.Config{
 		Client:      &client,
@@ -75,7 +75,7 @@ func TestE2E_04_WriteThenRead(t *testing.T) {
 	e2eEnvMinimal(t, stub)
 
 	cwd := t.TempDir()
-	client := openai.NewClient()
+	client := openai.NewClient(stubOpenAIOptions(stub)...)
 	msgs := []openai.ChatCompletionMessageParamUnion{}
 	err := loop.RunTurn(context.Background(), loop.Config{
 		Client:      &client,
@@ -118,7 +118,7 @@ func TestE2E_05_AbortCanceledContext(t *testing.T) {
 	cancel()
 
 	cwd := t.TempDir()
-	client := openai.NewClient()
+	client := openai.NewClient(stubOpenAIOptions(stub)...)
 	msgs := []openai.ChatCompletionMessageParamUnion{}
 	err := loop.RunTurn(ctx, loop.Config{
 		Client:      &client,

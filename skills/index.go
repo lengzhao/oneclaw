@@ -2,9 +2,10 @@ package skills
 
 import (
 	"fmt"
-	"os"
 	"sort"
 	"strings"
+
+	"github.com/lengzhao/oneclaw/rtopts"
 )
 
 // OrderSkills returns skills: recent-used first (still present in set), then the rest by name ascending.
@@ -98,7 +99,7 @@ func FormatIndex(ordered []Skill, maxBytes int) string {
 
 // PromptSkillLines returns skill bullet lines for system prompts (empty if disabled or no skills).
 func PromptSkillLines(cwd, home string, maxBytes int) []string {
-	if strings.TrimSpace(os.Getenv("ONCLAW_DISABLE_SKILLS")) == "1" {
+	if rtopts.Current().DisableSkills {
 		return nil
 	}
 	all := LoadAll(cwd, home)

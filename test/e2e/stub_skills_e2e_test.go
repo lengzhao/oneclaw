@@ -12,6 +12,7 @@ import (
 	"github.com/lengzhao/oneclaw/loop"
 	"github.com/lengzhao/oneclaw/memory"
 	"github.com/lengzhao/oneclaw/routing"
+	"github.com/lengzhao/oneclaw/rtopts"
 	"github.com/lengzhao/oneclaw/test/openaistub"
 	"github.com/lengzhao/oneclaw/toolctx"
 	"github.com/lengzhao/oneclaw/tools/builtin"
@@ -39,7 +40,7 @@ func TestE2E_105_SkillsIndexInSystemPrompt(t *testing.T) {
 	stub.Enqueue(openaistub.CompletionStop("", "ok"))
 	e2eEnvMinimal(t, stub)
 
-	e := newStubEngine(t, cwd)
+	e := newStubEngine(t, stub, cwd)
 	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "ping"}); err != nil {
 		t.Fatal(err)
 	}
@@ -75,7 +76,7 @@ func TestE2E_106_InvokeSkillToolAndRecentFile(t *testing.T) {
 	stub.Enqueue(openaistub.CompletionStop("", "after skill"))
 	e2eEnvMinimal(t, stub)
 
-	client := openai.NewClient()
+	client := openai.NewClient(stubOpenAIOptions(stub)...)
 	msgs := []openai.ChatCompletionMessageParamUnion{}
 	err := loop.RunTurn(context.Background(), loop.Config{
 		Client:      &client,
@@ -126,17 +127,19 @@ func TestE2E_106_InvokeSkillToolAndRecentFile(t *testing.T) {
 	}
 }
 
-// E2E-107 ONCLAW_DISABLE_SKILLS=1 时 system 不出现 ## Skills（磁盘上仍有 skill）。
+// E2E-107 rtopts.DisableSkills 时 system 不出现 ## Skills（磁盘上仍有 skill）。
 func TestE2E_107_SkillsDisabledNoSystemSection(t *testing.T) {
 	cwd := t.TempDir()
 	writeSkill(t, cwd, "hidden", "should not appear in system", "x")
 
-	t.Setenv("ONCLAW_DISABLE_SKILLS", "1")
 	stub := openaistub.New(t)
 	stub.Enqueue(openaistub.CompletionStop("", "ok"))
 	e2eEnvMinimal(t, stub)
+	s := rtopts.Current()
+	s.DisableSkills = true
+	rtopts.Set(&s)
 
-	e := newStubEngine(t, cwd)
+	e := newStubEngine(t, stub, cwd)
 	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "ping"}); err != nil {
 		t.Fatal(err)
 	}

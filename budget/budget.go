@@ -1,49 +1,56 @@
-// Package budget applies a global estimated byte budget to prompts (injections + history).
+// Package budget applies UTF-8 byte limits to prompts (injections + history).
 package budget
 
 import (
-	"os"
-	"strconv"
 	"strings"
 	"unicode/utf8"
 )
 
-// Global configures context sizing for one process. Zero MaxPromptBytes disables enforcement.
+const defaultContextTokens = 110_000
+
+// Global holds byte caps. MaxPromptBytes is the overall context text budget (explicit bytes or token×2 from config).
+// Segment fields > 0 override defaults; 0 means use a simple fraction of MaxPromptBytes.
 type Global struct {
-	MaxPromptBytes int
-	// MinTailMessages is the minimum messages to keep when trimming history (best-effort).
-	MinTailMessages int
+	MaxPromptBytes    int
+	MinTailMessages   int
+	RecallMaxBytes    int // ceiling for RecallBytes(); 0 means 12_000
+	HistoryMaxBytes   int
+	SystemExtraMaxBytes int
+	AgentMdMaxBytes   int
+	SkillIndexBytes   int
+	InheritedMessages int
 }
 
-// FromEnv loads ONCLAW_MAX_PROMPT_BYTES (default 220_000). Set ONCLAW_DISABLE_CONTEXT_BUDGET=1 to disable.
-func FromEnv() Global {
-	if v := strings.TrimSpace(os.Getenv("ONCLAW_DISABLE_CONTEXT_BUDGET")); v == "1" || strings.EqualFold(v, "true") {
-		return Global{MaxPromptBytes: 0, MinTailMessages: 4}
+// DefaultGlobal matches the historical default when YAML omits budget (110000 tokens ×2, etc.).
+func DefaultGlobal() Global {
+	maxB := defaultContextTokens * 2
+	return Global{
+		MaxPromptBytes:    maxB,
+		MinTailMessages:   6,
+		RecallMaxBytes:    12_000,
+		HistoryMaxBytes:   0,
+		SystemExtraMaxBytes: 0,
+		AgentMdMaxBytes:   0,
+		SkillIndexBytes:   0,
+		InheritedMessages: 0,
 	}
-	maxB := getenvInt("ONCLAW_MAX_PROMPT_BYTES", 220_000)
-	tail := getenvInt("ONCLAW_MIN_TRANSCRIPT_MESSAGES", 6)
-	if tail < 2 {
-		tail = 2
-	}
-	return Global{MaxPromptBytes: maxB, MinTailMessages: tail}
 }
 
-// Enabled is true when history / injection shrinking should run.
-func (g Global) Enabled() bool {
-	return g.MaxPromptBytes > 0
-}
+func (g Global) Enabled() bool { return g.MaxPromptBytes > 0 }
 
-// RecallBytes caps memory recall surfacing (SelectRecall budget).
-// Default ceiling matches memory.MaxSurfacedRecallBytes; raise with ONCLAW_RECALL_MAX_BYTES.
+// RecallBytes caps memory recall (SelectRecall). Uses RecallMaxBytes as ceiling (default 12_000); default share of MaxPromptBytes when enabled.
 func (g Global) RecallBytes() int {
-	ceil := getenvInt("ONCLAW_RECALL_MAX_BYTES", 12_000)
+	ceil := g.RecallMaxBytes
+	if ceil <= 0 {
+		ceil = 12_000
+	}
 	if !g.Enabled() {
 		if ceil < 4_000 {
 			ceil = 4_000
 		}
 		return ceil
 	}
-	n := g.MaxPromptBytes * 18 / 100
+	n := g.MaxPromptBytes * 10 / 100
 	if n < 4_000 {
 		n = 4_000
 	}
@@ -53,63 +60,81 @@ func (g Global) RecallBytes() int {
 	return n
 }
 
-// InjectCaps returns max bytes for system memory suffix and agentMd block (recall uses RecallBytes separately).
+// InjectCaps returns max bytes for system memory suffix and agentMd block.
 func (g Global) InjectCaps() (systemExtra, agentMd int) {
 	if !g.Enabled() {
 		return 1 << 30, 1 << 30
 	}
-	pool := g.MaxPromptBytes * 50 / 100
-	if pool < 16_000 {
-		pool = 16_000
+	sys := g.SystemExtraMaxBytes
+	if sys <= 0 {
+		sys = g.MaxPromptBytes * 20 / 100
+		if sys < 8_000 {
+			sys = 8_000
+		}
 	}
-	// Within injection pool: bias toward MEMORY indices in system suffix.
-	systemExtra = pool * 55 / 100
-	agentMd = pool * 45 / 100
-	return systemExtra, agentMd
+	ag := g.AgentMdMaxBytes
+	if ag <= 0 {
+		ag = g.MaxPromptBytes * 22 / 100
+		if ag < 8_000 {
+			ag = 8_000
+		}
+	}
+	return sys, ag
 }
 
-// HistoryByteBudget is an estimate of how many bytes the transcript (messages only) may use.
+// HistoryByteBudget is max UTF-8 bytes for transcript message text payloads (user/assistant/tool content; assistant tool names+args), aligned with len(system).
 func (g Global) HistoryByteBudget(systemLen int) int {
 	if !g.Enabled() {
 		return 1 << 30
 	}
-	slack := g.MaxPromptBytes * 8 / 100
-	if slack < 8_192 {
-		slack = 8_192
+	slack := g.MaxPromptBytes * 5 / 100
+	if slack < 4_096 {
+		slack = 4_096
 	}
-	out := g.MaxPromptBytes - systemLen - slack
-	if out < 24_000 {
-		out = 24_000
+	room := g.MaxPromptBytes - systemLen - slack
+	if room < 8_000 {
+		room = 8_000
 	}
-	return out
+	h := g.HistoryMaxBytes
+	if h <= 0 {
+		h = g.MaxPromptBytes * 42 / 100
+		if h < 24_000 {
+			h = 24_000
+		}
+	}
+	if h > room {
+		return room
+	}
+	return h
 }
 
-// SkillIndexMaxBytes caps the injected "## Skills" listing (names + short descriptions).
-// Default ~1% of MaxPromptBytes, clamped; disable when context budget is off (large ceiling).
+// SkillIndexMaxBytes caps the "## Skills" / catalog listing.
 func (g Global) SkillIndexMaxBytes() int {
+	if g.SkillIndexBytes > 0 {
+		return g.SkillIndexBytes
+	}
 	if !g.Enabled() {
 		return 1 << 30
 	}
 	n := g.MaxPromptBytes / 100
-	if n < 2048 {
-		n = 2048
+	if n < 2_048 {
+		n = 2_048
 	}
 	if n > 24_000 {
 		n = 24_000
 	}
-	if v := getenvInt("ONCLAW_SKILLS_INDEX_MAX_BYTES", 0); v > 0 {
-		return v
-	}
 	return n
 }
 
-// InheritedMessageCap limits fork / run_agent inherit_context tail length.
+// InheritedMessageCap limits fork / run_agent inherit_context tail (message count).
 func (g Global) InheritedMessageCap() int {
+	if g.InheritedMessages > 0 {
+		return g.InheritedMessages
+	}
 	if !g.Enabled() {
 		return 48
 	}
-	// Rough: 22% of prompt / ~700 B per message estimate.
-	n := g.MaxPromptBytes * 22 / 100 / 700
+	n := g.MaxPromptBytes / 800
 	if n < 12 {
 		n = 12
 	}
@@ -119,7 +144,7 @@ func (g Global) InheritedMessageCap() int {
 	return n
 }
 
-// TruncateUTF8 cuts s to at most maxBytes rune-safe and appends a warning line when truncated.
+// TruncateUTF8 cuts s to at most maxBytes rune-safe and appends a warning when truncated.
 func TruncateUTF8(s string, maxBytes int) string {
 	if maxBytes <= 0 {
 		return s
@@ -134,17 +159,5 @@ func TruncateUTF8(s string, maxBytes int) string {
 		}
 		s = s[:len(s)-1]
 	}
-	return strings.TrimRight(s, "\n") + "\n\n> WARNING: truncated by global context budget (ONCLAW_MAX_PROMPT_BYTES).\n"
-}
-
-func getenvInt(key string, def int) int {
-	v := strings.TrimSpace(os.Getenv(key))
-	if v == "" {
-		return def
-	}
-	n, err := strconv.Atoi(v)
-	if err != nil {
-		return def
-	}
-	return n
+	return strings.TrimRight(s, "\n") + "\n\n> WARNING: truncated by context byte limit (budget).\n"
 }

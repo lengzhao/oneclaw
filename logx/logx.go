@@ -7,12 +7,10 @@ import (
 	"strings"
 )
 
-// Init configures slog from environment and optional CLI overrides.
-// Env: ONCLAW_LOG_LEVEL (debug|info|warn|error), ONCLAW_LOG_FORMAT (text|json).
-// Empty overrides keep env-only behavior.
+// Init configures slog level/format strings (e.g. from config merged with CLI flags).
 func Init(levelOverride, formatOverride string) {
-	level := parseLevel(firstNonEmpty(levelOverride, os.Getenv("ONCLAW_LOG_LEVEL")))
-	format := strings.ToLower(strings.TrimSpace(firstNonEmpty(formatOverride, os.Getenv("ONCLAW_LOG_FORMAT"))))
+	level := parseLevel(levelOverride)
+	format := strings.ToLower(strings.TrimSpace(formatOverride))
 	if format == "" {
 		format = "text"
 	}
@@ -36,14 +34,6 @@ func Init(levelOverride, formatOverride string) {
 		slog.String("svc", "oneclaw"),
 	)
 	slog.SetDefault(root)
-}
-
-func firstNonEmpty(a, b string) string {
-	a = strings.TrimSpace(a)
-	if a != "" {
-		return a
-	}
-	return strings.TrimSpace(b)
 }
 
 func parseLevel(s string) slog.Level {

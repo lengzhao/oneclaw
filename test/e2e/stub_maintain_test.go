@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/lengzhao/oneclaw/memory"
+	"github.com/lengzhao/oneclaw/rtopts"
 	"github.com/lengzhao/oneclaw/routing"
 	"github.com/lengzhao/oneclaw/test/openaistub"
 )
@@ -24,13 +25,15 @@ func TestE2E_92_AutoMaintenanceAppends(t *testing.T) {
 	home := t.TempDir()
 	cwd := t.TempDir()
 	t.Setenv("HOME", home)
-	t.Setenv("ONCLAW_DISABLE_AUTO_MAINTENANCE", "0")
-	t.Setenv("ONCLAW_MAINTENANCE_MODEL", "gpt-4o")
-	t.Setenv("ONCLAW_MAINTENANCE_MIN_LOG_BYTES", "50")
-	t.Setenv("ONCLAW_POST_TURN_MAINTENANCE_MIN_LOG_BYTES", "50")
+	s := rtopts.Current()
+	s.DisableAutoMaintenance = false
+	s.MaintenanceModel = "gpt-4o"
+	s.MaintenanceMinLogBytes = 50
+	s.PostTurnMinLogBytes = 50
+	rtopts.Set(&s)
 	e2eIsolateUserMemory(t, home)
 
-	e := newStubEngine(t, cwd)
+	e := newStubEngine(t, stub, cwd)
 	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "hello recallkeyword"}); err != nil {
 		t.Fatal(err)
 	}

@@ -47,7 +47,7 @@ type Engine struct {
 	WorkingTranscriptPath string
 	// RecallState tracks memory recall surfacing across turns (phase B).
 	RecallState memory.RecallState
-	// ChatTransport overrides ONCLAW_CHAT_TRANSPORT when non-empty (from unified config).
+	// ChatTransport overrides default transport when non-empty (from unified config).
 	ChatTransport string
 }
 
@@ -62,9 +62,6 @@ func NewEngine(cwd string, reg *tools.Registry) *Engine {
 		Registry:  reg,
 		CWD:       cwd,
 		SessionID: newSessionID(),
-	}
-	if m := os.Getenv("ONCLAW_MODEL"); m != "" {
-		e.Model = m
 	}
 	return e
 }
@@ -120,6 +117,7 @@ func (e *Engine) SubmitUser(ctx context.Context, in routing.Inbound) error {
 		Messages:              &e.Messages,
 		Registry:              e.Registry,
 		ToolContext:           prep.tctx,
+		SessionID:             e.SessionID,
 		CanUseTool:            e.CanUseTool,
 		Outbound:              em,
 		MemoryAgentMd:         bundle.AgentMdBlock,

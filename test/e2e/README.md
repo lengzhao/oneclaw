@@ -1,6 +1,6 @@
 # test/e2e
 
-端到端测试：通过 **`OPENAI_BASE_URL`** 指向 `../openaistub` 的本地 HTTP 服务，**不调用真实 OpenAI**。
+端到端测试：通过 **`stubOpenAIOptions(stub)`** 将客户端指向 `../openaistub` 的本地 HTTP 服务，**不调用真实 OpenAI**。
 
 ## 文档
 
@@ -47,7 +47,7 @@ go test ./test/e2e/... -run TestE2E_StubTextReply -count=1 -v
 ## 公共约定
 
 - **`helpers_test.go`**：`baseStubTransport`、`e2eEnvMinimal` 等（见文件内注释）。
-- 需要测 memory 时：使用临时 `HOME`，一般**不要**调用 `e2eEnvMinimal` 里的 `ONCLAW_DISABLE_MEMORY`（可用 `baseStubTransport` + 自行 `Setenv`）。
+- 需要测 memory 时：使用临时 `HOME`，一般**不要**用 `e2eEnvMinimal`（其默认 `DisableMemory=true`）；改用 **`e2eEnvWithMemory`** 等。
 
 ## 实现顺序建议
 

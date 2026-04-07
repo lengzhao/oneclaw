@@ -6,10 +6,15 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/lengzhao/oneclaw/rtopts"
 )
 
 func TestAppendMemoryAudit_WritesLine(t *testing.T) {
-	t.Setenv("ONCLAW_DISABLE_MEMORY_AUDIT", "")
+	t.Cleanup(func() { rtopts.Set(nil) })
+	s := rtopts.DefaultSnapshot()
+	s.DisableMemoryAudit = false
+	rtopts.Set(&s)
 	cwd := t.TempDir()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -37,7 +42,10 @@ func TestAppendMemoryAudit_WritesLine(t *testing.T) {
 }
 
 func TestAppendMemoryAudit_SkipsOutsideRoots(t *testing.T) {
-	t.Setenv("ONCLAW_DISABLE_MEMORY_AUDIT", "")
+	t.Cleanup(func() { rtopts.Set(nil) })
+	s := rtopts.DefaultSnapshot()
+	s.DisableMemoryAudit = false
+	rtopts.Set(&s)
 	cwd := t.TempDir()
 	out := filepath.Join(cwd, "outside.txt")
 	lay := DefaultLayout(cwd, t.TempDir())
@@ -49,7 +57,10 @@ func TestAppendMemoryAudit_SkipsOutsideRoots(t *testing.T) {
 }
 
 func TestAppendMemoryAudit_Disabled(t *testing.T) {
-	t.Setenv("ONCLAW_DISABLE_MEMORY_AUDIT", "1")
+	t.Cleanup(func() { rtopts.Set(nil) })
+	s := rtopts.DefaultSnapshot()
+	s.DisableMemoryAudit = true
+	rtopts.Set(&s)
 	cwd := t.TempDir()
 	home := t.TempDir()
 	lay := DefaultLayout(cwd, home)
@@ -63,7 +74,10 @@ func TestAppendMemoryAudit_Disabled(t *testing.T) {
 }
 
 func TestAppendMemoryAudit_ProjectRulesFile(t *testing.T) {
-	t.Setenv("ONCLAW_DISABLE_MEMORY_AUDIT", "")
+	t.Cleanup(func() { rtopts.Set(nil) })
+	s := rtopts.DefaultSnapshot()
+	s.DisableMemoryAudit = false
+	rtopts.Set(&s)
 	cwd := t.TempDir()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -97,7 +111,10 @@ func TestPathUnderRoot(t *testing.T) {
 }
 
 func TestAppendMaintenanceSection_Audits(t *testing.T) {
-	t.Setenv("ONCLAW_DISABLE_MEMORY_AUDIT", "")
+	t.Cleanup(func() { rtopts.Set(nil) })
+	s := rtopts.DefaultSnapshot()
+	s.DisableMemoryAudit = false
+	rtopts.Set(&s)
 	cwd := t.TempDir()
 	home := t.TempDir()
 	t.Setenv("HOME", home)

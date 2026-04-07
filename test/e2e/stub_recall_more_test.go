@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/lengzhao/oneclaw/memory"
+	"github.com/lengzhao/oneclaw/rtopts"
 	"github.com/lengzhao/oneclaw/routing"
 	"github.com/lengzhao/oneclaw/test/openaistub"
 )
@@ -30,11 +31,12 @@ func TestE2E_32_RecallPathDedupSecondTurn(t *testing.T) {
 	stub := openaistub.New(t)
 	stub.Enqueue(openaistub.CompletionStop("", "t1"))
 	stub.Enqueue(openaistub.CompletionStop("", "t2"))
-	// 避免 PostTurn 写入的 daily log .md 在第二轮被 recall 命中（与 dedup.md 无关的第二次附件）
-	t.Setenv("ONCLAW_DISABLE_MEMORY_EXTRACT", "1")
 	e2eEnvWithMemory(t, stub)
+	s := rtopts.Current()
+	s.DisableMemoryExtract = true
+	rtopts.Set(&s)
 	e2eIsolateUserMemory(t, home)
-	e := newStubEngine(t, cwd)
+	e := newStubEngine(t, stub, cwd)
 
 	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "recall_dedup_e2e_32 first turn"}); err != nil {
 		t.Fatal(err)
@@ -76,7 +78,7 @@ func TestE2E_33_RecallTotalByteBudget(t *testing.T) {
 	stub.Enqueue(openaistub.CompletionStop("", "ok"))
 	e2eEnvWithMemory(t, stub)
 	e2eIsolateUserMemory(t, home)
-	e := newStubEngine(t, cwd)
+	e := newStubEngine(t, stub, cwd)
 	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: keyword + " please"}); err != nil {
 		t.Fatal(err)
 	}

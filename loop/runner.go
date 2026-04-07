@@ -14,6 +14,7 @@ import (
 	"github.com/lengzhao/oneclaw/routing"
 	"github.com/lengzhao/oneclaw/toolctx"
 	"github.com/lengzhao/oneclaw/tools"
+	"github.com/lengzhao/oneclaw/usageledger"
 	"github.com/openai/openai-go"
 	"golang.org/x/sync/errgroup"
 )
@@ -40,9 +41,9 @@ type Config struct {
 	InboundAttachmentMsgs []string
 	// UserLine is the primary user message after orchestration (e.g. attachment-only placeholder). If empty, TrimSpace(in.Text) is used.
 	UserLine string
-	// Budget trims transcript before each model call when Enabled (from budget.FromEnv).
+	// Budget trims transcript before each model call when Enabled (from rtopts / config).
 	Budget budget.Global
-	// ChatTransport overrides ONCLAW_CHAT_TRANSPORT when non-empty (e.g. from config file).
+	// ChatTransport overrides default transport when non-empty (e.g. from config).
 	ChatTransport string
 	// ToolTrace, when non-nil, records slim per-tool rows for this RunTurn only (not sent to the model).
 	ToolTrace *ToolTraceSink
@@ -52,6 +53,8 @@ type Config struct {
 	// assistant-visible reply (after any tool rounds). User turn is recorded before the model loop
 	// by the caller (Claude Code–style: recordTranscript before query). Not called on error or abort.
 	SlimTranscript func(assistantText string)
+	// SessionID is optional; when set with CWD on ToolContext, usage is written under .oneclaw/usage/.
+	SessionID string
 }
 
 func logOutboundEmit(op string, err error) {
@@ -150,6 +153,27 @@ func RunTurn(ctx context.Context, cfg Config, in routing.Inbound) (err error) {
 			"prompt_tokens", completion.Usage.PromptTokens,
 			"completion_tokens", completion.Usage.CompletionTokens,
 		)
+
+		cwd := ""
+		var inbound routing.Inbound
+		depth := 0
+		if cfg.ToolContext != nil {
+			cwd = cfg.ToolContext.CWD
+			inbound = cfg.ToolContext.TurnInbound
+			depth = cfg.ToolContext.SubagentDepth
+		}
+		usageledger.MaybeRecord(usageledger.RecordParams{
+			CWD:              cwd,
+			SessionID:        cfg.SessionID,
+			Model:            cfg.Model,
+			Step:             step,
+			SubagentDepth:    depth,
+			PromptTokens:     completion.Usage.PromptTokens,
+			CompletionTokens: completion.Usage.CompletionTokens,
+			TotalTokens:      completion.Usage.TotalTokens,
+			UsageJSON:        completion.Usage.RawJSON(),
+			Inbound:          inbound,
+		})
 
 		if choice.FinishReason != "tool_calls" {
 			recordSlimTranscript()

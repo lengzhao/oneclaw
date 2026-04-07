@@ -23,7 +23,6 @@ func TestTrimMessagesToBudget_dropsOldestUser(t *testing.T) {
 }
 
 func TestApplyHistoryBudget_insertsCompactBoundary(t *testing.T) {
-	t.Setenv("ONCLAW_DISABLE_SEMANTIC_COMPACT", "")
 	var msgs []openai.ChatCompletionMessageParamUnion
 	for range 200 {
 		msgs = append(msgs, openai.UserMessage(strings.Repeat("z", 900)))

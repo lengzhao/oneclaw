@@ -1,7 +1,6 @@
 package loop
 
 import (
-	"encoding/json"
 	"log/slog"
 	"strings"
 
@@ -9,23 +8,35 @@ import (
 	"github.com/openai/openai-go"
 )
 
-func messageJSONSize(m openai.ChatCompletionMessageParamUnion) int {
-	b, err := json.Marshal(m)
-	if err != nil {
-		return 256
+// messageTextBudgetBytes is UTF-8 byte length of what the user/assistant/tool “says”: visible text plus
+// tool call names and argument JSON on assistant messages (no OpenAI wire JSON wrapper).
+func messageTextBudgetBytes(m openai.ChatCompletionMessageParamUnion) int {
+	switch {
+	case m.OfUser != nil:
+		return len(userMessageText(m))
+	case m.OfTool != nil:
+		return len(toolMessageText(m))
+	case m.OfAssistant != nil:
+		a := m.OfAssistant
+		n := len(assistantContentString(a))
+		for _, tc := range a.ToolCalls {
+			n += len(tc.Function.Name) + len(tc.Function.Arguments)
+		}
+		return n
+	default:
+		return 0
 	}
-	return len(b)
 }
 
-func totalMessagesBytes(msgs []openai.ChatCompletionMessageParamUnion) int {
+func totalMessageTextBytes(msgs []openai.ChatCompletionMessageParamUnion) int {
 	n := 0
 	for _, m := range msgs {
-		n += messageJSONSize(m)
+		n += messageTextBudgetBytes(m)
 	}
 	return n
 }
 
-// TrimMessagesToBudget drops oldest safe prefix until estimated JSON size fits maxBytes or len<=minKeep.
+// TrimMessagesToBudget drops oldest safe prefix until total message text (UTF-8 bytes) fits maxBytes or len<=minKeep.
 func TrimMessagesToBudget(msgs []openai.ChatCompletionMessageParamUnion, maxBytes int, minKeep int) []openai.ChatCompletionMessageParamUnion {
 	if maxBytes <= 0 || len(msgs) == 0 {
 		return msgs
@@ -34,16 +45,16 @@ func TrimMessagesToBudget(msgs []openai.ChatCompletionMessageParamUnion, maxByte
 		minKeep = 0
 	}
 	out := msgs
-	for len(out) > minKeep && totalMessagesBytes(out) > maxBytes {
+	for len(out) > minKeep && totalMessageTextBytes(out) > maxBytes {
 		next, ok := dropOldestPrefix(out)
 		if !ok {
-			slog.Warn("loop.budget.cannot_trim_further", "messages", len(out), "bytes", totalMessagesBytes(out), "max", maxBytes)
+			slog.Warn("loop.budget.cannot_trim_further", "messages", len(out), "text_bytes", totalMessageTextBytes(out), "max", maxBytes)
 			break
 		}
 		out = next
 	}
 	if len(out) < len(msgs) {
-		slog.Info("loop.budget.trim_history", "before", len(msgs), "after", len(out), "bytes", totalMessagesBytes(out), "max", maxBytes)
+		slog.Info("loop.budget.trim_history", "before", len(msgs), "after", len(out), "text_bytes", totalMessageTextBytes(out), "max", maxBytes)
 	}
 	return out
 }
@@ -73,15 +84,12 @@ func dropOldestPrefix(msgs []openai.ChatCompletionMessageParamUnion) ([]openai.C
 		return msgs[1+n:], true
 	}
 	if first.OfTool != nil {
-		// Orphan tool message — drop one to recover.
 		return msgs[1:], true
 	}
 	return msgs, false
 }
 
-// ApplyHistoryBudget re-slices *msgs in place when a budget is enabled.
-// When semantic compact is enabled (default), trimming also prepends a user message with a heuristic
-// summary and a compact_boundary marker so the model retains gist of dropped turns.
+// ApplyHistoryBudget re-slices *msgs by total UTF-8 text payload bytes (see messageTextBudgetBytes). Optional semantic compact prepends a summary user line.
 func ApplyHistoryBudget(g budget.Global, system string, msgs *[]openai.ChatCompletionMessageParamUnion) {
 	if msgs == nil || !g.Enabled() {
 		return
@@ -100,12 +108,12 @@ func ApplyHistoryBudget(g budget.Global, system string, msgs *[]openai.ChatCompl
 				if strings.TrimSpace(summary) != "" {
 					compactMsg := openai.UserMessage(compactEnvelope(summary))
 					candidate := append([]openai.ChatCompletionMessageParamUnion{compactMsg}, trimmed...)
-					for len(summary) > 64 && totalMessagesBytes(candidate) > limit {
+					for len(summary) > 64 && totalMessageTextBytes(candidate) > limit {
 						summary = utf8TrimToBytes(summary, len(summary)*4/5)
 						compactMsg = openai.UserMessage(compactEnvelope(summary))
 						candidate = append([]openai.ChatCompletionMessageParamUnion{compactMsg}, trimmed...)
 					}
-					if totalMessagesBytes(candidate) <= limit {
+					if totalMessageTextBytes(candidate) <= limit {
 						slog.Info("loop.budget.semantic_compact", "dropped_messages", len(dropped), "kept", len(trimmed))
 						*msgs = candidate
 						return
@@ -114,6 +122,5 @@ func ApplyHistoryBudget(g budget.Global, system string, msgs *[]openai.ChatCompl
 			}
 		}
 	}
-	trimmed := TrimMessagesToBudget(full, limit, g.MinTailMessages)
-	*msgs = trimmed
+	*msgs = TrimMessagesToBudget(full, limit, g.MinTailMessages)
 }
