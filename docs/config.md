@@ -45,6 +45,7 @@
 | 路径 | `paths.memory_base`、`paths.transcript`、`paths.working_transcript`、`paths.working_transcript_max_messages`、`paths.turn_log_path` | 相对路径相对 `-cwd`；主线程在每轮成功 `RunTurn` 后把 **内存 `Messages`** 折叠为**用户可见**（去掉 agentMd / 路由 / recall / compact 注入与 tool 轮次等，与 Claude Code 发请求前的 compact/collapse 同类取舍）；`working_transcript` 与内存同形；`working_transcript_max_messages` 截尾部可见条数，`0` 默认 **30**，负数不限制 |
 | 预算 | `budget.*` | 见下表 |
 | 开关 | `features.disable_*` | `true` 为关闭；省略或 `false` 为开启 |
+| 通知审计 | `features.disable_audit_sinks`、`disable_audit_llm`、`disable_audit_orchestration`、`disable_audit_visible` | 默认三路全开；`disable_audit_sinks` 关闭全部；其余按路径关闭（见 [notify-sinks-audit-design.md](notify-sinks-audit-design.md)） |
 | 维护 | `maintain.*` | 定时/远场/回合后参数；`maintain.interval` 非空时主进程内 `maintainloop` 周期唤醒 |
 | 日志 | `log.level`、`log.format` | 可被 CLI 覆盖 |
 | 侧链 | `sidechain_merge` | 留空关闭；`1` / `true` / `tool` / `append` / `user` 等见历史设计文档 |

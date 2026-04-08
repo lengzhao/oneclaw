@@ -54,6 +54,8 @@ type Config struct {
 	SlimTranscript func(assistantText string)
 	// SessionID is optional; when set with CWD on ToolContext, usage is written under .oneclaw/usage/.
 	SessionID string
+	// Lifecycle optional hooks (model steps, tool execute start). Nil fields are skipped.
+	Lifecycle *LifecycleCallbacks
 }
 
 func logOutboundEmit(op string, err error) {
@@ -85,13 +87,30 @@ func RunTurn(ctx context.Context, cfg Config, in bus.InboundMessage) (err error)
 	AppendTurnUserMessages(msgs, cfg.MemoryAgentMd, cfg.MemoryRecall, cfg.InboundMeta, cfg.InboundAttachmentMsgs, userLine)
 
 	for step := 0; step < cfg.MaxSteps; step++ {
+		ApplyHistoryBudget(cfg.Budget, cfg.System, msgs)
 		select {
 		case <-ctx.Done():
+			if cfg.Lifecycle != nil && (cfg.Lifecycle.OnModelStepStart != nil || cfg.Lifecycle.OnModelStepEnd != nil) {
+				reqMsgs := buildRequestMessages(cfg.System, *msgs)
+				toolParams := cfg.Registry.OpenAITools()
+				stepMark := time.Now()
+				if cfg.Lifecycle.OnModelStepStart != nil {
+					cfg.Lifecycle.OnModelStepStart(ctx, step, len(toolParams), reqMsgs)
+				}
+				if cfg.Lifecycle.OnModelStepEnd != nil {
+					cfg.Lifecycle.OnModelStepEnd(ctx, step, ModelStepEndInfo{
+						Model:                  cfg.Model,
+						OK:                     false,
+						DurationMs:             time.Since(stepMark).Milliseconds(),
+						Err:                    ctx.Err(),
+						BeforeRequestCancelled: true,
+					})
+				}
+			}
 			return ctx.Err()
 		default:
 		}
 
-		ApplyHistoryBudget(cfg.Budget, cfg.System, msgs)
 		reqMsgs := buildRequestMessages(cfg.System, *msgs)
 		toolParams := cfg.Registry.OpenAITools()
 		params := openai.ChatCompletionNewParams{
@@ -111,14 +130,34 @@ func RunTurn(ctx context.Context, cfg Config, in bus.InboundMessage) (err error)
 			"tools", len(params.Tools),
 			"max_completion_tokens", cfg.MaxTokens,
 		)
+		if cfg.Lifecycle != nil && cfg.Lifecycle.OnModelStepStart != nil {
+			cfg.Lifecycle.OnModelStepStart(ctx, step, len(params.Tools), reqMsgs)
+		}
 		stepStart := time.Now()
 		completion, err := model.CompleteWithTransport(ctx, cfg.Client, params, cfg.ChatTransport)
 		if err != nil {
 			slog.Error("loop.model.error", "step", step, "model", cfg.Model, "duration_ms", time.Since(stepStart).Milliseconds(), "err", err)
+			if cfg.Lifecycle != nil && cfg.Lifecycle.OnModelStepEnd != nil {
+				cfg.Lifecycle.OnModelStepEnd(ctx, step, ModelStepEndInfo{
+					Model:      cfg.Model,
+					OK:         false,
+					DurationMs: time.Since(stepStart).Milliseconds(),
+					Err:        err,
+				})
+			}
 			return fmt.Errorf("model step %d: %w", step, err)
 		}
 		if len(completion.Choices) == 0 {
-			return fmt.Errorf("model step %d: empty choices", step)
+			emptyErr := fmt.Errorf("model step %d: empty choices", step)
+			if cfg.Lifecycle != nil && cfg.Lifecycle.OnModelStepEnd != nil {
+				cfg.Lifecycle.OnModelStepEnd(ctx, step, ModelStepEndInfo{
+					Model:      cfg.Model,
+					OK:         false,
+					DurationMs: time.Since(stepStart).Milliseconds(),
+					Err:        emptyErr,
+				})
+			}
+			return emptyErr
 		}
 
 		choice := completion.Choices[0]
@@ -136,6 +175,21 @@ func RunTurn(ctx context.Context, cfg Config, in bus.InboundMessage) (err error)
 			"prompt_tokens", completion.Usage.PromptTokens,
 			"completion_tokens", completion.Usage.CompletionTokens,
 		)
+		if cfg.Lifecycle != nil && cfg.Lifecycle.OnModelStepEnd != nil {
+			endInfo := ModelStepEndInfo{
+				Model:            cfg.Model,
+				OK:               true,
+				AssistantVisible: assistantVisibleText(choice.Message),
+				FinishReason:     choice.FinishReason,
+				ToolCallsCount:   len(choice.Message.ToolCalls),
+				DurationMs:       time.Since(stepStart).Milliseconds(),
+				PromptTokens:     completion.Usage.PromptTokens,
+				CompletionTokens: completion.Usage.CompletionTokens,
+				TotalTokens:      completion.Usage.TotalTokens,
+			}
+			endInfo.ToolCallsJSON = toolCallsJSONFromMessage(choice.Message)
+			cfg.Lifecycle.OnModelStepEnd(ctx, step, endInfo)
+		}
 
 		cwd := ""
 		var inbound bus.InboundMessage
@@ -299,6 +353,7 @@ func runOneTool(ctx context.Context, c toolCallInv, cfg Config, modelStep int) (
 	emitTool := func(ok bool, errText, out string) {
 		ent := ToolTraceEntry{
 			Step:        modelStep,
+			ToolUseID:   c.ID,
 			Name:        c.Name,
 			OK:          ok,
 			Err:         truncateRunes(errText, 200),
@@ -330,6 +385,9 @@ func runOneTool(ctx context.Context, c toolCallInv, cfg Config, modelStep int) (
 		emitTool(false, msg, "")
 		return openai.ToolMessage(msg, c.ID), nil
 	}
+	if cfg.Lifecycle != nil && cfg.Lifecycle.OnToolStart != nil {
+		cfg.Lifecycle.OnToolStart(ctx, modelStep, c.ID, c.Name, previewArgsJSON(c.Args))
+	}
 	out, err := tool.Execute(ctx, c.Args, cfg.ToolContext)
 	if err != nil {
 		slog.Warn("loop.tool.error", "tool", c.Name, "tool_use_id", c.ID, "duration_ms", time.Since(t0).Milliseconds(), "err", err)
@@ -342,6 +400,30 @@ func runOneTool(ctx context.Context, c toolCallInv, cfg Config, modelStep int) (
 	toolEnd(true)
 	emitTool(true, "", out)
 	return openai.ToolMessage(out, c.ID), nil
+}
+
+func toolCallsJSONFromMessage(msg openai.ChatCompletionMessage) string {
+	if len(msg.ToolCalls) == 0 {
+		return ""
+	}
+	type item struct {
+		ID   string          `json:"id"`
+		Name string          `json:"name"`
+		Args json.RawMessage `json:"arguments"`
+	}
+	items := make([]item, 0, len(msg.ToolCalls))
+	for _, tc := range msg.ToolCalls {
+		args := json.RawMessage(tc.Function.Arguments)
+		if len(args) == 0 {
+			args = json.RawMessage("null")
+		}
+		items = append(items, item{ID: tc.ID, Name: tc.Function.Name, Args: args})
+	}
+	b, err := json.Marshal(items)
+	if err != nil {
+		return ""
+	}
+	return string(b)
 }
 
 // TranscriptJSON is a serializable view of the conversation (API-shaped messages).

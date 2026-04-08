@@ -48,6 +48,11 @@ type File struct {
 		DisableSemanticCompact      *bool `yaml:"disable_semantic_compact"`
 		DisableSkills               *bool `yaml:"disable_skills"`
 		DisableTasks                *bool `yaml:"disable_tasks"`
+		// Notify audit JSONL sinks (.oneclaw/audit/...): disable_audit_sinks turns all off; the rest are per-path.
+		DisableAuditSinks           *bool `yaml:"disable_audit_sinks"`
+		DisableAuditLLM             *bool `yaml:"disable_audit_llm"`
+		DisableAuditOrchestration   *bool `yaml:"disable_audit_orchestration"`
+		DisableAuditVisible         *bool `yaml:"disable_audit_visible"`
 	} `yaml:"features"`
 
 	Budget struct {
@@ -191,6 +196,10 @@ func mergeFile(dst *File, src File) {
 	mergeBoolPtr(&dst.Features.DisableSemanticCompact, src.Features.DisableSemanticCompact)
 	mergeBoolPtr(&dst.Features.DisableSkills, src.Features.DisableSkills)
 	mergeBoolPtr(&dst.Features.DisableTasks, src.Features.DisableTasks)
+	mergeBoolPtr(&dst.Features.DisableAuditSinks, src.Features.DisableAuditSinks)
+	mergeBoolPtr(&dst.Features.DisableAuditLLM, src.Features.DisableAuditLLM)
+	mergeBoolPtr(&dst.Features.DisableAuditOrchestration, src.Features.DisableAuditOrchestration)
+	mergeBoolPtr(&dst.Features.DisableAuditVisible, src.Features.DisableAuditVisible)
 	if src.Budget.MaxContextTokens != 0 {
 		dst.Budget.MaxContextTokens = src.Budget.MaxContextTokens
 	}

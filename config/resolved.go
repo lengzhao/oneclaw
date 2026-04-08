@@ -139,10 +139,26 @@ func (r *Resolved) WorkingTranscriptPath() string {
 }
 
 func (r *Resolved) transcriptDisabled() bool {
-	if r.merged.Features.DisableTranscript != nil && *r.merged.Features.DisableTranscript {
-		return true
+	return boolPtrTrue(r.merged.Features.DisableTranscript)
+}
+
+// NotifyAuditSinkPaths returns which notify audit JSONL sinks should register.
+// Default is all true (llm, orchestration, visible). disable_audit_sinks disables all;
+// per-path flags further turn off individual sinks.
+func (r *Resolved) NotifyAuditSinkPaths() (llm, orchestration, visible bool) {
+	if r == nil {
+		return true, true, true
 	}
-	return false
+	if boolPtrTrue(r.merged.Features.DisableAuditSinks) {
+		return false, false, false
+	}
+	return !boolPtrTrue(r.merged.Features.DisableAuditLLM),
+		!boolPtrTrue(r.merged.Features.DisableAuditOrchestration),
+		!boolPtrTrue(r.merged.Features.DisableAuditVisible)
+}
+
+func boolPtrTrue(p *bool) bool {
+	return p != nil && *p
 }
 
 // EmbeddedScheduledMaintainInterval returns the interval for in-process maintainloop (oneclaw main).

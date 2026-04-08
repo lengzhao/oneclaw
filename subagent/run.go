@@ -14,6 +14,7 @@ import (
 	"github.com/lengzhao/oneclaw/budget"
 	"github.com/lengzhao/oneclaw/loop"
 	"github.com/lengzhao/clawbridge/bus"
+	"github.com/lengzhao/oneclaw/notify"
 	"github.com/lengzhao/oneclaw/toolctx"
 	"github.com/lengzhao/oneclaw/tools"
 	"github.com/openai/openai-go"
@@ -38,6 +39,12 @@ type Host struct {
 	HistoryBudget budget.Global
 	// ChatTransport overrides default transport when non-empty.
 	ChatTransport string
+	// Notify and parent correlation for subagent_start/end and nested loop lifecycle (optional).
+	Notify                notify.Sink
+	ParentAgentID         string
+	ParentTurnID          string
+	ParentCorrelationID   string
+	OnNestedLifecycle     func(ctx context.Context, childTurnID, childRunID, nestedAgentID string, depth int) *loop.LifecycleCallbacks
 }
 
 func (h *Host) maxInherited() int {
@@ -88,7 +95,7 @@ func stripMetaForNested(parent *toolctx.Context, reg *tools.Registry, always boo
 }
 
 // RunAgent starts an isolated sub-agent with its own transcript slice (sidechain).
-func RunAgent(ctx context.Context, h *Host, parent *toolctx.Context, agentType, task string, inheritContext bool) (string, error) {
+func RunAgent(ctx context.Context, h *Host, parent *toolctx.Context, agentType, task string, inheritContext bool) (reply string, err error) {
 	if err := validateNestedHost(h); err != nil {
 		return "", err
 	}
@@ -113,12 +120,31 @@ func RunAgent(ctx context.Context, h *Host, parent *toolctx.Context, agentType, 
 	}
 
 	child := parent.ChildContext()
-	agentID := newSubAgentID()
-	slog.Info("subagent.run_agent", "agent_id", agentID, "agent_type", def.AgentType, "depth", child.SubagentDepth, "inherit", inheritContext)
+	child.AgentID = strings.TrimSpace(def.AgentType)
+	childRunID := newSubAgentID()
+	nestedTurnID := newNestedTurnID()
+	slog.Info("subagent.run_agent", "agent_id", childRunID, "agent_type", def.AgentType, "depth", child.SubagentDepth, "inherit", inheritContext)
+
+	notifyStarted := false
+	if h.Notify != nil {
+		emitSubagentStart(h, ctx, "run_agent", def.AgentType, task, inheritContext, child.SubagentDepth, childRunID, nestedTurnID)
+		notifyStarted = true
+	}
+	defer func() {
+		if !notifyStarted {
+			return
+		}
+		emitSubagentEnd(h, ctx, "run_agent", def.AgentType, child.SubagentDepth, childRunID, nestedTurnID, reply, err)
+	}()
+
+	var lc *loop.LifecycleCallbacks
+	if h.OnNestedLifecycle != nil {
+		lc = h.OnNestedLifecycle(ctx, nestedTurnID, childRunID, def.AgentType, child.SubagentDepth)
+	}
 
 	msgs := make([]openai.ChatCompletionMessageParamUnion, 0)
 	if inheritContext && h.ParentMessages != nil {
-		msgs = append(msgs, trimMessages(*h.ParentMessages, h.maxInherited())...)
+		msgs = append(msgs, trimInheritedParentMessages(*h.ParentMessages, h.maxInherited())...)
 	}
 
 	sys := buildSubagentSystem(h.CWD, def.SystemPrompt)
@@ -138,19 +164,20 @@ func RunAgent(ctx context.Context, h *Host, parent *toolctx.Context, agentType, 
 		MemoryRecall:  "",
 		Budget:        h.HistoryBudget,
 		ChatTransport: h.ChatTransport,
+		Lifecycle:     lc,
 	}
-	if err := loop.RunTurn(ctx, cfg, bus.InboundMessage{Content: task}); err != nil {
+	if err = loop.RunTurn(ctx, cfg, bus.InboundMessage{Content: task}); err != nil {
 		return "", err
 	}
 	msgs = loop.ToUserVisibleMessages(msgs)
-	scPath, _ := writeSidechain(h.CWD, h.SessionID, agentID, "run_agent", msgs)
-	reply := loop.LastAssistantDisplay(msgs)
-	applySidechainMerge(parent, "run_agent", agentID, scPath, &reply)
+	scPath, _ := writeSidechain(h.CWD, h.SessionID, childRunID, "run_agent", msgs)
+	reply = loop.LastAssistantDisplay(msgs)
+	applySidechainMerge(parent, "run_agent", childRunID, scPath, &reply)
 	return reply, nil
 }
 
 // RunFork shares the parent system string and a trimmed parent message tail (TS: forkedAgent).
-func RunFork(ctx context.Context, h *Host, parent *toolctx.Context, task string, maxParentMessages int) (string, error) {
+func RunFork(ctx context.Context, h *Host, parent *toolctx.Context, task string, maxParentMessages int) (reply string, err error) {
 	if err := validateNestedHost(h); err != nil {
 		return "", err
 	}
@@ -174,12 +201,32 @@ func RunFork(ctx context.Context, h *Host, parent *toolctx.Context, task string,
 
 	child := parent.ChildContext()
 	child.ImportReadCacheFrom(parent)
-	agentID := newSubAgentID()
-	slog.Info("subagent.fork", "agent_id", agentID, "depth", child.SubagentDepth, "parent_tail", maxParentMessages)
+	const forkAgentID = "fork_context"
+	child.AgentID = forkAgentID
+	childRunID := newSubAgentID()
+	nestedTurnID := newNestedTurnID()
+	slog.Info("subagent.fork", "agent_id", childRunID, "depth", child.SubagentDepth, "parent_tail", maxParentMessages)
+
+	notifyStarted := false
+	if h.Notify != nil {
+		emitSubagentStart(h, ctx, "fork_context", forkAgentID, task, false, child.SubagentDepth, childRunID, nestedTurnID)
+		notifyStarted = true
+	}
+	defer func() {
+		if !notifyStarted {
+			return
+		}
+		emitSubagentEnd(h, ctx, "fork_context", forkAgentID, child.SubagentDepth, childRunID, nestedTurnID, reply, err)
+	}()
+
+	var lc *loop.LifecycleCallbacks
+	if h.OnNestedLifecycle != nil {
+		lc = h.OnNestedLifecycle(ctx, nestedTurnID, childRunID, forkAgentID, child.SubagentDepth)
+	}
 
 	msgs := make([]openai.ChatCompletionMessageParamUnion, 0)
 	if h.ParentMessages != nil {
-		msgs = append(msgs, trimMessages(*h.ParentMessages, maxParentMessages)...)
+		msgs = append(msgs, trimInheritedParentMessages(*h.ParentMessages, maxParentMessages)...)
 	}
 
 	cfg := loop.Config{
@@ -196,14 +243,15 @@ func RunFork(ctx context.Context, h *Host, parent *toolctx.Context, task string,
 		OutboundText:  nil,
 		Budget:        h.HistoryBudget,
 		ChatTransport: h.ChatTransport,
+		Lifecycle:     lc,
 	}
-	if err := loop.RunTurn(ctx, cfg, bus.InboundMessage{Content: task}); err != nil {
+	if err = loop.RunTurn(ctx, cfg, bus.InboundMessage{Content: task}); err != nil {
 		return "", err
 	}
 	msgs = loop.ToUserVisibleMessages(msgs)
-	scPath, _ := writeSidechain(h.CWD, h.SessionID, agentID, "fork_context", msgs)
-	reply := loop.LastAssistantDisplay(msgs)
-	applySidechainMerge(parent, "fork_context", agentID, scPath, &reply)
+	scPath, _ := writeSidechain(h.CWD, h.SessionID, childRunID, "fork_context", msgs)
+	reply = loop.LastAssistantDisplay(msgs)
+	applySidechainMerge(parent, "fork_context", childRunID, scPath, &reply)
 	return reply, nil
 }
 
@@ -243,6 +291,84 @@ func trimMessages(src []openai.ChatCompletionMessageParamUnion, max int) []opena
 	return out
 }
 
+// trimInheritedParentMessages takes the last max parent messages, then removes segments that are
+// invalid for chat.completions: orphaned leading tool messages, a trailing assistant with
+// unresolved tool_calls (e.g. the in-flight run_agent message), or a partial tool batch after such
+// an assistant.
+func trimInheritedParentMessages(src []openai.ChatCompletionMessageParamUnion, max int) []openai.ChatCompletionMessageParamUnion {
+	out := trimMessages(src, max)
+	before := len(out)
+	out = dropLeadingOrphanToolMessages(out)
+	for {
+		n := len(out)
+		out = dropTrailingIncompleteAssistantToolBatch(out)
+		if len(out) == n {
+			break
+		}
+	}
+	if len(out) < before {
+		slog.Debug("subagent.inherited_messages_sanitized", "before", before, "after", len(out))
+	}
+	return out
+}
+
+func dropLeadingOrphanToolMessages(msgs []openai.ChatCompletionMessageParamUnion) []openai.ChatCompletionMessageParamUnion {
+	i := 0
+	for i < len(msgs) && msgs[i].OfTool != nil {
+		i++
+	}
+	return msgs[i:]
+}
+
+func dropTrailingIncompleteAssistantToolBatch(msgs []openai.ChatCompletionMessageParamUnion) []openai.ChatCompletionMessageParamUnion {
+	if len(msgs) == 0 {
+		return msgs
+	}
+	last := msgs[len(msgs)-1]
+	if last.OfAssistant != nil && len(last.OfAssistant.ToolCalls) > 0 {
+		return msgs[:len(msgs)-1]
+	}
+	if last.OfTool == nil {
+		return msgs
+	}
+	toolStart := len(msgs) - 1
+	for toolStart >= 0 && msgs[toolStart].OfTool != nil {
+		toolStart--
+	}
+	if toolStart < 0 {
+		return nil
+	}
+	a := msgs[toolStart].OfAssistant
+	if a == nil || len(a.ToolCalls) == 0 {
+		return msgs[:toolStart+1]
+	}
+	want := len(a.ToolCalls)
+	got := len(msgs) - 1 - toolStart
+	if got != want {
+		return msgs[:toolStart]
+	}
+	needed := make(map[string]struct{}, want)
+	for _, tc := range a.ToolCalls {
+		if tc.ID != "" {
+			needed[tc.ID] = struct{}{}
+		}
+	}
+	for i := toolStart + 1; i < len(msgs); i++ {
+		tm := msgs[i].OfTool
+		if tm == nil {
+			return msgs[:toolStart]
+		}
+		if _, ok := needed[tm.ToolCallID]; !ok {
+			return msgs[:toolStart]
+		}
+		delete(needed, tm.ToolCallID)
+	}
+	if len(needed) > 0 {
+		return msgs[:toolStart]
+	}
+	return msgs
+}
+
 func wrapConservative(parent tools.CanUseTool) tools.CanUseTool {
 	return func(ctx context.Context, name string, input json.RawMessage, tctx *toolctx.Context) (bool, string) {
 		if name == "bash" {
@@ -259,6 +385,12 @@ func newSubAgentID() string {
 	var b [6]byte
 	_, _ = rand.Read(b[:])
 	return "sub_" + hex.EncodeToString(b[:])
+}
+
+func newNestedTurnID() string {
+	var b [8]byte
+	_, _ = rand.Read(b[:])
+	return "nturn_" + hex.EncodeToString(b[:])
 }
 
 func writeSidechain(cwd, sessionID, agentID, kind string, msgs []openai.ChatCompletionMessageParamUnion) (string, error) {

@@ -121,6 +121,9 @@ func main() {
 		}
 	}
 
+	llmAudit, orchAudit, visAudit := cfg.NotifyAuditSinkPaths()
+	eng.RegisterAuditSinks(llmAudit, orchAudit, visAudit)
+
 	if !cfg.HasAPIKey() {
 		slog.Error("missing API key: set openai.api_key in config",
 			"user_config", filepath.Join(home, config.UserRelPath),

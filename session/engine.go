@@ -15,9 +15,16 @@ import (
 	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/oneclaw/loop"
 	"github.com/lengzhao/oneclaw/memory"
+	"github.com/lengzhao/oneclaw/notify"
 	"github.com/lengzhao/oneclaw/tools"
 	"github.com/openai/openai-go"
 )
+
+// DefaultRootAgentID is the default notify / audit id for the root Engine created by NewEngine.
+const DefaultRootAgentID = "AGENT"
+
+// DefaultMainAgentID is an alias of DefaultRootAgentID for older call sites.
+const DefaultMainAgentID = DefaultRootAgentID
 
 // Engine holds conversation state and configuration for one chat session.
 type Engine struct {
@@ -38,7 +45,12 @@ type Engine struct {
 	Registry   *tools.Registry
 	CWD        string
 	CanUseTool tools.CanUseTool
-	SessionID  string
+	SessionID string
+	// RootAgentID is the stable id of this Engine (main thread only). It is copied into toolctx.Context.AgentID each turn; subagents use their own ctx.AgentID. Empty means DefaultRootAgentID in EffectiveRootAgentID.
+	RootAgentID string
+	// Notify is a fan-out list (notify.Multi) of lifecycle sinks; default empty no-op.
+	// Register handlers with RegisterNotify(sink) or assign notify.Multi{…} directly.
+	Notify notify.Multi
 	// PublishOutbound sends assistant / proactive messages to IM drivers via clawbridge. If nil, outbound is skipped.
 	PublishOutbound func(ctx context.Context, msg *bus.OutboundMessage) error
 	// TranscriptPath is where SaveTranscript writes after each successful loop.RunTurn (before PostTurn; post-turn maintain runs asynchronously). Empty disables auto-save.
@@ -66,6 +78,8 @@ func NewEngine(cwd string, reg *tools.Registry) *Engine {
 		Registry:  reg,
 		CWD:       cwd,
 		SessionID: newSessionID(),
+		RootAgentID: DefaultRootAgentID,
+		Notify:    notify.Multi{},
 	}
 	return e
 }
@@ -83,15 +97,33 @@ func (e *Engine) SubmitUser(ctx context.Context, in bus.InboundMessage) error {
 		return fmt.Errorf("session: empty inbound text")
 	}
 
+	turnID := newTurnID()
+	corrID := strings.TrimSpace(in.MessageID)
+	if e.hasNotify() {
+		ev := notify.NewEvent(notify.EventInboundReceived, "")
+		e.applyNotifyCorrelation(&ev, turnID, corrID)
+		ev.Data = inboundNotifyData(in, text, atts)
+		notify.EmitSafe(e.Notify, ctx, ev)
+	}
+
 	if reply, ok := e.trySlashLocalTurn(in); ok {
-		return e.submitLocalSlashTurn(ctx, in, atts, reply)
+		return e.submitLocalSlashTurn(ctx, in, atts, reply, turnID, corrID)
 	}
 
 	preview := combinedInboundPreview(text, atts)
 	slog.Debug("session.submit", "cwd", e.CWD, "model", e.Model, "preview_chars", utf8.RuneCountInString(preview))
 
-	prep, err := e.prepareSharedTurn(ctx, in, atts, preview, true)
+	prep, err := e.prepareSharedTurn(ctx, in, atts, preview, true, turnID, corrID)
 	if err != nil {
+		if e.hasNotify() {
+			ev := notify.NewEvent(notify.EventTurnError, "error")
+			e.applyNotifyCorrelation(&ev, turnID, corrID)
+			ev.Data = map[string]any{
+				"code":    "preparation",
+				"message": err.Error(),
+			}
+			notify.EmitSafe(e.Notify, ctx, ev)
+		}
 		return err
 	}
 	bg := prep.bg
@@ -101,14 +133,37 @@ func (e *Engine) SubmitUser(ctx context.Context, in bus.InboundMessage) error {
 	system := prep.system
 
 	var traceSink *loop.ToolTraceSink
-	uv := memory.UserTurnPreview(preview)
-	var onToolLogged func(loop.ToolTraceEntry)
-	if memOK && memory.MemoryExtractEnabled() {
+	needToolTrace := (memOK && memory.MemoryExtractEnabled()) || e.hasNotify()
+	if needToolTrace {
 		traceSink = &loop.ToolTraceSink{}
-		sid, cid := e.SessionID, strings.TrimSpace(in.MessageID)
+	}
+	uv := memory.UserTurnPreview(preview)
+	var memOnTool func(loop.ToolTraceEntry)
+	if memOK && memory.MemoryExtractEnabled() {
+		sid, cid := e.SessionID, corrID
 		lay := layout
-		onToolLogged = func(ent loop.ToolTraceEntry) {
+		memOnTool = func(ent loop.ToolTraceEntry) {
 			memory.AppendTurnToolLogJSONL(lay, sid, cid, uv, ent)
+		}
+	}
+	var onToolLogged func(loop.ToolTraceEntry)
+	switch {
+	case memOnTool != nil && e.hasNotify():
+		onToolLogged = func(ent loop.ToolTraceEntry) {
+			memOnTool(ent)
+			ev := notify.NewEvent(notify.EventToolCallEnd, "")
+			e.applyNotifyCorrelation(&ev, turnID, corrID)
+			ev.Data = notify.ToolCallEndData(ent)
+			notify.EmitSafe(e.Notify, ctx, ev)
+		}
+	case memOnTool != nil:
+		onToolLogged = memOnTool
+	case e.hasNotify():
+		onToolLogged = func(ent loop.ToolTraceEntry) {
+			ev := notify.NewEvent(notify.EventToolCallEnd, "")
+			e.applyNotifyCorrelation(&ev, turnID, corrID)
+			ev.Data = notify.ToolCallEndData(ent)
+			notify.EmitSafe(e.Notify, ctx, ev)
 		}
 	}
 
@@ -137,6 +192,7 @@ func (e *Engine) SubmitUser(ctx context.Context, in bus.InboundMessage) error {
 		SlimTranscript: func(assistantText string) {
 			e.Transcript = append(e.Transcript, openai.AssistantMessage(assistantText))
 		},
+		Lifecycle: e.buildLoopLifecycle(turnID, corrID, prep.tctx.AgentID),
 	}
 
 	// Claude Code–style: record user turn before query loop so crash/interrupt still leaves the request on disk.
@@ -148,11 +204,49 @@ func (e *Engine) SubmitUser(ctx context.Context, in bus.InboundMessage) error {
 		slog.Error("session.working_transcript_save_user", "err", err)
 	}
 
+	e.emitMemoryTurnContextNotify(ctx, turnID, corrID, memOK, bundle)
+
+	if e.hasNotify() {
+		ev := notify.NewEvent(notify.EventAgentTurnStart, "")
+		e.applyNotifyCorrelation(&ev, turnID, corrID)
+		ev.Data = map[string]any{
+			"model":             e.Model,
+			"max_steps":         e.MaxSteps,
+			"cwd":               e.CWD,
+			"user_line_preview": notify.Preview(userLine, notify.DefaultPreviewRunes),
+		}
+		notify.EmitSafe(e.Notify, ctx, ev)
+	}
+
 	err = loop.RunTurn(ctx, cfg, in)
 	if err != nil {
+		if e.hasNotify() {
+			ev := notify.NewEvent(notify.EventTurnError, "error")
+			e.applyNotifyCorrelation(&ev, turnID, corrID)
+			ev.Data = map[string]any{
+				"code":                   notify.TurnErrorCode(err),
+				"message":                err.Error(),
+				"truncated_by_max_steps": strings.Contains(err.Error(), "max model steps"),
+			}
+			notify.EmitSafe(e.Notify, ctx, ev)
+		}
 		return err
 	}
 	e.Messages = loop.ToUserVisibleMessages(e.Messages)
+	if e.hasNotify() {
+		toolCount := 0
+		if traceSink != nil {
+			toolCount = len(traceSink.Snapshot())
+		}
+		ev := notify.NewEvent(notify.EventTurnComplete, "")
+		e.applyNotifyCorrelation(&ev, turnID, corrID)
+		ev.Data = map[string]any{
+			"tool_count":               toolCount,
+			"final_assistant_preview":  notify.Preview(loop.LastAssistantDisplay(e.Messages), notify.DefaultPreviewRunes),
+			"truncated_by_max_steps":   false,
+		}
+		notify.EmitSafe(e.Notify, ctx, ev)
+	}
 	if err := e.SaveTranscript(); err != nil {
 		slog.Error("session.transcript_save", "err", err)
 	}
@@ -210,15 +304,40 @@ func (e *Engine) SendMessage(ctx context.Context, in bus.InboundMessage) error {
 	return e.PublishOutbound(ctx, msg)
 }
 
-func (e *Engine) submitLocalSlashTurn(ctx context.Context, in bus.InboundMessage, atts []Attachment, reply string) error {
+func (e *Engine) submitLocalSlashTurn(ctx context.Context, in bus.InboundMessage, atts []Attachment, reply string, turnID, corrID string) error {
 	slog.Debug("session.submit_local_slash", "cwd", e.CWD)
 	text := strings.TrimSpace(in.Content)
 	preview := combinedInboundPreview(text, atts)
-	prep, err := e.prepareSharedTurn(ctx, in, atts, preview, false)
+	prep, err := e.prepareSharedTurn(ctx, in, atts, preview, false, turnID, corrID)
 	if err != nil {
+		if e.hasNotify() {
+			ev := notify.NewEvent(notify.EventTurnError, "error")
+			e.applyNotifyCorrelation(&ev, turnID, corrID)
+			ev.Data = map[string]any{
+				"code":    "preparation",
+				"message": err.Error(),
+			}
+			notify.EmitSafe(e.Notify, ctx, ev)
+		}
 		return err
 	}
 	bundle := prep.bundle
+	memOK := prep.memOK
+
+	e.emitMemoryTurnContextNotify(ctx, turnID, corrID, memOK, bundle)
+
+	if e.hasNotify() {
+		ev := notify.NewEvent(notify.EventAgentTurnStart, "")
+		e.applyNotifyCorrelation(&ev, turnID, corrID)
+		ev.Data = map[string]any{
+			"local_slash":       true,
+			"model":             e.Model,
+			"max_steps":         e.MaxSteps,
+			"cwd":               e.CWD,
+			"user_line_preview": notify.Preview(combinedInboundPreview(text, atts), notify.DefaultPreviewRunes),
+		}
+		notify.EmitSafe(e.Notify, ctx, ev)
+	}
 
 	meta := InboundMetaForModel(in)
 	attMsgs := FormatInboundAttachmentMessages(atts)
@@ -240,6 +359,17 @@ func (e *Engine) submitLocalSlashTurn(ctx context.Context, in bus.InboundMessage
 		if err := prep.outboundText(ctx, reply); err != nil {
 			slog.Warn("session.local_slash.outbound", "err", err)
 		}
+	}
+	if e.hasNotify() {
+		ev := notify.NewEvent(notify.EventTurnComplete, "")
+		e.applyNotifyCorrelation(&ev, turnID, corrID)
+		ev.Data = map[string]any{
+			"tool_count":              0,
+			"local_slash":             true,
+			"final_assistant_preview": notify.Preview(reply, notify.DefaultPreviewRunes),
+			"truncated_by_max_steps":  false,
+		}
+		notify.EmitSafe(e.Notify, ctx, ev)
 	}
 	// No memory.PostTurn / MaybePostTurnMaintain: local slash is an intentional bypass (see docs/memory-maintain-dual-entry-design.md §2.4).
 	return nil
@@ -271,6 +401,50 @@ func newSessionID() string {
 	var b [8]byte
 	_, _ = rand.Read(b[:])
 	return "sess_" + hex.EncodeToString(b[:])
+}
+
+func newTurnID() string {
+	var b [10]byte
+	_, _ = rand.Read(b[:])
+	return "turn_" + hex.EncodeToString(b[:])
+}
+
+func (e *Engine) applyNotifyCorrelation(ev *notify.Event, turnID, corrID string) {
+	e.stampNotify(ev, turnID, turnID, corrID, e.EffectiveRootAgentID(), "", "")
+}
+
+// EffectiveRootAgentID returns RootAgentID trimmed, or DefaultRootAgentID if unset.
+func (e *Engine) EffectiveRootAgentID() string {
+	if e == nil {
+		return DefaultRootAgentID
+	}
+	if s := strings.TrimSpace(e.RootAgentID); s != "" {
+		return s
+	}
+	return DefaultRootAgentID
+}
+
+func (e *Engine) stampNotify(ev *notify.Event, turnID, runID, corrID, agentID, parentAgentID, parentRunID string) {
+	ev.SessionID = e.SessionID
+	ev.CorrelationID = corrID
+	ev.TurnID = turnID
+	ev.RunID = runID
+	ev.AgentID = agentID
+	ev.ParentAgentID = parentAgentID
+	ev.ParentRunID = parentRunID
+}
+
+func inboundNotifyData(in bus.InboundMessage, text string, atts []Attachment) map[string]any {
+	full := combinedInboundPreview(text, atts)
+	return map[string]any{
+		"channel":          strings.TrimSpace(in.Channel),
+		"chat_id":          strings.TrimSpace(in.ChatID),
+		"message_id":       strings.TrimSpace(in.MessageID),
+		"content_preview":  notify.Preview(full, notify.DefaultPreviewRunes),
+		"user_content":     full,
+		"attachment_count": len(atts),
+		"has_media":        len(atts) > 0 || len(in.MediaPaths) > 0,
+	}
 }
 
 func (e *Engine) appendDialogHistoryIfComplete() {

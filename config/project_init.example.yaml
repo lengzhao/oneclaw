@@ -128,6 +128,11 @@ features:
   disable_auto_maintenance: false
   disable_memory_audit: false
   disable_context_budget: false
+  # 通知审计 JSONL（.oneclaw/audit/<agent>/llm|orchestration|visible/）；省略或 false 为开启
+  disable_audit_sinks: false
+  disable_audit_llm: false
+  disable_audit_orchestration: false
+  disable_audit_visible: false
 
 # -----------------------------------------------------------------------------
 # 自动维护（将 daily log 蒸馏进 MEMORY.md）

@@ -29,11 +29,13 @@ type sharedTurnPrep struct {
 
 // prepareSharedTurn builds tctx, memory recall/agent blocks, optional OutboundText, buildTurnSystem, and subRunner.
 // wireSendMessage sets tctx.SendMessage when true (full model turns only).
-func (e *Engine) prepareSharedTurn(ctx context.Context, in bus.InboundMessage, atts []Attachment, preview string, wireSendMessage bool) (sharedTurnPrep, error) {
+// parentTurnID and parentCorrelationID are used for subagent notify correlation (same values as the current user turn).
+func (e *Engine) prepareSharedTurn(ctx context.Context, in bus.InboundMessage, atts []Attachment, preview string, wireSendMessage bool, parentTurnID, parentCorrelationID string) (sharedTurnPrep, error) {
 	var p sharedTurnPrep
 	p.turnSnap = in
 	p.bg = rtopts.Current().Budget
 	p.tctx = toolctx.New(e.CWD, ctx)
+	p.tctx.AgentID = e.EffectiveRootAgentID()
 	if wireSendMessage {
 		p.tctx.SendMessage = e.SendMessage
 	}
@@ -66,6 +68,13 @@ func (e *Engine) prepareSharedTurn(ctx context.Context, in bus.InboundMessage, a
 	cat := subagent.LoadCatalog(e.CWD)
 	p.catalog = cat
 	p.system = e.buildTurnSystem(p.memOK, p.bundle, p.bg, home, herr, cat)
-	p.tctx.Subagent = &subRunner{eng: e, turnSystem: p.system, catalog: cat, bg: p.bg}
+	p.tctx.Subagent = &subRunner{
+		eng:                 e,
+		turnSystem:          p.system,
+		catalog:             cat,
+		bg:                  p.bg,
+		parentTurnID:        parentTurnID,
+		parentCorrelationID: parentCorrelationID,
+	}
 	return p, nil
 }

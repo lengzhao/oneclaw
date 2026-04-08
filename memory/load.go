@@ -8,23 +8,35 @@ import (
 
 // StripYAMLFrontmatter removes a leading --- ... --- block if present.
 func StripYAMLFrontmatter(raw string) string {
+	start := BodyStartByteOffset(raw)
+	if start > len(raw) {
+		return ""
+	}
+	return raw[start:]
+}
+
+// BodyStartByteOffset returns the byte offset in raw where the markdown body begins
+// (after optional UTF-8 BOM and optional YAML frontmatter). Matches StripYAMLFrontmatter slicing.
+func BodyStartByteOffset(raw string) int {
 	s := strings.TrimPrefix(raw, "\ufeff")
+	bomSkip := len(raw) - len(s)
 	if !strings.HasPrefix(s, "---\n") {
-		return s
+		return bomSkip
 	}
 	rest := s[4:]
 	end := strings.Index(rest, "\n---")
 	if end < 0 {
-		return s
+		return bomSkip
 	}
 	after := rest[end+4:]
+	base := bomSkip + 4 + end + 4
 	if strings.HasPrefix(after, "\n") {
-		return after[1:]
+		return base + 1
 	}
 	if strings.HasPrefix(after, "\r\n") {
-		return after[2:]
+		return base + 2
 	}
-	return after
+	return base
 }
 
 // LoadMarkdownBody reads a text/markdown file, strips optional YAML frontmatter, and trims whitespace.

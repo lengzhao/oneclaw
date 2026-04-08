@@ -30,6 +30,11 @@ type Context struct {
 
 	CWD string
 
+	// AgentID is the logical agent for this tool-execution frame: root Engine id on the main thread,
+	// or the subagent type (e.g. catalog AgentType / fork_context) inside nested run_agent / fork_context.
+	// Session seeds it from Engine.RootAgentID; subagent overwrites it on child contexts.
+	AgentID string
+
 	// HomeDir is the session user's home directory (for audit / policy paths). Empty if unknown.
 	HomeDir string
 
@@ -158,6 +163,7 @@ func (c *Context) ChildContext() *Context {
 	child.SessionHost = c.SessionHost
 	child.MemoryWriteRoots = append([]string(nil), c.MemoryWriteRoots...)
 	child.HomeDir = c.HomeDir
+	child.AgentID = c.AgentID
 	child.MaxSubagentDepth = c.MaxSubagentDepth
 	child.SubagentDepth = c.SubagentDepth + 1
 	return child

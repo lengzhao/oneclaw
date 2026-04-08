@@ -228,3 +228,36 @@ func TestMergeMCP_laterDisables(t *testing.T) {
 		t.Fatal("expected MCP off after false layer")
 	}
 }
+
+func TestNotifyAuditSinkPaths_defaults(t *testing.T) {
+	var r *Resolved
+	llm, orch, vis := r.NotifyAuditSinkPaths()
+	if !llm || !orch || !vis {
+		t.Fatalf("nil resolved: %v %v %v", llm, orch, vis)
+	}
+	empty := &Resolved{merged: File{}}
+	llm, orch, vis = empty.NotifyAuditSinkPaths()
+	if !llm || !orch || !vis {
+		t.Fatalf("empty file: %v %v %v", llm, orch, vis)
+	}
+}
+
+func TestNotifyAuditSinkPaths_masterOff(t *testing.T) {
+	f := File{}
+	f.Features.DisableAuditSinks = boolPtr(true)
+	r := &Resolved{merged: f}
+	llm, orch, vis := r.NotifyAuditSinkPaths()
+	if llm || orch || vis {
+		t.Fatalf("want all off, got %v %v %v", llm, orch, vis)
+	}
+}
+
+func TestNotifyAuditSinkPaths_perPath(t *testing.T) {
+	f := File{}
+	f.Features.DisableAuditLLM = boolPtr(true)
+	r := &Resolved{merged: f}
+	llm, orch, vis := r.NotifyAuditSinkPaths()
+	if llm || !orch || !vis {
+		t.Fatalf("got llm=%v orch=%v vis=%v", llm, orch, vis)
+	}
+}

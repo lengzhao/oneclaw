@@ -10,6 +10,7 @@ import (
 // It is not injected into model context; callers use it for memory extract / offline logs.
 type ToolTraceEntry struct {
 	Step        int    `json:"step"`
+	ToolUseID   string `json:"tool_use_id,omitempty"`
 	Name        string `json:"name"`
 	OK          bool   `json:"ok"`
 	Err         string `json:"err,omitempty"`
