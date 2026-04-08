@@ -1,3 +1,5 @@
+//go:build e2e
+
 package e2e_test
 
 import (
@@ -7,8 +9,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/oneclaw/loop"
-	"github.com/lengzhao/oneclaw/routing"
+	"github.com/lengzhao/oneclaw/session"
 	"github.com/lengzhao/oneclaw/test/openaistub"
 )
 
@@ -17,7 +20,7 @@ func TestE2E_113_SlashHelpSkipsModel(t *testing.T) {
 	stub := openaistub.New(t)
 	e2eEnvMinimal(t, stub)
 	e := newStubEngine(t, stub, t.TempDir())
-	err := e.SubmitUser(context.Background(), routing.Inbound{Text: "/help", Source: "cli"})
+	err := e.SubmitUser(context.Background(), bus.InboundMessage{Content: "/help", Channel: "cli"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -36,15 +39,9 @@ func TestE2E_114_InboundMetaAndAttachmentInHistory(t *testing.T) {
 	stub.Enqueue(openaistub.CompletionStop("", "ok"))
 	e2eEnvMinimal(t, stub)
 	e := newStubEngine(t, stub, t.TempDir())
-	err := e.SubmitUser(context.Background(), routing.Inbound{
-		Text:       "see file",
-		Source:     "http",
-		SessionKey: "thr1",
-		Locale:     "zh-CN",
-		Attachments: []routing.Attachment{
-			{Name: "f.txt", MIME: "text/plain", Text: "PAYLOAD_INLINE_MUST_NOT_APPEAR"},
-		},
-	})
+	err := e.SubmitUser(context.Background(), inboundWithPersistedAttachments(t, e.CWD, "see file", "http", "thr1", []session.Attachment{
+		{Name: "f.txt", MIME: "text/plain", Text: "PAYLOAD_INLINE_MUST_NOT_APPEAR"},
+	}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +60,7 @@ func TestE2E_114_InboundMetaAndAttachmentInHistory(t *testing.T) {
 	if strings.Contains(s, "<inbound-context>") {
 		t.Fatalf("inbound meta should not remain in collapsed Messages:\n%s", s)
 	}
-	if !strings.Contains(s, "[Attachment: f.txt") || !strings.Contains(s, "read_file") || !strings.Contains(s, ".oneclaw/media/inbound") {
+	if !strings.Contains(s, "f.txt") || !strings.Contains(s, "read_file") || !strings.Contains(s, ".oneclaw/media/inbound") {
 		t.Fatalf("expected stored path + read_file hint, got:\n%s", s)
 	}
 	if strings.Contains(s, "PAYLOAD_INLINE_MUST_NOT_APPEAR") {
@@ -77,12 +74,9 @@ func TestE2E_115_EmptyTextWithAttachmentAccepted(t *testing.T) {
 	stub.Enqueue(openaistub.CompletionStop("", "read"))
 	e2eEnvMinimal(t, stub)
 	e := newStubEngine(t, stub, t.TempDir())
-	err := e.SubmitUser(context.Background(), routing.Inbound{
-		Text: "   ",
-		Attachments: []routing.Attachment{
-			{Name: "note.md", Text: "hello"},
-		},
-	})
+	err := e.SubmitUser(context.Background(), inboundWithPersistedAttachments(t, e.CWD, "   ", "", "", []session.Attachment{
+		{Name: "note.md", Text: "hello"},
+	}))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/lengzhao/oneclaw/routing"
+	"github.com/lengzhao/clawbridge/bus"
 )
 
 // trySlashLocalTurn handles built-in slash commands without calling the model.
-func (e *Engine) trySlashLocalTurn(in routing.Inbound) (reply string, ok bool) {
-	cmd, _, slash := routing.ParseLeadingSlash(in.Text)
+func (e *Engine) trySlashLocalTurn(in bus.InboundMessage) (reply string, ok bool) {
+	cmd, _, slash := ParseLeadingSlash(in.Content)
 	if !slash {
 		return "", false
 	}

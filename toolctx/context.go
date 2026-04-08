@@ -3,20 +3,21 @@ package toolctx
 
 import (
 	"context"
+	"strings"
 	"sync"
 
-	"github.com/lengzhao/oneclaw/routing"
+	"github.com/lengzhao/clawbridge/bus"
 	"github.com/openai/openai-go"
 )
 
-// SessionHost groups turn-level capabilities wired by session.Engine: routing defaults for tools,
+// SessionHost groups turn-level capabilities wired by session.Engine: inbound defaults for tools,
 // proactive outbound, and nested agent runner. Embedded on Context so tools still use tctx.TurnInbound, etc.
 type SessionHost struct {
-	// TurnInbound is the routing metadata for the current SubmitUser turn (e.g. cron add defaults).
-	TurnInbound routing.Inbound
+	// TurnInbound is the bus metadata for the current SubmitUser turn (e.g. cron add defaults).
+	TurnInbound bus.InboundMessage
 
 	// SendMessage, when set by the host, delivers proactive outbound notifications (session.Engine.SendMessage).
-	SendMessage func(ctx context.Context, in routing.Inbound) error
+	SendMessage func(ctx context.Context, in bus.InboundMessage) error
 
 	// Subagent runs nested loops when non-nil (run_agent / fork_context).
 	Subagent SubagentRunner
@@ -65,13 +66,87 @@ func New(cwd string, abort context.Context) *Context {
 	}
 }
 
-// ApplyTurnInboundToToolContext merges envelope routing into TurnInbound (see routing.MergeNonEmptyRouting).
-// RunTurn calls this at the start of each turn so tools see Source/SessionKey/… and nested Text-only turns do not keep parent attachments.
-func (c *Context) ApplyTurnInboundToToolContext(in routing.Inbound) {
+// ApplyTurnInboundToToolContext merges envelope routing into TurnInbound.
+// RunTurn calls this at the start of each turn so tools see Channel/Peer/… and nested Content-only turns do not keep parent MediaPaths.
+func (c *Context) ApplyTurnInboundToToolContext(in bus.InboundMessage) {
 	if c == nil {
 		return
 	}
-	routing.MergeNonEmptyRouting(&c.TurnInbound, in)
+	mergeTurnInbound(&c.TurnInbound, in)
+}
+
+// mergeTurnInbound copies non-empty routing fields from src into dst. Content is not merged.
+// If src has no MediaPaths, dst.MediaPaths is set to nil so nested turns do not inherit parent attachments.
+func mergeTurnInbound(dst *bus.InboundMessage, src bus.InboundMessage) {
+	if dst == nil {
+		return
+	}
+	if s := strings.TrimSpace(src.Channel); s != "" {
+		dst.Channel = s
+	}
+	if s := strings.TrimSpace(src.ChatID); s != "" {
+		dst.ChatID = s
+	}
+	if s := strings.TrimSpace(src.MessageID); s != "" {
+		dst.MessageID = s
+	}
+	if senderNonEmpty(src.Sender) {
+		dst.Sender = mergeSender(dst.Sender, src.Sender)
+	}
+	if peerNonEmpty(src.Peer) {
+		dst.Peer = mergePeer(dst.Peer, src.Peer)
+	}
+	if len(src.MediaPaths) > 0 {
+		dst.MediaPaths = append([]string(nil), src.MediaPaths...)
+	} else {
+		dst.MediaPaths = nil
+	}
+	if src.ReceivedAt != 0 {
+		dst.ReceivedAt = src.ReceivedAt
+	}
+}
+
+func senderNonEmpty(s bus.SenderInfo) bool {
+	return strings.TrimSpace(s.Platform) != "" ||
+		strings.TrimSpace(s.PlatformID) != "" ||
+		strings.TrimSpace(s.CanonicalID) != "" ||
+		strings.TrimSpace(s.Username) != "" ||
+		strings.TrimSpace(s.DisplayName) != ""
+}
+
+func peerNonEmpty(p bus.Peer) bool {
+	return strings.TrimSpace(p.Kind) != "" || strings.TrimSpace(p.ID) != ""
+}
+
+func mergeSender(dst, src bus.SenderInfo) bus.SenderInfo {
+	out := dst
+	if strings.TrimSpace(src.Platform) != "" {
+		out.Platform = strings.TrimSpace(src.Platform)
+	}
+	if strings.TrimSpace(src.PlatformID) != "" {
+		out.PlatformID = strings.TrimSpace(src.PlatformID)
+	}
+	if strings.TrimSpace(src.CanonicalID) != "" {
+		out.CanonicalID = strings.TrimSpace(src.CanonicalID)
+	}
+	if strings.TrimSpace(src.Username) != "" {
+		out.Username = strings.TrimSpace(src.Username)
+	}
+	if strings.TrimSpace(src.DisplayName) != "" {
+		out.DisplayName = strings.TrimSpace(src.DisplayName)
+	}
+	return out
+}
+
+func mergePeer(dst, src bus.Peer) bus.Peer {
+	out := dst
+	if strings.TrimSpace(src.Kind) != "" {
+		out.Kind = strings.TrimSpace(src.Kind)
+	}
+	if strings.TrimSpace(src.ID) != "" {
+		out.ID = strings.TrimSpace(src.ID)
+	}
+	return out
 }
 
 // ChildContext returns an isolated tool context for a nested agent (fresh read cache, same cwd/abort/memory roots).

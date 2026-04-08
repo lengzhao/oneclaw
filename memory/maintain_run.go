@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/lengzhao/oneclaw/loop"
-	"github.com/lengzhao/oneclaw/routing"
+	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/oneclaw/toolctx"
 	"github.com/lengzhao/oneclaw/tools"
 	"github.com/openai/openai-go"
@@ -301,7 +301,7 @@ func runDistill(ctx context.Context, layout Layout, client *openai.Client, p dis
 		ToolContext: tctx,
 	}
 	slog.Info("memory.maintain.request", "model", model, "pathway", p.pathway, "dedicated_model", override)
-	if err := loop.RunTurn(runCtx, cfg, routing.Inbound{Text: userPrompt}); err != nil {
+	if err := loop.RunTurn(runCtx, cfg, bus.InboundMessage{Content: userPrompt}); err != nil {
 		slog.Warn("memory.maintain.run_failed", "model", model, "pathway", p.pathway, "err", err)
 		return
 	}

@@ -62,7 +62,7 @@ func TestInitWorkspaceMergesMissingKeys(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, sub := range []string{"user-key", "keep-me", "channels:", "budget:"} {
+	for _, sub := range []string{"user-key", "keep-me", "clawbridge:", "budget:"} {
 		if !strings.Contains(string(out), sub) {
 			t.Fatalf("merged config missing %q:\n%s", sub, string(out))
 		}

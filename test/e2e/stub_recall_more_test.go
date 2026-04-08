@@ -1,3 +1,5 @@
+//go:build e2e
+
 package e2e_test
 
 import (
@@ -9,7 +11,7 @@ import (
 	"testing"
 
 	"github.com/lengzhao/oneclaw/memory"
-	"github.com/lengzhao/oneclaw/routing"
+	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/oneclaw/rtopts"
 	"github.com/lengzhao/oneclaw/test/openaistub"
 )
@@ -38,7 +40,7 @@ func TestE2E_32_RecallPathDedupSecondTurn(t *testing.T) {
 	e2eIsolateUserMemory(t, home)
 	e := newStubEngine(t, stub, cwd)
 
-	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "recall_dedup_e2e_32 first turn"}); err != nil {
+	if err := e.SubmitUser(context.Background(), bus.InboundMessage{Content: "recall_dedup_e2e_32 first turn"}); err != nil {
 		t.Fatal(err)
 	}
 	bodies := stub.ChatRequestBodies()
@@ -53,7 +55,7 @@ func TestE2E_32_RecallPathDedupSecondTurn(t *testing.T) {
 		t.Fatalf("turn1 missing recall:\n%s", t1)
 	}
 
-	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "recall_dedup_e2e_32 second turn"}); err != nil {
+	if err := e.SubmitUser(context.Background(), bus.InboundMessage{Content: "recall_dedup_e2e_32 second turn"}); err != nil {
 		t.Fatal(err)
 	}
 	bodies = stub.ChatRequestBodies()
@@ -92,7 +94,7 @@ func TestE2E_33_RecallTotalByteBudget(t *testing.T) {
 	e2eEnvWithMemory(t, stub)
 	e2eIsolateUserMemory(t, home)
 	e := newStubEngine(t, stub, cwd)
-	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: keyword + " please"}); err != nil {
+	if err := e.SubmitUser(context.Background(), bus.InboundMessage{Content: keyword + " please"}); err != nil {
 		t.Fatal(err)
 	}
 	bodies := stub.ChatRequestBodies()

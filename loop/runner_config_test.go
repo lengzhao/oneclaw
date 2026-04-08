@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/lengzhao/oneclaw/routing"
+	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/oneclaw/tools"
 	"github.com/openai/openai-go"
 )
@@ -15,7 +15,7 @@ func TestRunTurnNilMessages(t *testing.T) {
 		Model:    "gpt-4o-mini",
 		Messages: nil,
 		Registry: tools.NewRegistry(),
-	}, routing.Inbound{Text: "hi"})
+	}, bus.InboundMessage{Content: "hi"})
 	if err == nil {
 		t.Fatal("expected error for nil Messages")
 	}

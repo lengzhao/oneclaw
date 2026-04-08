@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	cbconfig "github.com/lengzhao/clawbridge/config"
 	"github.com/lengzhao/oneclaw/memory"
 	"github.com/openai/openai-go/option"
 )
@@ -55,12 +56,17 @@ func (r *Resolved) ChatModel() string {
 	return strings.TrimSpace(r.merged.Model)
 }
 
-// Channels returns merged `channels:` entries. Empty means callers should fall back to “start all registered specs”.
-func (r *Resolved) Channels() []ChannelConfig {
+// ClawbridgeConfigForRun returns merged clawbridge config for clawbridge.New.
+// When media.root is empty in YAML, it defaults to <cwd>/.oneclaw/media.
+func (r *Resolved) ClawbridgeConfigForRun() (cbconfig.Config, error) {
 	if r == nil {
-		return nil
+		return cbconfig.Config{}, fmt.Errorf("config: nil resolved")
 	}
-	return r.merged.Channels
+	cfg := r.merged.Clawbridge
+	if strings.TrimSpace(cfg.Media.Root) == "" {
+		cfg.Media.Root = filepath.Join(r.cwd, memory.DotDir, "media")
+	}
+	return cfg, nil
 }
 
 // ChatTransport returns YAML chat.transport, else empty (use library default).

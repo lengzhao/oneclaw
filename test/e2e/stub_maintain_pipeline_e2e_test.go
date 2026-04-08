@@ -1,3 +1,5 @@
+//go:build e2e
+
 package e2e_test
 
 import (
@@ -10,7 +12,7 @@ import (
 
 	"github.com/lengzhao/oneclaw/memory"
 	"github.com/lengzhao/oneclaw/rtopts"
-	"github.com/lengzhao/oneclaw/routing"
+	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/oneclaw/test/openaistub"
 	"github.com/lengzhao/oneclaw/tools/builtin"
 	"github.com/openai/openai-go"
@@ -57,7 +59,7 @@ func TestE2E_101_PostTurnMaintainPromptSessionOnly(t *testing.T) {
 	}
 
 	e := newStubEngine(t, stub, cwd)
-	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "E2E101_TODAY_MARKER ping"}); err != nil {
+	if err := e.SubmitUser(context.Background(), bus.InboundMessage{Content: "E2E101_TODAY_MARKER ping"}); err != nil {
 		t.Fatal(err)
 	}
 	e2eWaitMinChatRequests(t, stub, 2, 5*time.Second)
@@ -231,7 +233,7 @@ func TestE2E_102_MaintainDedupeSkipsAppendWhenNoNewBullets(t *testing.T) {
 	}
 
 	e := newStubEngine(t, stub, cwd)
-	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "E2E102_USER turn filler text for daily log"}); err != nil {
+	if err := e.SubmitUser(context.Background(), bus.InboundMessage{Content: "E2E102_USER turn filler text for daily log"}); err != nil {
 		t.Fatal(err)
 	}
 	e2eWaitMinChatRequests(t, stub, 2, 5*time.Second)

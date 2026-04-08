@@ -4,14 +4,14 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/lengzhao/oneclaw/tools/builtin"
+	"github.com/lengzhao/oneclaw/tools"
 )
 
 var errTestResolver = errors.New("test resolver factory error")
 
 func TestSessionResolverDistinctEngines(t *testing.T) {
 	r := NewSessionResolver(func(SessionHandle) (*Engine, error) {
-		return NewEngine(t.TempDir(), builtin.DefaultRegistry()), nil
+		return NewEngine(t.TempDir(), tools.NewRegistry()), nil
 	})
 
 	e1, err := r.EngineFor(SessionHandle{Source: "feishu", SessionKey: "a"})
@@ -29,7 +29,7 @@ func TestSessionResolverDistinctEngines(t *testing.T) {
 
 func TestSessionResolverSameHandleReusesEngine(t *testing.T) {
 	r := NewSessionResolver(func(SessionHandle) (*Engine, error) {
-		return NewEngine(t.TempDir(), builtin.DefaultRegistry()), nil
+		return NewEngine(t.TempDir(), tools.NewRegistry()), nil
 	})
 	e1, err := r.EngineFor(SessionHandle{Source: "slack", SessionKey: "t1"})
 	if err != nil {

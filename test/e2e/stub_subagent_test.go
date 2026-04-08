@@ -1,3 +1,5 @@
+//go:build e2e
+
 // 子 Agent / fork：阶段 C 的 stub E2E。
 package e2e_test
 
@@ -7,7 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/lengzhao/oneclaw/routing"
+	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/oneclaw/test/openaistub"
 )
 
@@ -23,7 +25,7 @@ func TestE2E_StubRunAgentNested(t *testing.T) {
 
 	cwd := t.TempDir()
 	e := newStubEngine(t, stub, cwd)
-	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "go"}); err != nil {
+	if err := e.SubmitUser(context.Background(), bus.InboundMessage{Content: "go"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -52,7 +54,7 @@ func TestE2E_StubForkContext(t *testing.T) {
 
 	cwd := t.TempDir()
 	e := newStubEngine(t, stub, cwd)
-	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "hi"}); err != nil {
+	if err := e.SubmitUser(context.Background(), bus.InboundMessage{Content: "hi"}); err != nil {
 		t.Fatal(err)
 	}
 	last := e.Messages[len(e.Messages)-1]

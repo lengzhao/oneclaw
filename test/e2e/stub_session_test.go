@@ -1,3 +1,5 @@
+//go:build e2e
+
 package e2e_test
 
 import (
@@ -8,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/lengzhao/oneclaw/loop"
-	"github.com/lengzhao/oneclaw/routing"
+	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/oneclaw/test/openaistub"
 	"github.com/lengzhao/oneclaw/toolctx"
 	"github.com/lengzhao/oneclaw/tools/builtin"
@@ -36,7 +38,7 @@ func TestE2E_02_MultiTurnSameSession(t *testing.T) {
 		ToolContext: toolctx.New(cwd, context.Background()),
 	}
 
-	if err := loop.RunTurn(context.Background(), cfg, routing.Inbound{Text: "turn one"}); err != nil {
+	if err := loop.RunTurn(context.Background(), cfg, bus.InboundMessage{Content: "turn one"}); err != nil {
 		t.Fatal(err)
 	}
 	nAfterFirst := len(msgs)
@@ -49,7 +51,7 @@ func TestE2E_02_MultiTurnSameSession(t *testing.T) {
 		t.Fatalf("turn1 last msg: %#v", last)
 	}
 
-	if err := loop.RunTurn(context.Background(), cfg, routing.Inbound{Text: "turn two"}); err != nil {
+	if err := loop.RunTurn(context.Background(), cfg, bus.InboundMessage{Content: "turn two"}); err != nil {
 		t.Fatal(err)
 	}
 	if len(msgs) <= nAfterFirst {
@@ -86,7 +88,7 @@ func TestE2E_04_WriteThenRead(t *testing.T) {
 		Messages:    &msgs,
 		Registry:    builtin.DefaultRegistry(),
 		ToolContext: toolctx.New(cwd, context.Background()),
-	}, routing.Inbound{Text: "create and read subdir/x.txt"})
+	}, bus.InboundMessage{Content: "create and read subdir/x.txt"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -129,7 +131,7 @@ func TestE2E_05_AbortCanceledContext(t *testing.T) {
 		Messages:    &msgs,
 		Registry:    builtin.DefaultRegistry(),
 		ToolContext: toolctx.New(cwd, context.Background()),
-	}, routing.Inbound{Text: "hi"})
+	}, bus.InboundMessage{Content: "hi"})
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("want context.Canceled, got %v", err)
 	}

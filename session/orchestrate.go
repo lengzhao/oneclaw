@@ -4,26 +4,23 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/lengzhao/oneclaw/routing"
+	"github.com/lengzhao/clawbridge/bus"
 )
 
-// InboundMetaForModel builds a user-shaped routing context block. Omits CorrelationID and RawRef by design
+// InboundMetaForModel builds a user-shaped routing context block. Omits MessageID (correlation) by design
 // (see docs/inbound-routing-design.md).
-func InboundMetaForModel(in routing.Inbound) string {
+func InboundMetaForModel(in bus.InboundMessage) string {
 	var lines []string
-	if s := strings.TrimSpace(in.Source); s != "" {
+	if s := strings.TrimSpace(in.Channel); s != "" {
 		lines = append(lines, "source: "+s)
 	}
-	if s := strings.TrimSpace(in.SessionKey); s != "" {
+	if s := strings.TrimSpace(in.Peer.ID); s != "" {
 		lines = append(lines, "session_key: "+s)
 	}
-	if s := strings.TrimSpace(in.Locale); s != "" {
-		lines = append(lines, "locale: "+s)
-	}
-	if s := strings.TrimSpace(in.UserID); s != "" {
+	if s := InboundUserID(in); s != "" {
 		lines = append(lines, "user_id: "+s)
 	}
-	if s := strings.TrimSpace(in.TenantID); s != "" {
+	if s := InboundTenantHint(in); s != "" {
 		lines = append(lines, "tenant_id: "+s)
 	}
 	if len(lines) == 0 {
@@ -40,7 +37,7 @@ func InboundMetaForModel(in routing.Inbound) string {
 }
 
 // FormatInboundAttachmentMessages turns normalized attachments into user message bodies.
-func FormatInboundAttachmentMessages(atts []routing.Attachment) []string {
+func FormatInboundAttachmentMessages(atts []Attachment) []string {
 	if len(atts) == 0 {
 		return nil
 	}
@@ -73,9 +70,9 @@ func ModelUserLine(text string, hasAttachments bool) string {
 }
 
 // SlimTranscriptUserLine is persisted in the slim transcript (memory prefixes omitted).
-func SlimTranscriptUserLine(in routing.Inbound) string {
-	t := strings.TrimSpace(in.Text)
-	if len(in.Attachments) == 0 {
+func SlimTranscriptUserLine(text string, atts []Attachment) string {
+	t := strings.TrimSpace(text)
+	if len(atts) == 0 {
 		return t
 	}
 	var sb strings.Builder
@@ -84,7 +81,7 @@ func SlimTranscriptUserLine(in routing.Inbound) string {
 		sb.WriteString("\n\n")
 	}
 	sb.WriteString("[attachments:")
-	for i, a := range in.Attachments {
+	for i, a := range atts {
 		if i > 0 {
 			sb.WriteString(",")
 		}
@@ -101,14 +98,14 @@ func SlimTranscriptUserLine(in routing.Inbound) string {
 	return sb.String()
 }
 
-func combinedInboundPreview(in routing.Inbound) string {
-	t := strings.TrimSpace(in.Text)
-	if len(in.Attachments) == 0 {
+func combinedInboundPreview(text string, atts []Attachment) string {
+	t := strings.TrimSpace(text)
+	if len(atts) == 0 {
 		return t
 	}
 	var sb strings.Builder
 	sb.WriteString(t)
-	for _, a := range in.Attachments {
+	for _, a := range atts {
 		if sb.Len() > 0 {
 			sb.WriteString(" · ")
 		}

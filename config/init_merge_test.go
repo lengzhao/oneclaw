@@ -66,14 +66,16 @@ chat:
 
 func TestMergeInitYAMLKeepsUserSlice(t *testing.T) {
 	tmpl := []byte(`
-channels:
-  - id: localweb
-    type: statichttp
+clawbridge:
+  clients:
+    - id: localweb
+      driver: webchat
 `)
 	exist := []byte(`
-channels:
-  - id: only-cli
-    type: cli
+clawbridge:
+  clients:
+    - id: only-cli
+      driver: noop
 `)
 	merged, changed, err := mergeInitYAML(tmpl, exist)
 	if err != nil {

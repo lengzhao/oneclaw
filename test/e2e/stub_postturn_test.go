@@ -1,3 +1,5 @@
+//go:build e2e
+
 package e2e_test
 
 import (
@@ -9,7 +11,7 @@ import (
 
 	"github.com/lengzhao/oneclaw/memory"
 	"github.com/lengzhao/oneclaw/rtopts"
-	"github.com/lengzhao/oneclaw/routing"
+	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/oneclaw/test/openaistub"
 )
 
@@ -26,7 +28,7 @@ func TestE2E_50_DailyLogAppendDefault(t *testing.T) {
 	rtopts.Set(&s)
 	e2eIsolateUserMemory(t, home)
 	e := newStubEngine(t, stub, cwd)
-	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "user line for log"}); err != nil {
+	if err := e.SubmitUser(context.Background(), bus.InboundMessage{Content: "user line for log"}); err != nil {
 		t.Fatal(err)
 	}
 	lay := memory.DefaultLayout(cwd, home)
@@ -53,7 +55,7 @@ func TestE2E_51_DailyLogDisabledByEnv(t *testing.T) {
 	rtopts.Set(&s)
 	e2eIsolateUserMemory(t, home)
 	e := newStubEngine(t, stub, cwd)
-	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "y"}); err != nil {
+	if err := e.SubmitUser(context.Background(), bus.InboundMessage{Content: "y"}); err != nil {
 		t.Fatal(err)
 	}
 	lay := memory.DefaultLayout(cwd, home)

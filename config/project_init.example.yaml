@@ -46,43 +46,54 @@ paths:
   turn_log_path: ""
 
 # -----------------------------------------------------------------------------
-# 渠道实例（非空时仅启动列表中的项；id = Inbound.Source / Sink 注册键，type = 实现 Spec.Key）
-# 省略本段或 channels: []：对每个已注册 Spec 各启一个实例，实例 id 默认为 Spec.Key（与仅配 cli 等价）
+# IM 总线（github.com/lengzhao/clawbridge）；形状与 clawbridge config.Config 一致，见该仓库 config.example.yaml。
+# client id = bus.InboundMessage.Channel / OutboundMessage.ClientID；driver = feishu | slack | noop | webchat | …
+# media.root 留空则运行时使用 <cwd>/.oneclaw/media。
+# 至少配置一个 client，否则 oneclaw 无法启动 IM 宿主循环。
 # -----------------------------------------------------------------------------
-channels:
-  # - id: cli
-  #   type: cli
-  # 本地静态页渠道：内嵌 HTML + POST /api/chat；仅监听本机。
-  - id: localweb
-    type: statichttp
-    listen_addr: "127.0.0.1:8765"
-    static_dir: "" # 非空则挂载为 http://<listen>/static/
-    # POST /api/chat：application/json 或 multipart；附件落盘 .oneclaw/media/inbound/<UTC-YYYY-MM-DD>/，可按天删目录
+clawbridge:
+  media:
+    root: ""
+  clients:
+    # Slack Socket Mode
+    # - id: slack-bot-1
+    #   driver: slack
+    #   enabled: true
+    #   options:
+    #     bot_token: "xoxb-..."
+    #     app_token: "xapp-..."
+    #     allow_from: ["*"]
+    #     group_trigger:
+    #       mention_only: true
+    #       prefixes: ["/ask"]
 
-  # Slack Socket Mode：id 即 Inbound.Source / Sink 键；需 Slack App 开启 Socket Mode 与对应权限。
-  # - id: slack1
-  #   type: slack
-  #   bot_token: "xoxb-..."   # Bot User OAuth Token
-  #   app_token: "xapp-..."   # App-Level Token（connections:write）
-  #   # allow_from 为空则允许任意用户
-  #   allow_from:
-  #     - "U01234567"
-  #   group_trigger:
-  #     mention_only: false   # true：群内需 @ 机器人才响应
-  #     prefixes: ["!", "/"]   # 非空时群聊仅当以此前缀开头时响应（mention 仍始终响应）
+    # 飞书 WebSocket
+    # - id: feishu-bot-1
+    #   driver: feishu
+    #   enabled: true
+    #   options:
+    #     app_id: "cli_xxx"
+    #     app_secret: "..."
+    #     verification_token: ""
+    #     encrypt_key: ""
+    #     is_lark: false
+    #     allow_from: ["*"]
+    #     group_trigger:
+    #       mention_only: true
+    #       prefixes: ["/ask", "/bot"]
 
-  # 飞书 / Lark 长连接（64 位架构）；is_lark: true 时使用 Lark 国际站 API。
-  # - id: feishu1
-  #   type: feishu
-  #   app_id: "cli_xxx"
-  #   app_secret: "..."
-  #   verification_token: ""  # 事件订阅校验（可选）
-  #   encrypt_key: ""         # 消息加密（可选）
-  #   is_lark: false
-  #   allow_from: []
-  #   group_trigger:
-  #     mention_only: true
-  #     prefixes: []
+    # 占位（无真实 IM，仅用于联调进程启动；无入站消息）
+    - id: noop-1
+      driver: noop
+      enabled: true
+      options: {}
+    - id: webchat-1
+      driver: webchat
+      enabled: true
+      options:
+        display_name: You
+        listen: "127.0.0.1:8765"
+        path: /
 
 # -----------------------------------------------------------------------------
 # MCP 工具（连接外部 MCP Server；需显式 enabled: true）

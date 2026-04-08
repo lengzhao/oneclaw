@@ -1,3 +1,5 @@
+//go:build e2e
+
 package e2e_test
 
 import (
@@ -8,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/lengzhao/oneclaw/memory"
-	"github.com/lengzhao/oneclaw/routing"
+	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/oneclaw/test/openaistub"
 )
 
@@ -28,7 +30,7 @@ func TestE2E_10_UserAgentMdInjected(t *testing.T) {
 	e2eEnvWithMemory(t, stub)
 	e2eIsolateUserMemory(t, home)
 	e := newStubEngine(t, stub, t.TempDir())
-	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "ping"}); err != nil {
+	if err := e.SubmitUser(context.Background(), bus.InboundMessage{Content: "ping"}); err != nil {
 		t.Fatal(err)
 	}
 	bodies := stub.ChatRequestBodies()
@@ -61,7 +63,7 @@ func TestE2E_11_ProjectOneclawAgentMd(t *testing.T) {
 	e2eEnvWithMemory(t, stub)
 	e2eIsolateUserMemory(t, home)
 	e := newStubEngine(t, stub, cwd)
-	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "ping"}); err != nil {
+	if err := e.SubmitUser(context.Background(), bus.InboundMessage{Content: "ping"}); err != nil {
 		t.Fatal(err)
 	}
 	bodies := stub.ChatRequestBodies()
@@ -94,7 +96,7 @@ func TestE2E_12_DotOneclawAgentMdOnly(t *testing.T) {
 	e2eEnvWithMemory(t, stub)
 	e2eIsolateUserMemory(t, home)
 	e := newStubEngine(t, stub, cwd)
-	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "ping"}); err != nil {
+	if err := e.SubmitUser(context.Background(), bus.InboundMessage{Content: "ping"}); err != nil {
 		t.Fatal(err)
 	}
 	bodies := stub.ChatRequestBodies()
@@ -127,7 +129,7 @@ func TestE2E_13_DotOneclawRules(t *testing.T) {
 	e2eEnvWithMemory(t, stub)
 	e2eIsolateUserMemory(t, home)
 	e := newStubEngine(t, stub, cwd)
-	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "ping"}); err != nil {
+	if err := e.SubmitUser(context.Background(), bus.InboundMessage{Content: "ping"}); err != nil {
 		t.Fatal(err)
 	}
 	bodies := stub.ChatRequestBodies()
@@ -171,7 +173,7 @@ func TestE2E_14_WalkUpOrderChildAfterParent(t *testing.T) {
 	e2eEnvWithMemory(t, stub)
 	e2eIsolateUserMemory(t, home)
 	e := newStubEngine(t, stub, child)
-	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "ping"}); err != nil {
+	if err := e.SubmitUser(context.Background(), bus.InboundMessage{Content: "ping"}); err != nil {
 		t.Fatal(err)
 	}
 	bodies := stub.ChatRequestBodies()
@@ -208,7 +210,7 @@ func TestE2E_15_MemoryDisabledNoAgentInject(t *testing.T) {
 	stub.Enqueue(openaistub.CompletionStop("", "ok"))
 	e2eEnvMinimal(t, stub)
 	e := newStubEngine(t, stub, cwd)
-	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "ping"}); err != nil {
+	if err := e.SubmitUser(context.Background(), bus.InboundMessage{Content: "ping"}); err != nil {
 		t.Fatal(err)
 	}
 	if strings.Contains(concatUserText(e.Messages), "E2E15_SHOULD_NOT_APPEAR") {
@@ -224,7 +226,7 @@ func TestE2E_16_NoHomeDegradesGracefully(t *testing.T) {
 	e2eEnvWithMemory(t, stub)
 	e2eIsolateUserMemory(t, "")
 	e := newStubEngine(t, stub, t.TempDir())
-	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "ping"}); err != nil {
+	if err := e.SubmitUser(context.Background(), bus.InboundMessage{Content: "ping"}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -246,7 +248,7 @@ func TestE2E_30_RecallHit(t *testing.T) {
 	e2eEnvWithMemory(t, stub)
 	e2eIsolateUserMemory(t, home)
 	e := newStubEngine(t, stub, cwd)
-	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "What about zebrarecall_e2e_30?"}); err != nil {
+	if err := e.SubmitUser(context.Background(), bus.InboundMessage{Content: "What about zebrarecall_e2e_30?"}); err != nil {
 		t.Fatal(err)
 	}
 	bodies := stub.ChatRequestBodies()
@@ -272,7 +274,7 @@ func TestE2E_31_RecallMissNoAttachment(t *testing.T) {
 	e2eEnvWithMemory(t, stub)
 	e2eIsolateUserMemory(t, home)
 	e := newStubEngine(t, stub, cwd)
-	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "hello plain text only"}); err != nil {
+	if err := e.SubmitUser(context.Background(), bus.InboundMessage{Content: "hello plain text only"}); err != nil {
 		t.Fatal(err)
 	}
 	if strings.Contains(concatUserText(e.Messages), "relevant_memories") {

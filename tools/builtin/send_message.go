@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/lengzhao/oneclaw/routing"
+	"github.com/lengzhao/oneclaw/session"
 	"github.com/lengzhao/oneclaw/toolctx"
 	"github.com/openai/openai-go"
 )
@@ -19,17 +19,17 @@ type sendMessageAttachmentIn struct {
 }
 
 type sendMessageToolInput struct {
-	Text           string                    `json:"text"`
-	Source         string                    `json:"source"`
-	SessionKey     string                    `json:"session_key"`
-	UserID         string                    `json:"user_id"`
-	TenantID       string                    `json:"tenant_id"`
-	CorrelationID  string                    `json:"correlation_id"`
-	RawRef         json.RawMessage           `json:"raw_ref"`
-	Attachments    []sendMessageAttachmentIn `json:"attachments"`
+	Text          string                    `json:"text"`
+	Source        string                    `json:"source"`
+	SessionKey    string                    `json:"session_key"`
+	UserID        string                    `json:"user_id"`
+	TenantID      string                    `json:"tenant_id"`
+	CorrelationID string                    `json:"correlation_id"`
+	RawRef        json.RawMessage           `json:"raw_ref"`
+	Attachments   []sendMessageAttachmentIn `json:"attachments"`
 }
 
-// SendMessageTool pushes text and/or media to a channel Sink without ending the model turn (proactive notify).
+// SendMessageTool pushes text and/or media via clawbridge without ending the model turn (proactive notify).
 type SendMessageTool struct{}
 
 func (SendMessageTool) Name() string          { return "send_message" }
@@ -58,27 +58,27 @@ func (SendMessageTool) Parameters() openai.FunctionParameters {
 		},
 		"source": map[string]any{
 			"type":        "string",
-			"description": "Channel instance id (config channels[].id); default: current turn's source",
+			"description": "Channel instance id (config channels[].id); default: current turn's client id",
 		},
 		"session_key": map[string]any{
 			"type":        "string",
-			"description": "Optional: target thread/session for SinkFactory",
+			"description": "Optional: target thread/session (Peer.ID)",
 		},
 		"user_id": map[string]any{
 			"type":        "string",
-			"description": "Optional: recipient user id for routing",
+			"description": "Optional: sender/recipient user id (Sender)",
 		},
 		"tenant_id": map[string]any{
 			"type":        "string",
-			"description": "Optional: tenant id for routing",
+			"description": "Optional: tenant hint (Sender.Platform)",
 		},
 		"correlation_id": map[string]any{
 			"type":        "string",
-			"description": "Optional: id on outbound Record.job_id",
+			"description": "Optional: MessageID / correlation for logging",
 		},
 		"raw_ref": map[string]any{
 			"type":        "object",
-			"description": "Optional: opaque JSON for channel-specific SinkFactory (advanced)",
+			"description": "Deprecated: ignored in clawbridge host",
 		},
 		"attachments": map[string]any{
 			"type":        "array",
@@ -89,16 +89,19 @@ func (SendMessageTool) Parameters() openai.FunctionParameters {
 }
 
 func routingTargetOverridesTurn(in sendMessageToolInput, tctx *toolctx.Context) bool {
-	if strings.TrimSpace(in.Source) != "" && strings.TrimSpace(in.Source) != strings.TrimSpace(tctx.TurnInbound.Source) {
+	tin := tctx.TurnInbound
+	if strings.TrimSpace(in.Source) != "" && strings.TrimSpace(in.Source) != strings.TrimSpace(tin.Channel) {
 		return true
 	}
-	if strings.TrimSpace(in.SessionKey) != "" && strings.TrimSpace(in.SessionKey) != strings.TrimSpace(tctx.TurnInbound.SessionKey) {
+	if strings.TrimSpace(in.SessionKey) != "" && strings.TrimSpace(in.SessionKey) != strings.TrimSpace(tin.Peer.ID) {
 		return true
 	}
-	if strings.TrimSpace(in.UserID) != "" && strings.TrimSpace(in.UserID) != strings.TrimSpace(tctx.TurnInbound.UserID) {
+	uid := session.InboundUserID(tin)
+	if strings.TrimSpace(in.UserID) != "" && strings.TrimSpace(in.UserID) != uid {
 		return true
 	}
-	if strings.TrimSpace(in.TenantID) != "" && strings.TrimSpace(in.TenantID) != strings.TrimSpace(tctx.TurnInbound.TenantID) {
+	th := session.InboundTenantHint(tin)
+	if strings.TrimSpace(in.TenantID) != "" && strings.TrimSpace(in.TenantID) != th {
 		return true
 	}
 	return false
@@ -114,49 +117,53 @@ func (SendMessageTool) Execute(ctx context.Context, input json.RawMessage, tctx 
 	}
 	src := strings.TrimSpace(in.Source)
 	if src == "" {
-		src = strings.TrimSpace(tctx.TurnInbound.Source)
+		src = strings.TrimSpace(tctx.TurnInbound.Channel)
 	}
 	if src == "" {
-		return "", fmt.Errorf("send_message: need source (or a turn with channel source context)")
+		return "", fmt.Errorf("send_message: need source (or a turn with channel context)")
 	}
-	out := routing.Inbound{
-		Source:        src,
-		Text:          strings.TrimSpace(in.Text),
-		SessionKey:    strings.TrimSpace(in.SessionKey),
-		UserID:        strings.TrimSpace(in.UserID),
-		TenantID:      strings.TrimSpace(in.TenantID),
-		CorrelationID: strings.TrimSpace(in.CorrelationID),
+
+	out := tctx.TurnInbound
+	out.Channel = src
+	out.Content = strings.TrimSpace(in.Text)
+	out.MediaPaths = nil
+
+	if sk := strings.TrimSpace(in.SessionKey); sk != "" {
+		out.Peer.ID = sk
 	}
-	if out.SessionKey == "" {
-		out.SessionKey = strings.TrimSpace(tctx.TurnInbound.SessionKey)
+	if u := strings.TrimSpace(in.UserID); u != "" {
+		out.Sender.PlatformID = u
+		out.Sender.CanonicalID = u
 	}
-	if out.UserID == "" {
-		out.UserID = strings.TrimSpace(tctx.TurnInbound.UserID)
+	if ten := strings.TrimSpace(in.TenantID); ten != "" {
+		out.Sender.Platform = ten
 	}
-	if out.TenantID == "" {
-		out.TenantID = strings.TrimSpace(tctx.TurnInbound.TenantID)
+	if corr := strings.TrimSpace(in.CorrelationID); corr != "" {
+		out.MessageID = corr
+	} else if !routingTargetOverridesTurn(in, tctx) {
+		out.MessageID = strings.TrimSpace(tctx.TurnInbound.MessageID)
 	}
-	if out.CorrelationID == "" {
-		out.CorrelationID = strings.TrimSpace(tctx.TurnInbound.CorrelationID)
-	}
-	if len(in.RawRef) > 0 && string(in.RawRef) != "null" {
-		var ref any
-		if err := json.Unmarshal(in.RawRef, &ref); err != nil {
-			return "", fmt.Errorf("send_message: raw_ref: %w", err)
-		}
-		out.RawRef = ref
-	} else if !routingTargetOverridesTurn(in, tctx) && tctx.TurnInbound.RawRef != nil {
-		out.RawRef = tctx.TurnInbound.RawRef
-	}
+
+	var atts []session.Attachment
 	for _, a := range in.Attachments {
-		out.Attachments = append(out.Attachments, routing.Attachment{
+		atts = append(atts, session.Attachment{
 			Name: strings.TrimSpace(a.Name),
 			MIME: strings.TrimSpace(a.MIME),
 			Path: strings.TrimSpace(a.Path),
 			Text: a.Text,
 		})
 	}
-	if out.Text == "" && len(out.Attachments) == 0 {
+	atts = session.NormalizeAttachments(atts)
+	if err := session.PersistInlineAttachmentFiles(tctx.CWD, &atts); err != nil {
+		return "", err
+	}
+	for _, a := range atts {
+		if p := strings.TrimSpace(a.Path); p != "" {
+			out.MediaPaths = append(out.MediaPaths, p)
+		}
+	}
+
+	if strings.TrimSpace(out.Content) == "" && len(out.MediaPaths) == 0 {
 		return "", fmt.Errorf("send_message: need text and/or attachments")
 	}
 	if tctx.SendMessage == nil {

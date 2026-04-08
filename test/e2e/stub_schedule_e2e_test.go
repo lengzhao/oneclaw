@@ -1,3 +1,5 @@
+//go:build e2e
+
 package e2e_test
 
 import (
@@ -10,7 +12,7 @@ import (
 
 	"github.com/lengzhao/oneclaw/loop"
 	"github.com/lengzhao/oneclaw/memory"
-	"github.com/lengzhao/oneclaw/routing"
+	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/oneclaw/schedule"
 	"github.com/lengzhao/oneclaw/test/openaistub"
 	"github.com/lengzhao/oneclaw/toolctx"
@@ -39,7 +41,7 @@ func TestE2E_111_CronToolWritesFile(t *testing.T) {
 		Messages:    &msgs,
 		Registry:    builtin.DefaultRegistry(),
 		ToolContext: toolctx.New(cwd, context.Background()),
-	}, routing.Inbound{Text: "schedule a job", Source: "cli"})
+	}, bus.InboundMessage{Content: "schedule a job", Channel: "cli"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +83,7 @@ func TestE2E_112_ScheduledJobsBlockInSystemPrompt(t *testing.T) {
 	e2eEnvMinimal(t, stub)
 
 	e := newStubEngine(t, stub, cwd)
-	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "ping"}); err != nil {
+	if err := e.SubmitUser(context.Background(), bus.InboundMessage{Content: "ping"}); err != nil {
 		t.Fatal(err)
 	}
 

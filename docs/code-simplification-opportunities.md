@@ -10,10 +10,10 @@
 |--------|------|----------|
 | P0 | `SubmitUser` 与 `submitLocalSlashTurn` 共享的前半段抽出 | **已实现**：`session/turn_prepare.go` 中 `prepareSharedTurn` |
 | P0 | ~~明确本地 slash 与维护流水线关系~~ **已决议**：旁路、不跑 `PostTurn` / 维护（见 [memory-maintain-dual-entry-design.md](memory-maintain-dual-entry-design.md) §2.4） | 文档与实现一致 |
-| P1 | `subagent` 中 `RunAgent` / `RunFork` 前置校验与 registry 过滤 | 删重复、统一深度与 meta-tool 策略 |
+| P1 | `subagent` 中 `RunAgent` / `RunFork` 前置校验与 registry 过滤 | **已实现**：`validateNestedHost` / `validateNestedParent` / `stripMetaForNested`（`subagent/run.go`） |
 | P1 | `toolctx` 字段分组（Host / 执行环境）；可选 `context.Value` 未做 | **已实现**：`SessionHost` 嵌入 + `ApplyTurnInboundToToolContext`；`context.Value` 仍见 §8 |
-| P2 | 多 connector 消费 `OutboundChan` 的共用助手 | statichttp 与将来渠道的聚合逻辑复用 |
-| P2 | `memory.PostTurn` 与 `MaybePostTurnMaintain` 的重复入参 | 局部 builder，降低抄错字段风险 |
+| P2 | 多 connector 消费 `OutboundChan` 的共用助手 | **已实现**：`channel.DrainTextReply`，`statichttp` 已迁移 |
+| P2 | `memory.PostTurn` 与 `MaybePostTurnMaintain` 的重复入参 | **已实现**：`SubmitUser` 尾部共用 `pti` |
 | P3 | 预留字段与全局注册表文档化 | 减少「死字段 / 隐式全局」噪音 |
 
 ---
@@ -56,9 +56,9 @@ flowchart LR
 
 **产品语义**：slash 为**旁路**——无模型调用、无工具轨迹、无「本回合可蒸馏」的增量信号；若仍写 daily log 或跑近场维护，会与双入口设计中的「Current turn snapshot」前提不符，且易产生噪声维护。详细约定见 [memory-maintain-dual-entry-design.md](memory-maintain-dual-entry-design.md) §2.4。
 
-### 2.3 `Emitter` 使用的 `context`
+### 2.3 `Emitter` 使用的 `context`（**已对齐**）
 
-`submitLocalSlashTurn` 中 `em.Text` 使用请求 `ctx`，`em.Done` 使用 `context.Background()`。与 loop 内其它路径的 cancel 策略对比后，建议**统一策略**（例如：文本随用户取消、Done 用 detach 背景 ctx），并在代码注释中写一句「为何」。
+`submitLocalSlashTurn` 与 `loop.RunTurn` defer：**`Text` 用回合 `ctx`（可随用户取消）；`Done` 用 `context.Background()`**（取消后仍发出 `KindDone`，释放 HTTP 等 waiter）。见 `session/engine.go` `submitLocalSlashTurn` 与 `loop/runner.go` defer 注释。
 
 ---
 
@@ -96,12 +96,12 @@ flowchart LR
 
 ## 5. Channel 与出站消费
 
-### 5.1 `OutboundChan` 聚合逻辑
+### 5.1 `OutboundChan` 聚合逻辑（**已实现**）
 
-- `channel/cli/repl.go`：`printOutbound` 流式打印 `KindText` / `KindDone`。  
-- `channel/statichttp/connector.go`：`handleChat` 内 for-select 拼接 `reply`，在 `KindDone` 上与 `done` channel 同步。
+- `channel/cli/repl.go`：`printOutbound` 仍流式打印（无需拼单条 reply）。  
+- **`channel.DrainTextReply`**：`statichttp` `handleChat` 已改用；新 connector 可复用。
 
-新增 connector 时，「拼满一轮 assistant 文本 + 等 Done + 错误映射」会重复。**简化方向**：在 `channel` 包提供可选助手，例如 `DrainTextReply(ctx, outbound <-chan Record) (string, error)`（名称示意），statichttp 先迁移验证。
+签名：`DrainTextReply(ctx, outbound <-chan routing.Record, turnDone <-chan error) (reply string, err error)`（`turnDone` 可 nil）。
 
 ### 5.2 多用户与 `SessionResolver`
 
@@ -111,16 +111,9 @@ flowchart LR
 
 ## 6. Subagent
 
-### 6.1 `RunAgent` 与 `RunFork` 重复前置逻辑
+### 6.1 `RunAgent` 与 `RunFork` 重复前置逻辑（**已实现**）
 
-`subagent/run.go` 中两段函数均包含：
-
-- `Host` 完整性检查  
-- `parent == nil`  
-- `MaxSubagentDepth` 默认与深度上限  
-- `SubagentDepth >= 1` 时 `WithoutMetaTools`  
-
-**简化方向**：提取 `prepareNestedRun(parent, h) (child *toolctx.Context, reg *tools.Registry, err error)` 等私有函数，差异留在各自分支（catalog 查找 vs fork 的 `ParentSystem`）。
+共享：`validateNestedHost`、`validateNestedParent`、`nestingDepthLimited`、`stripMetaForNested`（`run_agent` 路径始终 strip meta；`fork_context` 仅在 `SubagentDepth >= 1` 时 strip）。差异仍在各自分支：catalog / `FilterRegistry` vs `ParentSystem` 与 `wrapConservative`。
 
 ### 6.2 工具集规则分散
 
@@ -128,11 +121,9 @@ flowchart LR
 
 ---
 
-## 7. Memory 与 `PostTurnInput`
+## 7. Memory 与 `PostTurnInput`（**已实现**）
 
-`session/engine.go` 在成功回合末尾对 `memory.PostTurn` 与 `memory.MaybePostTurnMaintain` 传入的 `memory.PostTurnInput` **字段几乎相同**。
-
-**简化方向**：在 `SubmitUser` 尾部构造一次 `pti := memory.PostTurnInput{...}`，两次调用共用；若字段继续增长，可用 builder。
+`SubmitUser` 尾部构造一次 **`pti`**，`memory.PostTurn` 与异步 `MaybePostTurnMaintain` 共用（goroutine 按值捕获 `pti`）。若字段继续增长可再引入 builder。
 
 ---
 
@@ -159,9 +150,8 @@ flowchart LR
 
 1. ~~**抽取共享准备**~~ **已完成**：`prepareSharedTurn` / `sharedTurnPrep`。  
 2. ~~裁定 slash 与维护~~ **已完成**：slash 旁路，见 memory 文档 §2.4。  
-3. **`subagent` 前置逻辑去重** — 已入 [`todo.md`](todo.md) 统一 backlog **#19**。  
-4. ~~**`toolctx` 分组**~~ **已完成**（`SessionHost`、`ApplyTurnInboundToToolContext`）；**ctx 挂载窄接口**仍为可选（**#27**），与全局 Engine 讨论见 §8。  
-5. **`channel` 出站 drain 助手** — **#20**；其余未完项见 **#21–#26**（`docs/todo.md`）。
+3. ~~**`subagent` 前置逻辑去重**~~ **已完成**（见 [`todo.md`](todo.md) **#19**）。4. ~~**`toolctx` 分组**~~ **已完成**（`SessionHost`、`ApplyTurnInboundToToolContext`）；**ctx 挂载窄接口**仍为可选（**#27**），与全局 Engine 讨论见 §8。  
+5. ~~**`channel` 出站 drain**~~ **已完成**（**#20**）；~~**PostTurnInput**~~（**#21**）、~~**Emitter ctx**~~（**#22**）已落地；其余文档项见 **#23–#26**（`docs/todo.md`）。
 
 ---
 

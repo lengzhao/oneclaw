@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lengzhao/oneclaw/routing"
+	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/oneclaw/rtopts"
 )
 
@@ -55,7 +55,7 @@ type InteractionLine struct {
 	SessionID        string          `json:"session_id"`
 	CorrelationID    string          `json:"correlation_id"`
 	UserKey          string          `json:"user_key"`
-	Source           string          `json:"source"`
+	Source           string          `json:"source"` // client id (Channel)
 	Model            string          `json:"model"`
 	Step             int             `json:"step"`
 	SubagentDepth    int             `json:"subagent_depth"`
@@ -79,7 +79,7 @@ type RecordParams struct {
 	TotalTokens      int64
 	// UsageJSON is completion.Usage.RawJSON() from the provider (source of truth for tokens).
 	UsageJSON string
-	Inbound   routing.Inbound
+	Inbound   bus.InboundMessage
 }
 
 // MaybeRecord appends an interaction line and updates daily + per-user rollups under <cwd>/.oneclaw/usage/.
@@ -116,9 +116,9 @@ func MaybeRecord(p RecordParams) {
 	line := InteractionLine{
 		TimeRFC3339:      time.Now().UTC().Format(time.RFC3339Nano),
 		SessionID:        p.SessionID,
-		CorrelationID:    strings.TrimSpace(p.Inbound.CorrelationID),
+		CorrelationID:    strings.TrimSpace(p.Inbound.MessageID),
 		UserKey:          userKey,
-		Source:           strings.TrimSpace(p.Inbound.Source),
+		Source:           strings.TrimSpace(p.Inbound.Channel),
 		Model:            p.Model,
 		Step:             p.Step,
 		SubagentDepth:    p.SubagentDepth,

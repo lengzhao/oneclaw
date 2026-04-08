@@ -1,3 +1,5 @@
+//go:build e2e
+
 // Delegated agents：主线程 system 含目录；run_agent 工具为静态 description（E2E-116）。
 package e2e_test
 
@@ -9,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lengzhao/oneclaw/routing"
+	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/oneclaw/test/openaistub"
 )
 
@@ -60,7 +62,7 @@ func TestE2E_116_AgentCatalogInSystemAndRunAgentTool(t *testing.T) {
 	e2eEnvMinimal(t, stub)
 
 	e := newStubEngine(t, stub, cwd)
-	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "ping"}); err != nil {
+	if err := e.SubmitUser(context.Background(), bus.InboundMessage{Content: "ping"}); err != nil {
 		t.Fatal(err)
 	}
 	bodies := stub.ChatRequestBodies()

@@ -1,3 +1,5 @@
+//go:build e2e
+
 // Skills：系统提示索引 + invoke_skill 工具闭环（用例编号见 CASES.md）。
 package e2e_test
 
@@ -11,7 +13,7 @@ import (
 
 	"github.com/lengzhao/oneclaw/loop"
 	"github.com/lengzhao/oneclaw/memory"
-	"github.com/lengzhao/oneclaw/routing"
+	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/oneclaw/rtopts"
 	"github.com/lengzhao/oneclaw/test/openaistub"
 	"github.com/lengzhao/oneclaw/toolctx"
@@ -41,7 +43,7 @@ func TestE2E_105_SkillsIndexInSystemPrompt(t *testing.T) {
 	e2eEnvMinimal(t, stub)
 
 	e := newStubEngine(t, stub, cwd)
-	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "ping"}); err != nil {
+	if err := e.SubmitUser(context.Background(), bus.InboundMessage{Content: "ping"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -87,7 +89,7 @@ func TestE2E_106_InvokeSkillToolAndRecentFile(t *testing.T) {
 		Messages:    &msgs,
 		Registry:    builtin.DefaultRegistry(),
 		ToolContext: toolctx.New(cwd, context.Background()),
-	}, routing.Inbound{Text: "load the skill"})
+	}, bus.InboundMessage{Content: "load the skill"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -140,7 +142,7 @@ func TestE2E_107_SkillsDisabledNoSystemSection(t *testing.T) {
 	rtopts.Set(&s)
 
 	e := newStubEngine(t, stub, cwd)
-	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "ping"}); err != nil {
+	if err := e.SubmitUser(context.Background(), bus.InboundMessage{Content: "ping"}); err != nil {
 		t.Fatal(err)
 	}
 

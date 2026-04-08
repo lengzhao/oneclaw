@@ -1,4 +1,4 @@
-package routing
+package session
 
 import "strings"
 
@@ -22,7 +22,6 @@ func ParseLeadingSlash(text string) (cmd, args string, ok bool) {
 	if rest == "" {
 		return "", "", false
 	}
-	// First segment: run until space or end
 	end := strings.IndexByte(rest, ' ')
 	if end < 0 {
 		return strings.ToLower(rest), "", true

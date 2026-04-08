@@ -5,31 +5,33 @@ import (
 	"log/slog"
 	"os"
 
+	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/oneclaw/budget"
 	"github.com/lengzhao/oneclaw/memory"
-	"github.com/lengzhao/oneclaw/routing"
 	"github.com/lengzhao/oneclaw/rtopts"
 	"github.com/lengzhao/oneclaw/subagent"
 	"github.com/lengzhao/oneclaw/toolctx"
 )
 
 // sharedTurnPrep is the common substrate for SubmitUser and submitLocalSlashTurn:
-// tool context, memory bundle, system prompt string, subagent runner, and optional outbound emitter.
+// tool context, memory bundle, system prompt string, subagent runner, and optional outbound hook.
 type sharedTurnPrep struct {
-	tctx    *toolctx.Context
-	bg      budget.Global
-	memOK   bool
-	layout  memory.Layout
-	bundle  memory.TurnBundle
-	em      *routing.Emitter
-	system  string
-	catalog *subagent.Catalog
+	tctx         *toolctx.Context
+	bg           budget.Global
+	memOK        bool
+	layout       memory.Layout
+	bundle       memory.TurnBundle
+	outboundText func(ctx context.Context, text string) error
+	system       string
+	catalog      *subagent.Catalog
+	turnSnap     bus.InboundMessage
 }
 
-// prepareSharedTurn builds tctx, memory recall/agent blocks, ResolveTurnSink + Emitter, buildTurnSystem, and subRunner.
+// prepareSharedTurn builds tctx, memory recall/agent blocks, optional OutboundText, buildTurnSystem, and subRunner.
 // wireSendMessage sets tctx.SendMessage when true (full model turns only).
-func (e *Engine) prepareSharedTurn(ctx context.Context, in routing.Inbound, preview string, wireSendMessage bool) (sharedTurnPrep, error) {
+func (e *Engine) prepareSharedTurn(ctx context.Context, in bus.InboundMessage, atts []Attachment, preview string, wireSendMessage bool) (sharedTurnPrep, error) {
 	var p sharedTurnPrep
+	p.turnSnap = in
 	p.bg = rtopts.Current().Budget
 	p.tctx = toolctx.New(e.CWD, ctx)
 	if wireSendMessage {
@@ -51,12 +53,15 @@ func (e *Engine) prepareSharedTurn(ctx context.Context, in routing.Inbound, prev
 	} else if herr != nil {
 		slog.Warn("session.user_home", "err", herr)
 	}
-	sink, err := routing.ResolveTurnSink(ctx, e.SinkRegistry, e.SinkFactory, in)
-	if err != nil {
-		return sharedTurnPrep{}, err
-	}
-	if sink != nil {
-		p.em = routing.NewEmitter(sink, e.SessionID, "")
+	if e.PublishOutbound != nil {
+		snap := in
+		p.outboundText = func(ctx context.Context, text string) error {
+			msg := assistantTextOutbound(&snap, text)
+			if msg == nil {
+				return nil
+			}
+			return e.PublishOutbound(ctx, msg)
+		}
 	}
 	cat := subagent.LoadCatalog(e.CWD)
 	p.catalog = cat

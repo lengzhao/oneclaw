@@ -7,16 +7,22 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lengzhao/oneclaw/routing"
+	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/oneclaw/rtopts"
 )
 
 func TestUserInteractionKey(t *testing.T) {
-	k := UserInteractionKey(routing.Inbound{UserID: "U1", TenantID: "T", Source: "slack"})
+	k := UserInteractionKey(bus.InboundMessage{
+		Channel: "slack",
+		Sender:  bus.SenderInfo{CanonicalID: "U1", Platform: "T"},
+	})
 	if k != "T/U1@slack" {
 		t.Fatalf("got %q", k)
 	}
-	k2 := UserInteractionKey(routing.Inbound{SessionKey: "th", Source: "cli"})
+	k2 := UserInteractionKey(bus.InboundMessage{
+		Channel: "cli",
+		Peer:    bus.Peer{ID: "th"},
+	})
 	if k2 != "session:th@cli" {
 		t.Fatalf("got %q", k2)
 	}
@@ -35,9 +41,9 @@ func TestMaybeRecord_writesFiles(t *testing.T) {
 		CompletionTokens: 50,
 		TotalTokens:      150,
 		UsageJSON:        `{"prompt_tokens":100,"completion_tokens":50,"total_tokens":150}`,
-		Inbound: routing.Inbound{
-			Source: "cli",
-			UserID: "alice",
+		Inbound: bus.InboundMessage{
+			Channel: "cli",
+			Sender:  bus.SenderInfo{CanonicalID: "alice"},
 		},
 	})
 	root := filepath.Join(cwd, dotDir, "usage")
@@ -81,7 +87,7 @@ func TestMaybeRecord_costFromUsageJSON(t *testing.T) {
 		CompletionTokens: 5,
 		TotalTokens:      15,
 		UsageJSON:        `{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15,"cost_usd":0.001}`,
-		Inbound:          routing.Inbound{Source: "cli"},
+		Inbound:          bus.InboundMessage{Channel: "cli"},
 	})
 	raw, err := os.ReadFile(filepath.Join(cwd, dotDir, "usage", "interactions.jsonl"))
 	if err != nil {
@@ -103,7 +109,7 @@ func TestMaybeRecord_estimateCostEnv(t *testing.T) {
 		CompletionTokens: 0,
 		TotalTokens:      1_000_000,
 		UsageJSON:        `{"prompt_tokens":1000000,"completion_tokens":0,"total_tokens":1000000}`,
-		Inbound:          routing.Inbound{Source: "cli"},
+		Inbound:          bus.InboundMessage{Channel: "cli"},
 	})
 	raw, err := os.ReadFile(filepath.Join(cwd, dotDir, "usage", "interactions.jsonl"))
 	if err != nil {
@@ -118,7 +124,7 @@ func TestMaybeRecord_skipsWhenDisabled(t *testing.T) {
 	t.Cleanup(func() { rtopts.Set(nil) })
 	rtopts.Set(&rtopts.Snapshot{DisableUsageLedger: true})
 	cwd := t.TempDir()
-	MaybeRecord(RecordParams{CWD: cwd, Model: "gpt-4o", PromptTokens: 1, CompletionTokens: 1, Inbound: routing.Inbound{Source: "x"}})
+	MaybeRecord(RecordParams{CWD: cwd, Model: "gpt-4o", PromptTokens: 1, CompletionTokens: 1, Inbound: bus.InboundMessage{Channel: "x"}})
 	if _, err := os.Stat(filepath.Join(cwd, dotDir, "usage")); err == nil {
 		t.Fatal("expected no usage dir when disabled")
 	}

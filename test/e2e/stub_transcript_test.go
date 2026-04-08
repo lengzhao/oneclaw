@@ -1,10 +1,12 @@
+//go:build e2e
+
 package e2e_test
 
 import (
 	"context"
 	"testing"
 
-	"github.com/lengzhao/oneclaw/routing"
+	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/oneclaw/test/openaistub"
 )
 
@@ -14,7 +16,7 @@ func TestE2E_60_TranscriptRoundTrip(t *testing.T) {
 	stub.Enqueue(openaistub.CompletionStop("", "once"))
 	e2eEnvMinimal(t, stub)
 	e := newStubEngine(t, stub, t.TempDir())
-	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "hi"}); err != nil {
+	if err := e.SubmitUser(context.Background(), bus.InboundMessage{Content: "hi"}); err != nil {
 		t.Fatal(err)
 	}
 	nBefore := len(e.Transcript)

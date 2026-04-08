@@ -1,3 +1,5 @@
+//go:build e2e
+
 package e2e_test
 
 import (
@@ -8,7 +10,7 @@ import (
 	"github.com/lengzhao/oneclaw/budget"
 	"github.com/lengzhao/oneclaw/loop"
 	"github.com/lengzhao/oneclaw/rtopts"
-	"github.com/lengzhao/oneclaw/routing"
+	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/oneclaw/test/openaistub"
 	"github.com/lengzhao/oneclaw/toolctx"
 	"github.com/lengzhao/oneclaw/tools/builtin"
@@ -52,7 +54,7 @@ func TestE2E_103_SemanticCompactInChatRequest(t *testing.T) {
 		Registry:    builtin.DefaultRegistry(),
 		ToolContext: toolctx.New(cwd, ctx),
 		Budget:      rtopts.Current().Budget,
-	}, routing.Inbound{Text: "E2E103_FINAL_USER"})
+	}, bus.InboundMessage{Content: "E2E103_FINAL_USER"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +109,7 @@ func TestE2E_104_SemanticCompactDisabledNoBoundaryTag(t *testing.T) {
 		Registry:    builtin.DefaultRegistry(),
 		ToolContext: toolctx.New(cwd, ctx),
 		Budget:      rtopts.Current().Budget,
-	}, routing.Inbound{Text: "E2E104_FINAL_USER"})
+	}, bus.InboundMessage{Content: "E2E104_FINAL_USER"})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -2,71 +2,60 @@ package session
 
 import (
 	"context"
-	"encoding/json"
 	"strings"
 	"testing"
 
-	"github.com/lengzhao/oneclaw/routing"
-	"github.com/lengzhao/oneclaw/tools/builtin"
+	"github.com/lengzhao/clawbridge/bus"
+	"github.com/lengzhao/oneclaw/tools"
 )
-
-type sendMsgCaptureSink struct {
-	lines []string
-}
-
-func (c *sendMsgCaptureSink) Emit(_ context.Context, r routing.Record) error {
-	b, _ := json.Marshal(r)
-	c.lines = append(c.lines, string(b))
-	return nil
-}
 
 func TestEngineSendMessage(t *testing.T) {
 	cwd := t.TempDir()
-	reg := routing.NewMapRegistry()
-	var sink sendMsgCaptureSink
-	reg.Register("ch1", &sink)
+	var published []*bus.OutboundMessage
+	eng := NewEngine(cwd, tools.NewRegistry())
+	eng.PublishOutbound = func(_ context.Context, msg *bus.OutboundMessage) error {
+		published = append(published, msg)
+		return nil
+	}
 
-	eng := NewEngine(cwd, builtin.DefaultRegistry())
-	eng.SinkRegistry = reg
-
-	err := eng.SendMessage(context.Background(), routing.Inbound{
-		Source:        "ch1",
-		Text:          "notify",
-		CorrelationID: "cron-1",
-		Attachments:   []routing.Attachment{{Name: "n", MIME: "text/plain", Text: "inline"}},
+	err := eng.SendMessage(context.Background(), bus.InboundMessage{
+		Channel:       "ch1",
+		ChatID:        "C123",
+		MessageID:     "cron-1",
+		Content:       "notify",
+		MediaPaths:    nil,
+		Peer:          bus.Peer{Kind: "channel"},
+		Sender:        bus.SenderInfo{PlatformID: "U1"},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(sink.lines) != 1 {
-		t.Fatalf("want 1 record, got %d: %v", len(sink.lines), sink.lines)
+	if len(published) != 1 {
+		t.Fatalf("want 1 outbound, got %d", len(published))
 	}
-	rec := sink.lines[0]
-	if !strings.Contains(rec, `"kind":"text"`) || !strings.Contains(rec, "notify") {
-		t.Fatalf("text record: %s", rec)
+	msg := published[0]
+	if msg.ClientID != "ch1" || msg.Text != "notify" {
+		t.Fatalf("outbound %+v", msg)
 	}
-	if !strings.Contains(rec, `"job_id":"cron-1"`) {
-		t.Fatalf("job_id: %s", rec)
-	}
-	if !strings.Contains(rec, `"path"`) {
-		t.Fatalf("expected persisted path in attachments: %s", rec)
+	if msg.To.ChatID != "C123" {
+		t.Fatalf("chat id %+v", msg.To)
 	}
 }
 
-func TestEngineSendMessageRequiresSource(t *testing.T) {
-	eng := NewEngine(t.TempDir(), builtin.DefaultRegistry())
-	eng.SinkRegistry = routing.NewMapRegistry()
-	err := eng.SendMessage(context.Background(), routing.Inbound{Text: "x"})
-	if err == nil || !strings.Contains(err.Error(), "Source") {
-		t.Fatalf("expected Source error, got %v", err)
+func TestEngineSendMessageRequiresChannel(t *testing.T) {
+	eng := NewEngine(t.TempDir(), tools.NewRegistry())
+	eng.PublishOutbound = func(context.Context, *bus.OutboundMessage) error { return nil }
+	err := eng.SendMessage(context.Background(), bus.InboundMessage{Content: "x", ChatID: "C1"})
+	if err == nil || !strings.Contains(err.Error(), "Channel") {
+		t.Fatalf("expected Channel error, got %v", err)
 	}
 }
 
-func TestEngineSendMessageNoSink(t *testing.T) {
-	eng := NewEngine(t.TempDir(), builtin.DefaultRegistry())
-	eng.SinkRegistry = routing.NewMapRegistry()
-	err := eng.SendMessage(context.Background(), routing.Inbound{Source: "missing", Text: "x"})
-	if err == nil || !strings.Contains(err.Error(), "unknown source") {
-		t.Fatalf("expected unknown source / no sink error, got %v", err)
+func TestEngineSendMessageNoChat(t *testing.T) {
+	eng := NewEngine(t.TempDir(), tools.NewRegistry())
+	eng.PublishOutbound = func(context.Context, *bus.OutboundMessage) error { return nil }
+	err := eng.SendMessage(context.Background(), bus.InboundMessage{Channel: "x", Content: "hi"})
+	if err == nil || !strings.Contains(err.Error(), "ChatID") {
+		t.Fatalf("expected ChatID error, got %v", err)
 	}
 }

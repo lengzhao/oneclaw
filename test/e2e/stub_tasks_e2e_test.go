@@ -1,3 +1,5 @@
+//go:build e2e
+
 // 任务状态工具：落盘 + 系统提示（用例编号见 CASES.md）。
 package e2e_test
 
@@ -12,7 +14,7 @@ import (
 	"github.com/lengzhao/oneclaw/loop"
 	"github.com/lengzhao/oneclaw/memory"
 	"github.com/lengzhao/oneclaw/rtopts"
-	"github.com/lengzhao/oneclaw/routing"
+	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/oneclaw/tasks"
 	"github.com/lengzhao/oneclaw/test/openaistub"
 	"github.com/lengzhao/oneclaw/toolctx"
@@ -32,7 +34,7 @@ func TestE2E_108_TasksBlockInSystemPrompt(t *testing.T) {
 	e2eEnvMinimal(t, stub)
 
 	e := newStubEngine(t, stub, cwd)
-	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "ping"}); err != nil {
+	if err := e.SubmitUser(context.Background(), bus.InboundMessage{Content: "ping"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -73,7 +75,7 @@ func TestE2E_109_TaskToolsWriteFileAndDisableHidesBlock(t *testing.T) {
 		Messages:    &msgs,
 		Registry:    builtin.DefaultRegistry(),
 		ToolContext: toolctx.New(cwd, context.Background()),
-	}, routing.Inbound{Text: "create task"})
+	}, bus.InboundMessage{Content: "create task"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,7 +119,7 @@ func TestE2E_109_TaskToolsWriteFileAndDisableHidesBlock(t *testing.T) {
 		Messages:    &msgs2,
 		Registry:    builtin.DefaultRegistry(),
 		ToolContext: toolctx.New(cwd, context.Background()),
-	}, routing.Inbound{Text: "complete it"})
+	}, bus.InboundMessage{Content: "complete it"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,7 +135,7 @@ func TestE2E_109_TaskToolsWriteFileAndDisableHidesBlock(t *testing.T) {
 	s.DisableTasks = true
 	rtopts.Set(&s)
 	e := newStubEngine(t, stub3, cwd)
-	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "ping"}); err != nil {
+	if err := e.SubmitUser(context.Background(), bus.InboundMessage{Content: "ping"}); err != nil {
 		t.Fatal(err)
 	}
 	bodies := stub3.ChatRequestBodies()

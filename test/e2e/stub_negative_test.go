@@ -1,3 +1,5 @@
+//go:build e2e
+
 package e2e_test
 
 import (
@@ -6,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/lengzhao/oneclaw/loop"
-	"github.com/lengzhao/oneclaw/routing"
+	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/oneclaw/test/openaistub"
 	"github.com/lengzhao/oneclaw/toolctx"
 	"github.com/lengzhao/oneclaw/tools"
@@ -18,7 +20,7 @@ func TestE2E_81_EmptyInboundRejected(t *testing.T) {
 	stub := openaistub.New(t)
 	e2eEnvMinimal(t, stub)
 	e := newStubEngine(t, stub, t.TempDir())
-	err := e.SubmitUser(context.Background(), routing.Inbound{Text: "   "})
+	err := e.SubmitUser(context.Background(), bus.InboundMessage{Content: "   "})
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -48,7 +50,7 @@ func TestE2E_82_UnknownToolName(t *testing.T) {
 		Messages:    &msgs,
 		Registry:    tools.NewRegistry(),
 		ToolContext: toolctx.New(cwd, context.Background()),
-	}, routing.Inbound{Text: "hi"})
+	}, bus.InboundMessage{Content: "hi"})
 	if err != nil {
 		t.Fatal(err)
 	}

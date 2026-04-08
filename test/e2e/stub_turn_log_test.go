@@ -1,3 +1,5 @@
+//go:build e2e
+
 package e2e_test
 
 import (
@@ -12,7 +14,7 @@ import (
 
 	"github.com/lengzhao/oneclaw/memory"
 	"github.com/lengzhao/oneclaw/rtopts"
-	"github.com/lengzhao/oneclaw/routing"
+	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/oneclaw/test/openaistub"
 )
 
@@ -37,9 +39,9 @@ func TestE2E_98_TurnLogAssistantFinalWithoutTools(t *testing.T) {
 	rtopts.Set(&s)
 	e2eIsolateUserMemory(t, home)
 	e := newStubEngine(t, stub, cwd)
-	if err := e.SubmitUser(context.Background(), routing.Inbound{
-		Text:          "user for turn log",
-		CorrelationID: "corr-98",
+	if err := e.SubmitUser(context.Background(), bus.InboundMessage{
+		Content:   "user for turn log",
+		MessageID: "corr-98",
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +87,7 @@ func TestE2E_100_TurnLogToolThenAssistantFinal(t *testing.T) {
 		t.Fatal(err)
 	}
 	e := newStubEngine(t, stub, cwd)
-	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "read note"}); err != nil {
+	if err := e.SubmitUser(context.Background(), bus.InboundMessage{Content: "read note"}); err != nil {
 		t.Fatal(err)
 	}
 	path := turnLogPathToday(t, cwd, home)
@@ -134,7 +136,7 @@ func TestE2E_99_TurnLogDisabledNoFile(t *testing.T) {
 	rtopts.Set(&s99)
 	e2eIsolateUserMemory(t, home)
 	eng := newStubEngine(t, stub, cwd)
-	if err := eng.SubmitUser(context.Background(), routing.Inbound{Text: "y"}); err != nil {
+	if err := eng.SubmitUser(context.Background(), bus.InboundMessage{Content: "y"}); err != nil {
 		t.Fatal(err)
 	}
 	path := turnLogPathToday(t, cwd, home)

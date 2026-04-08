@@ -1,3 +1,5 @@
+//go:build e2e
+
 package e2e_test
 
 import (
@@ -11,7 +13,7 @@ import (
 
 	"github.com/lengzhao/oneclaw/memory"
 	"github.com/lengzhao/oneclaw/rtopts"
-	"github.com/lengzhao/oneclaw/routing"
+	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/oneclaw/test/openaistub"
 )
 
@@ -37,7 +39,7 @@ func TestE2E_93_MemoryAuditDailyLog(t *testing.T) {
 	rtopts.Set(&s)
 	e2eIsolateUserMemory(t, home)
 	e := newStubEngine(t, stub, cwd)
-	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "user line for audit e2e"}); err != nil {
+	if err := e.SubmitUser(context.Background(), bus.InboundMessage{Content: "user line for audit e2e"}); err != nil {
 		t.Fatal(err)
 	}
 	lay := memory.DefaultLayout(cwd, home)
@@ -77,7 +79,7 @@ func TestE2E_94_MemoryAuditDisabledNoFile(t *testing.T) {
 	rtopts.Set(&s)
 	e2eIsolateUserMemory(t, home)
 	e := newStubEngine(t, stub, cwd)
-	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "y"}); err != nil {
+	if err := e.SubmitUser(context.Background(), bus.InboundMessage{Content: "y"}); err != nil {
 		t.Fatal(err)
 	}
 	auditPath := filepath.Join(cwd, memory.DotDir, "audit", "memory-write.jsonl")
@@ -110,7 +112,7 @@ func TestE2E_95_MemoryAuditWriteFileUnderMemoryRoot(t *testing.T) {
 	rtopts.Set(&s95)
 	e2eIsolateUserMemory(t, home)
 	e := newStubEngine(t, stub, cwd)
-	if err := e.SubmitUser(context.Background(), routing.Inbound{Text: "write memory topic"}); err != nil {
+	if err := e.SubmitUser(context.Background(), bus.InboundMessage{Content: "write memory topic"}); err != nil {
 		t.Fatal(err)
 	}
 	wantPath := filepath.Join(cwd, memRel)

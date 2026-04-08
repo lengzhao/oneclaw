@@ -20,10 +20,10 @@
 | **后置** | **MCP 工具**（连接外部 MCP Server） | [x] backlog **#30**（`mcpclient`）；discovery 等见续作 |
 | **后置** | compact 高级形态、全量遥测、MCP 其余（如 UI 级权限流） | 刻意控制范围，见「刻意后置」、backlog **#29** |
 | **P1 续作** | Skills 加深 | 审计、条件 paths、动态子目录发现等（主干已在 backlog #8 勾选，见 [`claude-code-skills-mechanism.md`](claude-code-skills-mechanism.md)） |
-| **P1 工程** | **subagent 前置去重** | `RunAgent` / `RunFork` 共享校验与 `WithoutMetaTools` 等（见 [`code-simplification-opportunities.md`](code-simplification-opportunities.md) §6.1、统一 backlog **#19**） |
-| **P2 工程** | **channel 出站聚合** | `OutboundChan` 拼 assistant 文本 + 等 `Done` 的共用助手，`statichttp` 先迁（见 [`code-simplification-opportunities.md`](code-simplification-opportunities.md) §5.1、**#20**） |
-| **P2 工程** | **PostTurnInput 单次构建** | `SubmitUser` 尾部 `PostTurn` / `MaybePostTurnMaintain` 共用同一 `PostTurnInput`（见 **#21**） |
-| **P2 工程** | **Emitter `context` 策略统一** | `submitLocalSlashTurn` 与 `loop` 路径上 `Text`/`Done` 所用 ctx 对齐并注释（见 **#22**） |
+| **P1 工程** | ~~**subagent 前置去重**~~（已落地） | 见统一 backlog **#19** |
+| **P2 工程** | ~~**channel 出站聚合**~~（已落地） | `channel.DrainTextReply` + `statichttp`（**#20**） |
+| **P2 工程** | ~~**PostTurnInput 单次构建**~~（已落地） | `SubmitUser` 尾部共用 `pti`（**#21**） |
+| **P2 工程** | ~~**Emitter `context` 策略统一**~~（已落地） | `loop` defer 与 `submitLocalSlashTurn` 注释对齐（**#22**） |
 | **P3 文档** | **Routing / 渠道文档补全** | `DefaultRegistry` 进程单例语义；`SinkRegistry` vs `SinkFactory`；单 `Engine`+多 source vs `SessionResolver`（见 **#23–#25**） |
 | **P3 文档** | **子 agent 工具可见性说明** | 最终工具表 = catalog ∩ 过滤 − meta（见 **#26**） |
 | **后置/可选** | **`context.Value` 窄接口** | 可选 `OutboundSender`，与全局 Engine 方案二选一（见 [`code-simplification-opportunities.md`](code-simplification-opportunities.md) §8、**#27**） |
@@ -76,10 +76,10 @@
 
 ### 工程简化（可选，详 [`code-simplification-opportunities.md`](code-simplification-opportunities.md)）
 
-19. `[ ]` **subagent 前置去重** — `subagent/run.go`：`RunAgent` / `RunFork` 抽取共享前置（Host/parent/深度/`WithoutMetaTools`），差异留在分支内。
-20. `[ ]` **channel 出站 drain 助手** — 例如从 `OutboundChan` 聚合 `KindText` 至最终 reply 并与 `KindDone`/`done` 同步；`statichttp` 先迁移验证。
-21. `[ ]` **PostTurnInput 构建复用** — `session.Engine.SubmitUser` 末尾对 `memory.PostTurn` 与 `memory.MaybePostTurnMaintain` 共用同一 `PostTurnInput` 变量或 builder。
-22. `[ ]` **Emitter 所用 `context` 统一** — `submitLocalSlashTurn` 与 `loop` defer/`Done` 的 ctx 策略对齐，并在代码注释说明「可取消 vs detach」理由。
+19. `[x]` **subagent 前置去重** — `subagent/run.go`：`RunAgent` / `RunFork` 抽取共享前置（Host/parent/深度/`WithoutMetaTools`），差异留在分支内。
+20. `[x]` **channel 出站 drain 助手** — 例如从 `OutboundChan` 聚合 `KindText` 至最终 reply 并与 `KindDone`/`done` 同步；`statichttp` 先迁移验证。
+21. `[x]` **PostTurnInput 构建复用** — `session.Engine.SubmitUser` 末尾对 `memory.PostTurn` 与 `memory.MaybePostTurnMaintain` 共用同一 `PostTurnInput` 变量或 builder。
+22. `[x]` **Emitter 所用 `context` 统一** — `submitLocalSlashTurn` 与 `loop` defer/`Done` 的 ctx 策略对齐，并在代码注释说明「可取消 vs detach」理由。
 
 ### 文档与小修（P3，可与上表并行）
 

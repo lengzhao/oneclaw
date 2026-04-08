@@ -1,3 +1,5 @@
+//go:build e2e
+
 package e2e_test
 
 import (
@@ -10,7 +12,7 @@ import (
 
 	"github.com/lengzhao/oneclaw/loop"
 	"github.com/lengzhao/oneclaw/memory"
-	"github.com/lengzhao/oneclaw/routing"
+	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/oneclaw/test/openaistub"
 	"github.com/lengzhao/oneclaw/toolctx"
 	"github.com/lengzhao/oneclaw/tools/builtin"
@@ -39,7 +41,7 @@ func TestE2E_40_WriteFileUnderCwdOnly(t *testing.T) {
 		Messages:    &msgs,
 		Registry:    builtin.DefaultRegistry(),
 		ToolContext: toolctx.New(cwd, context.Background()),
-	}, routing.Inbound{Text: "write"})
+	}, bus.InboundMessage{Content: "write"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +84,7 @@ func TestE2E_41_WriteFileUnderUserMemoryRoot(t *testing.T) {
 		Messages:    &msgs,
 		Registry:    builtin.DefaultRegistry(),
 		ToolContext: tctx,
-	}, routing.Inbound{Text: "write to user memory"})
+	}, bus.InboundMessage{Content: "write to user memory"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,7 +124,7 @@ func TestE2E_42_WriteFileRejectedOutsideRoots(t *testing.T) {
 		Messages:    &msgs,
 		Registry:    builtin.DefaultRegistry(),
 		ToolContext: tctx,
-	}, routing.Inbound{Text: "write"})
+	}, bus.InboundMessage{Content: "write"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -178,7 +180,7 @@ func TestE2E_43_GrepUnderProjectMemoryRoot(t *testing.T) {
 		Messages:    &msgs,
 		Registry:    builtin.DefaultRegistry(),
 		ToolContext: tctx,
-	}, routing.Inbound{Text: "search"})
+	}, bus.InboundMessage{Content: "search"})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -6,18 +6,20 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lengzhao/oneclaw/routing"
+	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/oneclaw/toolctx"
 )
 
 func TestSendMessageToolUsesTurnDefaults(t *testing.T) {
-	var got routing.Inbound
+	var got bus.InboundMessage
 	tctx := toolctx.New(t.TempDir(), context.Background())
-	tctx.TurnInbound = routing.Inbound{
-		Source: "cli", SessionKey: "thr1", UserID: "u1", TenantID: "ten1",
-		RawRef: map[string]any{"ts": "1.2"},
+	tctx.TurnInbound = bus.InboundMessage{
+		Channel: "cli",
+		Peer:    bus.Peer{ID: "thr1"},
+		Sender:  bus.SenderInfo{PlatformID: "u1", CanonicalID: "u1", Platform: "ten1"},
+		ChatID:  "Cxyz",
 	}
-	tctx.SendMessage = func(_ context.Context, in routing.Inbound) error {
+	tctx.SendMessage = func(_ context.Context, in bus.InboundMessage) error {
 		got = in
 		return nil
 	}
@@ -27,23 +29,19 @@ func TestSendMessageToolUsesTurnDefaults(t *testing.T) {
 	if err != nil || out != "sent" {
 		t.Fatalf("Execute: out=%q err=%v", out, err)
 	}
-	if got.Source != "cli" || got.Text != "hello" {
+	if got.Channel != "cli" || got.Content != "hello" {
 		t.Fatalf("got %+v", got)
 	}
-	if got.SessionKey != "thr1" || got.UserID != "u1" || got.TenantID != "ten1" {
+	if got.Peer.ID != "thr1" || got.Sender.PlatformID != "u1" || got.Sender.Platform != "ten1" {
 		t.Fatalf("routing defaults %+v", got)
-	}
-	m, ok := got.RawRef.(map[string]any)
-	if !ok || m["ts"] != "1.2" {
-		t.Fatalf("raw ref %+v", got.RawRef)
 	}
 }
 
-func TestSendMessageToolNoRawRefWhenOverrideSession(t *testing.T) {
-	var got routing.Inbound
+func TestSendMessageToolOverrideSessionKey(t *testing.T) {
+	var got bus.InboundMessage
 	tctx := toolctx.New(t.TempDir(), context.Background())
-	tctx.TurnInbound = routing.Inbound{Source: "cli", SessionKey: "a", RawRef: "secret"}
-	tctx.SendMessage = func(_ context.Context, in routing.Inbound) error {
+	tctx.TurnInbound = bus.InboundMessage{Channel: "cli", Peer: bus.Peer{ID: "a"}, ChatID: "C1"}
+	tctx.SendMessage = func(_ context.Context, in bus.InboundMessage) error {
 		got = in
 		return nil
 	}
@@ -53,8 +51,8 @@ func TestSendMessageToolNoRawRefWhenOverrideSession(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.RawRef != nil {
-		t.Fatalf("expected no raw ref when targeting other session, got %#v", got.RawRef)
+	if got.Peer.ID != "other" {
+		t.Fatalf("expected peer id other, got %q", got.Peer.ID)
 	}
 }
 
@@ -66,7 +64,7 @@ func TestSendMessageToolErrors(t *testing.T) {
 		t.Fatalf("want source error, got %v", err)
 	}
 
-	tctx.TurnInbound.Source = "cli"
+	tctx.TurnInbound.Channel = "cli"
 	tctx.SendMessage = nil
 	_, err = tool.Execute(context.Background(), json.RawMessage(`{"text":"x"}`), tctx)
 	if err == nil || !strings.Contains(err.Error(), "not available") {

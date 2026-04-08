@@ -1,3 +1,5 @@
+//go:build e2e
+
 // 会话与工具闭环的 stub E2E；用例编号见 CASES.md。
 package e2e_test
 
@@ -8,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/lengzhao/oneclaw/loop"
-	"github.com/lengzhao/oneclaw/routing"
+	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/oneclaw/test/openaistub"
 	"github.com/lengzhao/oneclaw/toolctx"
 	"github.com/lengzhao/oneclaw/tools"
@@ -35,7 +37,7 @@ func TestE2E_StubTextReply(t *testing.T) {
 		Messages:    &msgs,
 		Registry:    reg,
 		ToolContext: toolctx.New(cwd, context.Background()),
-	}, routing.Inbound{Text: "hi"})
+	}, bus.InboundMessage{Content: "hi"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,7 +80,7 @@ func TestE2E_StubToolThenText(t *testing.T) {
 		Messages:    &msgs,
 		Registry:    reg,
 		ToolContext: toolctx.New(cwd, context.Background()),
-	}, routing.Inbound{Text: "read note.txt"})
+	}, bus.InboundMessage{Content: "read note.txt"})
 	if err != nil {
 		t.Fatal(err)
 	}

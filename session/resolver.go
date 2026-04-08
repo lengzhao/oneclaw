@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/lengzhao/oneclaw/routing"
+	"github.com/lengzhao/clawbridge/bus"
 )
 
 // SessionHandle identifies one logical chat (same IM source + session key).
@@ -83,10 +83,10 @@ func (r *SessionResolver) EngineFor(h SessionHandle) (*Engine, error) {
 	return slot.eng, nil
 }
 
-// SubmitUser resolves the engine for in.Source + in.SessionKey and runs one user turn.
+// SubmitUser resolves the engine for in.Channel + session key (Peer.ID) and runs one user turn.
 // Same handle is processed strictly one turn at a time (FIFO).
-func (r *SessionResolver) SubmitUser(ctx context.Context, in routing.Inbound) error {
-	h := SessionHandle{Source: in.Source, SessionKey: in.SessionKey}
+func (r *SessionResolver) SubmitUser(ctx context.Context, in bus.InboundMessage) error {
+	h := SessionHandle{Source: in.Channel, SessionKey: InboundSessionKey(in)}
 	slot, err := r.slotFor(h)
 	if err != nil {
 		return err

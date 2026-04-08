@@ -9,18 +9,17 @@ import (
 	"os/signal"
 	"path/filepath"
 	"syscall"
+	"time"
 
-	"github.com/lengzhao/oneclaw/channel"
-	_ "github.com/lengzhao/oneclaw/channel/cli"
-	_ "github.com/lengzhao/oneclaw/channel/feishu"
-	_ "github.com/lengzhao/oneclaw/channel/slack"
-	_ "github.com/lengzhao/oneclaw/channel/statichttp"
+	"github.com/lengzhao/clawbridge"
+	"github.com/lengzhao/clawbridge/bus"
+	_ "github.com/lengzhao/clawbridge/drivers"
 	"github.com/lengzhao/oneclaw/config"
 	"github.com/lengzhao/oneclaw/logx"
 	"github.com/lengzhao/oneclaw/maintainloop"
 	"github.com/lengzhao/oneclaw/mcpclient"
 	"github.com/lengzhao/oneclaw/memory"
-	"github.com/lengzhao/oneclaw/routing"
+	"github.com/lengzhao/oneclaw/schedule"
 	"github.com/lengzhao/oneclaw/session"
 	"github.com/lengzhao/oneclaw/tools/builtin"
 	"github.com/openai/openai-go"
@@ -95,7 +94,6 @@ func main() {
 		eng.Model = m
 	}
 	eng.ChatTransport = cfg.ChatTransport()
-	eng.SinkRegistry = routing.DefaultRegistry()
 
 	eng.TranscriptPath = cfg.TranscriptPath()
 	eng.WorkingTranscriptPath = cfg.WorkingTranscriptPath()
@@ -154,13 +152,71 @@ func main() {
 		MaxMaintainTokens: eng.MaxTokens,
 	})
 
-	if _, err := channel.DefaultRegistry().StartAll(rootCtx, channel.Bootstrap{
-		Engine: eng,
-		Config: cfg,
-	}); err != nil && !errors.Is(err, context.Canceled) {
-		slog.Error("channel.start", "err", err)
+	cbCfg, err := cfg.ClawbridgeConfigForRun()
+	if err != nil {
+		slog.Error("clawbridge.config", "err", err)
 		os.Exit(1)
 	}
+	if len(cbCfg.Clients) == 0 {
+		slog.Error("no IM clients in config",
+			"hint", "add clawbridge.clients (driver feishu, slack, noop, webchat, …) under clawbridge: in config; see https://github.com/lengzhao/clawbridge/blob/main/config.example.yaml",
+			"cwd", absCwd,
+		)
+		os.Exit(1)
+	}
+
+	bridge, err := clawbridge.New(cbCfg)
+	if err != nil {
+		slog.Error("clawbridge.new", "err", err)
+		os.Exit(1)
+	}
+	eng.PublishOutbound = func(ctx context.Context, msg *bus.OutboundMessage) error {
+		return bridge.Bus().PublishOutbound(ctx, msg)
+	}
+
+	if err := bridge.Start(rootCtx); err != nil {
+		slog.Error("clawbridge.start", "err", err)
+		os.Exit(1)
+	}
+	defer func() {
+		stopCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if err := bridge.Stop(stopCtx); err != nil {
+			slog.Warn("clawbridge.stop", "err", err)
+		}
+	}()
+
+	for _, c := range cbCfg.Clients {
+		if !c.Enabled {
+			continue
+		}
+		if err := schedule.StartHostPollerIfEnabled(rootCtx, absCwd, c.ID, eng.SubmitUser); err != nil {
+			slog.Error("schedule.poller", "client_id", c.ID, "err", err)
+			os.Exit(1)
+		}
+	}
+
+	go func() {
+		for {
+			msg, err := bridge.Bus().ConsumeInbound(rootCtx)
+			if err != nil {
+				if errors.Is(err, context.Canceled) || errors.Is(err, bus.ErrClosed) {
+					return
+				}
+				slog.Error("clawbridge.consume_inbound", "err", err)
+				return
+			}
+			m := msg
+			go func() {
+				submitCtx := context.Background()
+				if err := eng.SubmitUser(submitCtx, m); err != nil {
+					slog.Warn("session.submit_user", "err", err)
+				}
+			}()
+		}
+	}()
+
+	<-rootCtx.Done()
 }
 
 func resolveCwd(flagCwd string) (string, error) {

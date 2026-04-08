@@ -3,7 +3,6 @@ package loop
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -11,7 +10,7 @@ import (
 
 	"github.com/lengzhao/oneclaw/budget"
 	"github.com/lengzhao/oneclaw/model"
-	"github.com/lengzhao/oneclaw/routing"
+	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/oneclaw/toolctx"
 	"github.com/lengzhao/oneclaw/tools"
 	"github.com/lengzhao/oneclaw/usageledger"
@@ -30,8 +29,8 @@ type Config struct {
 	Registry    *tools.Registry
 	ToolContext *toolctx.Context
 	CanUseTool  tools.CanUseTool
-	// Outbound emits text/tool/done events; nil disables outbound for this turn.
-	Outbound *routing.Emitter
+	// OutboundText publishes assistant-visible text per model step; nil skips.
+	OutboundText func(ctx context.Context, text string) error
 	// MemoryAgentMd / MemoryRecall are optional extra user messages before the real user turn (phase B).
 	MemoryAgentMd string
 	MemoryRecall  string
@@ -39,7 +38,7 @@ type Config struct {
 	InboundMeta string
 	// InboundAttachmentMsgs are formatted attachment bodies, each as its own user message.
 	InboundAttachmentMsgs []string
-	// UserLine is the primary user message after orchestration (e.g. attachment-only placeholder). If empty, TrimSpace(in.Text) is used.
+	// UserLine is the primary user message after orchestration (e.g. attachment-only placeholder). If empty, TrimSpace(in.Content) is used.
 	UserLine string
 	// Budget trims transcript before each model call when Enabled (from rtopts / config).
 	Budget budget.Global
@@ -63,30 +62,14 @@ func logOutboundEmit(op string, err error) {
 	}
 }
 
-// RunTurn appends a user message from in.Text, then runs model ↔ tool until stop or limits.
-func RunTurn(ctx context.Context, cfg Config, in routing.Inbound) (err error) {
+// RunTurn appends a user message from in.Content, then runs model ↔ tool until stop or limits.
+func RunTurn(ctx context.Context, cfg Config, in bus.InboundMessage) (err error) {
 	if cfg.Messages == nil {
 		return fmt.Errorf("loop: Config.Messages is nil")
 	}
 	if cfg.ToolContext != nil {
 		cfg.ToolContext.ApplyTurnInboundToToolContext(in)
 	}
-	defer func() {
-		emit := cfg.Outbound
-		if emit == nil {
-			return
-		}
-		bg := context.Background()
-		if err != nil {
-			msg := err.Error()
-			if errors.Is(err, context.Canceled) {
-				msg = "aborted"
-			}
-			logOutboundEmit("done", emit.Done(bg, false, msg))
-			return
-		}
-		logOutboundEmit("done", emit.Done(bg, true, ""))
-	}()
 
 	msgs := cfg.Messages
 	recordSlimTranscript := func() {
@@ -97,7 +80,7 @@ func RunTurn(ctx context.Context, cfg Config, in routing.Inbound) (err error) {
 	}
 	userLine := strings.TrimSpace(cfg.UserLine)
 	if userLine == "" {
-		userLine = strings.TrimSpace(in.Text)
+		userLine = strings.TrimSpace(in.Content)
 	}
 	AppendTurnUserMessages(msgs, cfg.MemoryAgentMd, cfg.MemoryRecall, cfg.InboundMeta, cfg.InboundAttachmentMsgs, userLine)
 
@@ -140,9 +123,9 @@ func RunTurn(ctx context.Context, cfg Config, in routing.Inbound) (err error) {
 
 		choice := completion.Choices[0]
 		*msgs = append(*msgs, choice.Message.ToParam())
-		if cfg.Outbound != nil {
+		if cfg.OutboundText != nil {
 			if vis := assistantVisibleText(choice.Message); vis != "" {
-				logOutboundEmit("text", cfg.Outbound.Text(ctx, vis))
+				logOutboundEmit("text", cfg.OutboundText(ctx, vis))
 			}
 		}
 		slog.Info("loop.model.response",
@@ -155,7 +138,7 @@ func RunTurn(ctx context.Context, cfg Config, in routing.Inbound) (err error) {
 		)
 
 		cwd := ""
-		var inbound routing.Inbound
+		var inbound bus.InboundMessage
 		depth := 0
 		if cfg.ToolContext != nil {
 			cwd = cfg.ToolContext.CWD
@@ -186,12 +169,6 @@ func RunTurn(ctx context.Context, cfg Config, in routing.Inbound) (err error) {
 			return nil
 		}
 		slog.Info("loop.tools.batch", "step", step, "n", len(calls), "names", toolCallNames(calls))
-
-		if cfg.Outbound != nil {
-			for _, c := range calls {
-				logOutboundEmit("tool_start", cfg.Outbound.ToolStart(ctx, c.Name))
-			}
-		}
 
 		toolMsgs, err := executeToolBatches(ctx, calls, cfg, step)
 		if err != nil {
@@ -317,9 +294,7 @@ func concurrentBatch(batch []toolCallInv, reg *tools.Registry) bool {
 func runOneTool(ctx context.Context, c toolCallInv, cfg Config, modelStep int) (openai.ChatCompletionMessageParamUnion, error) {
 	t0 := time.Now()
 	toolEnd := func(ok bool) {
-		if cfg.Outbound != nil {
-			logOutboundEmit("tool_end", cfg.Outbound.ToolEnd(ctx, c.Name, ok))
-		}
+		_ = ok
 	}
 	emitTool := func(ok bool, errText, out string) {
 		ent := ToolTraceEntry{

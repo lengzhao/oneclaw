@@ -13,7 +13,7 @@ import (
 
 	"github.com/lengzhao/oneclaw/budget"
 	"github.com/lengzhao/oneclaw/loop"
-	"github.com/lengzhao/oneclaw/routing"
+	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/oneclaw/toolctx"
 	"github.com/lengzhao/oneclaw/tools"
 	"github.com/openai/openai-go"
@@ -57,18 +57,45 @@ func (h *Host) maxStepsForDef(def Definition) int {
 	return h.MaxSteps
 }
 
-// RunAgent starts an isolated sub-agent with its own transcript slice (sidechain).
-func RunAgent(ctx context.Context, h *Host, parent *toolctx.Context, agentType, task string, inheritContext bool) (string, error) {
+func validateNestedHost(h *Host) error {
 	if h == nil || h.Client == nil || h.Registry == nil {
-		return "", fmt.Errorf("subagent: incomplete host")
+		return fmt.Errorf("subagent: incomplete host")
 	}
+	return nil
+}
+
+func validateNestedParent(parent *toolctx.Context) error {
 	if parent == nil {
-		return "", fmt.Errorf("subagent: nil parent tool context")
+		return fmt.Errorf("subagent: nil parent tool context")
 	}
 	if parent.MaxSubagentDepth <= 0 {
 		parent.MaxSubagentDepth = 3
 	}
-	if parent.SubagentDepth >= parent.MaxSubagentDepth {
+	return nil
+}
+
+func nestingDepthLimited(parent *toolctx.Context) bool {
+	return parent.SubagentDepth >= parent.MaxSubagentDepth
+}
+
+// stripMetaForNested removes run_agent / fork_context when always is true (run_agent path), or when
+// parent is already nested (fork_context path). Matches prior RunAgent vs RunFork behavior.
+func stripMetaForNested(parent *toolctx.Context, reg *tools.Registry, always bool) (*tools.Registry, error) {
+	if !always && parent.SubagentDepth < 1 {
+		return reg, nil
+	}
+	return WithoutMetaTools(reg, "run_agent", "fork_context")
+}
+
+// RunAgent starts an isolated sub-agent with its own transcript slice (sidechain).
+func RunAgent(ctx context.Context, h *Host, parent *toolctx.Context, agentType, task string, inheritContext bool) (string, error) {
+	if err := validateNestedHost(h); err != nil {
+		return "", err
+	}
+	if err := validateNestedParent(parent); err != nil {
+		return "", err
+	}
+	if nestingDepthLimited(parent) {
 		return "subagent nesting depth limit reached", nil
 	}
 	def, ok := h.Catalog.Get(strings.TrimSpace(agentType))
@@ -80,7 +107,7 @@ func RunAgent(ctx context.Context, h *Host, parent *toolctx.Context, agentType, 
 	if err != nil {
 		return "", err
 	}
-	reg, err = WithoutMetaTools(reg, "run_agent", "fork_context")
+	reg, err = stripMetaForNested(parent, reg, true)
 	if err != nil {
 		return "", err
 	}
@@ -106,13 +133,13 @@ func RunAgent(ctx context.Context, h *Host, parent *toolctx.Context, agentType, 
 		ToolContext:   child,
 		SessionID:     h.SessionID,
 		CanUseTool:    h.CanUseTool,
-		Outbound:      nil,
+		OutboundText:  nil,
 		MemoryAgentMd: "",
 		MemoryRecall:  "",
 		Budget:        h.HistoryBudget,
 		ChatTransport: h.ChatTransport,
 	}
-	if err := loop.RunTurn(ctx, cfg, routing.Inbound{Text: task}); err != nil {
+	if err := loop.RunTurn(ctx, cfg, bus.InboundMessage{Content: task}); err != nil {
 		return "", err
 	}
 	msgs = loop.ToUserVisibleMessages(msgs)
@@ -124,16 +151,13 @@ func RunAgent(ctx context.Context, h *Host, parent *toolctx.Context, agentType, 
 
 // RunFork shares the parent system string and a trimmed parent message tail (TS: forkedAgent).
 func RunFork(ctx context.Context, h *Host, parent *toolctx.Context, task string, maxParentMessages int) (string, error) {
-	if h == nil || h.Client == nil || h.Registry == nil {
-		return "", fmt.Errorf("subagent: incomplete host")
+	if err := validateNestedHost(h); err != nil {
+		return "", err
 	}
-	if parent == nil {
-		return "", fmt.Errorf("subagent: nil parent tool context")
+	if err := validateNestedParent(parent); err != nil {
+		return "", err
 	}
-	if parent.MaxSubagentDepth <= 0 {
-		parent.MaxSubagentDepth = 3
-	}
-	if parent.SubagentDepth >= parent.MaxSubagentDepth {
+	if nestingDepthLimited(parent) {
 		return "subagent nesting depth limit reached", nil
 	}
 	if strings.TrimSpace(h.ParentSystem) == "" {
@@ -143,13 +167,9 @@ func RunFork(ctx context.Context, h *Host, parent *toolctx.Context, task string,
 		maxParentMessages = h.maxInherited()
 	}
 
-	reg := h.Registry
-	var err error
-	if parent.SubagentDepth >= 1 {
-		reg, err = WithoutMetaTools(reg, "run_agent", "fork_context")
-		if err != nil {
-			return "", err
-		}
+	reg, err := stripMetaForNested(parent, h.Registry, false)
+	if err != nil {
+		return "", err
 	}
 
 	child := parent.ChildContext()
@@ -173,11 +193,11 @@ func RunFork(ctx context.Context, h *Host, parent *toolctx.Context, task string,
 		ToolContext:   child,
 		SessionID:     h.SessionID,
 		CanUseTool:    wrapConservative(h.CanUseTool),
-		Outbound:      nil,
+		OutboundText:  nil,
 		Budget:        h.HistoryBudget,
 		ChatTransport: h.ChatTransport,
 	}
-	if err := loop.RunTurn(ctx, cfg, routing.Inbound{Text: task}); err != nil {
+	if err := loop.RunTurn(ctx, cfg, bus.InboundMessage{Content: task}); err != nil {
 		return "", err
 	}
 	msgs = loop.ToUserVisibleMessages(msgs)

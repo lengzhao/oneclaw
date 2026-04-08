@@ -1,4 +1,4 @@
-package routing
+package session
 
 import (
 	"strconv"
@@ -6,12 +6,11 @@ import (
 	"unicode/utf8"
 )
 
-// Attachment is wire-neutral inbound payload: either a project-relative Path (under .oneclaw/media/inbound/<date>/)
-// after persistence, or inline Text before the engine persists it.
+// Attachment is inbound payload: project-relative Path under .oneclaw/media/inbound/… after persistence,
+// or inline Text before the engine persists it.
 type Attachment struct {
 	Name string
 	MIME string
-	// Path is relative to the session cwd (slash-separated); when set, Text is not sent to the model.
 	Path string
 	Text string
 }
@@ -46,7 +45,7 @@ func NormalizeAttachments(in []Attachment) []Attachment {
 			continue
 		}
 		if n := utf8.RuneCountInString(body); n > maxAttachmentRunes {
-			body = truncateRunes(body, maxAttachmentRunes)
+			body = truncateAttachmentRunes(body, maxAttachmentRunes)
 			body += "\n\n[truncated: attachment exceeded " + strconv.Itoa(maxAttachmentRunes) + " runes]"
 		}
 		n := utf8.RuneCountInString(body)
@@ -55,7 +54,7 @@ func NormalizeAttachments(in []Attachment) []Attachment {
 			if room <= 0 {
 				break
 			}
-			body = truncateRunes(body, room)
+			body = truncateAttachmentRunes(body, room)
 			body += "\n\n[truncated: total attachments budget exceeded]"
 			n = utf8.RuneCountInString(body)
 		}
@@ -65,7 +64,7 @@ func NormalizeAttachments(in []Attachment) []Attachment {
 	return out
 }
 
-func truncateRunes(s string, max int) string {
+func truncateAttachmentRunes(s string, max int) string {
 	if max <= 0 {
 		return ""
 	}

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/lengzhao/oneclaw/schedule"
+	"github.com/lengzhao/oneclaw/session"
 	"github.com/lengzhao/oneclaw/toolctx"
 	"github.com/openai/openai-go"
 )
@@ -102,10 +103,10 @@ func (CronTool) Execute(ctx context.Context, input json.RawMessage, tctx *toolct
 			EverySeconds: s.EverySeconds,
 			CronExpr:     strings.TrimSpace(s.CronExpr),
 		}
-		ts := strings.TrimSpace(tctx.TurnInbound.Source)
-		sk := strings.TrimSpace(tctx.TurnInbound.SessionKey)
-		uid := strings.TrimSpace(tctx.TurnInbound.UserID)
-		ten := strings.TrimSpace(tctx.TurnInbound.TenantID)
+		ts := strings.TrimSpace(tctx.TurnInbound.Channel)
+		sk := session.InboundSessionKey(tctx.TurnInbound)
+		uid := session.InboundUserID(tctx.TurnInbound)
+		ten := session.InboundTenantHint(tctx.TurnInbound)
 		return schedule.Add(tctx.CWD, schedule.AddInput{
 			Name:         in.Name,
 			Message:      in.Message,

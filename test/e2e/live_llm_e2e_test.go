@@ -1,9 +1,9 @@
-//go:build live_llm
+//go:build e2e && live_llm
 
 // 真实 LLM 验收：复制 live_llm.config.example.yaml 为 live_llm.config.yaml 并填写 api_key。
 // 默认构建不包含本文件，避免 CI 或无密钥环境失败。
 //
-//	go test -tags=live_llm ./test/e2e/... -run TestLiveLLM -count=1 -v
+//	go test -tags=e2e,live_llm ./test/e2e/... -run TestLiveLLM -count=1 -v
 package e2e_test
 
 import (
@@ -20,7 +20,7 @@ import (
 	"github.com/lengzhao/oneclaw/loop"
 	"github.com/lengzhao/oneclaw/memory"
 	"github.com/lengzhao/oneclaw/rtopts"
-	"github.com/lengzhao/oneclaw/routing"
+	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/oneclaw/session"
 	"github.com/lengzhao/oneclaw/tools/builtin"
 	"github.com/openai/openai-go"
@@ -100,7 +100,7 @@ func TestLiveLLM_ChatRoundTrip(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 
-	if err := e.SubmitUser(ctx, routing.Inbound{Text: "Say exactly: LIVE_OK"}); err != nil {
+	if err := e.SubmitUser(ctx, bus.InboundMessage{Content: "Say exactly: LIVE_OK"}); err != nil {
 		t.Fatal(err)
 	}
 	out := strings.TrimSpace(loop.LastAssistantDisplay(e.Messages))
@@ -144,7 +144,7 @@ func TestLiveLLM_DailyLogExtract(t *testing.T) {
 
 	token := "E2E_LIVE_MEM_TOKEN_9911"
 	msg := "For the project log: remember token " + token + " for testing. Reply with one short acknowledgment sentence only."
-	if err := e.SubmitUser(ctx, routing.Inbound{Text: msg}); err != nil {
+	if err := e.SubmitUser(ctx, bus.InboundMessage{Content: msg}); err != nil {
 		t.Fatal(err)
 	}
 	if strings.TrimSpace(loop.LastAssistantDisplay(e.Messages)) == "" {

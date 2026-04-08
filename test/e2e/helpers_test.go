@@ -1,3 +1,5 @@
+//go:build e2e
+
 package e2e_test
 
 import (
@@ -6,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/oneclaw/memory"
 	"github.com/lengzhao/oneclaw/rtopts"
 	"github.com/lengzhao/oneclaw/session"
@@ -45,6 +48,28 @@ func newStubEngineWithRegistry(t *testing.T, stub *openaistub.Server, cwd string
 }
 
 // concatUserText joins all user-role string contents (in order) for assertions on injected context.
+// inboundWithPersistedAttachments normalizes and persists session attachments, then builds bus.InboundMessage MediaPaths.
+func inboundWithPersistedAttachments(t *testing.T, cwd, content, channel, peerID string, atts []session.Attachment) bus.InboundMessage {
+	t.Helper()
+	atts = append([]session.Attachment(nil), atts...)
+	atts = session.NormalizeAttachments(atts)
+	if err := session.PersistInlineAttachmentFiles(cwd, &atts); err != nil {
+		t.Fatal(err)
+	}
+	var paths []string
+	for _, a := range atts {
+		if p := strings.TrimSpace(a.Path); p != "" {
+			paths = append(paths, p)
+		}
+	}
+	return bus.InboundMessage{
+		Channel:    channel,
+		Content:    strings.TrimSpace(content),
+		Peer:       bus.Peer{ID: peerID},
+		MediaPaths: paths,
+	}
+}
+
 func concatUserText(msgs []openai.ChatCompletionMessageParamUnion) string {
 	var sb strings.Builder
 	for _, m := range msgs {

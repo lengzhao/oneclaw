@@ -12,9 +12,9 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/oneclaw/loop"
 	"github.com/lengzhao/oneclaw/memory"
-	"github.com/lengzhao/oneclaw/routing"
 	"github.com/lengzhao/oneclaw/tools"
 	"github.com/openai/openai-go"
 )
@@ -39,11 +39,8 @@ type Engine struct {
 	CWD        string
 	CanUseTool tools.CanUseTool
 	SessionID  string
-	// SinkRegistry resolves sinks by routing.Inbound.Source. If nil, no outbound emission.
-	SinkRegistry routing.SinkRegistry
-	// SinkFactory builds a per-turn Sink (e.g. bind IM thread). If nil, only SinkRegistry is used.
-	// When non-nil, NewSink runs first; ErrUseRegistrySink falls back to SinkRegistry.
-	SinkFactory routing.SinkFactory
+	// PublishOutbound sends assistant / proactive messages to IM drivers via clawbridge. If nil, outbound is skipped.
+	PublishOutbound func(ctx context.Context, msg *bus.OutboundMessage) error
 	// TranscriptPath is where SaveTranscript writes after each successful loop.RunTurn (before PostTurn; post-turn maintain runs asynchronously). Empty disables auto-save.
 	TranscriptPath string
 	// WorkingTranscriptPath persists Messages (already user-visible in memory after each turn).
@@ -74,24 +71,26 @@ func NewEngine(cwd string, reg *tools.Registry) *Engine {
 }
 
 // SubmitUser runs one user turn (may involve multiple internal model calls).
-// in.Text is the primary user line; Attachments add leading user messages. Routing fields feed Sink 选择与可选 <inbound-context>。
+// in.Content is the primary user line; MediaPaths add leading user messages after normalization.
 // Cancel ctx to abort in-flight model and tool calls.
-func (e *Engine) SubmitUser(ctx context.Context, in routing.Inbound) error {
-	if err := e.prepareInboundAttachments(&in); err != nil {
+func (e *Engine) SubmitUser(ctx context.Context, in bus.InboundMessage) error {
+	atts, err := e.prepareInboundFromBus(&in)
+	if err != nil {
 		return err
 	}
-	if strings.TrimSpace(in.Text) == "" && len(in.Attachments) == 0 {
+	text := strings.TrimSpace(in.Content)
+	if text == "" && len(atts) == 0 {
 		return fmt.Errorf("session: empty inbound text")
 	}
 
 	if reply, ok := e.trySlashLocalTurn(in); ok {
-		return e.submitLocalSlashTurn(ctx, in, reply)
+		return e.submitLocalSlashTurn(ctx, in, atts, reply)
 	}
 
-	preview := combinedInboundPreview(in)
+	preview := combinedInboundPreview(text, atts)
 	slog.Debug("session.submit", "cwd", e.CWD, "model", e.Model, "preview_chars", utf8.RuneCountInString(preview))
 
-	prep, err := e.prepareSharedTurn(ctx, in, preview, true)
+	prep, err := e.prepareSharedTurn(ctx, in, atts, preview, true)
 	if err != nil {
 		return err
 	}
@@ -99,7 +98,6 @@ func (e *Engine) SubmitUser(ctx context.Context, in routing.Inbound) error {
 	memOK := prep.memOK
 	layout := prep.layout
 	bundle := prep.bundle
-	em := prep.em
 	system := prep.system
 
 	var traceSink *loop.ToolTraceSink
@@ -107,14 +105,14 @@ func (e *Engine) SubmitUser(ctx context.Context, in routing.Inbound) error {
 	var onToolLogged func(loop.ToolTraceEntry)
 	if memOK && memory.MemoryExtractEnabled() {
 		traceSink = &loop.ToolTraceSink{}
-		sid, cid := e.SessionID, in.CorrelationID
+		sid, cid := e.SessionID, strings.TrimSpace(in.MessageID)
 		lay := layout
 		onToolLogged = func(ent loop.ToolTraceEntry) {
 			memory.AppendTurnToolLogJSONL(lay, sid, cid, uv, ent)
 		}
 	}
 
-	userLine := ModelUserLine(in.Text, len(in.Attachments) > 0)
+	userLine := ModelUserLine(text, len(atts) > 0)
 	cfg := loop.Config{
 		Client:                &e.Client,
 		Model:                 e.Model,
@@ -126,11 +124,11 @@ func (e *Engine) SubmitUser(ctx context.Context, in routing.Inbound) error {
 		ToolContext:           prep.tctx,
 		SessionID:             e.SessionID,
 		CanUseTool:            e.CanUseTool,
-		Outbound:              em,
+		OutboundText:          prep.outboundText,
 		MemoryAgentMd:         bundle.AgentMdBlock,
 		MemoryRecall:          bundle.RecallBlock,
 		InboundMeta:           InboundMetaForModel(in),
-		InboundAttachmentMsgs: FormatInboundAttachmentMessages(in.Attachments),
+		InboundAttachmentMsgs: FormatInboundAttachmentMessages(atts),
 		UserLine:              userLine,
 		Budget:                bg,
 		ChatTransport:         e.ChatTransport,
@@ -142,7 +140,7 @@ func (e *Engine) SubmitUser(ctx context.Context, in routing.Inbound) error {
 	}
 
 	// Claude Code–style: record user turn before query loop so crash/interrupt still leaves the request on disk.
-	e.Transcript = append(e.Transcript, openai.UserMessage(SlimTranscriptUserLine(in)))
+	e.Transcript = append(e.Transcript, openai.UserMessage(SlimTranscriptUserLine(text, atts)))
 	if err := e.SaveTranscript(); err != nil {
 		slog.Error("session.transcript_save_user", "err", err)
 	}
@@ -163,80 +161,73 @@ func (e *Engine) SubmitUser(ctx context.Context, in routing.Inbound) error {
 	}
 	e.appendDialogHistoryIfComplete()
 	if memOK && memory.MemoryExtractEnabled() {
-		memory.AppendTurnAssistantFinalJSONL(layout, e.SessionID, in.CorrelationID, uv, loop.LastAssistantDisplay(e.Messages))
+		memory.AppendTurnAssistantFinalJSONL(layout, e.SessionID, strings.TrimSpace(in.MessageID), uv, loop.LastAssistantDisplay(e.Messages))
 	}
 	if memOK {
 		var tools []loop.ToolTraceEntry
 		if traceSink != nil {
 			tools = traceSink.Snapshot()
 		}
-		toolsCopy := append([]loop.ToolTraceEntry(nil), tools...)
-		turnIn := memory.PostTurnInput{
+		pti := memory.PostTurnInput{
 			SessionID:        e.SessionID,
-			CorrelationID:    in.CorrelationID,
+			CorrelationID:    strings.TrimSpace(in.MessageID),
 			UserText:         preview,
 			AssistantVisible: loop.LastAssistantDisplay(e.Messages),
-			Tools:            toolsCopy,
+			Tools:            append([]loop.ToolTraceEntry(nil), tools...),
 		}
-		memory.PostTurn(layout, turnIn)
+		memory.PostTurn(layout, pti)
 		// Post-turn LLM maintain is best-effort and can be slow; do not block channels waiting on HTTP Done.
-		lay := layout
-		client := &e.Client
-		model := e.Model
-		maxTok := e.MaxTokens
 		go func(in memory.PostTurnInput) {
-			memory.MaybePostTurnMaintain(context.Background(), lay, client, model, maxTok, &in)
-		}(turnIn)
+			memory.MaybePostTurnMaintain(context.Background(), layout, &e.Client, e.Model, e.MaxTokens, &in)
+		}(pti)
 	}
 	return nil
 }
 
-// SendMessage delivers text and/or attachments to the Sink for in.Source without running the model
-// (proactive outbound, similar in spirit to picoclaw Channel.Send + optional media).
-// in.Source must match a registered channel instance id; routing fields (SessionKey, RawRef, …) are passed to SinkFactory like SubmitUser.
-func (e *Engine) SendMessage(ctx context.Context, in routing.Inbound) error {
-	if strings.TrimSpace(in.Source) == "" {
-		return fmt.Errorf("session: SendMessage requires Inbound.Source")
+// SendMessage delivers text and/or attachments without running the model (proactive notify).
+// in.Channel must be the clawbridge client id; ChatID / Peer must allow delivery.
+func (e *Engine) SendMessage(ctx context.Context, in bus.InboundMessage) error {
+	if strings.TrimSpace(in.Channel) == "" {
+		return fmt.Errorf("session: SendMessage requires InboundMessage.Channel")
 	}
 	inCopy := in
-	if len(in.Attachments) > 0 {
-		inCopy.Attachments = append([]routing.Attachment(nil), in.Attachments...)
-	}
-	if err := e.prepareInboundAttachments(&inCopy); err != nil {
-		return err
-	}
-	if strings.TrimSpace(inCopy.Text) == "" && len(inCopy.Attachments) == 0 {
-		return fmt.Errorf("session: SendMessage: empty text and attachments")
-	}
-	sink, err := routing.ResolveTurnSink(ctx, e.SinkRegistry, e.SinkFactory, inCopy)
+	atts, err := e.prepareInboundFromBus(&inCopy)
 	if err != nil {
 		return err
 	}
-	if sink == nil {
-		return fmt.Errorf("session: no sink for source %q", inCopy.Source)
+	body := strings.TrimSpace(inCopy.Content)
+	if body == "" && len(atts) == 0 {
+		return fmt.Errorf("session: SendMessage: empty text and attachments")
 	}
-	jobID := strings.TrimSpace(inCopy.CorrelationID)
-	em := routing.NewEmitter(sink, e.SessionID, jobID)
-	return em.TextWithAttachments(ctx, strings.TrimSpace(inCopy.Text), inCopy.Attachments)
+	if e.PublishOutbound == nil {
+		return fmt.Errorf("session: PublishOutbound not configured")
+	}
+	parts := mediaPartsFromAttachments(atts)
+	msg := assistantOutboundWithMedia(&inCopy, body, parts)
+	if msg == nil {
+		return fmt.Errorf("session: SendMessage: missing ChatID (cannot address recipient)")
+	}
+	return e.PublishOutbound(ctx, msg)
 }
 
-func (e *Engine) submitLocalSlashTurn(ctx context.Context, in routing.Inbound, reply string) error {
+func (e *Engine) submitLocalSlashTurn(ctx context.Context, in bus.InboundMessage, atts []Attachment, reply string) error {
 	slog.Debug("session.submit_local_slash", "cwd", e.CWD)
-	preview := combinedInboundPreview(in)
-	prep, err := e.prepareSharedTurn(ctx, in, preview, false)
+	text := strings.TrimSpace(in.Content)
+	preview := combinedInboundPreview(text, atts)
+	prep, err := e.prepareSharedTurn(ctx, in, atts, preview, false)
 	if err != nil {
 		return err
 	}
 	bundle := prep.bundle
 
 	meta := InboundMetaForModel(in)
-	attMsgs := FormatInboundAttachmentMessages(in.Attachments)
-	userLine := ModelUserLine(in.Text, len(in.Attachments) > 0)
+	attMsgs := FormatInboundAttachmentMessages(atts)
+	userLine := ModelUserLine(text, len(atts) > 0)
 	loop.AppendTurnUserMessages(&e.Messages, bundle.AgentMdBlock, bundle.RecallBlock, meta, attMsgs, userLine)
 	e.Messages = append(e.Messages, openai.AssistantMessage(reply))
 	e.Messages = loop.ToUserVisibleMessages(e.Messages)
 
-	e.Transcript = append(e.Transcript, openai.UserMessage(SlimTranscriptUserLine(in)))
+	e.Transcript = append(e.Transcript, openai.UserMessage(SlimTranscriptUserLine(text, atts)))
 	e.Transcript = append(e.Transcript, openai.AssistantMessage(reply))
 	if err := e.SaveTranscript(); err != nil {
 		slog.Error("session.transcript_save_local_slash", "err", err)
@@ -245,25 +236,35 @@ func (e *Engine) submitLocalSlashTurn(ctx context.Context, in routing.Inbound, r
 		slog.Error("session.working_transcript_save_local_slash", "err", err)
 	}
 	e.appendDialogHistoryIfComplete()
-	if prep.em != nil {
-		emitCtx := context.Background()
-		if err := prep.em.Text(ctx, reply); err != nil {
-			slog.Warn("session.local_slash.emit_text", "err", err)
-		}
-		if err := prep.em.Done(emitCtx, true, ""); err != nil {
-			slog.Warn("session.local_slash.emit_done", "err", err)
+	if prep.outboundText != nil {
+		if err := prep.outboundText(ctx, reply); err != nil {
+			slog.Warn("session.local_slash.outbound", "err", err)
 		}
 	}
 	// No memory.PostTurn / MaybePostTurnMaintain: local slash is an intentional bypass (see docs/memory-maintain-dual-entry-design.md §2.4).
 	return nil
 }
 
-func (e *Engine) prepareInboundAttachments(in *routing.Inbound) error {
-	if err := ValidateInboundMediaPaths(e.CWD, in.Attachments); err != nil {
-		return err
+func (e *Engine) prepareInboundFromBus(in *bus.InboundMessage) ([]Attachment, error) {
+	atts := AttachmentsFromMediaPaths(in.MediaPaths)
+	atts = NormalizeAttachments(atts)
+	if err := ValidateInboundMediaPaths(e.CWD, atts); err != nil {
+		return nil, err
 	}
-	in.Attachments = routing.NormalizeAttachments(in.Attachments)
-	return PersistInlineAttachmentFiles(e.CWD, &in.Attachments)
+	if err := PersistInlineAttachmentFiles(e.CWD, &atts); err != nil {
+		return nil, err
+	}
+	return atts, nil
+}
+
+func mediaPartsFromAttachments(atts []Attachment) []bus.MediaPart {
+	var out []bus.MediaPart
+	for _, a := range atts {
+		if p := strings.TrimSpace(a.Path); p != "" {
+			out = append(out, bus.MediaPart{Path: p, Filename: a.Name, ContentType: a.MIME})
+		}
+	}
+	return out
 }
 
 func newSessionID() string {
