@@ -77,7 +77,7 @@ flowchart TB
 |------|----------|------|
 | **Go：`NotifySink` / `LifecycleHook` 函数组** | 进程内插件、测试、桥接到 MQ | 与 `loop.Config` / `Engine` 字段注入一致；日志用 `slog` |
 | **HTTP Webhook** | 外部 SaaS、无代码集成 | 独立包或 `channel` 适配；需签名、超时、payload 大小上限 |
-| **文件 / JSONL** | 本地审计 | 与 `memory.AppendTurnToolLogJSONL` 类似，可共用序列化 |
+| **文件 / JSONL** | 本地审计 | notify audit sinks（`.oneclaw/.../audit/...`） |
 
 **MVP 已选**：进程内 **`notify.Sink`** + **`notify.Multi`**；Webhook / JSONL 文件 sink **未实现**，可自行用 `FuncSink` 写文件或调 HTTP。
 

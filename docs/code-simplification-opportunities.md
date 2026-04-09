@@ -105,7 +105,7 @@ flowchart LR
 
 ### 5.2 多用户与 `SessionResolver`
 
-`session/resolver.go` 提供按 `SessionHandle` 懒创建 `Engine`、每槽串行；`cmd/oneclaw/main.go` 当前是**单 `Engine`**。文档上建议说明：**何时用单 Engine + 多 source**，**何时必须 Resolver + 多 Engine**，避免扩展时误用共享 transcript/recall。
+`session/resolver.go` 仍提供按 `SessionHandle` 懒创建并**复用** `Engine`（测试等场景）。**`cmd/oneclaw/main.go`** 使用 **`session.WorkerPool`**：固定 **`sessions.worker_count`** 个 goroutine，按 session 哈希分片串行；每任务 **新建 `Engine` 后丢弃**，转写/recall 依赖落盘，避免 worker 与会话对象无限增长。详见 [config.md](config.md)「会话与多通道」。
 
 ---
 

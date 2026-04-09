@@ -11,6 +11,49 @@ import (
 
 func boolPtr(b bool) *bool { return &b }
 
+func TestMainAgentMaxSteps(t *testing.T) {
+	home := t.TempDir()
+	cwd := t.TempDir()
+	projDir := filepath.Join(cwd, memory.DotDir)
+	if err := os.MkdirAll(projDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(projDir, "config.yaml"), []byte(`
+agent:
+  max_steps: 48
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	r, err := Load(LoadOptions{Home: home, Cwd: cwd})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.MainAgentMaxSteps() != 48 {
+		t.Fatalf("got %d", r.MainAgentMaxSteps())
+	}
+	emptyCwd := t.TempDir()
+	empty, err := Load(LoadOptions{Home: home, Cwd: emptyCwd})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if empty.MainAgentMaxSteps() != 32 {
+		t.Fatalf("default max steps: %d", empty.MainAgentMaxSteps())
+	}
+	if err := os.WriteFile(filepath.Join(projDir, "config.yaml"), []byte(`
+agent:
+  max_steps: 999
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	r3, err := Load(LoadOptions{Home: home, Cwd: cwd})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r3.MainAgentMaxSteps() != 256 {
+		t.Fatalf("clamp high: got %d", r3.MainAgentMaxSteps())
+	}
+}
+
 func TestMerge_projectOverridesUser(t *testing.T) {
 	home := t.TempDir()
 	cwd := t.TempDir()
@@ -259,5 +302,77 @@ func TestNotifyAuditSinkPaths_perPath(t *testing.T) {
 	llm, orch, vis := r.NotifyAuditSinkPaths()
 	if llm || !orch || !vis {
 		t.Fatalf("got llm=%v orch=%v vis=%v", llm, orch, vis)
+	}
+}
+
+func TestSessionTranscriptPaths(t *testing.T) {
+	cwd := filepath.Join(t.TempDir(), "proj")
+	f := File{}
+	r := &Resolved{merged: f, cwd: cwd}
+	tp, wp := r.SessionTranscriptPaths("abc123")
+	wantT := filepath.Join(cwd, memory.DotDir, "sessions", "abc123", "transcript.json")
+	wantW := filepath.Join(cwd, memory.DotDir, "sessions", "abc123", "working_transcript.json")
+	if tp != wantT || wp != wantW {
+		t.Fatalf("got transcript=%q working=%q", tp, wp)
+	}
+	f.Features.DisableTranscript = boolPtr(true)
+	r2 := &Resolved{merged: f, cwd: cwd}
+	tp2, wp2 := r2.SessionTranscriptPaths("abc123")
+	if tp2 != "" || wp2 != "" {
+		t.Fatalf("disabled transcript: got %q %q", tp2, wp2)
+	}
+}
+
+func TestSessionWorkerCount(t *testing.T) {
+	cwd := filepath.Join(t.TempDir(), "proj")
+	r := &Resolved{merged: File{}, cwd: cwd}
+	if r.SessionWorkerCount() != 0 {
+		t.Fatalf("unset: %d", r.SessionWorkerCount())
+	}
+	f := File{}
+	f.Sessions.WorkerCount = 16
+	r2 := &Resolved{merged: f, cwd: cwd}
+	if r2.SessionWorkerCount() != 16 {
+		t.Fatalf("got %d", r2.SessionWorkerCount())
+	}
+}
+
+func TestSessionsSQLitePath(t *testing.T) {
+	cwd := filepath.Join(t.TempDir(), "proj")
+	f := File{}
+	r := &Resolved{merged: f, cwd: cwd}
+	got := r.SessionsSQLitePath()
+	want := filepath.Join(cwd, memory.DotDir, "sessions.sqlite")
+	if got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+	f.Sessions.DisableSQLite = boolPtr(true)
+	r2 := &Resolved{merged: f, cwd: cwd}
+	if r2.SessionsSQLitePath() != "" {
+		t.Fatal("expected empty when disabled")
+	}
+	f = File{}
+	f.Sessions.SQLitePath = "custom.db"
+	r3 := &Resolved{merged: f, cwd: cwd}
+	if r3.SessionsSQLitePath() != filepath.Join(cwd, "custom.db") {
+		t.Fatalf("relative: %q", r3.SessionsSQLitePath())
+	}
+}
+
+func TestMultimodalFeatureFlagsResolved(t *testing.T) {
+	var r *Resolved
+	if r.MultimodalImageDisabled() || r.MultimodalAudioDisabled() {
+		t.Fatal("nil resolved should not disable multimodal")
+	}
+	f := File{}
+	r2 := &Resolved{merged: f}
+	if r2.MultimodalImageDisabled() || r2.MultimodalAudioDisabled() {
+		t.Fatal("unset flags should default off (multimodal allowed)")
+	}
+	f.Features.DisableMultimodalImage = boolPtr(true)
+	f.Features.DisableMultimodalAudio = boolPtr(true)
+	r3 := &Resolved{merged: f}
+	if !r3.MultimodalImageDisabled() || !r3.MultimodalAudioDisabled() {
+		t.Fatalf("expected both disabled, img=%v audio=%v", r3.MultimodalImageDisabled(), r3.MultimodalAudioDisabled())
 	}
 }

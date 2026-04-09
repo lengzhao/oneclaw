@@ -80,6 +80,47 @@ func UserMessageText(m openai.ChatCompletionMessageParamUnion) string {
 	return out.String()
 }
 
+// UserMessageHasNonTextMedia reports whether m is a user message carrying image/audio/file parts (not plain string content).
+func UserMessageHasNonTextMedia(m openai.ChatCompletionMessageParamUnion) bool {
+	if m.OfUser == nil {
+		return false
+	}
+	c := m.OfUser.Content
+	if c.OfString.Valid() {
+		return false
+	}
+	for _, part := range c.OfArrayOfContentParts {
+		if part.OfImageURL != nil || part.OfInputAudio != nil || part.OfFile != nil {
+			return true
+		}
+	}
+	return false
+}
+
+// userMessageMediaPayloadBytes approximates multimodal payload size for history budgeting (data URLs / base64 audio).
+func userMessageMediaPayloadBytes(m openai.ChatCompletionMessageParamUnion) int {
+	if m.OfUser == nil {
+		return 0
+	}
+	c := m.OfUser.Content
+	if c.OfString.Valid() {
+		return 0
+	}
+	n := 0
+	for _, part := range c.OfArrayOfContentParts {
+		if part.OfImageURL != nil {
+			n += len(part.OfImageURL.ImageURL.URL)
+		}
+		if part.OfInputAudio != nil {
+			n += len(part.OfInputAudio.InputAudio.Data)
+		}
+		if part.OfFile != nil {
+			n += 4096
+		}
+	}
+	return n
+}
+
 func toolMessageText(m openai.ChatCompletionMessageParamUnion) string {
 	if m.OfTool == nil {
 		return ""

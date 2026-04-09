@@ -47,6 +47,9 @@ type Job struct {
 	Enabled      bool         `json:"enabled"`
 	TargetSource string       `json:"target_source"`
 	SessionKey   string       `json:"session_key,omitempty"`
+	// TargetChatID is the bus inbound chat_id at job creation (e.g. webchat tab); required for assistant outbound to the same UI.
+	TargetChatID string       `json:"target_chat_id,omitempty"`
+	PeerKind     string       `json:"peer_kind,omitempty"`
 	UserID       string       `json:"user_id,omitempty"`
 	TenantID     string       `json:"tenant_id,omitempty"`
 	Schedule     ScheduleSpec `json:"schedule"`
@@ -259,6 +262,8 @@ type AddInput struct {
 	Message      string
 	TargetSource string
 	SessionKey   string
+	TargetChatID string
+	PeerKind     string
 	UserID       string
 	TenantID     string
 	Schedule     ScheduleSpec
@@ -314,6 +319,8 @@ func Add(cwd string, in AddInput) (string, error) {
 		Enabled:      true,
 		TargetSource: ts,
 		SessionKey:   strings.TrimSpace(in.SessionKey),
+		TargetChatID: strings.TrimSpace(in.TargetChatID),
+		PeerKind:     strings.TrimSpace(in.PeerKind),
 		UserID:       strings.TrimSpace(in.UserID),
 		TenantID:     strings.TrimSpace(in.TenantID),
 		Schedule:     spec,
@@ -438,6 +445,9 @@ func ListText(cwd string) (string, error) {
 		if j.SessionKey != "" {
 			sk = " session_key=" + j.SessionKey
 		}
+		if j.TargetChatID != "" {
+			sk += " chat_id=" + j.TargetChatID
+		}
 		fmt.Fprintf(&b, "- %s id=%s target=%s%s next=%s — %s\n  schedule: %s\n", j.Name, j.ID, j.TargetSource, sk, next, j.Message, sch)
 	}
 	return strings.TrimRight(b.String(), "\n"), nil
@@ -487,6 +497,8 @@ type TurnDelivery struct {
 	Text          string
 	CorrelationID string
 	SessionKey    string
+	TargetChatID  string
+	PeerKind      string
 	UserID        string
 	TenantID      string
 }
@@ -532,6 +544,8 @@ func CollectDue(cwd, targetSource string, now time.Time) ([]TurnDelivery, error)
 			Text:          text,
 			CorrelationID: corr,
 			SessionKey:    j.SessionKey,
+			TargetChatID:  j.TargetChatID,
+			PeerKind:      j.PeerKind,
 			UserID:        j.UserID,
 			TenantID:      j.TenantID,
 		})

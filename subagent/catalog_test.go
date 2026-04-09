@@ -13,6 +13,7 @@ description: Demo
 tools:
   - read_file
 max_turns: 5
+model: " gpt-4o-mini "
 ---
 You are a demo.
 `)
@@ -20,7 +21,7 @@ You are a demo.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if d.AgentType != "demo-agent" || d.MaxTurns != 5 || len(d.Tools) != 1 {
+	if d.AgentType != "demo-agent" || d.MaxTurns != 5 || len(d.Tools) != 1 || d.Model != "gpt-4o-mini" {
 		t.Fatalf("def: %+v", d)
 	}
 	if d.SystemPrompt != "You are a demo." {

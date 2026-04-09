@@ -107,11 +107,14 @@ func (CronTool) Execute(ctx context.Context, input json.RawMessage, tctx *toolct
 		sk := session.InboundSessionKey(tctx.TurnInbound)
 		uid := session.InboundUserID(tctx.TurnInbound)
 		ten := session.InboundTenantHint(tctx.TurnInbound)
+		pk := strings.TrimSpace(tctx.TurnInbound.Peer.Kind)
 		return schedule.Add(tctx.CWD, schedule.AddInput{
 			Name:         in.Name,
 			Message:      in.Message,
 			TargetSource: ts,
 			SessionKey:   sk,
+			TargetChatID: strings.TrimSpace(tctx.TurnInbound.ChatID),
+			PeerKind:     pk,
 			UserID:       uid,
 			TenantID:     ten,
 			Schedule:     spec,

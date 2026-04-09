@@ -13,7 +13,7 @@ import (
 func messageTextBudgetBytes(m openai.ChatCompletionMessageParamUnion) int {
 	switch {
 	case m.OfUser != nil:
-		return len(UserMessageText(m))
+		return len(UserMessageText(m)) + userMessageMediaPayloadBytes(m)
 	case m.OfTool != nil:
 		return len(toolMessageText(m))
 	case m.OfAssistant != nil:

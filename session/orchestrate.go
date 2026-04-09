@@ -36,6 +36,20 @@ func InboundMetaForModel(in bus.InboundMessage) string {
 	return b.String()
 }
 
+// formatInboundAttachmentUserText is one user-shaped block for a single attachment (read_file hint or inline text).
+func formatInboundAttachmentUserText(a Attachment) string {
+	if p := strings.TrimSpace(a.Path); p != "" {
+		return fmt.Sprintf(
+			"[Attachment: %s (%s)]\nFile saved in the project media store. Read with read_file using this path (relative to cwd):\n%s",
+			a.Name, a.MIME, p,
+		)
+	}
+	if strings.TrimSpace(a.Text) != "" {
+		return fmt.Sprintf("[Attachment: %s (%s)]\n%s", a.Name, a.MIME, a.Text)
+	}
+	return ""
+}
+
 // FormatInboundAttachmentMessages turns normalized attachments into user message bodies.
 func FormatInboundAttachmentMessages(atts []Attachment) []string {
 	if len(atts) == 0 {
@@ -43,15 +57,8 @@ func FormatInboundAttachmentMessages(atts []Attachment) []string {
 	}
 	out := make([]string, 0, len(atts))
 	for _, a := range atts {
-		if p := strings.TrimSpace(a.Path); p != "" {
-			out = append(out, fmt.Sprintf(
-				"[Attachment: %s (%s)]\nFile saved in the project media store. Read with read_file using this path (relative to cwd):\n%s",
-				a.Name, a.MIME, p,
-			))
-			continue
-		}
-		if strings.TrimSpace(a.Text) != "" {
-			out = append(out, fmt.Sprintf("[Attachment: %s (%s)]\n%s", a.Name, a.MIME, a.Text))
+		if s := formatInboundAttachmentUserText(a); strings.TrimSpace(s) != "" {
+			out = append(out, s)
 		}
 	}
 	return out
@@ -64,7 +71,7 @@ func ModelUserLine(text string, hasAttachments bool) string {
 		return t
 	}
 	if hasAttachments {
-		return "（本轮无正文，仅附件。）"
+		return ""
 	}
 	return ""
 }

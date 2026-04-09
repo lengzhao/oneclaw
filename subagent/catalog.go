@@ -14,7 +14,7 @@ const maxAgentListingDescRunes = 120
 // RunAgentToolDescriptionBase is the static OpenAI tool description for run_agent (agent list lives in the main system prompt).
 const RunAgentToolDescriptionBase = `Run a named sub-agent with its own short-lived context and tool surface. ` +
 	`Built-in types: general-purpose, explore. ` +
-	`Add markdown definitions under .oneclaw/agents/*.md (YAML frontmatter: agent_type, description, tools, max_turns). ` +
+	`Add markdown definitions under .oneclaw/agents/*.md (YAML frontmatter: agent_type, description, tools, max_turns, optional model). ` +
 	`Set inherit_context true to prepend a trimmed copy of the parent message list (still no mutation of the main transcript).`
 
 // Catalog maps agent_type -> definition (user files override builtins with same name).

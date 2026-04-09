@@ -78,7 +78,7 @@ go run ./cmd/oneclaw -cwd . -maintain-once
 
 - **执行循环**：模型 ↔ 工具 ↔ 回灌；流式/非流式；Abort；`log/slog` 日志。
 - **内置工具**：`read_file`、`write_file`、`grep`、`bash`、`run_agent`、`fork_context`、`task_create` / `task_update`、**`cron`**（定时/周期提醒，落盘 `.oneclaw/scheduled_jobs.json`，进程内轮询到期后注入用户消息；对标 picoclaw 的同名能力，简化版不含计划 shell 命令）、**`send_message`**（主动推送文本/附件到当前或指定 channel 实例，不经模型再生成一轮）（注册表 + schema；只读并行、写串行等保守策略）。
-- **Memory**：user / project / local / auto / team / agent 等作用域；发现、注入、recall、回合日志（`paths.turn_log_path` 等）与维护管道。
+- **Memory**：user / project / local / auto / team / agent 等作用域；发现、注入、recall、与维护管道（回合内工具轨迹经内存进入 `PostTurn` / maintain，不再写 `.oneclaw/traces/`）。
 - **子 Agent**：`.oneclaw/agents/*.md`；嵌套隔离上下文与工具面收缩。
 - **路由抽象**：入站 `Inbound`、出站 `Record` / `Sink`，便于在 CLI 之外接 HTTP / webhook 等（见 `routing/` 与设计文档）。
 
@@ -107,10 +107,12 @@ docs/            设计与 prompt 参考
 
 ## 架构流程
 
+更完整的进程分支、WorkerPool、维护与定时任务说明见 **[`docs/runtime-flow.md`](docs/runtime-flow.md)**。
+
 **单轮执行（简化）**
 
 ```mermaid
-flowchart TD
+flowchart TB
   U[用户输入] --> S[session 编排]
   S --> M[发现并注入 memory / rules]
   M --> L[loop.RunTurn]
@@ -123,7 +125,7 @@ flowchart TD
 **长期沉淀（概念）**
 
 ```mermaid
-flowchart LR
+flowchart TB
   A[执行任务] --> B[对话与外部信号]
   B --> C[提取与维护]
   C --> D[写 memory / rules]

@@ -14,6 +14,7 @@
 
 | 文档 | 说明 |
 |------|------|
+| [runtime-flow.md](runtime-flow.md) | **运行时主流程**：`main` 分支、WorkerPool、单轮 `SubmitUser`、`loop.RunTurn`、记忆维护双入口、定时任务与出站 |
 | [config.md](config.md) | 统一 YAML 配置：合并顺序、`--config`、API key、`PushRuntime` / `rtopts` |
 | [multi-llm-provider-design.md](multi-llm-provider-design.md) | 多 LLM / 多协议支持：与 picoclaw 对齐的配置形态、`llm.Provider` 抽象与分阶段改造 |
 | [outbound-events-design.md](outbound-events-design.md) | 出站事件 envelope、`Record`/`Sink`、CLI/HTTP 行为 |

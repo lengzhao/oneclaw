@@ -20,7 +20,6 @@ type Snapshot struct {
 	DisableMemory              bool
 	DisableAutoMemory          bool
 	DisableMemoryExtract       bool
-	DisableTurnLog             bool
 	DisableTranscript          bool
 	DisableAutoMaintenance     bool
 	DisableScheduledMaintenance bool
@@ -47,8 +46,6 @@ type Snapshot struct {
 	SkillsRecent  string
 
 	DisableTasks bool
-
-	TurnLogPath string
 
 	// Scheduled / post-turn maintenance tuning (defaults in DefaultSnapshot; YAML via PushRuntime).
 	MaintenanceLogDays              int

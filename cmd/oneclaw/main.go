@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"sync"
 	"syscall"
 	"time"
 
@@ -20,6 +21,7 @@ import (
 	"github.com/lengzhao/oneclaw/mcpclient"
 	"github.com/lengzhao/oneclaw/memory"
 	"github.com/lengzhao/oneclaw/schedule"
+	"github.com/lengzhao/oneclaw/sessdb"
 	"github.com/lengzhao/oneclaw/session"
 	"github.com/lengzhao/oneclaw/tools/builtin"
 	"github.com/openai/openai-go"
@@ -88,41 +90,25 @@ func main() {
 		return
 	}
 
-	eng := session.NewEngine(absCwd, builtin.DefaultRegistry())
-	eng.Client = openai.NewClient(cfg.OpenAIOptions()...)
+	sharedReg := builtin.DefaultRegistry()
+	sharedClient := openai.NewClient(cfg.OpenAIOptions()...)
+	mainModel := string(openai.ChatModelGPT4o)
 	if m := cfg.ChatModel(); m != "" {
-		eng.Model = m
-	}
-	eng.ChatTransport = cfg.ChatTransport()
-
-	eng.TranscriptPath = cfg.TranscriptPath()
-	eng.WorkingTranscriptPath = cfg.WorkingTranscriptPath()
-	eng.WorkingTranscriptMaxMessages = cfg.WorkingTranscriptMaxMessages()
-	if eng.TranscriptPath != "" {
-		if b, err := os.ReadFile(eng.TranscriptPath); err == nil {
-			if err := eng.LoadTranscript(b); err != nil {
-				slog.Error("load transcript", "err", err)
-				os.Exit(1)
-			}
-		} else if !os.IsNotExist(err) {
-			slog.Error("read transcript", "path", eng.TranscriptPath, "err", err)
-			os.Exit(1)
-		}
-	}
-	if eng.WorkingTranscriptPath != "" {
-		if b, err := os.ReadFile(eng.WorkingTranscriptPath); err == nil {
-			if err := eng.LoadWorkingTranscript(b); err != nil {
-				slog.Error("load working transcript", "err", err)
-				os.Exit(1)
-			}
-		} else if !os.IsNotExist(err) {
-			slog.Error("read working transcript", "path", eng.WorkingTranscriptPath, "err", err)
-			os.Exit(1)
-		}
+		mainModel = m
 	}
 
 	llmAudit, orchAudit, visAudit := cfg.NotifyAuditSinkPaths()
-	eng.RegisterAuditSinks(llmAudit, orchAudit, visAudit)
+
+	var sessStore *sessdb.Store
+	if p := cfg.SessionsSQLitePath(); p != "" {
+		st, err := sessdb.Open(p)
+		if err != nil {
+			slog.Warn("sessdb.open", "path", p, "err", err)
+		} else {
+			sessStore = st
+			defer func() { _ = sessStore.Close() }()
+		}
+	}
 
 	if !cfg.HasAPIKey() {
 		slog.Error("missing API key: set openai.api_key in config",
@@ -135,7 +121,7 @@ func main() {
 	rootCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	mcpMgr, mcpNote, err := mcpclient.RegisterIfEnabled(rootCtx, cfg, eng.Registry, absCwd)
+	mcpMgr, mcpNote, err := mcpclient.RegisterIfEnabled(rootCtx, cfg, sharedReg, absCwd)
 	if err != nil {
 		slog.Error("mcp.register", "err", err)
 		os.Exit(1)
@@ -143,16 +129,44 @@ func main() {
 	if mcpMgr != nil {
 		defer func() { _ = mcpMgr.Close() }()
 	}
-	if mcpNote != "" {
-		eng.MCPSystemNote = mcpNote
+
+	var publishOutbound func(context.Context, *bus.OutboundMessage) error
+
+	deps := session.MainEngineFactoryDeps{
+		CWD:           absCwd,
+		Resolved:      cfg,
+		Registry:      sharedReg,
+		Client:        sharedClient,
+		Model:         mainModel,
+		MCPSystemNote: mcpNote,
+		LLMAudit:      llmAudit,
+		OrchAudit:     orchAudit,
+		VisAudit:      visAudit,
+		OutboundPublisher: func() func(context.Context, *bus.OutboundMessage) error {
+			return publishOutbound
+		},
 	}
+	if sessStore != nil {
+		deps.NewRecallPersister = func(h session.SessionHandle) session.RecallPersister {
+			return sessdb.NewRecallBridge(sessStore, h)
+		}
+	}
+	engineFactory := session.MainEngineFactory(deps)
+
+	workers := cfg.SessionWorkerCount()
+	workerPool, err := session.NewWorkerPool(workers, engineFactory)
+	if err != nil {
+		slog.Error("session.worker_pool", "err", err)
+		os.Exit(1)
+	}
+	defer workerPool.Close()
 
 	maintainloop.Start(rootCtx, maintainloop.Params{
 		Interval:          cfg.EmbeddedScheduledMaintainInterval(),
 		Layout:            memory.DefaultLayout(absCwd, home),
-		Client:            &eng.Client,
-		MainModel:         eng.Model,
-		MaxMaintainTokens: eng.MaxTokens,
+		Client:            &sharedClient,
+		MainModel:         mainModel,
+		MaxMaintainTokens: 8192,
 	})
 
 	cbCfg, err := cfg.ClawbridgeConfigForRun()
@@ -173,7 +187,7 @@ func main() {
 		slog.Error("clawbridge.new", "err", err)
 		os.Exit(1)
 	}
-	eng.PublishOutbound = func(ctx context.Context, msg *bus.OutboundMessage) error {
+	publishOutbound = func(ctx context.Context, msg *bus.OutboundMessage) error {
 		return bridge.Bus().PublishOutbound(ctx, msg)
 	}
 
@@ -193,12 +207,13 @@ func main() {
 		if !c.Enabled {
 			continue
 		}
-		if err := schedule.StartHostPollerIfEnabled(rootCtx, absCwd, c.ID, eng.SubmitUser); err != nil {
+		if err := schedule.StartHostPollerIfEnabled(rootCtx, absCwd, c.ID, workerPool.SubmitUser); err != nil {
 			slog.Error("schedule.poller", "client_id", c.ID, "err", err)
 			os.Exit(1)
 		}
 	}
 
+	var inboundInflight sync.WaitGroup
 	go func() {
 		for {
 			msg, err := bridge.Bus().ConsumeInbound(rootCtx)
@@ -210,9 +225,11 @@ func main() {
 				return
 			}
 			m := msg
+			inboundInflight.Add(1)
 			go func() {
+				defer inboundInflight.Done()
 				submitCtx := context.Background()
-				if err := eng.SubmitUser(submitCtx, m); err != nil {
+				if err := workerPool.SubmitUser(submitCtx, m); err != nil {
 					slog.Warn("session.submit_user", "err", err)
 				}
 			}()
@@ -220,6 +237,7 @@ func main() {
 	}()
 
 	<-rootCtx.Done()
+	inboundInflight.Wait()
 }
 
 func resolveCwd(flagCwd string) (string, error) {

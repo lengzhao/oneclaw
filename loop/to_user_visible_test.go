@@ -88,3 +88,17 @@ func TestToUserVisibleMessages_keepsNormalUserWithAgentMdMention(t *testing.T) {
 		t.Fatalf("len=%d want 1", len(out))
 	}
 }
+
+func TestToUserVisibleMessages_keepsMultimodalUserWithoutText(t *testing.T) {
+	t.Parallel()
+	mm := openai.UserMessage([]openai.ChatCompletionContentPartUnionParam{
+		openai.ImageContentPart(openai.ChatCompletionContentPartImageImageURLParam{URL: "data:image/png;base64,xxx"}),
+	})
+	out := loop.ToUserVisibleMessages([]openai.ChatCompletionMessageParamUnion{mm})
+	if len(out) != 1 {
+		t.Fatalf("len=%d want 1", len(out))
+	}
+	if !loop.UserMessageHasNonTextMedia(out[0]) {
+		t.Fatal("expected multimodal user retained")
+	}
+}

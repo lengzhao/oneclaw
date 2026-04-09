@@ -26,6 +26,12 @@ const DefaultRootAgentID = "AGENT"
 // DefaultMainAgentID is an alias of DefaultRootAgentID for older call sites.
 const DefaultMainAgentID = DefaultRootAgentID
 
+// RecallPersister persists memory recall dedupe state per session (optional; e.g. SQLite).
+type RecallPersister interface {
+	LoadRecall(sessionID string) (memory.RecallState, error)
+	SaveRecall(sessionID string, state memory.RecallState) error
+}
+
 // Engine holds conversation state and configuration for one chat session.
 type Engine struct {
 	Client openai.Client
@@ -61,10 +67,16 @@ type Engine struct {
 	WorkingTranscriptMaxMessages int
 	// RecallState tracks memory recall surfacing across turns (phase B).
 	RecallState memory.RecallState
+	// RecallPersister loads/saves RecallState across restarts when set (e.g. sessdb).
+	RecallPersister RecallPersister
 	// ChatTransport overrides default transport when non-empty (from unified config).
 	ChatTransport string
 	// MCPSystemNote is optional; non-empty injects the MCP section in the main-thread system prompt.
 	MCPSystemNote string
+	// DisableMultimodalImage when true, image attachments use read_file hints only (no image_url API parts).
+	DisableMultimodalImage bool
+	// DisableMultimodalAudio when true, wav/mp3 attachments use read_file hints only (no input_audio parts).
+	DisableMultimodalAudio bool
 }
 
 // NewEngine builds an engine with sensible defaults.
@@ -137,28 +149,8 @@ func (e *Engine) SubmitUser(ctx context.Context, in bus.InboundMessage) error {
 	if needToolTrace {
 		traceSink = &loop.ToolTraceSink{}
 	}
-	uv := memory.UserTurnPreview(preview)
-	var memOnTool func(loop.ToolTraceEntry)
-	if memOK && memory.MemoryExtractEnabled() {
-		sid, cid := e.SessionID, corrID
-		lay := layout
-		memOnTool = func(ent loop.ToolTraceEntry) {
-			memory.AppendTurnToolLogJSONL(lay, sid, cid, uv, ent)
-		}
-	}
 	var onToolLogged func(loop.ToolTraceEntry)
-	switch {
-	case memOnTool != nil && e.hasNotify():
-		onToolLogged = func(ent loop.ToolTraceEntry) {
-			memOnTool(ent)
-			ev := notify.NewEvent(notify.EventToolCallEnd, "")
-			e.applyNotifyCorrelation(&ev, turnID, corrID)
-			ev.Data = notify.ToolCallEndData(ent)
-			notify.EmitSafe(e.Notify, ctx, ev)
-		}
-	case memOnTool != nil:
-		onToolLogged = memOnTool
-	case e.hasNotify():
+	if e.hasNotify() {
 		onToolLogged = func(ent loop.ToolTraceEntry) {
 			ev := notify.NewEvent(notify.EventToolCallEnd, "")
 			e.applyNotifyCorrelation(&ev, turnID, corrID)
@@ -168,23 +160,24 @@ func (e *Engine) SubmitUser(ctx context.Context, in bus.InboundMessage) error {
 	}
 
 	userLine := ModelUserLine(text, len(atts) > 0)
+	attChunks := InboundUserChunksForAttachments(e.CWD, atts, !e.DisableMultimodalImage, !e.DisableMultimodalAudio)
 	cfg := loop.Config{
-		Client:                &e.Client,
-		Model:                 e.Model,
-		System:                system,
-		MaxTokens:             e.MaxTokens,
-		MaxSteps:              e.MaxSteps,
-		Messages:              &e.Messages,
-		Registry:              e.Registry,
-		ToolContext:           prep.tctx,
-		SessionID:             e.SessionID,
-		CanUseTool:            e.CanUseTool,
-		OutboundText:          prep.outboundText,
-		MemoryAgentMd:         bundle.AgentMdBlock,
-		MemoryRecall:          bundle.RecallBlock,
-		InboundMeta:           InboundMetaForModel(in),
-		InboundAttachmentMsgs: FormatInboundAttachmentMessages(atts),
-		UserLine:              userLine,
+		Client:                  &e.Client,
+		Model:                   e.Model,
+		System:                  system,
+		MaxTokens:               e.MaxTokens,
+		MaxSteps:                e.MaxSteps,
+		Messages:                &e.Messages,
+		Registry:                e.Registry,
+		ToolContext:             prep.tctx,
+		SessionID:               e.SessionID,
+		CanUseTool:              e.CanUseTool,
+		OutboundText:            prep.outboundText,
+		MemoryAgentMd:           bundle.AgentMdBlock,
+		MemoryRecall:            bundle.RecallBlock,
+		InboundMeta:             InboundMetaForModel(in),
+		InboundAttachmentChunks: attChunks,
+		UserLine:                userLine,
 		Budget:                bg,
 		ChatTransport:         e.ChatTransport,
 		ToolTrace:             traceSink,
@@ -226,7 +219,7 @@ func (e *Engine) SubmitUser(ctx context.Context, in bus.InboundMessage) error {
 			ev.Data = map[string]any{
 				"code":                   notify.TurnErrorCode(err),
 				"message":                err.Error(),
-				"truncated_by_max_steps": strings.Contains(err.Error(), "max model steps"),
+				"truncated_by_max_steps": notify.TurnErrorCode(err) == "max_steps",
 			}
 			notify.EmitSafe(e.Notify, ctx, ev)
 		}
@@ -241,9 +234,9 @@ func (e *Engine) SubmitUser(ctx context.Context, in bus.InboundMessage) error {
 		ev := notify.NewEvent(notify.EventTurnComplete, "")
 		e.applyNotifyCorrelation(&ev, turnID, corrID)
 		ev.Data = map[string]any{
-			"tool_count":               toolCount,
-			"final_assistant_preview":  notify.Preview(loop.LastAssistantDisplay(e.Messages), notify.DefaultPreviewRunes),
-			"truncated_by_max_steps":   false,
+			"tool_count":              toolCount,
+			"final_assistant_preview": notify.Preview(loop.LastAssistantDisplay(e.Messages), notify.DefaultPreviewRunes),
+			"truncated_by_max_steps": false,
 		}
 		notify.EmitSafe(e.Notify, ctx, ev)
 	}
@@ -254,9 +247,6 @@ func (e *Engine) SubmitUser(ctx context.Context, in bus.InboundMessage) error {
 		slog.Error("session.working_transcript_save", "err", err)
 	}
 	e.appendDialogHistoryIfComplete()
-	if memOK && memory.MemoryExtractEnabled() {
-		memory.AppendTurnAssistantFinalJSONL(layout, e.SessionID, strings.TrimSpace(in.MessageID), uv, loop.LastAssistantDisplay(e.Messages))
-	}
 	if memOK {
 		var tools []loop.ToolTraceEntry
 		if traceSink != nil {
@@ -275,6 +265,7 @@ func (e *Engine) SubmitUser(ctx context.Context, in bus.InboundMessage) error {
 			memory.MaybePostTurnMaintain(context.Background(), layout, &e.Client, e.Model, e.MaxTokens, &in)
 		}(pti)
 	}
+	e.persistRecall()
 	return nil
 }
 
@@ -340,9 +331,9 @@ func (e *Engine) submitLocalSlashTurn(ctx context.Context, in bus.InboundMessage
 	}
 
 	meta := InboundMetaForModel(in)
-	attMsgs := FormatInboundAttachmentMessages(atts)
+	attChunks := InboundUserChunksForAttachments(e.CWD, atts, !e.DisableMultimodalImage, !e.DisableMultimodalAudio)
 	userLine := ModelUserLine(text, len(atts) > 0)
-	loop.AppendTurnUserMessages(&e.Messages, bundle.AgentMdBlock, bundle.RecallBlock, meta, attMsgs, userLine)
+	loop.AppendTurnUserMessages(&e.Messages, bundle.AgentMdBlock, bundle.RecallBlock, meta, attChunks, userLine)
 	e.Messages = append(e.Messages, openai.AssistantMessage(reply))
 	e.Messages = loop.ToUserVisibleMessages(e.Messages)
 
@@ -372,7 +363,17 @@ func (e *Engine) submitLocalSlashTurn(ctx context.Context, in bus.InboundMessage
 		notify.EmitSafe(e.Notify, ctx, ev)
 	}
 	// No memory.PostTurn / MaybePostTurnMaintain: local slash is an intentional bypass (see docs/memory-maintain-dual-entry-design.md §2.4).
+	e.persistRecall()
 	return nil
+}
+
+func (e *Engine) persistRecall() {
+	if e.RecallPersister == nil {
+		return
+	}
+	if err := e.RecallPersister.SaveRecall(e.SessionID, e.RecallState); err != nil {
+		slog.Warn("session.recall_persist", "session_id", e.SessionID, "err", err)
+	}
 }
 
 func (e *Engine) prepareInboundFromBus(in *bus.InboundMessage) ([]Attachment, error) {
@@ -467,7 +468,7 @@ func (e *Engine) appendDialogHistoryIfComplete() {
 	}
 	layout := memory.DefaultLayout(e.CWD, home)
 	date := time.Now().Format("2006-01-02")
-	if err := memory.AppendDialogHistoryPair(layout, date, u, a); err != nil {
+	if err := memory.AppendDialogHistoryPair(layout, date, e.SessionID, u, a); err != nil {
 		slog.Warn("session.dialog_history.append", "err", err)
 	}
 }

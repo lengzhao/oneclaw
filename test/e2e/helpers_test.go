@@ -3,6 +3,7 @@
 package e2e_test
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -127,6 +128,24 @@ func e2eWaitMinChatRequests(t *testing.T, stub *openaistub.Server, want int, dea
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
+}
+
+// e2eWaitForFile polls until path exists and is readable (post-turn maintain runs in a goroutine after the last stub chat body is recorded).
+func e2eWaitForFile(t *testing.T, path string, deadline time.Duration) []byte {
+	t.Helper()
+	deadlineAt := time.Now().Add(deadline)
+	for time.Now().Before(deadlineAt) {
+		raw, err := os.ReadFile(path)
+		if err == nil {
+			return raw
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("timed out after %v waiting for %s: %v", deadline, path, err)
+	}
+	return raw
 }
 
 // e2eEnvWithMemory keeps stub transport defaults and does not disable memory.

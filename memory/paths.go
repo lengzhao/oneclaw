@@ -143,12 +143,27 @@ func DailyLogPath(autoMemoryDir, date string) string {
 }
 
 // DialogHistoryPath returns <cwd>/.oneclaw/memory/YYYY-MM-DD/dialog_history.json (calendar date, local).
+// Prefer DialogHistoryPathForSession when a stable session id is available so concurrent chats do not share one file.
 func (l Layout) DialogHistoryPath(date string) string {
 	date = strings.TrimSpace(date)
 	if len(date) >= 10 {
 		date = date[:10]
 	}
 	return filepath.Join(l.Project, date, "dialog_history.json")
+}
+
+// DialogHistoryPathForSession returns per-session dialog history under the day's directory.
+// sessionID should be a stable filesystem-safe segment (e.g. StableSessionID from session package).
+func (l Layout) DialogHistoryPathForSession(date, sessionID string) string {
+	date = strings.TrimSpace(date)
+	if len(date) >= 10 {
+		date = date[:10]
+	}
+	seg := sanitizeDirName(strings.TrimSpace(sessionID))
+	if seg == "" {
+		return l.DialogHistoryPath(date)
+	}
+	return filepath.Join(l.Project, date, seg, "dialog_history.json")
 }
 
 type AgentScope int

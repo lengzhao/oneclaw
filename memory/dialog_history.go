@@ -6,17 +6,24 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/lengzhao/oneclaw/loop"
 	"github.com/openai/openai-go"
 )
 
 // AppendDialogHistoryPair appends one slim user message and one assistant message to the day's dialog_history.json.
-func AppendDialogHistoryPair(layout Layout, date string, user, assistant openai.ChatCompletionMessageParamUnion) error {
+// sessionID selects a per-session file under the date directory when non-empty; otherwise the legacy single file path is used.
+func AppendDialogHistoryPair(layout Layout, date, sessionID string, user, assistant openai.ChatCompletionMessageParamUnion) error {
 	if layout.CWD == "" {
 		return fmt.Errorf("memory: empty layout cwd")
 	}
-	path := layout.DialogHistoryPath(date)
+	var path string
+	if strings.TrimSpace(sessionID) != "" {
+		path = layout.DialogHistoryPathForSession(date, sessionID)
+	} else {
+		path = layout.DialogHistoryPath(date)
+	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return fmt.Errorf("mkdir dialog history: %w", err)
 	}

@@ -148,7 +148,7 @@
 - [x] **B3** 发现层：自 cwd 向上查找 `AGENT.md`、`.oneclaw/rules/*.md`、memory 根
 - [x] **B5** 注入与 recall：system 前缀拼装；recall → attachment；surfaced 字节上限、路径去重
 - [x] **B6** 在线更新：工具可写 topic、`MEMORY.md`、daily log
-- [x] **B7** extract / dream：**主干已接** — daily log + 回合后 **`MaybePostTurnMaintain`** / **`RunPostTurnMaintain`** 与定时 **`RunScheduledMaintain`**（**`oneclaw -maintain-once`** / `cmd/maintain` 与 **`maintainloop`**）；双入口与 `maintain.post_turn.*` / `rtopts` 见 [`memory-maintain-dual-entry-design.md`](memory-maintain-dual-entry-design.md)、[`embedded-maintain-scheduler-design.md`](embedded-maintain-scheduler-design.md)。`MaybeMaintain` 为弃用别名。默认 interval 1h；`-once` 或 `0` 单次。模型：YAML `maintain.model` / `maintain.scheduled_model`。写 **project `MEMORY.md`** `## Auto-maintained (日期)`；D2 审计为 `.oneclaw/audit/memory-write.jsonl`（可按需扩展字段/查询面，非阻塞项）
+- [x] **B7** extract / dream：**主干已接** — daily log + 回合后 **`MaybePostTurnMaintain`** / **`RunPostTurnMaintain`** 与定时 **`RunScheduledMaintain`**（**`oneclaw -maintain-once`** / `cmd/maintain` 与 **`maintainloop`**）；双入口与 `maintain.post_turn.*` / `rtopts` 见 [`memory-maintain-dual-entry-design.md`](memory-maintain-dual-entry-design.md)、[`embedded-maintain-scheduler-design.md`](embedded-maintain-scheduler-design.md)。`MaybeMaintain` 为弃用别名。默认 interval 1h；`-once` 或 `0` 单次。模型：YAML `maintain.model` / `maintain.scheduled_model`。写 **project `MEMORY.md`** `## Auto-maintained (日期)`；D2 审计为 `.oneclaw/audit/memory-write.jsonl`（不含 `<memory_base>/projects/` 下自动记忆与 daily log；可按需扩展字段/查询面，非阻塞项）
 
 ---
 

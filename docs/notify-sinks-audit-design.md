@@ -72,13 +72,18 @@ flowchart TB
 
 ## 3. 建议落盘布局（相对 `cwd`）
 
-**必须**在 `.oneclaw/audit/` 下增加 **一层 Agent 分区**，避免多 Agent 共用同一 `cwd` 时审计数据混写。该层目录名称为 **`agent_segment`**（由业务 Agent 标识派生，见下）。
+**必须**在审计根下增加 **一层 Agent 分区**（`agent_segment`），避免多 Agent 共用同一 `cwd` 时审计数据混写。主路径仍为 `.oneclaw/audit/`；当 `Engine.SessionID` 非空（多 IM 会话 / `WorkerPool` 等）时，notify 三路审计改写在 **`.oneclaw/sessions/<session_id>/audit/`** 下，与 `transcript.json` 同会话目录并列，避免多 thread 混写同一 JSONL。
 
 ```text
-.oneclaw/audit/<agent_segment>/
-  llm/YYYY/MM/YYYY-MM-DD.jsonl              # Sink 1：每 model_step 一行（详细）
-  orchestration/YYYY/MM/YYYY-MM-DD.jsonl    # Sink 2：入站/tool/subagent/recall/budget/turn 结束
-  visible/YYYY/MM/YYYY-MM-DD.jsonl          # Sink 3：用户可见全量
+.oneclaw/audit/<agent_segment>/                          # SessionID 为空时（单 Engine / 测试等）
+  llm/YYYY/MM/YYYY-MM-DD.jsonl
+  orchestration/YYYY/MM/YYYY-MM-DD.jsonl
+  visible/YYYY/MM/YYYY-MM-DD.jsonl
+
+.oneclaw/sessions/<session_id>/audit/<agent_segment>/     # SessionID 非空时
+  llm/...
+  orchestration/...
+  visible/...
 ```
 
 ### 3.1 `agent_segment` 命名规则
@@ -90,7 +95,7 @@ flowchart TB
 | **文件系统安全** | 对 segment 做净化：仅保留 `[a-zA-Z0-9._-]`，其余替换为 `_`，长度上限（如 64），避免路径穿越。 |
 | **子 Agent** | **目录层仍用主会话 Engine 的 `agent_segment`**，子 Agent 身份用 **JSON 行内** `agent_id` / `run_id` / `parent_*` 区分；若未来要强隔离子 Agent 文件，可在 v2 增加可选二级目录 `.../sub/<sub_agent_id>/`（非默认）。 |
 
-实现侧：`path.Join(cwd, ".oneclaw", "audit", agentSegment, "llm", y, m, date+".jsonl")` 等；**每个 `(agent_segment, 相对文件路径)` 一把写锁**，不同 Agent 互不阻塞。
+实现侧：`notify/sinks` 在 `Options.AuditSessionID` 非空时使用 `sessions/<id>/audit/<agentSegment>/...`，否则 `audit/<agentSegment>/...`；**每个最终 JSONL 绝对路径一把写锁**，不同文件互不阻塞。
 
 ---
 

@@ -39,9 +39,12 @@ type Options struct {
 	AgentID string
 	// AgentSegment, if non-empty after trim, is sanitized and overrides AgentID for the path.
 	AgentSegment string
+	// AuditSessionID when non-empty: JSONL under <cwd>/.oneclaw/sessions/<id>/audit/<agent_segment>/...
+	// instead of <cwd>/.oneclaw/audit/<agent_segment>/... (IM / multi-session hosts).
+	AuditSessionID string
 }
 
-// Segment returns the filesystem directory name under .oneclaw/audit/.
+// Segment returns the agent subdirectory name (under global audit or under sessions/<id>/audit).
 func (o Options) Segment() string {
 	if strings.TrimSpace(o.AgentSegment) != "" {
 		return SanitizeAgentSegment(o.AgentSegment)

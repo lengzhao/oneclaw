@@ -24,7 +24,9 @@ type Config struct {
 	Model       string
 	System      string
 	MaxTokens   int64
-	MaxSteps    int // model calls per SubmitUser turn
+	// MaxSteps is the number of model calls per user turn. The last call is made without tools
+	// so the model can only answer in text; earlier calls include tools when MaxSteps > 1.
+	MaxSteps int
 	Messages    *[]openai.ChatCompletionMessageParamUnion
 	Registry    *tools.Registry
 	ToolContext *toolctx.Context
@@ -36,8 +38,8 @@ type Config struct {
 	MemoryRecall  string
 	// InboundMeta is optional channel routing context as a user-shaped block (see session orchestration).
 	InboundMeta string
-	// InboundAttachmentMsgs are formatted attachment bodies, each as its own user message.
-	InboundAttachmentMsgs []string
+	// InboundAttachmentChunks are attachment-derived user messages (read_file hints and/or multimodal parts).
+	InboundAttachmentChunks []InboundUserChunk
 	// UserLine is the primary user message after orchestration (e.g. attachment-only placeholder). If empty, TrimSpace(in.Content) is used.
 	UserLine string
 	// Budget trims transcript before each model call when Enabled (from rtopts / config).
@@ -84,18 +86,28 @@ func RunTurn(ctx context.Context, cfg Config, in bus.InboundMessage) (err error)
 	if userLine == "" {
 		userLine = strings.TrimSpace(in.Content)
 	}
-	AppendTurnUserMessages(msgs, cfg.MemoryAgentMd, cfg.MemoryRecall, cfg.InboundMeta, cfg.InboundAttachmentMsgs, userLine)
+	AppendTurnUserMessages(msgs, cfg.MemoryAgentMd, cfg.MemoryRecall, cfg.InboundMeta, cfg.InboundAttachmentChunks, userLine)
 
-	for step := 0; step < cfg.MaxSteps; step++ {
+	maxSteps := cfg.MaxSteps
+	if maxSteps < 1 {
+		maxSteps = 32
+	}
+
+	for step := 0; step < maxSteps; step++ {
+		offerTools := maxSteps > 1 && step < maxSteps-1
+
 		ApplyHistoryBudget(cfg.Budget, cfg.System, msgs)
 		select {
 		case <-ctx.Done():
 			if cfg.Lifecycle != nil && (cfg.Lifecycle.OnModelStepStart != nil || cfg.Lifecycle.OnModelStepEnd != nil) {
 				reqMsgs := buildRequestMessages(cfg.System, *msgs)
-				toolParams := cfg.Registry.OpenAITools()
+				toolN := 0
+				if offerTools {
+					toolN = len(cfg.Registry.OpenAITools())
+				}
 				stepMark := time.Now()
 				if cfg.Lifecycle.OnModelStepStart != nil {
-					cfg.Lifecycle.OnModelStepStart(ctx, step, len(toolParams), reqMsgs)
+					cfg.Lifecycle.OnModelStepStart(ctx, step, toolN, reqMsgs)
 				}
 				if cfg.Lifecycle.OnModelStepEnd != nil {
 					cfg.Lifecycle.OnModelStepEnd(ctx, step, ModelStepEndInfo{
@@ -112,15 +124,16 @@ func RunTurn(ctx context.Context, cfg Config, in bus.InboundMessage) (err error)
 		}
 
 		reqMsgs := buildRequestMessages(cfg.System, *msgs)
-		toolParams := cfg.Registry.OpenAITools()
 		params := openai.ChatCompletionNewParams{
 			Model:               cfg.Model,
 			Messages:            reqMsgs,
-			Tools:               toolParams,
 			MaxCompletionTokens: openai.Int(cfg.MaxTokens),
+			StreamOptions:       openai.ChatCompletionStreamOptionsParam{IncludeUsage: openai.Bool(true)},
+		}
+		if offerTools {
+			params.Tools = cfg.Registry.OpenAITools()
 			// Let the model batch tool calls; executor partitions by Registry.ConcurrencySafe (read parallel, write serial).
-			ParallelToolCalls: openai.Bool(true),
-			StreamOptions:     openai.ChatCompletionStreamOptionsParam{IncludeUsage: openai.Bool(true)},
+			params.ParallelToolCalls = openai.Bool(true)
 		}
 
 		slog.Info("loop.model.request",
@@ -128,6 +141,7 @@ func RunTurn(ctx context.Context, cfg Config, in bus.InboundMessage) (err error)
 			"model", cfg.Model,
 			"history_messages", len(reqMsgs),
 			"tools", len(params.Tools),
+			"tools_offered", offerTools,
 			"max_completion_tokens", cfg.MaxTokens,
 		)
 		if cfg.Lifecycle != nil && cfg.Lifecycle.OnModelStepStart != nil {
@@ -222,6 +236,10 @@ func RunTurn(ctx context.Context, cfg Config, in bus.InboundMessage) (err error)
 			recordSlimTranscript()
 			return nil
 		}
+		if !offerTools {
+			return fmt.Errorf("model step %d: tool_calls but tools were not offered (max_steps=%d)", step, maxSteps)
+		}
+
 		slog.Info("loop.tools.batch", "step", step, "n", len(calls), "names", toolCallNames(calls))
 
 		toolMsgs, err := executeToolBatches(ctx, calls, cfg, step)
@@ -238,7 +256,7 @@ func RunTurn(ctx context.Context, cfg Config, in bus.InboundMessage) (err error)
 		}
 	}
 
-	return fmt.Errorf("max model steps (%d) exceeded", cfg.MaxSteps)
+	return fmt.Errorf("loop: internal: model loop fell through (max_steps=%d)", maxSteps)
 }
 
 func buildRequestMessages(system string, history []openai.ChatCompletionMessageParamUnion) []openai.ChatCompletionMessageParamUnion {

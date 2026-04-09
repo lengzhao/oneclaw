@@ -19,6 +19,10 @@ openai:
 # -----------------------------------------------------------------------------
 model: gpt-4o
 
+# 主会话每回合模型调用次数（默认 32，范围 1–256）。最后一次请求不传 tools，此前各次可正常工具调用。
+# agent:
+#   max_steps: 32
+
 chat:
   # auto：流式失败则回退非流式；仅支持非流式的网关请用 non_stream
   transport: auto
@@ -42,8 +46,19 @@ paths:
   working_transcript: ""
   # 写入 working_transcript 时最多保留的尾部消息条数；0=默认 30；负数=不限制
   working_transcript_max_messages: 0
-  # 留空：按日分文件写入 traces；以 .jsonl 结尾为单文件
-  turn_log_path: ""
+
+# -----------------------------------------------------------------------------
+# 多会话（IM 线程隔离）；主进程 cmd/oneclaw 使用 SessionResolver：每个 channel + session_key 独立 Engine。
+# 转写文件：<cwd>/.oneclaw/sessions/<stable_id>/transcript.json 与 working_transcript.json（与下方 paths.transcript  YAML 无关）。
+# SQLite：会话元数据 + memory recall 去重状态；文件型 MEMORY.md / 审计 jsonl 等仍按原路径。
+# -----------------------------------------------------------------------------
+sessions:
+  # true：不打开 SQLite，仅文件（测试或极简环境）
+  disable_sqlite: false
+  # 留空：默认 <cwd>/.oneclaw/sessions.sqlite；可填绝对路径或相对 -cwd 的路径
+  sqlite_path: ""
+  # cmd/oneclaw 固定 worker 数（按 session 哈希分片）；0 或未设置则运行时默认 8；不会随会话数无限增加 goroutine
+  worker_count: 0
 
 # -----------------------------------------------------------------------------
 # IM 总线（github.com/lengzhao/clawbridge）；形状与 clawbridge config.Config 一致，见该仓库 config.example.yaml。
@@ -123,16 +138,19 @@ features:
   disable_memory: false
   disable_auto_memory: false
   disable_memory_extract: false
-  disable_turn_log: false
   disable_transcript: false
   disable_auto_maintenance: false
   disable_memory_audit: false
   disable_context_budget: false
-  # 通知审计 JSONL（.oneclaw/audit/<agent>/llm|orchestration|visible/）；省略或 false 为开启
+  # 通知审计 JSONL：无 SessionID 时 .oneclaw/audit/<agent>/...；有 SessionID 时 .oneclaw/sessions/<id>/audit/<agent>/...
   disable_audit_sinks: false
   disable_audit_llm: false
   disable_audit_orchestration: false
   disable_audit_visible: false
+  # true：入站图片不注入 Chat Completions 的 image_url（仅 read_file 路径提示）
+  disable_multimodal_image: false
+  # true：入站 wav/mp3 不注入 input_audio（仅 read_file 路径提示）
+  disable_multimodal_audio: false
 
 # -----------------------------------------------------------------------------
 # 自动维护（将 daily log 蒸馏进 MEMORY.md）

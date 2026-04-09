@@ -104,7 +104,6 @@ func (r *Resolved) PushRuntime() {
 	s.DisableMemory = featTrue(f.Features.DisableMemory)
 	s.DisableAutoMemory = featTrue(f.Features.DisableAutoMemory)
 	s.DisableMemoryExtract = featTrue(f.Features.DisableMemoryExtract)
-	s.DisableTurnLog = featTrue(f.Features.DisableTurnLog)
 	s.DisableTranscript = featTrue(f.Features.DisableTranscript)
 	s.DisableAutoMaintenance = featTrue(f.Features.DisableAutoMaintenance)
 	s.DisableScheduledMaintenance = featTrue(f.Features.DisableScheduledMaintenance)
@@ -132,7 +131,6 @@ func (r *Resolved) PushRuntime() {
 		s.CompactSummaryMaxBytes = f.SemanticCompact.SummaryMaxBytes
 	}
 	s.SkillsRecent = strings.TrimSpace(f.Skills.RecentPath)
-	s.TurnLogPath = strings.TrimSpace(f.Paths.TurnLogPath)
 
 	m := f.Maintain
 	pt := m.PostTurn

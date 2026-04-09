@@ -64,6 +64,17 @@ func (h *Host) maxStepsForDef(def Definition) int {
 	return h.MaxSteps
 }
 
+// effectiveModel returns def.Model when set, otherwise the host default.
+func effectiveModel(h *Host, def Definition) string {
+	if m := strings.TrimSpace(def.Model); m != "" {
+		return m
+	}
+	if h == nil {
+		return ""
+	}
+	return h.Model
+}
+
 func validateNestedHost(h *Host) error {
 	if h == nil || h.Client == nil || h.Registry == nil {
 		return fmt.Errorf("subagent: incomplete host")
@@ -150,7 +161,7 @@ func RunAgent(ctx context.Context, h *Host, parent *toolctx.Context, agentType, 
 	sys := buildSubagentSystem(h.CWD, def.SystemPrompt)
 	cfg := loop.Config{
 		Client:        h.Client,
-		Model:         h.Model,
+		Model:         effectiveModel(h, def),
 		System:        sys,
 		MaxTokens:     h.MaxTokens,
 		MaxSteps:      h.maxStepsForDef(def),

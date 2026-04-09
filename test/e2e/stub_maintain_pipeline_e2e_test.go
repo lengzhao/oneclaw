@@ -96,10 +96,7 @@ func TestE2E_101_PostTurnMaintainPromptSessionOnly(t *testing.T) {
 	}
 
 	epPath := memory.ProjectEpisodeDailyPath(cwd, date)
-	raw, err := os.ReadFile(epPath)
-	if err != nil {
-		t.Fatalf("read episodic digest: %v", err)
-	}
+	raw := e2eWaitForFile(t, epPath, 3*time.Second)
 	if !strings.Contains(string(raw), "E2E101_NEW_FACT") {
 		t.Fatalf("expected new fact in daily digest:\n%s", string(raw))
 	}

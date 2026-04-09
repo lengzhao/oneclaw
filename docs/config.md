@@ -42,10 +42,12 @@
 | 模型 | `model` | 默认聊天模型；空则代码内默认 |
 | 传输 | `chat.transport` | `auto`（先流式、失败再非流式）、`non_stream`、`stream`；兼容网关仅支持非流式时建议 `non_stream` |
 | OpenAI 兼容 | `openai.api_key`、`openai.base_url`、`openai.org_id`、`openai.project_id` | `base_url` 需含 `/v1/` 后缀（若网关要求） |
-| 路径 | `paths.memory_base`、`paths.transcript`、`paths.working_transcript`、`paths.working_transcript_max_messages`、`paths.turn_log_path` | 相对路径相对 `-cwd`；主线程在每轮成功 `RunTurn` 后把 **内存 `Messages`** 折叠为**用户可见**（去掉 agentMd / 路由 / recall / compact 注入与 tool 轮次等，与 Claude Code 发请求前的 compact/collapse 同类取舍）；`working_transcript` 与内存同形；`working_transcript_max_messages` 截尾部可见条数，`0` 默认 **30**，负数不限制 |
+| 路径 | `paths.memory_base`、`paths.transcript`、`paths.working_transcript`、`paths.working_transcript_max_messages` | 相对路径相对 `-cwd`；**`cmd/oneclaw` 多会话模式**下，每逻辑会话的转写落盘见下节「会话」，**不再**使用此处全局 `transcript` / `working_transcript` 路径；`working_transcript_max_messages` 仍适用。其他入口若仍用单 `Engine`，行为见各命令文档。单 `Engine` 时：主线程在每轮成功 `RunTurn` 后把 **内存 `Messages`** 折叠为**用户可见**（去掉 agentMd / 路由 / recall / compact 注入与 tool 轮次等）；`working_transcript` 与内存同形；`working_transcript_max_messages` 截尾部可见条数，`0` 默认 **30**，负数不限制 |
+| 会话 | `sessions.disable_sqlite`、`sessions.sqlite_path`、`sessions.worker_count` | 见下 **「会话与多通道（`cmd/oneclaw`）」** |
 | 预算 | `budget.*` | 见下表 |
 | 开关 | `features.disable_*` | `true` 为关闭；省略或 `false` 为开启 |
-| 通知审计 | `features.disable_audit_sinks`、`disable_audit_llm`、`disable_audit_orchestration`、`disable_audit_visible` | 默认三路全开；`disable_audit_sinks` 关闭全部；其余按路径关闭（见 [notify-sinks-audit-design.md](notify-sinks-audit-design.md)） |
+| 通知审计 | `features.disable_audit_sinks`、`disable_audit_llm`、`disable_audit_orchestration`、`disable_audit_visible` | 默认三路全开；`disable_audit_sinks` 关闭全部；其余按路径关闭。`cmd/oneclaw` 有 `SessionID` 时 JSONL 在 `.oneclaw/sessions/<id>/audit/...`（见 [notify-sinks-audit-design.md](notify-sinks-audit-design.md)） |
+| 入站多模态 | `features.disable_multimodal_image`、`features.disable_multimodal_audio` | 默认 **不** 禁用：图片注入 Chat Completions `image_url`（data URL），wav/mp3 注入 `input_audio`；任一为 `true` 时对应类型仅保留 read_file 路径提示，不送多模态载荷 |
 | 维护 | `maintain.*` | 定时/远场/回合后参数；`maintain.interval` 非空时主进程内 `maintainloop` 周期唤醒 |
 | 日志 | `log.level`、`log.format` | 可被 CLI 覆盖 |
 | 侧链 | `sidechain_merge` | 留空关闭；`1` / `true` / `tool` / `append` / `user` 等见历史设计文档 |
@@ -72,6 +74,22 @@
 | `min_transcript_messages` | 裁剪历史时至少保留条数，默认 **6** |
 
 `features.disable_context_budget`：关闭预算收紧。
+
+### 会话与多通道（`cmd/oneclaw`）
+
+主进程 **`oneclaw`（非 `-init` / `-maintain-once`）** 使用 **`session.SessionResolver`**：按 **入站 `Channel` + `Peer.ID`（逻辑 session_key）** 懒创建 **`session.Engine`**，**同一 handle 内串行**处理回合，避免多线程共用一个 `Engine` 的 data race。
+
+| 概念 | 说明 |
+|------|------|
+| **session_key** | 来自 clawbridge `bus.InboundMessage` 的线程/话题键（`session.InboundSessionKey`）；决定「哪一条会话」 |
+| **Engine.SessionID** | 由 `Source` + `session_key` **稳定派生**的十六进制 id（`session.StableSessionID`），用于审计 jsonl、`dialog_history` 分文件等 |
+| **转写文件** | `<cwd>/.oneclaw/sessions/<SessionID>/transcript.json` 与 `working_transcript.json`（与 YAML `paths.transcript` 无关，避免多线程混写同一文件） |
+| **SQLite** | 默认 `<cwd>/.oneclaw/sessions.sqlite`（可用 `sessions.sqlite_path` 覆盖）：会话行 + **memory recall 去重状态**（`RecallState`）；**规则 / episodic** 等仍以**文件**为主；**notify 三路审计**与 transcript 同会话时在 `sessions/<id>/audit/` |
+| **dialog_history** | 按日落盘到 `<cwd>/.oneclaw/memory/YYYY-MM-DD/<SessionID>/dialog_history.json`，不同会话互不追加到同一文件 |
+
+**`sessions.disable_sqlite: true`**：不打开数据库，仅依赖上述文件布局（适合测试或禁止落库的环境）。
+
+**`sessions.worker_count`**：主进程用于处理入站回合的 **固定 worker 数**（默认 **8**，配置为 **0** 或未写时与 `<1` 同样走默认）。每个 session 按稳定哈希落到其中一个 worker，**同一 session 内消息在该 worker 上串行**；每条消息 **临时 `NewEngine`、落盘后丢弃**，避免无限增长的内存 map。worker 数不随会话数量增加。
 
 ### LLM 用量（`<cwd>/.oneclaw/usage/`）
 

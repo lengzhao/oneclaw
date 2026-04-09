@@ -25,8 +25,8 @@ type auditLine struct {
 	SHA256 string `json:"sha256"`
 }
 
-// E2E-93 PostTurn 追加 daily log 后写入审计 JSONL（source=daily_log_line）
-func TestE2E_93_MemoryAuditDailyLog(t *testing.T) {
+// E2E-93 PostTurn 写 daily log（~/.oneclaw/projects/...）；该路径不写入 memory-write.jsonl
+func TestE2E_93_PostTurnDailyLogSkipsProjectsAudit(t *testing.T) {
 	home := t.TempDir()
 	cwd := t.TempDir()
 	t.Setenv("HOME", home)
@@ -44,24 +44,29 @@ func TestE2E_93_MemoryAuditDailyLog(t *testing.T) {
 	}
 	lay := memory.DefaultLayout(cwd, home)
 	logPath := memory.DailyLogPath(lay.Auto, time.Now().Format("2006-01-02"))
+	if _, err := os.Stat(logPath); err != nil {
+		t.Fatalf("daily log should exist: %v", err)
+	}
 	auditPath := filepath.Join(cwd, memory.DotDir, "audit", "memory-write.jsonl")
 	raw, err := os.ReadFile(auditPath)
+	if os.IsNotExist(err) {
+		return
+	}
 	if err != nil {
 		t.Fatalf("audit file: %v", err)
 	}
-	line := strings.TrimSpace(string(raw))
-	var rec auditLine
-	if err := json.Unmarshal([]byte(line), &rec); err != nil {
-		t.Fatalf("audit json: %v\n%s", err, line)
-	}
-	if rec.Source != "daily_log_line" {
-		t.Fatalf("source=%q want daily_log_line", rec.Source)
-	}
-	if rec.Path != logPath {
-		t.Fatalf("path=%q want %q", rec.Path, logPath)
-	}
-	if rec.Bytes < 10 || len(rec.SHA256) != 64 {
-		t.Fatalf("record: %+v", rec)
+	for _, line := range strings.Split(strings.TrimSpace(string(raw)), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		var rec auditLine
+		if json.Unmarshal([]byte(line), &rec) != nil {
+			continue
+		}
+		if rec.Source == "daily_log_line" {
+			t.Fatalf("unexpected daily_log_line audit for projects store: %+v", rec)
+		}
 	}
 }
 

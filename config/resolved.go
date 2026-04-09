@@ -56,6 +56,30 @@ func (r *Resolved) ChatModel() string {
 	return strings.TrimSpace(r.merged.Model)
 }
 
+const (
+	defaultMainAgentMaxSteps = 100
+	minMainAgentMaxSteps     = 1
+	maxMainAgentMaxSteps     = 256
+)
+
+// MainAgentMaxSteps returns agent.max_steps from YAML, clamped to [1, 256]; 0/unset → 32.
+func (r *Resolved) MainAgentMaxSteps() int {
+	if r == nil {
+		return defaultMainAgentMaxSteps
+	}
+	n := r.merged.Agent.MaxSteps
+	if n <= 0 {
+		return defaultMainAgentMaxSteps
+	}
+	if n < minMainAgentMaxSteps {
+		n = minMainAgentMaxSteps
+	}
+	if n > maxMainAgentMaxSteps {
+		n = maxMainAgentMaxSteps
+	}
+	return n
+}
+
 // ClawbridgeConfigForRun returns merged clawbridge config for clawbridge.New.
 // When media.root is empty in YAML, it defaults to <cwd>/.oneclaw/media.
 func (r *Resolved) ClawbridgeConfigForRun() (cbconfig.Config, error) {
@@ -142,6 +166,61 @@ func (r *Resolved) transcriptDisabled() bool {
 	return boolPtrTrue(r.merged.Features.DisableTranscript)
 }
 
+// SessionsSQLiteDisabled reports sessions.disable_sqlite (default false = SQLite enabled when path resolves).
+func (r *Resolved) SessionsSQLiteDisabled() bool {
+	if r == nil {
+		return true
+	}
+	return boolPtrTrue(r.merged.Sessions.DisableSQLite)
+}
+
+// SessionsSQLitePath returns the SQLite database path for session metadata and recall state.
+// Empty means "do not open SQLite" (when disabled or misconfigured).
+func (r *Resolved) SessionsSQLitePath() string {
+	if r == nil || r.SessionsSQLiteDisabled() {
+		return ""
+	}
+	p := strings.TrimSpace(r.merged.Sessions.SQLitePath)
+	if p == "" {
+		return filepath.Join(r.cwd, memory.DotDir, "sessions.sqlite")
+	}
+	if filepath.IsAbs(p) {
+		return filepath.Clean(p)
+	}
+	abs, err := filepath.Abs(filepath.Join(r.cwd, p))
+	if err != nil {
+		return filepath.Join(r.cwd, p)
+	}
+	return abs
+}
+
+// SessionTranscriptDir is the directory for one logical session's transcript files (under .oneclaw/sessions/).
+func (r *Resolved) SessionTranscriptDir(sessionSegment string) string {
+	seg := strings.TrimSpace(sessionSegment)
+	if seg == "" {
+		seg = "default"
+	}
+	return filepath.Join(r.cwd, memory.DotDir, "sessions", seg)
+}
+
+// SessionWorkerCount returns sessions.worker_count; values < 1 mean the session package default (8).
+func (r *Resolved) SessionWorkerCount() int {
+	if r == nil {
+		return 0
+	}
+	return r.merged.Sessions.WorkerCount
+}
+
+// SessionTranscriptPaths returns per-session transcript.json and working_transcript.json paths.
+// When transcript is disabled, both are empty.
+func (r *Resolved) SessionTranscriptPaths(sessionSegment string) (transcript, working string) {
+	if r.transcriptDisabled() {
+		return "", ""
+	}
+	dir := r.SessionTranscriptDir(sessionSegment)
+	return filepath.Join(dir, "transcript.json"), filepath.Join(dir, "working_transcript.json")
+}
+
 // NotifyAuditSinkPaths returns which notify audit JSONL sinks should register.
 // Default is all true (llm, orchestration, visible). disable_audit_sinks disables all;
 // per-path flags further turn off individual sinks.
@@ -155,6 +234,22 @@ func (r *Resolved) NotifyAuditSinkPaths() (llm, orchestration, visible bool) {
 	return !boolPtrTrue(r.merged.Features.DisableAuditLLM),
 		!boolPtrTrue(r.merged.Features.DisableAuditOrchestration),
 		!boolPtrTrue(r.merged.Features.DisableAuditVisible)
+}
+
+// MultimodalImageDisabled reports features.disable_multimodal_image (default false = vision parts allowed).
+func (r *Resolved) MultimodalImageDisabled() bool {
+	if r == nil {
+		return false
+	}
+	return boolPtrTrue(r.merged.Features.DisableMultimodalImage)
+}
+
+// MultimodalAudioDisabled reports features.disable_multimodal_audio (default false = input_audio allowed for wav/mp3).
+func (r *Resolved) MultimodalAudioDisabled() bool {
+	if r == nil {
+		return false
+	}
+	return boolPtrTrue(r.merged.Features.DisableMultimodalAudio)
 }
 
 func boolPtrTrue(p *bool) bool {

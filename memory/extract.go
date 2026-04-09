@@ -96,7 +96,7 @@ func oneLine(s string, max int) string {
 	return s[:max] + "…"
 }
 
-// UserTurnPreview truncates user text for turn-log correlation fields (one line, max 200 bytes prefix).
+// UserTurnPreview truncates user text for memory / PostTurn correlation (one line, max 200 bytes prefix).
 func UserTurnPreview(s string) string {
 	return oneLine(s, 200)
 }

@@ -14,6 +14,8 @@ type Definition struct {
 	Description string   `yaml:"description"`
 	Tools       []string `yaml:"tools"`
 	MaxTurns    int      `yaml:"max_turns"`
+	// Model, when non-empty after trim, overrides the host default for this agent's nested loop.
+	Model string `yaml:"model"`
 	// OmitMemoryInjection: when true, run_agent does not prepend memory user blocks (explore-style).
 	OmitMemoryInjection bool `yaml:"omit_memory_injection"`
 	SystemPrompt        string
@@ -26,6 +28,7 @@ type frontmatterFields struct {
 	Description         string   `yaml:"description"`
 	Tools               []string `yaml:"tools"`
 	MaxTurns            int      `yaml:"max_turns"`
+	Model               string   `yaml:"model"`
 	OmitMemoryInjection bool     `yaml:"omit_memory_injection"`
 }
 
@@ -68,6 +71,7 @@ func ParseAgentFile(path string, raw []byte) (Definition, error) {
 		Description:         fm.Description,
 		Tools:               fm.Tools,
 		MaxTurns:            fm.MaxTurns,
+		Model:               strings.TrimSpace(fm.Model),
 		OmitMemoryInjection: fm.OmitMemoryInjection,
 		SystemPrompt:        body,
 		SourcePath:          path,

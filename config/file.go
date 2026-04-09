@@ -18,6 +18,11 @@ const UserRelPath = ".oneclaw/config.yaml"
 type File struct {
 	OpenAI OpenAIFile `yaml:"openai"`
 	Model  string     `yaml:"model"`
+	// Agent configures the main session model loop (per inbound turn).
+	Agent struct {
+		// MaxSteps is model calls per turn; the last call is sent without tools (earlier calls can use tools).
+		MaxSteps int `yaml:"max_steps"`
+	} `yaml:"agent"`
 
 	Chat struct {
 		Transport string `yaml:"transport"`
@@ -28,13 +33,11 @@ type File struct {
 		Transcript                   string `yaml:"transcript"`
 		WorkingTranscript            string `yaml:"working_transcript"`
 		WorkingTranscriptMaxMessages int    `yaml:"working_transcript_max_messages"` // 0=default 30; <0=unlimited
-		TurnLogPath                  string `yaml:"turn_log_path"`
 	} `yaml:"paths"`
 
 	Features struct {
 		DisableTranscript           *bool `yaml:"disable_transcript"`
 		DisableMemory               *bool `yaml:"disable_memory"`
-		DisableTurnLog              *bool `yaml:"disable_turn_log"`
 		DisableAutoMemory           *bool `yaml:"disable_auto_memory"`
 		DisableMemoryExtract        *bool `yaml:"disable_memory_extract"`
 		DisableAutoMaintenance      *bool `yaml:"disable_auto_maintenance"`
@@ -53,6 +56,10 @@ type File struct {
 		DisableAuditLLM             *bool `yaml:"disable_audit_llm"`
 		DisableAuditOrchestration   *bool `yaml:"disable_audit_orchestration"`
 		DisableAuditVisible         *bool `yaml:"disable_audit_visible"`
+		// DisableMultimodalImage: when true, inbound images use read_file hints only (no vision API parts).
+		DisableMultimodalImage *bool `yaml:"disable_multimodal_image"`
+		// DisableMultimodalAudio: when true, inbound wav/mp3 use read_file hints only (no input_audio parts).
+		DisableMultimodalAudio *bool `yaml:"disable_multimodal_audio"`
 	} `yaml:"features"`
 
 	Budget struct {
@@ -119,6 +126,14 @@ type File struct {
 		RecentPath string `yaml:"recent_path"`
 	} `yaml:"skills"`
 
+	// Sessions: per-chat isolation (IM threads). SQLite stores session index + recall state; transcripts stay as files under .oneclaw/sessions/<id>/.
+	Sessions struct {
+		DisableSQLite *bool  `yaml:"disable_sqlite"`
+		SQLitePath    string `yaml:"sqlite_path"`
+		// WorkerCount: fixed goroutine shards for cmd/oneclaw (hash session → worker). 0 = default 8.
+		WorkerCount int `yaml:"worker_count"`
+	} `yaml:"sessions"`
+
 	// Clawbridge is IM 总线配置，形状与 github.com/lengzhao/clawbridge/config.Config 一致（media + clients）。
 	// 见 clawbridge 仓库 config.example.yaml。media.root 留空时运行时默认为 <cwd>/.oneclaw/media。
 	Clawbridge cbconfig.Config `yaml:"clawbridge"`
@@ -162,6 +177,9 @@ func mergeFile(dst *File, src File) {
 	if src.Model != "" {
 		dst.Model = src.Model
 	}
+	if src.Agent.MaxSteps != 0 {
+		dst.Agent.MaxSteps = src.Agent.MaxSteps
+	}
 	if src.Chat.Transport != "" {
 		dst.Chat.Transport = src.Chat.Transport
 	}
@@ -177,12 +195,8 @@ func mergeFile(dst *File, src File) {
 	if src.Paths.WorkingTranscriptMaxMessages != 0 {
 		dst.Paths.WorkingTranscriptMaxMessages = src.Paths.WorkingTranscriptMaxMessages
 	}
-	if src.Paths.TurnLogPath != "" {
-		dst.Paths.TurnLogPath = src.Paths.TurnLogPath
-	}
 	mergeBoolPtr(&dst.Features.DisableTranscript, src.Features.DisableTranscript)
 	mergeBoolPtr(&dst.Features.DisableMemory, src.Features.DisableMemory)
-	mergeBoolPtr(&dst.Features.DisableTurnLog, src.Features.DisableTurnLog)
 	mergeBoolPtr(&dst.Features.DisableAutoMemory, src.Features.DisableAutoMemory)
 	mergeBoolPtr(&dst.Features.DisableMemoryExtract, src.Features.DisableMemoryExtract)
 	mergeBoolPtr(&dst.Features.DisableAutoMaintenance, src.Features.DisableAutoMaintenance)
@@ -200,6 +214,8 @@ func mergeFile(dst *File, src File) {
 	mergeBoolPtr(&dst.Features.DisableAuditLLM, src.Features.DisableAuditLLM)
 	mergeBoolPtr(&dst.Features.DisableAuditOrchestration, src.Features.DisableAuditOrchestration)
 	mergeBoolPtr(&dst.Features.DisableAuditVisible, src.Features.DisableAuditVisible)
+	mergeBoolPtr(&dst.Features.DisableMultimodalImage, src.Features.DisableMultimodalImage)
+	mergeBoolPtr(&dst.Features.DisableMultimodalAudio, src.Features.DisableMultimodalAudio)
 	if src.Budget.MaxContextTokens != 0 {
 		dst.Budget.MaxContextTokens = src.Budget.MaxContextTokens
 	}
@@ -327,6 +343,13 @@ func mergeFile(dst *File, src File) {
 	}
 	if len(src.Clawbridge.Clients) > 0 {
 		dst.Clawbridge.Clients = append([]cbconfig.ClientConfig(nil), src.Clawbridge.Clients...)
+	}
+	mergeBoolPtr(&dst.Sessions.DisableSQLite, src.Sessions.DisableSQLite)
+	if src.Sessions.SQLitePath != "" {
+		dst.Sessions.SQLitePath = src.Sessions.SQLitePath
+	}
+	if src.Sessions.WorkerCount != 0 {
+		dst.Sessions.WorkerCount = src.Sessions.WorkerCount
 	}
 	mergeMCP(&dst.MCP, src.MCP)
 }

@@ -28,7 +28,6 @@
 | `stub_audit_test.go` | E2E-93～95 |
 | `stub_maintain_cli_test.go` | E2E-96、97 |
 | `stub_schedule_e2e_test.go` | E2E-111、112 |
-| `stub_turn_log_test.go` | E2E-98～100 |
 
 `../openaistub` 会记录每次 `POST /v1/chat/completions` 的 JSON 体（`ChatRequestBodies` / `ChatRequestUserTextConcat`），供 E2E-101 等断言 prompt。
 

@@ -18,6 +18,7 @@ import (
 // user `~/.oneclaw/rules`, and canonical AGENT paths (project `.oneclaw/AGENT.md`, user `~/.oneclaw/AGENT.md`). Log path:
 //   <cwd>/.oneclaw/audit/memory-write.jsonl
 // Each line is a JSON object: ts, source, path, bytes, sha256.
+// Writes under <memory_base>/projects/ (per-repo auto memory and daily logs) are not audited here.
 // Disable with features.disable_memory_audit in config.
 // Teams that version-control .oneclaw can also rely on git history for forensics.
 
@@ -44,6 +45,9 @@ func AppendMemoryAudit(layout Layout, absPath, source string, content []byte) {
 	}
 	absPath = filepath.Clean(absPath)
 	if !pathUnderAnyRoot(absPath, layout.AuditWriteRoots()) && !layout.IsBehaviorPolicyFile(absPath) {
+		return
+	}
+	if layout.skipMemoryAuditForGlobalProjectsStore(absPath) {
 		return
 	}
 	sum := sha256.Sum256(content)
@@ -77,6 +81,17 @@ func AppendMemoryAudit(layout Layout, absPath, source string, content []byte) {
 	if _, err := f.Write(line); err != nil {
 		slog.Warn("memory.audit.write", "path", auditPath, "err", err)
 	}
+}
+
+// skipMemoryAuditForGlobalProjectsStore is true when absPath lies under <MemoryBase>/projects/
+// (AutoMemoryDir daily logs and topics). Those paths are still normal write roots; audit is omitted by design.
+func (l Layout) skipMemoryAuditForGlobalProjectsStore(absPath string) bool {
+	mb := filepath.Clean(strings.TrimSpace(l.MemoryBase))
+	if mb == "" || mb == "." {
+		return false
+	}
+	projectsRoot := filepath.Join(mb, "projects")
+	return pathUnderRoot(absPath, projectsRoot)
 }
 
 func pathUnderAnyRoot(file string, roots []string) bool {

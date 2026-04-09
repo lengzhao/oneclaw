@@ -23,10 +23,11 @@ func ToUserVisibleMessages(msgs []openai.ChatCompletionMessageParamUnion) []open
 			continue
 		case m.OfUser != nil:
 			t := UserMessageText(m)
-			if shouldDropNonVisibleUserText(t) {
+			hasMedia := UserMessageHasNonTextMedia(m)
+			if shouldDropNonVisibleUserText(t) && !hasMedia {
 				continue
 			}
-			if strings.TrimSpace(t) == "" {
+			if strings.TrimSpace(t) == "" && !hasMedia {
 				continue
 			}
 			out = append(out, m)

@@ -94,6 +94,27 @@ func TestAuditSinksWriteJSONL(t *testing.T) {
 	}
 }
 
+func TestAuditSinksWriteJSONL_perSessionDir(t *testing.T) {
+	dir := t.TempDir()
+	o := Options{CWD: dir, AgentID: "AGENT", AuditSessionID: "deadbeefcafe"}
+	llm := NewLLMAuditSink(o)
+	ev := notify.NewEvent(notify.EventModelStepEnd, "")
+	ev.SessionID = "deadbeefcafe"
+	ev.TurnID = "t1"
+	ev.Data = map[string]any{"step": 0}
+	if err := llm.Emit(context.Background(), ev); err != nil {
+		t.Fatal(err)
+	}
+	base := filepath.Join(dir, ".oneclaw", "sessions", "deadbeefcafe", "audit", "AGENT", "llm")
+	matches, err := filepath.Glob(filepath.Join(base, "*", "*", "*.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(matches) != 1 {
+		t.Fatalf("glob: %v", matches)
+	}
+}
+
 func TestLLMSinkIgnoresOtherEvents(t *testing.T) {
 	dir := t.TempDir()
 	s := NewLLMAuditSink(Options{CWD: dir, AgentID: "a"})

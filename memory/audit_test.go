@@ -41,6 +41,24 @@ func TestAppendMemoryAudit_WritesLine(t *testing.T) {
 	}
 }
 
+func TestAppendMemoryAudit_SkipsGlobalProjectsStore(t *testing.T) {
+	t.Cleanup(func() { rtopts.Set(nil) })
+	s := rtopts.DefaultSnapshot()
+	s.DisableMemoryAudit = false
+	rtopts.Set(&s)
+	cwd := t.TempDir()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	lay := DefaultLayout(cwd, home)
+	autoFile := filepath.Join(lay.Auto, "logs", "2099", "01", "2099-01-01.md")
+	_ = os.MkdirAll(filepath.Dir(autoFile), 0o755)
+	AppendMemoryAudit(lay, autoFile, "daily_log_line", []byte("x"))
+	auditPath := filepath.Join(cwd, DotDir, "audit", "memory-write.jsonl")
+	if _, err := os.Stat(auditPath); err == nil {
+		t.Fatal("expected no audit file for paths under memory_base/projects")
+	}
+}
+
 func TestAppendMemoryAudit_SkipsOutsideRoots(t *testing.T) {
 	t.Cleanup(func() { rtopts.Set(nil) })
 	s := rtopts.DefaultSnapshot()

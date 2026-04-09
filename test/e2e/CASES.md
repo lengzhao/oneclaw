@@ -46,14 +46,11 @@
 | E2E-90 | `run_agent` 子循环 + sidechain 落盘 | [x] | `TestE2E_StubRunAgentNested` · `stub_subagent_test.go` |
 | E2E-91 | `fork_context` 共享 system | [x] | `TestE2E_StubForkContext` · `stub_subagent_test.go` |
 | E2E-92 | 近场维护写入 `memory/YYYY-MM-DD.md`（测试中显式放开 `DisableAutoMaintenance`） | [x] | `TestE2E_92_AutoMaintenanceAppends` · `stub_maintain_test.go` |
-| E2E-93 | Memory 审计：daily log 追加后 `memory-write.jsonl` 含 `daily_log_line` | [x] | `TestE2E_93_MemoryAuditDailyLog` · `stub_audit_test.go` |
+| E2E-93 | PostTurn daily log 落在 `<memory_base>/projects/...`，**不**写入 `memory-write.jsonl` | [x] | `TestE2E_93_PostTurnDailyLogSkipsProjectsAudit` · `stub_audit_test.go` |
 | E2E-94 | `features.disable_memory_audit` 不写审计文件 | [x] | `TestE2E_94_MemoryAuditDisabledNoFile` · `stub_audit_test.go` |
 | E2E-95 | `write_file` 写 project memory 根时审计含 `write_file` | [x] | `TestE2E_95_MemoryAuditWriteFileUnderMemoryRoot` · `stub_audit_test.go` |
 | E2E-96 | `oneclaw -maintain-once` 子进程 + stub 写回当日 `memory/YYYY-MM-DD.md` | [x] | `TestE2E_96_MaintainCLIOnce` · `stub_maintain_cli_test.go` |
 | E2E-97 | `oneclaw -init` 子进程写入项目 `config.yaml` | [x] | `TestE2E_97_OneclawInitWritesProjectConfig` · `stub_maintain_cli_test.go` |
-| E2E-98 | turn-log 按日分文件；无工具时仍有 `assistant_final` 一行 | [x] | `TestE2E_98_TurnLogAssistantFinalWithoutTools` · `stub_turn_log_test.go` |
-| E2E-99 | `features.disable_turn_log` 不写 turn-log 文件 | [x] | `TestE2E_99_TurnLogDisabledNoFile` · `stub_turn_log_test.go` |
-| E2E-100 | 每工具一行 `kind=tool` + 回合末 `kind=assistant_final` | [x] | `TestE2E_100_TurnLogToolThenAssistantFinal` · `stub_turn_log_test.go` |
 | E2E-101 | 近场维护：第 2 次请求仅含 Current turn 快照 + 规则 `MEMORY.md` 摘录；不含 daily log / topic；写回当日 episodic 日文件 | [x] | `TestE2E_101_PostTurnMaintainPromptSessionOnly` · `stub_maintain_pipeline_e2e_test.go` |
 | E2E-102 | 维护强去重：规则 `MEMORY.md` 已有同义 bullet 时 episodic 不落 `## Auto-maintained` | [x] | `TestE2E_102_MaintainDedupeSkipsAppendWhenNoNewBullets` · `stub_maintain_pipeline_e2e_test.go` |
 | E2E-103 | 语义 compact：预算裁剪时首条 chat 请求 user 文本含 `compact_boundary` | [x] | `TestE2E_103_SemanticCompactInChatRequest` · `stub_semantic_compact_e2e_test.go` |
@@ -242,22 +239,13 @@
 
 ---
 
-## 11. Memory 审计与 turn-log（阶段 D2）
+## 11. Memory 审计（阶段 D2）
 
 ### E2E-93～E2E-95
 
-- **E2E-93**：默认开启审计；`SubmitUser` 后 `PostTurn` 写 daily log；断言 `<cwd>/.oneclaw/audit/memory-write.jsonl` 首行 JSON 的 `source=daily_log_line` 且 `path` 为当日 log。
+- **E2E-93**：默认开启审计（对非 projects 路径仍生效）；`SubmitUser` 后 `PostTurn` 写当日 daily log；断言 log 文件存在，且审计文件中**无** `source=daily_log_line`（`<memory_base>/projects/` 不落审计）。
 - **E2E-94**：`features.disable_memory_audit` 时上述审计文件不存在。
 - **E2E-95**：stub 下发 `write_file` 至 `<cwd>/.oneclaw/memory/...`；审计中至少一行 `source=write_file` 且 `path` 为绝对目标路径。
-
-### E2E-98～E2E-100（turn-log）
-
-- **前置**：`e2eEnvWithMemory`；`features.disable_memory_extract` 未关（与 `ToolTrace` / 即时落盘同源开关）。E2E-98 可设 `features.disable_memory_audit`。
-- **E2E-98**：stub 仅 `CompletionStop`；默认路径为 `<cwd>/.oneclaw/traces/logs/YYYY/MM/YYYY-MM-DD.jsonl`，含一行 `kind=assistant_final`。
-- **E2E-99**：`features.disable_turn_log` 时上述当日文件**不**创建；`PostTurn` / daily log 不受影响。
-- **E2E-100**：stub `CompletionToolCalls(read_file)` → `CompletionStop`；当日 JSONL 内先 `kind=tool`（read_file），再 `kind=assistant_final`；**不**写入对话 `Messages`。
-
----
 
 ## 12. 维护与初始化 CLI（`cmd/oneclaw`）
 
