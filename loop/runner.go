@@ -124,6 +124,7 @@ func RunTurn(ctx context.Context, cfg Config, in bus.InboundMessage) (err error)
 		}
 
 		reqMsgs := buildRequestMessages(cfg.System, *msgs)
+		ApplyOutboundAssistantExtensionFields(reqMsgs)
 		params := openai.ChatCompletionNewParams{
 			Model:               cfg.Model,
 			Messages:            reqMsgs,
@@ -175,7 +176,7 @@ func RunTurn(ctx context.Context, cfg Config, in bus.InboundMessage) (err error)
 		}
 
 		choice := completion.Choices[0]
-		*msgs = append(*msgs, choice.Message.ToParam())
+		*msgs = append(*msgs, assistantParamFromCompletion(choice.Message))
 		if cfg.OutboundText != nil {
 			if vis := assistantVisibleText(choice.Message); vis != "" {
 				logOutboundEmit("text", cfg.OutboundText(ctx, vis))

@@ -39,24 +39,24 @@
 **方案 B（与 picoclaw 控制台模型列表接近）**  
 
 ```yaml
-# 全局默认连接（可省略，由下面 models 条目覆盖）
-openai:
-  api_key: ""
-  base_url: ""
-
-# 可选：命名模型列表；agents / 路由可引用 model_ref
+# 模型列表（顺序无关）；每条一组「协议/模型 ID + 凭据与网关」（可与 config 里全局 openai 块组合，本示例从略）
 models:
-  chat:
-    model: "openai/gpt-4o"           # 或 groq/llama-3.3-70b-versatile
-    api_key: ""                      # 空则回退 openai.api_key
-    base_url: ""                     # 空则使用该协议内置默认或全局 openai.base_url
-  cheap:
-    model: "deepseek/deepseek-chat"
+  - model: "openai/gpt-4o"           # 或 groq/llama-3.3-70b-versatile；本条在配置内作为「选用名」
+    api_key: "..."
+    base_url: ""                     # 空则使用该协议内置默认（若有）；否则在全局 openai 或实现约定中补全
+  - model: "deepseek/deepseek-chat"
     api_key: "..."
     base_url: "https://api.deepseek.com/v1"
 
-model: chat                          # 指向 models 的键，或直接写 model 字符串
+# 主会话：填写与上面某条 `model` 完全相同的字符串，表示选中该列表项（含其 key/base_url）
+model: "openai/gpt-4o"
+
+maintain:
+  model: "deepseek/deepseek-chat"    # 同上：按字符串匹配 models[].model
+  scheduled_model: "openai/gpt-4o"   # 可选；规则一致
 ```
+
+**选用规则**：`model`（主会话）、`maintain.model`、`maintain.scheduled_model` 等字段的值 **等于** `models` 里某元素的 `model` 字段时，解析为该条目的 `api_key` / `base_url`；某字段为空时的回退（全局 `openai`、`org_id` / `project_id`、协议默认 `base_url` 等）与 [config.md](config.md)、方案 A 一致。若写的是 **`协议/模型` 字符串但不在 `models` 列表中**，则视为「仅指定模型 ID」：连接参数走全局 `openai`（与 Phase 0 行为一致）。列表内 **`model` 字符串应在配置内唯一**，避免歧义。
 
 合并规则、路径、`PushRuntime` 的约定延续 [config.md](config.md)；新增字段需在 `config.File` / `Resolved` 上提供解析与校验。
 
@@ -94,7 +94,7 @@ Provider interface {
 ### 3.5 维护与子 Agent
 
 - `memory/maintain_run`、`subagent`：将 `*openai.Client` 改为接受同一 `llm.Provider`（或工厂按 `maintain.model` 再建一个 provider）。  
-- `maintain.model` 支持 `协议/模型`；解析规则与主会话一致。
+- `maintain.model` / `scheduled_model` 与顶层 `model` 相同：可写 **`models` 列表中某条的 `model` 值** 以选中该条凭据，或直接写 **`协议/模型`**（未在列表中则走全局 `openai`）。
 
 ## 4. 分阶段落地（建议）
 
