@@ -35,6 +35,7 @@ func (e *Engine) prepareSharedTurn(ctx context.Context, in bus.InboundMessage, a
 	p.turnSnap = in
 	p.bg = rtopts.Current().Budget
 	p.tctx = toolctx.New(e.CWD, ctx)
+	p.tctx.SessionID = e.SessionID
 	p.tctx.AgentID = e.EffectiveRootAgentID()
 	if wireSendMessage {
 		p.tctx.SendMessage = e.SendMessage

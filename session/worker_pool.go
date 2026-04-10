@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"hash/fnv"
+	"log/slog"
 	"sync"
 
 	"github.com/lengzhao/clawbridge/bus"
@@ -43,20 +44,45 @@ func NewWorkerPool(n int, factory func(SessionHandle) (*Engine, error)) (*Worker
 	for i := 0; i < n; i++ {
 		wp.chans[i] = make(chan submitWork, 256)
 		wp.wg.Add(1)
-		go wp.runWorker(wp.chans[i])
+		go wp.runWorker(i, wp.chans[i])
 	}
 	return wp, nil
 }
 
-func (wp *WorkerPool) runWorker(ch <-chan submitWork) {
+func (wp *WorkerPool) runWorker(workerID int, ch <-chan submitWork) {
 	defer wp.wg.Done()
 	for w := range ch {
-		eng, err := wp.factory(w.h)
-		if err != nil {
-			w.err <- err
+		sid := StableSessionID(w.h)
+		slog.Info("session.worker.job_start",
+			"worker_id", workerID,
+			"session_id", sid,
+			"channel", w.h.Source,
+			"session_key", w.h.SessionKey,
+		)
+		eng, factoryErr := wp.factory(w.h)
+		if factoryErr != nil {
+			slog.Info("session.worker.job_end",
+				"worker_id", workerID,
+				"session_id", sid,
+				"channel", w.h.Source,
+				"session_key", w.h.SessionKey,
+				"err", factoryErr,
+			)
+			w.err <- factoryErr
 			continue
 		}
-		w.err <- eng.SubmitUser(w.ctx, w.in)
+		submitErr := eng.SubmitUser(w.ctx, w.in)
+		endArgs := []any{
+			"worker_id", workerID,
+			"session_id", sid,
+			"channel", w.h.Source,
+			"session_key", w.h.SessionKey,
+		}
+		if submitErr != nil {
+			endArgs = append(endArgs, "err", submitErr)
+		}
+		slog.Info("session.worker.job_end", endArgs...)
+		w.err <- submitErr
 	}
 }
 

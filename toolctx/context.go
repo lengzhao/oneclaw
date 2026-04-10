@@ -30,6 +30,9 @@ type Context struct {
 
 	CWD string
 
+	// SessionID is the stable logical session (e.g. Engine.SessionID / SQLite session row). Empty in tests or non-session hosts.
+	SessionID string
+
 	// AgentID is the logical agent for this tool-execution frame: root Engine id on the main thread,
 	// or the subagent type (e.g. catalog AgentType / fork_context) inside nested run_agent / fork_context.
 	// Session seeds it from Engine.RootAgentID; subagent overwrites it on child contexts.
@@ -163,6 +166,7 @@ func (c *Context) ChildContext() *Context {
 	child.SessionHost = c.SessionHost
 	child.MemoryWriteRoots = append([]string(nil), c.MemoryWriteRoots...)
 	child.HomeDir = c.HomeDir
+	child.SessionID = c.SessionID
 	child.AgentID = c.AgentID
 	child.MaxSubagentDepth = c.MaxSubagentDepth
 	child.SubagentDepth = c.SubagentDepth + 1
