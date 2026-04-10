@@ -16,8 +16,8 @@ func TestFilterRegistry_allowlist(t *testing.T) {
 	if _, ok := f.Get("read_file"); !ok {
 		t.Fatal("expected read_file")
 	}
-	if _, ok := f.Get("bash"); ok {
-		t.Fatal("bash should be excluded")
+	if _, ok := f.Get("exec"); ok {
+		t.Fatal("exec should be excluded")
 	}
 }
 

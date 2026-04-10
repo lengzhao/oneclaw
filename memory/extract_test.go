@@ -10,12 +10,12 @@ import (
 func TestBuildDailyLogLineToolSummary(t *testing.T) {
 	line := buildDailyLogLine("hello", "world", []loop.ToolTraceEntry{
 		{Name: "read_file", OK: true},
-		{Name: "bash", OK: false, Err: "exit 1"},
+		{Name: "exec", OK: false, Err: "exit 1"},
 	})
 	if !strings.Contains(line, "| tools: ") {
 		t.Fatalf("missing tools: %q", line)
 	}
-	if !strings.Contains(line, "read_file:ok") || !strings.Contains(line, "bash:err") {
+	if !strings.Contains(line, "read_file:ok") || !strings.Contains(line, "exec:err") {
 		t.Fatalf("unexpected content: %q", line)
 	}
 }

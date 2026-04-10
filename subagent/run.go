@@ -385,8 +385,8 @@ func dropTrailingIncompleteAssistantToolBatch(msgs []openai.ChatCompletionMessag
 
 func wrapConservative(parent tools.CanUseTool) tools.CanUseTool {
 	return func(ctx context.Context, name string, input json.RawMessage, tctx *toolctx.Context) (bool, string) {
-		if name == "bash" {
-			return false, "bash disabled in fork_context (non-interactive sub-context)"
+		if name == "exec" {
+			return false, "exec disabled in fork_context (non-interactive sub-context)"
 		}
 		if parent != nil {
 			return parent(ctx, name, input, tctx)

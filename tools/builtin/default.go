@@ -2,7 +2,7 @@ package builtin
 
 import "github.com/lengzhao/oneclaw/tools"
 
-// DefaultRegistry registers read/write/grep/bash plus glob, list_dir, and subagent tools.
+// DefaultRegistry registers read/write/grep/exec plus glob, list_dir, and subagent tools.
 // Policy-scoped writes (AGENT.md / .oneclaw/rules / skills) use write_behavior_policy only in ScheduledMaintainReadRegistry, not here.
 func DefaultRegistry() *tools.Registry {
 	r := tools.NewRegistry()
@@ -11,7 +11,7 @@ func DefaultRegistry() *tools.Registry {
 	r.MustRegister(GrepTool{})
 	r.MustRegister(GlobTool{})
 	r.MustRegister(ListDirTool{})
-	r.MustRegister(BashTool{})
+	r.MustRegister(ExecTool{})
 	r.MustRegister(RunAgentTool{})
 	r.MustRegister(ForkContextTool{})
 	r.MustRegister(InvokeSkillTool{})

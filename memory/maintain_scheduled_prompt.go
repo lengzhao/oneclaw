@@ -53,7 +53,7 @@ func buildScheduledToolUserPrompt(layout Layout, rulesMemPath, episodePath strin
 			"to inspect project memory and **auto daily logs**. Your **final assistant message** is merged into the **episodic digest** file for today (path below). **`MEMORY.md` holds project rules only** (loaded every turn like AGENT); put **durable episodic facts** in the digest, not in MEMORY.md.\n\n"+
 			"**Allowed tools:** `read_file`, `grep`, `glob`, `list_dir`, and **`write_behavior_policy`** only when durable **instructions** need updating — "+
 			"**`<cwd>/.oneclaw/AGENT.md`**, **`<cwd>/.oneclaw/rules/*.md`**, **`<cwd>/.oneclaw/skills/<name>/SKILL.md`**, **`MEMORY.md`** rules (target `memory`; full-file replace of rules only). "+
-			"Do **not** call `write_file`, bash, run_agent, fork_context, cron, task_*, invoke_skill, or any other tool.\n\n"+
+			"Do **not** call `write_file`, exec, run_agent, fork_context, cron, task_*, invoke_skill, or any other tool.\n\n"+
 			"**Paths (absolute):**\n"+
 			"- Auto memory root (daily logs live under `logs/YYYY/MM/YYYY-MM-DD.md`): `%s`\n"+
 			"- Today's daily log file: `%s`\n"+

@@ -20,7 +20,7 @@ func TestToUserVisibleMessages_dropsInjectionsAndTools(t *testing.T) {
 			map[string]any{"role": "user", "content": "[oneclaw:compact_boundary ts=2020-01-01T00:00:00Z]\nEarlier\n\n[/oneclaw:compact_boundary]\n"},
 			map[string]any{"role": "user", "content": "人类可见问题"},
 			map[string]any{"role": "assistant", "tool_calls": []any{map[string]any{
-				"id": "c1", "type": "function", "function": map[string]any{"name": "bash", "arguments": "{}"},
+				"id": "c1", "type": "function", "function": map[string]any{"name": "exec", "arguments": "{}"},
 			}}},
 			map[string]any{"role": "tool", "tool_call_id": "c1", "content": "shell out"},
 			map[string]any{"role": "assistant", "content": "最终答复"},
@@ -54,7 +54,7 @@ func TestToUserVisibleMessages_stripsToolCallsFromMixedAssistant(t *testing.T) {
 				"role":    "assistant",
 				"content": "好的",
 				"tool_calls": []any{map[string]any{
-					"id": "c1", "type": "function", "function": map[string]any{"name": "bash", "arguments": "{}"},
+					"id": "c1", "type": "function", "function": map[string]any{"name": "exec", "arguments": "{}"},
 				}},
 			},
 		},

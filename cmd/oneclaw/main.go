@@ -282,8 +282,8 @@ func main() {
 			inboundInflight.Add(1)
 			go func() {
 				defer inboundInflight.Done()
-				submitCtx := context.Background()
-				if err := workerPool.SubmitUser(submitCtx, m); err != nil {
+				// Use rootCtx so SIGINT/SIGTERM cancels model/tool work (see Engine.SubmitUser).
+				if err := workerPool.SubmitUser(rootCtx, m); err != nil {
 					slog.Warn("session.submit_user", "err", err)
 				}
 			}()
