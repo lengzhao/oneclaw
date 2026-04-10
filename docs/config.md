@@ -41,7 +41,7 @@
 | 区域 | 主要 YAML 路径 | 说明 |
 |------|----------------|------|
 | 模型 | `model` | 默认聊天模型；空则代码内默认 |
-| 主会话循环 | `agent.max_steps`、`agent.max_tokens` | `max_steps`：每用户回合内模型调用步数（默认 **100**，范围 1–256）。`max_tokens`：每步 **`max_completion_tokens`**（默认 **32768**，范围 1024–131072；YAML 写 0 或不写则用默认）。`cmd/oneclaw` 经 `MainEngineFactory` 写入 `Engine.MaxTokens`。 |
+| 主会话循环 | `agent.max_steps`、`agent.max_tokens` | `max_steps`：每用户回合内模型调用步数（默认 **100**，范围 1–256）。`max_tokens`：每步 **`max_completion_tokens`**（默认 **32768**，范围 1024–131072；YAML 写 0 或不写则用默认）。`cmd/oneclaw` 经 `MainEngineFactory` 写入 `Engine.MaxTokens`。单次 chat completion 的 context 超时由 `model` 包默认 **2 分钟**（`model.Complete` / `CompleteWithTransport`），非 YAML 配置项。 |
 | 传输 | `chat.transport` | `auto`（先流式、失败再非流式）、`non_stream`、`stream`；兼容网关仅支持非流式时建议 `non_stream` |
 | OpenAI 兼容 | `openai.api_key`、`openai.base_url`、`openai.org_id`、`openai.project_id` | `base_url` 需含 `/v1/` 后缀（若网关要求） |
 | 路径 | `paths.memory_base`、`paths.transcript`、`paths.working_transcript`、`paths.working_transcript_max_messages` | 相对路径相对 `-cwd`；**`cmd/oneclaw` 多会话模式**下，每逻辑会话的转写落盘见下节「会话」，**不再**使用此处全局 `transcript` / `working_transcript` 路径；`working_transcript_max_messages` 仍适用。其他入口若仍用单 `Engine`，行为见各命令文档。单 `Engine` 时：主线程在每轮成功 `RunTurn` 后把 **内存 `Messages`** 折叠为**用户可见**（去掉 agentMd / 路由 / recall / compact 注入与 tool 轮次等）；`working_transcript` 与内存同形；`working_transcript_max_messages` 截尾部可见条数，`0` 默认 **30**，负数不限制 |

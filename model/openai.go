@@ -9,13 +9,20 @@ import (
 	"github.com/openai/openai-go"
 )
 
+// defaultRequestTimeout caps one chat completion (stream or non-stream, including stream→non-stream fallback).
+const defaultRequestTimeout = 2 * time.Minute
+
 // Complete calls the chat API. Transport comes from chat.transport in config (see transport.go).
 func Complete(ctx context.Context, client *openai.Client, params openai.ChatCompletionNewParams) (*openai.ChatCompletion, error) {
 	return CompleteWithTransport(ctx, client, params, "")
 }
 
 // CompleteWithTransport uses transportHint when non-empty; otherwise the same rules as Complete.
+// Each call uses context.WithTimeout(ctx, 2m) so a single completion cannot hang indefinitely; if ctx already
+// has a shorter deadline, that deadline still applies.
 func CompleteWithTransport(ctx context.Context, client *openai.Client, params openai.ChatCompletionNewParams, transportHint string) (*openai.ChatCompletion, error) {
+	ctx, cancel := context.WithTimeout(ctx, defaultRequestTimeout)
+	defer cancel()
 	switch resolveTransport(transportHint) {
 	case transportNonStream:
 		t0 := time.Now()

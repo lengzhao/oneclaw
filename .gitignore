@@ -40,7 +40,6 @@ go.work.sum
 
 # Mistaken cwd-relative ~/.oneclaw from e2e before tmp HOME + paths.memory_base isolation
 test/e2e/~/
-config.yaml
 # Local LLM credentials for opt-in e2e (see test/e2e/live_llm.config.example.yaml)
 test/e2e/live_llm.config.yaml
 tmp/
