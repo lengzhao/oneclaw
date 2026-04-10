@@ -138,6 +138,31 @@ func (r *Resolved) LogFormat(cliOverride string) string {
 	return strings.TrimSpace(r.merged.Log.Format)
 }
 
+// ResolveLogPath turns a config or CLI log path into an absolute path; empty p returns "".
+func ResolveLogPath(cwd, p string) string {
+	p = strings.TrimSpace(p)
+	if p == "" {
+		return ""
+	}
+	if filepath.IsAbs(p) {
+		return filepath.Clean(p)
+	}
+	abs, err := filepath.Abs(filepath.Join(cwd, p))
+	if err != nil {
+		return filepath.Join(cwd, p)
+	}
+	return abs
+}
+
+// LogFile returns an absolute log file path: CLI override wins, then YAML log.file.
+// Empty string means file logging is disabled. Relative paths are resolved from Load CWD.
+func (r *Resolved) LogFile(cliOverride string) string {
+	if v := strings.TrimSpace(cliOverride); v != "" {
+		return ResolveLogPath(r.cwd, v)
+	}
+	return ResolveLogPath(r.cwd, r.merged.Log.File)
+}
+
 // TranscriptPath resolves transcript file path from YAML and defaults.
 func (r *Resolved) TranscriptPath() string {
 	if r.transcriptDisabled() {

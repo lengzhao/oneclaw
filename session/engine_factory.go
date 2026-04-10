@@ -1,11 +1,10 @@
 package session
 
 import (
-	"context"
 	"log/slog"
 	"os"
 
-	"github.com/lengzhao/clawbridge/bus"
+	"github.com/lengzhao/clawbridge"
 	"github.com/lengzhao/oneclaw/config"
 	"github.com/lengzhao/oneclaw/tools"
 	"github.com/openai/openai-go"
@@ -22,8 +21,6 @@ type MainEngineFactoryDeps struct {
 	LLMAudit      bool
 	OrchAudit     bool
 	VisAudit      bool
-	// OutboundPublisher returns the current PublishOutbound hook; nil return skips outbound.
-	OutboundPublisher func() func(context.Context, *bus.OutboundMessage) error
 	// NewRecallPersister, if non-nil, provides recall persistence for the given handle (e.g. sessdb bridge).
 	NewRecallPersister func(SessionHandle) RecallPersister
 }
@@ -50,16 +47,9 @@ func MainEngineFactory(deps MainEngineFactoryDeps) func(SessionHandle) (*Engine,
 		if deps.MCPSystemNote != "" {
 			eng.MCPSystemNote = deps.MCPSystemNote
 		}
-		eng.PublishOutbound = func(ctx context.Context, msg *bus.OutboundMessage) error {
-			pub := deps.OutboundPublisher
-			if pub == nil {
-				return nil
-			}
-			if fn := pub(); fn != nil {
-				return fn(ctx, msg)
-			}
-			return nil
-		}
+		// Requires cmd/oneclaw to call clawbridge.SetDefault after New; see clawbridge.PublishOutbound / UpdateStatus.
+		eng.PublishOutbound = clawbridge.PublishOutbound
+		eng.UpdateInboundStatus = clawbridge.UpdateStatus
 		eng.RegisterAuditSinks(deps.LLMAudit, deps.OrchAudit, deps.VisAudit)
 		if np := deps.NewRecallPersister; np != nil {
 			eng.RecallPersister = np(h)

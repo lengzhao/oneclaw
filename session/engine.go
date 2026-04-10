@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/lengzhao/clawbridge/bus"
+	"github.com/lengzhao/clawbridge/client"
 	"github.com/lengzhao/oneclaw/loop"
 	"github.com/lengzhao/oneclaw/memory"
 	"github.com/lengzhao/oneclaw/notify"
@@ -59,6 +61,8 @@ type Engine struct {
 	Notify notify.Multi
 	// PublishOutbound sends assistant / proactive messages to IM drivers via clawbridge. If nil, outbound is skipped.
 	PublishOutbound func(ctx context.Context, msg *bus.OutboundMessage) error
+	// UpdateInboundStatus updates the triggering message row (processing / completed / failed) when the driver supports it.
+	UpdateInboundStatus func(ctx context.Context, req *bus.UpdateStatusRequest) error
 	// TranscriptPath is where SaveTranscript writes after each successful loop.RunTurn (before PostTurn; post-turn maintain runs asynchronously). Empty disables auto-save.
 	TranscriptPath string
 	// WorkingTranscriptPath persists Messages (already user-visible in memory after each turn).
@@ -99,7 +103,7 @@ func NewEngine(cwd string, reg *tools.Registry) *Engine {
 // SubmitUser runs one user turn (may involve multiple internal model calls).
 // in.Content is the primary user line; MediaPaths add leading user messages after normalization.
 // Cancel ctx to abort in-flight model and tool calls.
-func (e *Engine) SubmitUser(ctx context.Context, in bus.InboundMessage) error {
+func (e *Engine) SubmitUser(ctx context.Context, in bus.InboundMessage) (err error) {
 	atts, err := e.prepareInboundFromBus(&in)
 	if err != nil {
 		return err
@@ -108,6 +112,15 @@ func (e *Engine) SubmitUser(ctx context.Context, in bus.InboundMessage) error {
 	if text == "" && len(atts) == 0 {
 		return fmt.Errorf("session: empty inbound text")
 	}
+
+	e.applyInboundMessageStatus(ctx, in, bus.StatusProcessing)
+	defer func() {
+		st := bus.StatusCompleted
+		if err != nil {
+			st = bus.StatusFailed
+		}
+		e.applyInboundMessageStatus(context.WithoutCancel(ctx), in, st)
+	}()
 
 	turnID := newTurnID()
 	corrID := strings.TrimSpace(in.MessageID)
@@ -389,6 +402,19 @@ func (e *Engine) persistRecall() {
 	}
 	if err := e.RecallPersister.SaveRecall(e.SessionID, e.RecallState); err != nil {
 		slog.Warn("session.recall_persist", "session_id", e.SessionID, "err", err)
+	}
+}
+
+func (e *Engine) applyInboundMessageStatus(ctx context.Context, in bus.InboundMessage, state string) {
+	if e.UpdateInboundStatus == nil {
+		return
+	}
+	req := InboundUpdateStatusRequest(&in, state)
+	if req == nil {
+		return
+	}
+	if err := e.UpdateInboundStatus(ctx, req); err != nil && !errors.Is(err, client.ErrCapabilityUnsupported) {
+		slog.Warn("session.inbound_status", "state", state, "err", err)
 	}
 }
 

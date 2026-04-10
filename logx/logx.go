@@ -2,13 +2,17 @@
 package logx
 
 import (
+	"fmt"
+	"io"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
-// Init configures slog level/format strings (e.g. from config merged with CLI flags).
-func Init(levelOverride, formatOverride string) {
+// Init sets the default slog logger. When logFile is non-empty, logs are appended to that file (UTF-8)
+// in addition to stderr. Returns close, which should be deferred on shutdown to flush and release the file.
+func Init(levelOverride, formatOverride, logFile string) (close func()) {
 	level := parseLevel(levelOverride)
 	format := strings.ToLower(strings.TrimSpace(formatOverride))
 	if format == "" {
@@ -22,18 +26,39 @@ func Init(levelOverride, formatOverride string) {
 		opts.AddSource = true
 	}
 
+	out := io.Writer(os.Stderr)
+	var f *os.File
+	if p := strings.TrimSpace(logFile); p != "" {
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			fmt.Fprintf(os.Stderr, "logx: mkdir for log file %q: %v (stderr only)\n", p, err)
+		} else {
+			var err error
+			f, err = os.OpenFile(p, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "logx: open log file %q: %v (stderr only)\n", p, err)
+			} else {
+				out = io.MultiWriter(os.Stderr, f)
+			}
+		}
+	}
+
 	var h slog.Handler
 	switch format {
 	case "json":
-		h = slog.NewJSONHandler(os.Stderr, opts)
+		h = slog.NewJSONHandler(out, opts)
 	default:
-		h = slog.NewTextHandler(os.Stderr, opts)
+		h = slog.NewTextHandler(out, opts)
 	}
 
 	root := slog.New(h).With(
 		slog.String("svc", "oneclaw"),
 	)
 	slog.SetDefault(root)
+
+	if f == nil {
+		return func() {}
+	}
+	return func() { _ = f.Close() }
 }
 
 func parseLevel(s string) slog.Level {

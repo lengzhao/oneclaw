@@ -32,6 +32,7 @@
 | `-config` | 额外 YAML 层（见上合并顺序） |
 | `-log-level` | `debug` / `info` / `warn` / `error`，非空时覆盖配置里的 `log.level` |
 | `-log-format` | `text` / `json`，非空时覆盖 `log.format` |
+| `-log-file` | 追加日志到该文件（UTF-8），**同时仍输出 stderr**；非空时覆盖配置里的 `log.file`；相对路径相对 `-cwd` |
 | `-init` | 初始化 `.oneclaw`；无 `config.yaml` 则写入模板，已有则合并补全缺失键（不覆盖），仅用上述日志标志 |
 | `-maintain-once` | 单次远场维护后退出（需 YAML 中的 API key 等） |
 
@@ -50,7 +51,7 @@
 | 通知审计 | `features.disable_audit_sinks`、`disable_audit_llm`、`disable_audit_orchestration`、`disable_audit_visible` | 默认三路全开；`disable_audit_sinks` 关闭全部；其余按路径关闭。`cmd/oneclaw` 有 `SessionID` 时 JSONL 在 `.oneclaw/sessions/<id>/audit/...`（见 [notify-sinks-audit-design.md](notify-sinks-audit-design.md)） |
 | 入站多模态 | `features.disable_multimodal_image`、`features.disable_multimodal_audio` | 默认 **不** 禁用：图片注入 Chat Completions `image_url`（data URL），wav/mp3 注入 `input_audio`；任一为 `true` 时对应类型仅保留 read_file 路径提示，不送多模态载荷 |
 | 维护 | `maintain.*` | 定时/远场/回合后参数；`maintain.interval` 非空时主进程内 `maintainloop` 周期唤醒 |
-| 日志 | `log.level`、`log.format` | 可被 CLI 覆盖 |
+| 日志 | `log.level`、`log.format`、`log.file` | `log.file`：可选，追加落盘（与 stderr 双写）；相对路径相对 `-cwd`；可被 `-log-file` 覆盖 |
 | 侧链 | `sidechain_merge` | 留空关闭；`1` / `true` / `tool` / `append` / `user` 等见历史设计文档 |
 | 用量 | `usage.*` | 见下节 |
 | 调度睡眠 | `schedule.min_sleep`、`schedule.idle_sleep` | Agent 定时任务调度用 Go duration 字符串 |

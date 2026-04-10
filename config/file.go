@@ -106,6 +106,8 @@ type File struct {
 	Log struct {
 		Level  string `yaml:"level"`
 		Format string `yaml:"format"`
+		// File: append logs here (UTF-8) in addition to stderr; relative paths are resolved from -cwd.
+		File string `yaml:"file"`
 	} `yaml:"log"`
 
 	SidechainMerge string `yaml:"sidechain_merge"`
@@ -321,6 +323,9 @@ func mergeFile(dst *File, src File) {
 	}
 	if src.Log.Format != "" {
 		dst.Log.Format = src.Log.Format
+	}
+	if src.Log.File != "" {
+		dst.Log.File = src.Log.File
 	}
 	if src.SidechainMerge != "" {
 		dst.SidechainMerge = src.SidechainMerge

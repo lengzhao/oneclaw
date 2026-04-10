@@ -12,7 +12,8 @@ import (
 )
 
 func TestInitWorkspaceWritesConfigAndDirs(t *testing.T) {
-	logx.Init("error", "text")
+	closeLog := logx.Init("error", "text", "")
+	defer closeLog()
 	home := t.TempDir()
 	cwd := t.TempDir()
 	if err := config.InitWorkspace(cwd, home); err != nil {
@@ -51,7 +52,8 @@ func TestInitWorkspaceWritesConfigAndDirs(t *testing.T) {
 }
 
 func TestInitWorkspaceMergesMissingKeys(t *testing.T) {
-	logx.Init("error", "text")
+	closeLog := logx.Init("error", "text", "")
+	defer closeLog()
 	home := t.TempDir()
 	cwd := t.TempDir()
 	dot := filepath.Join(cwd, memory.DotDir)
@@ -78,7 +80,8 @@ func TestInitWorkspaceMergesMissingKeys(t *testing.T) {
 }
 
 func TestInitWorkspaceInvalidYAML(t *testing.T) {
-	logx.Init("error", "text")
+	closeLog := logx.Init("error", "text", "")
+	defer closeLog()
 	home := t.TempDir()
 	cwd := t.TempDir()
 	dot := filepath.Join(cwd, memory.DotDir)

@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	cbconfig "github.com/lengzhao/clawbridge/config"
@@ -417,5 +418,56 @@ func TestMultimodalFeatureFlagsResolved(t *testing.T) {
 	r3 := &Resolved{merged: f}
 	if !r3.MultimodalImageDisabled() || !r3.MultimodalAudioDisabled() {
 		t.Fatalf("expected both disabled, img=%v audio=%v", r3.MultimodalImageDisabled(), r3.MultimodalAudioDisabled())
+	}
+}
+
+func TestResolveLogPath(t *testing.T) {
+	t.Parallel()
+	tmp := t.TempDir()
+	if ResolveLogPath(tmp, "") != "" {
+		t.Fatal("empty path")
+	}
+	absMark, err := filepath.Abs(filepath.Join(tmp, "abs_only.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := ResolveLogPath(tmp, absMark); got != absMark {
+		t.Fatalf("abs: got %q want %q", got, absMark)
+	}
+	rel := filepath.Join("d", "e.log")
+	want := filepath.Join(tmp, rel)
+	if got := ResolveLogPath(tmp, rel); got != want {
+		t.Fatalf("relative: got %q want %q", got, want)
+	}
+}
+
+func TestResolved_LogFile(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	cwd := t.TempDir()
+	proj := filepath.Join(cwd, memory.DotDir)
+	if err := os.MkdirAll(proj, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(proj, "config.yaml"), []byte(`
+log:
+  file: ".oneclaw/run.log"
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	r, err := Load(LoadOptions{Home: home, Cwd: cwd})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := r.LogFile("")
+	if !strings.HasSuffix(got, filepath.Join(".oneclaw", "run.log")) {
+		t.Fatalf("LogFile: %q", got)
+	}
+	ov, err := filepath.Abs(filepath.Join(cwd, "override.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.LogFile(ov) != ov {
+		t.Fatalf("cli override: %q", r.LogFile(ov))
 	}
 }

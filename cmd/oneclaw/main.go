@@ -15,6 +15,7 @@ import (
 	"github.com/lengzhao/clawbridge"
 	"github.com/lengzhao/clawbridge/bus"
 	_ "github.com/lengzhao/clawbridge/drivers"
+
 	"github.com/lengzhao/oneclaw/config"
 	"github.com/lengzhao/oneclaw/logx"
 	"github.com/lengzhao/oneclaw/maintainloop"
@@ -36,6 +37,7 @@ func main() {
 	probeMaintainModel := flag.Bool("probe-maintain-model", false, "send a minimal chat request for each configured maintenance model, then exit (needs API key)")
 	logLevel := flag.String("log-level", "", "debug|info|warn|error (overrides config log.level when non-empty)")
 	logFormat := flag.String("log-format", "", "text|json (overrides config log.format when non-empty)")
+	logFile := flag.String("log-file", "", "append logs to this file (UTF-8) in addition to stderr; overrides config log.file when non-empty; relative to -cwd")
 	flag.Parse()
 
 	if *maintainOnce && *initFlag {
@@ -71,8 +73,15 @@ func main() {
 		os.Exit(1)
 	}
 
+	var logClose func()
+	defer func() {
+		if logClose != nil {
+			logClose()
+		}
+	}()
+
 	if *initFlag {
-		logx.Init(*logLevel, *logFormat)
+		logClose = logx.Init(*logLevel, *logFormat, config.ResolveLogPath(absCwd, *logFile))
 		if err := config.InitWorkspace(absCwd, home); err != nil {
 			slog.Error("init", "err", err)
 			os.Exit(1)
@@ -81,7 +90,7 @@ func main() {
 	}
 
 	if *exportSession != "" {
-		logx.Init(*logLevel, *logFormat)
+		logClose = logx.Init(*logLevel, *logFormat, config.ResolveLogPath(absCwd, *logFile))
 		if err := memory.ExportSessionSnapshot(absCwd, *exportSession); err != nil {
 			slog.Error("export-session", "err", err)
 			os.Exit(1)
@@ -96,7 +105,7 @@ func main() {
 		os.Exit(1)
 	}
 	cfg.PushRuntime()
-	logx.Init(cfg.LogLevel(*logLevel), cfg.LogFormat(*logFormat))
+	logClose = logx.Init(cfg.LogLevel(*logLevel), cfg.LogFormat(*logFormat), cfg.LogFile(*logFile))
 
 	if *probeMaintainModel {
 		if !cfg.HasAPIKey() {
@@ -182,8 +191,6 @@ func main() {
 		defer func() { _ = mcpMgr.Close() }()
 	}
 
-	var publishOutbound func(context.Context, *bus.OutboundMessage) error
-
 	deps := session.MainEngineFactoryDeps{
 		CWD:           absCwd,
 		Resolved:      cfg,
@@ -194,9 +201,6 @@ func main() {
 		LLMAudit:      llmAudit,
 		OrchAudit:     orchAudit,
 		VisAudit:      visAudit,
-		OutboundPublisher: func() func(context.Context, *bus.OutboundMessage) error {
-			return publishOutbound
-		},
 	}
 	if sessStore != nil {
 		deps.NewRecallPersister = func(h session.SessionHandle) session.RecallPersister {
@@ -239,9 +243,7 @@ func main() {
 		slog.Error("clawbridge.new", "err", err)
 		os.Exit(1)
 	}
-	publishOutbound = func(ctx context.Context, msg *bus.OutboundMessage) error {
-		return bridge.Bus().PublishOutbound(ctx, msg)
-	}
+	clawbridge.SetDefault(bridge)
 
 	if err := bridge.Start(rootCtx); err != nil {
 		slog.Error("clawbridge.start", "err", err)
