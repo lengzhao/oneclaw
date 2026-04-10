@@ -38,6 +38,7 @@ func MainEngineFactory(deps MainEngineFactoryDeps) func(SessionHandle) (*Engine,
 		eng.Model = deps.Model
 		if deps.Resolved != nil {
 			eng.MaxSteps = deps.Resolved.MainAgentMaxSteps()
+			eng.MaxTokens = deps.Resolved.MainAgentMaxCompletionTokens()
 			eng.ChatTransport = deps.Resolved.ChatTransport()
 			tp, wp := deps.Resolved.SessionTranscriptPaths(sid)
 			eng.TranscriptPath = tp

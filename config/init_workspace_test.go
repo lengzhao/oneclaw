@@ -40,6 +40,14 @@ func TestInitWorkspaceWritesConfigAndDirs(t *testing.T) {
 	if string(raw) != string(raw2) {
 		t.Fatal("config should be unchanged on second init")
 	}
+	memPath := filepath.Join(cwd, memory.DotDir, "memory", "MEMORY.md")
+	if _, err := os.Stat(memPath); err != nil {
+		t.Fatalf("MEMORY.md from init template: %v", err)
+	}
+	agentPath := filepath.Join(cwd, memory.DotDir, "AGENT.md")
+	if _, err := os.Stat(agentPath); err != nil {
+		t.Fatalf("AGENT.md from init template: %v", err)
+	}
 }
 
 func TestInitWorkspaceMergesMissingKeys(t *testing.T) {

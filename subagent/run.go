@@ -20,6 +20,9 @@ import (
 	"github.com/openai/openai-go"
 )
 
+// maxSidechainTranscriptMessages limits messages persisted per sidechain JSONL record (oldest dropped first).
+const maxSidechainTranscriptMessages = 128
+
 // Host carries parent-session knobs for nested loops (TS: cache-safe / tool-use shell).
 type Host struct {
 	Client         *openai.Client
@@ -414,6 +417,11 @@ func writeSidechain(cwd, sessionID, agentID, kind string, msgs []openai.ChatComp
 	}
 	name := fmt.Sprintf("%s_%s.jsonl", sanitizeID(sessionID), agentID)
 	path := filepath.Join(dir, name)
+	beforeN := len(msgs)
+	msgs = trimMessages(msgs, maxSidechainTranscriptMessages)
+	if len(msgs) < beforeN {
+		slog.Debug("subagent.sidechain_transcript_trimmed", "before", beforeN, "after", len(msgs), "cap", maxSidechainTranscriptMessages)
+	}
 	raw, err := loop.MarshalMessages(msgs)
 	if err != nil {
 		return "", err

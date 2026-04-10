@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -278,57 +277,11 @@ func (l Layout) WriteRoots() []string {
 	return out
 }
 
-// defaultAgentMdStub is written when `<cwd>/.oneclaw/AGENT.md` is missing and there is no legacy root AGENT.md to migrate.
-const defaultAgentMdStub = `# Agent instructions
-
-Durable behavior rules for this agent in this repository. Edit freely.
-
-- Prefer accurate, tool-grounded answers; avoid guessing when data is missing.
-
-(This file was created automatically because .oneclaw/AGENT.md did not exist.)
-`
-
-// EnsureDefaultAgentMd ensures `<cwd>/.oneclaw/AGENT.md` exists: migrates legacy root `AGENT.md` into `.oneclaw/` when the latter is missing, otherwise writes a stub.
-func EnsureDefaultAgentMd(l Layout) {
-	if l.CWD == "" {
-		return
-	}
-	dotDir := filepath.Join(l.CWD, DotDir)
-	dot := filepath.Join(dotDir, AgentInstructionsFile)
-	if st, err := os.Stat(dot); err == nil && !st.IsDir() {
-		return
-	}
-	root := filepath.Join(l.CWD, AgentInstructionsFile)
-	if err := os.MkdirAll(dotDir, 0o755); err != nil {
-		slog.Warn("memory.agent_md.mkdir", "path", dotDir, "err", err)
-		return
-	}
-	if st, err := os.Stat(root); err == nil && !st.IsDir() {
-		raw, rerr := os.ReadFile(root)
-		if rerr != nil {
-			slog.Warn("memory.agent_md.migrate_read", "path", root, "err", rerr)
-			return
-		}
-		if err := os.WriteFile(dot, raw, 0o644); err != nil {
-			slog.Warn("memory.agent_md.migrate_write", "path", dot, "err", err)
-			return
-		}
-		slog.Info("memory.agent_md.migrated_from_root", "from", root, "to", dot)
-		return
-	}
-	if err := os.WriteFile(dot, []byte(defaultAgentMdStub), 0o644); err != nil {
-		slog.Warn("memory.agent_md.write", "path", dot, "err", err)
-		return
-	}
-	slog.Info("memory.agent_md.created", "path", dot)
-}
-
 // EnsureDirs creates memory directories so Write can succeed without mkdir in the model.
 func (l Layout) EnsureDirs() {
 	for _, d := range l.WriteRoots() {
 		_ = os.MkdirAll(d, 0o755)
 	}
-	EnsureDefaultAgentMd(l)
 }
 
 // AutoMemoryDisabled reports features.disable_auto_memory from config.

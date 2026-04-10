@@ -211,6 +211,9 @@ type UpdatePatch struct {
 	Owner       *string
 	DependsOn   *[]string
 	Metadata    map[string]string
+	// CompletionEvidence is optional text required when transitioning to completed (see Update).
+	// Usually set by the task_update tool from JSON field completion_evidence.
+	CompletionEvidence *string
 }
 
 // Update mutates a single task.
@@ -239,16 +242,33 @@ func Update(cwd, taskID string, patch UpdatePatch) (string, error) {
 	if idx < 0 {
 		return "", fmt.Errorf("unknown task_id %q", id)
 	}
-	if patch.Status == nil && patch.Subject == nil && patch.Description == nil && patch.Owner == nil && patch.DependsOn == nil && patch.Metadata == nil {
+	if patch.Status == nil && patch.Subject == nil && patch.Description == nil && patch.Owner == nil && patch.DependsOn == nil && patch.Metadata == nil && patch.CompletionEvidence == nil {
 		return "no fields to update", nil
 	}
 	it := f.Items[idx]
+	oldStatus := it.Status
+	var newStatus string = oldStatus
 	if patch.Status != nil {
 		st, err := normalizeStatus(*patch.Status)
 		if err != nil {
 			return "", err
 		}
-		it.Status = st
+		newStatus = st
+	}
+	if newStatus == "completed" && oldStatus != "completed" {
+		ev := ""
+		if patch.CompletionEvidence != nil {
+			ev = strings.TrimSpace(*patch.CompletionEvidence)
+		}
+		if ev == "" && patch.Metadata != nil {
+			ev = strings.TrimSpace(patch.Metadata["completion_evidence"])
+		}
+		if ev == "" {
+			return "", fmt.Errorf("task %q: status cannot move to completed without completion_evidence (tool field completion_evidence or metadata.completion_evidence): one short sentence of verified outcome", id)
+		}
+	}
+	if patch.Status != nil {
+		it.Status = newStatus
 	}
 	if patch.Subject != nil {
 		s := strings.TrimSpace(*patch.Subject)
@@ -279,6 +299,14 @@ func Update(cwd, taskID string, patch UpdatePatch) (string, error) {
 		}
 		if len(it.Metadata) == 0 {
 			it.Metadata = nil
+		}
+	}
+	if patch.CompletionEvidence != nil {
+		if t := strings.TrimSpace(*patch.CompletionEvidence); t != "" {
+			if it.Metadata == nil {
+				it.Metadata = make(map[string]string)
+			}
+			it.Metadata["completion_evidence"] = t
 		}
 	}
 	f.Items[idx] = it

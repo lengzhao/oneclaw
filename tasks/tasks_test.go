@@ -43,7 +43,8 @@ func TestCreateAppendAndUpdate(t *testing.T) {
 		t.Fatalf("want 2 items, got %v err %v", f.Items, err)
 	}
 	st := "completed"
-	_, err = Update(dir, id, UpdatePatch{Status: &st})
+	ev := "verified in unit test"
+	_, err = Update(dir, id, UpdatePatch{Status: &st, CompletionEvidence: &ev})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,6 +123,51 @@ func TestUpdateNoFields(t *testing.T) {
 	}
 	if msg != "no fields to update" {
 		t.Fatalf("got %q", msg)
+	}
+}
+
+func TestCompletedRequiresEvidence(t *testing.T) {
+	dir := t.TempDir()
+	_, err := Create(dir, false, []CreateInput{{Subject: "x", Status: "in_progress"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, err := Read(Path(dir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := f.Items[0].ID
+	st := "completed"
+	_, err = Update(dir, id, UpdatePatch{Status: &st})
+	if err == nil {
+		t.Fatal("expected error without completion_evidence")
+	}
+	meta := map[string]string{"completion_evidence": "done via metadata"}
+	_, err = Update(dir, id, UpdatePatch{Status: &st, Metadata: meta})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, err = Read(Path(dir))
+	if err != nil || f.Items[0].Status != "completed" {
+		t.Fatalf("want completed, got %+v err %v", f.Items, err)
+	}
+}
+
+func TestCompletedIdempotentNoEvidence(t *testing.T) {
+	dir := t.TempDir()
+	ev := "once"
+	_, err := Create(dir, false, []CreateInput{{Subject: "x", Status: "pending"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, _ := Read(Path(dir))
+	id := f.Items[0].ID
+	st := "completed"
+	if _, err := Update(dir, id, UpdatePatch{Status: &st, CompletionEvidence: &ev}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Update(dir, id, UpdatePatch{Status: &st}); err != nil {
+		t.Fatalf("second completed without new evidence should succeed: %v", err)
 	}
 }
 

@@ -32,12 +32,31 @@ func main() {
 	cwdFlag := flag.String("cwd", "", "project root directory (default: current working directory)")
 	maintainOnce := flag.Bool("maintain-once", false, "run one scheduled memory distill pass and exit (no channels)")
 	initFlag := flag.Bool("init", false, "create <cwd>/.oneclaw; write config.yaml from built-in example if missing, else merge in missing keys without overwriting user values; then exit")
+	exportSession := flag.String("export-session", "", "copy transcripts, tasks, memory, and sidechain from <cwd>/.oneclaw into this directory, then exit (no API key required)")
+	probeMaintainModel := flag.Bool("probe-maintain-model", false, "send a minimal chat request for each configured maintenance model, then exit (needs API key)")
 	logLevel := flag.String("log-level", "", "debug|info|warn|error (overrides config log.level when non-empty)")
 	logFormat := flag.String("log-format", "", "text|json (overrides config log.format when non-empty)")
 	flag.Parse()
 
 	if *maintainOnce && *initFlag {
 		slog.Error("cli.usage", "err", "use only one of -maintain-once or -init")
+		os.Exit(2)
+	}
+	exclusive := 0
+	if *exportSession != "" {
+		exclusive++
+	}
+	if *probeMaintainModel {
+		exclusive++
+	}
+	if *maintainOnce {
+		exclusive++
+	}
+	if *initFlag {
+		exclusive++
+	}
+	if exclusive > 1 {
+		slog.Error("cli.usage", "err", "use only one of -export-session, -probe-maintain-model, -maintain-once, -init")
 		os.Exit(2)
 	}
 
@@ -61,6 +80,16 @@ func main() {
 		return
 	}
 
+	if *exportSession != "" {
+		logx.Init(*logLevel, *logFormat)
+		if err := memory.ExportSessionSnapshot(absCwd, *exportSession); err != nil {
+			slog.Error("export-session", "err", err)
+			os.Exit(1)
+		}
+		slog.Info("export-session.done", "cwd", absCwd, "out", *exportSession)
+		return
+	}
+
 	cfg, err := config.Load(config.LoadOptions{Cwd: absCwd, Home: home, ExplicitPath: *configPath})
 	if err != nil {
 		slog.Error("config.load", "err", err)
@@ -68,6 +97,29 @@ func main() {
 	}
 	cfg.PushRuntime()
 	logx.Init(cfg.LogLevel(*logLevel), cfg.LogFormat(*logFormat))
+
+	if *probeMaintainModel {
+		if !cfg.HasAPIKey() {
+			slog.Error("missing API key: set openai.api_key in config",
+				"user_config", filepath.Join(home, config.UserRelPath),
+				"project_config", filepath.Join(absCwd, memory.DotDir, "config.yaml"),
+			)
+			os.Exit(1)
+		}
+		client := openai.NewClient(cfg.OpenAIOptions()...)
+		mainModel := string(openai.ChatModelGPT4o)
+		if m := cfg.ChatModel(); m != "" {
+			mainModel = m
+		}
+		pctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+		defer cancel()
+		if err := memory.ProbeMaintenanceModels(pctx, &client, mainModel); err != nil {
+			slog.Error("probe-maintain-model", "err", err)
+			os.Exit(1)
+		}
+		slog.Info("probe-maintain-model.ok")
+		return
+	}
 
 	if *maintainOnce {
 		if !cfg.HasAPIKey() {

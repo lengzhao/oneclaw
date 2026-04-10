@@ -12,13 +12,14 @@ import (
 )
 
 type taskUpdateInput struct {
-	TaskID      string            `json:"task_id"`
-	Status      string            `json:"status"`
-	Subject     string            `json:"subject"`
-	Description string            `json:"description"`
-	Owner       string            `json:"owner"`
-	DependsOn   []string          `json:"depends_on"`
-	Metadata    map[string]string `json:"metadata"`
+	TaskID             string            `json:"task_id"`
+	Status             string            `json:"status"`
+	Subject            string            `json:"subject"`
+	Description        string            `json:"description"`
+	Owner              string            `json:"owner"`
+	DependsOn          []string          `json:"depends_on"`
+	Metadata           map[string]string `json:"metadata"`
+	CompletionEvidence string            `json:"completion_evidence"`
 }
 
 // TaskUpdateTool updates one persisted task (status, text, owner, dependencies, metadata).
@@ -28,7 +29,7 @@ func (TaskUpdateTool) Name() string          { return "task_update" }
 func (TaskUpdateTool) ConcurrencySafe() bool { return false }
 
 func (TaskUpdateTool) Description() string {
-	return "Update a single task by id in <cwd>/.oneclaw/tasks.json. Mark in_progress when you start work and completed only when truly done. Optional fields: subject, description, owner, depends_on, metadata (merged with existing metadata keys)."
+	return "Update a single task by id in <cwd>/.oneclaw/tasks.json. Mark in_progress when you start work and completed only when truly done. When setting status to completed, you must include completion_evidence (one short sentence: what was verified or delivered) or metadata.completion_evidence. Optional fields: subject, description, owner, depends_on, metadata (merged with existing metadata keys)."
 }
 
 func (TaskUpdateTool) Parameters() openai.FunctionParameters {
@@ -40,6 +41,10 @@ func (TaskUpdateTool) Parameters() openai.FunctionParameters {
 		"status": map[string]any{
 			"type":        "string",
 			"description": "pending | in_progress | completed | cancelled (omit to leave unchanged)",
+		},
+		"completion_evidence": map[string]any{
+			"type":        "string",
+			"description": "Required when moving to completed: one short sentence of verified outcome (tests passed, PR merged, user confirmed, etc.). Also accepted as metadata.completion_evidence.",
 		},
 		"subject": map[string]any{
 			"type":        "string",
@@ -100,6 +105,10 @@ func (TaskUpdateTool) Execute(ctx context.Context, input json.RawMessage, tctx *
 	}
 	if _, ok := raw["metadata"]; ok && len(in.Metadata) > 0 {
 		patch.Metadata = in.Metadata
+	}
+	if _, ok := raw["completion_evidence"]; ok {
+		s := strings.TrimSpace(in.CompletionEvidence)
+		patch.CompletionEvidence = &s
 	}
 	return tasks.Update(tctx.CWD, in.TaskID, patch)
 }

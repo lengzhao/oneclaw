@@ -5,7 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/lengzhao/oneclaw/toolctx"
@@ -23,7 +26,10 @@ type BashTool struct{}
 func (BashTool) Name() string          { return "bash" }
 func (BashTool) ConcurrencySafe() bool { return false }
 func (BashTool) Description() string {
-	return "Run a shell command via sh -c in the working directory. Optional timeout_sec (default 30, max 120)."
+	return "Run a shell command via sh -c in the working directory (non-interactive: no TTY, stdin is /dev/null). " +
+		"Do not run commands that need a password prompt; they will hang until timeout_sec. " +
+		"Prefer: sudo -n, ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new, git with GIT_TERMINAL_PROMPT=0 (set automatically), npm --yes. " +
+		"Optional timeout_sec (default 30, max 120)."
 }
 
 func (BashTool) Parameters() openai.FunctionParameters {
@@ -34,7 +40,7 @@ func (BashTool) Parameters() openai.FunctionParameters {
 		},
 		"timeout_sec": map[string]any{
 			"type":        "integer",
-			"description": "Timeout in seconds (default 30, max 120)",
+			"description": "Timeout in seconds (default 30, max 120). Entire command is killed when exceeded; use for hung network or stuck prompts.",
 		},
 	}, []string{"command"})
 }
@@ -59,10 +65,17 @@ func (BashTool) Execute(ctx context.Context, input json.RawMessage, tctx *toolct
 	defer cancel()
 	cmd := exec.CommandContext(runCtx, "sh", "-c", in.Command)
 	cmd.Dir = tctx.CWD
+	cmd.Env = nonInteractiveShellEnv()
+	stdin, err := os.Open(os.DevNull)
+	if err != nil {
+		return "", fmt.Errorf("bash: open stdin: %w", err)
+	}
+	defer stdin.Close()
+	cmd.Stdin = stdin
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-	err := cmd.Run()
+	err = cmd.Run()
 	out := stdout.String()
 	if stderr.Len() > 0 {
 		if out != "" {
@@ -80,4 +93,37 @@ func (BashTool) Execute(ctx context.Context, input json.RawMessage, tctx *toolct
 		out = "(no output)"
 	}
 	return out, nil
+}
+
+// nonInteractiveShellEnv returns the process environment with variables that make common CLIs
+// fail fast or skip TTY prompts instead of blocking the agent (stdin is already /dev/null).
+func nonInteractiveShellEnv() []string {
+	base := os.Environ()
+	m := make(map[string]string, len(base)+8)
+	for _, e := range base {
+		i := strings.IndexByte(e, '=')
+		if i <= 0 {
+			continue
+		}
+		m[e[:i]] = e[i+1:]
+	}
+	// Generic: many scripts skip prompts when CI is set.
+	m["CI"] = "true"
+	m["DEBIAN_FRONTEND"] = "noninteractive"
+	m["GIT_TERMINAL_PROMPT"] = "0"
+	m["NPM_CONFIG_YES"] = "true"
+	// curl: fail on HTTP errors without hanging on slow reads; does not fix password prompts.
+	if _, ok := m["CURL_NO_SIGNAL"]; !ok {
+		m["CURL_NO_SIGNAL"] = "1"
+	}
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	out := make([]string, 0, len(keys))
+	for _, k := range keys {
+		out = append(out, k+"="+m[k])
+	}
+	return out
 }

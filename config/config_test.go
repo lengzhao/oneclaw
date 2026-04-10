@@ -36,7 +36,7 @@ agent:
 	if err != nil {
 		t.Fatal(err)
 	}
-	if empty.MainAgentMaxSteps() != 32 {
+	if empty.MainAgentMaxSteps() != 100 {
 		t.Fatalf("default max steps: %d", empty.MainAgentMaxSteps())
 	}
 	if err := os.WriteFile(filepath.Join(projDir, "config.yaml"), []byte(`
@@ -51,6 +51,49 @@ agent:
 	}
 	if r3.MainAgentMaxSteps() != 256 {
 		t.Fatalf("clamp high: got %d", r3.MainAgentMaxSteps())
+	}
+}
+
+func TestMainAgentMaxCompletionTokens(t *testing.T) {
+	home := t.TempDir()
+	cwd := t.TempDir()
+	projDir := filepath.Join(cwd, memory.DotDir)
+	if err := os.MkdirAll(projDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(projDir, "config.yaml"), []byte(`
+agent:
+  max_tokens: 16384
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	r, err := Load(LoadOptions{Home: home, Cwd: cwd})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.MainAgentMaxCompletionTokens() != 16384 {
+		t.Fatalf("got %d", r.MainAgentMaxCompletionTokens())
+	}
+	emptyCwd := t.TempDir()
+	empty, err := Load(LoadOptions{Home: home, Cwd: emptyCwd})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if empty.MainAgentMaxCompletionTokens() != 32768 {
+		t.Fatalf("default max tokens: %d", empty.MainAgentMaxCompletionTokens())
+	}
+	if err := os.WriteFile(filepath.Join(projDir, "config.yaml"), []byte(`
+agent:
+  max_tokens: 9999999
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	r2, err := Load(LoadOptions{Home: home, Cwd: cwd})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r2.MainAgentMaxCompletionTokens() != 131072 {
+		t.Fatalf("clamp high: got %d", r2.MainAgentMaxCompletionTokens())
 	}
 }
 

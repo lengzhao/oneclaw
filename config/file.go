@@ -22,6 +22,8 @@ type File struct {
 	Agent struct {
 		// MaxSteps is model calls per turn; the last call is sent without tools (earlier calls can use tools).
 		MaxSteps int `yaml:"max_steps"`
+		// MaxTokens is max_completion_tokens per model step (main thread / IM sessions). 0 = use Resolved default.
+		MaxTokens int64 `yaml:"max_tokens"`
 	} `yaml:"agent"`
 
 	Chat struct {
@@ -179,6 +181,9 @@ func mergeFile(dst *File, src File) {
 	}
 	if src.Agent.MaxSteps != 0 {
 		dst.Agent.MaxSteps = src.Agent.MaxSteps
+	}
+	if src.Agent.MaxTokens != 0 {
+		dst.Agent.MaxTokens = src.Agent.MaxTokens
 	}
 	if src.Chat.Transport != "" {
 		dst.Chat.Transport = src.Chat.Transport

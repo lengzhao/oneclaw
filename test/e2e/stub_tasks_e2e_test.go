@@ -104,7 +104,7 @@ func TestE2E_109_TaskToolsWriteFileAndDisableHidesBlock(t *testing.T) {
 
 	stub2 := openaistub.New(t)
 	stub2.Enqueue(openaistub.CompletionToolCalls("", []map[string]any{
-		openaistub.ToolCall("u1", "task_update", `{"task_id":"`+id+`","status":"completed"}`),
+		openaistub.ToolCall("u1", "task_update", `{"task_id":"`+id+`","status":"completed","completion_evidence":"e2e stub marked done"}`),
 	}))
 	stub2.Enqueue(openaistub.CompletionStop("", "ok"))
 	e2eEnvMinimal(t, stub2)

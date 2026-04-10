@@ -12,7 +12,7 @@
 
 缺失的文件会被忽略；若 `-config` 指向的路径不存在，启动报错。
 
-**初始化项目**：`oneclaw -init`（可选 `-cwd <dir>`）会创建记忆目录。若 `<cwd>/.oneclaw/config.yaml` **不存在**，则写入内置模板（`config` 包嵌入的 [`project_init.example.yaml`](../config/project_init.example.yaml)）。若**已存在**，则在**保留已有键值**的前提下，把模板里**缺失**的键补进该文件（嵌套 mapping 递归合并；已存在的列表、标量不覆盖）。仅当确有新增键时才会重写文件（重写后 YAML 注释可能丢失）。
+**初始化项目**：`oneclaw -init`（可选 `-cwd <dir>`）会把 `config/init_template/` **整棵复制**到 `<cwd>/.oneclaw/`（目标路径已存在则**不覆盖**），并创建记忆目录。其中 `config.yaml`：若 init 前**已存在**，则在**保留已有键值**的前提下，把嵌入模板里**缺失**的键补进该文件（嵌套 mapping 递归合并；已存在的列表、标量不覆盖）。仅当确有新增键时才会重写 `config.yaml`（重写后 YAML 注释可能丢失）。模板目录还包含默认 `AGENT.md`、`memory/MEMORY.md` 等，见 [`config/init_template/`](../config/init_template/)。
 
 ## 敏感项（API Key）
 
@@ -40,6 +40,7 @@
 | 区域 | 主要 YAML 路径 | 说明 |
 |------|----------------|------|
 | 模型 | `model` | 默认聊天模型；空则代码内默认 |
+| 主会话循环 | `agent.max_steps`、`agent.max_tokens` | `max_steps`：每用户回合内模型调用步数（默认 **100**，范围 1–256）。`max_tokens`：每步 **`max_completion_tokens`**（默认 **32768**，范围 1024–131072；YAML 写 0 或不写则用默认）。`cmd/oneclaw` 经 `MainEngineFactory` 写入 `Engine.MaxTokens`。 |
 | 传输 | `chat.transport` | `auto`（先流式、失败再非流式）、`non_stream`、`stream`；兼容网关仅支持非流式时建议 `non_stream` |
 | OpenAI 兼容 | `openai.api_key`、`openai.base_url`、`openai.org_id`、`openai.project_id` | `base_url` 需含 `/v1/` 后缀（若网关要求） |
 | 路径 | `paths.memory_base`、`paths.transcript`、`paths.working_transcript`、`paths.working_transcript_max_messages` | 相对路径相对 `-cwd`；**`cmd/oneclaw` 多会话模式**下，每逻辑会话的转写落盘见下节「会话」，**不再**使用此处全局 `transcript` / `working_transcript` 路径；`working_transcript_max_messages` 仍适用。其他入口若仍用单 `Engine`，行为见各命令文档。单 `Engine` 时：主线程在每轮成功 `RunTurn` 后把 **内存 `Messages`** 折叠为**用户可见**（去掉 agentMd / 路由 / recall / compact 注入与 tool 轮次等）；`working_transcript` 与内存同形；`working_transcript_max_messages` 截尾部可见条数，`0` 默认 **30**，负数不限制 |
@@ -117,7 +118,7 @@
 
 ## 示例
 
-仓库内唯一示例模板：[`config/project_init.example.yaml`](../config/project_init.example.yaml)（**`oneclaw -init`** 嵌入并写入项目；亦可手动复制为 `~/.oneclaw/config.yaml` 或 `<项目>/.oneclaw/config.yaml`）。
+新项目默认文件树：[`config/init_template/`](../config/init_template/)（**`oneclaw -init`** 嵌入并复制到 `<项目>/.oneclaw/`；亦可手动将其中 `config.yaml` 复制为 `~/.oneclaw/config.yaml` 或 `<项目>/.oneclaw/config.yaml`）。
 
 ## 与第三方 autoload 的关系
 

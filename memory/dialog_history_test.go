@@ -45,6 +45,35 @@ func TestAppendDialogHistoryPair(t *testing.T) {
 	}
 }
 
+func TestAppendDialogHistoryPair_trimsOld(t *testing.T) {
+	t.Parallel()
+	oldCap := maxDialogHistoryMessages
+	maxDialogHistoryMessages = 4
+	t.Cleanup(func() { maxDialogHistoryMessages = oldCap })
+
+	cwd := t.TempDir()
+	home := t.TempDir()
+	lay := DefaultLayout(cwd, home)
+	date := "2026-04-06"
+	path := lay.DialogHistoryPath(date)
+	for i := 0; i < 4; i++ {
+		if err := AppendDialogHistoryPair(lay, date, "", openai.UserMessage("u"), openai.AssistantMessage("a")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	msgs, err := loop.UnmarshalMessages(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(msgs) != 4 {
+		t.Fatalf("want cap 4 messages, got %d", len(msgs))
+	}
+}
+
 func TestDialogHistoryPath(t *testing.T) {
 	t.Parallel()
 	cwd := filepath.Join("/tmp", "proj")

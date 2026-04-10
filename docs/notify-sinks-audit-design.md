@@ -122,8 +122,10 @@ flowchart TB
 
 ### 4.3 Sink 3（`kind: audit_visible`）
 
-- `transcript`：`[{ "role": "user"|"assistant", "content": "…" }]` **完整列表**（或本 turn delta 两则 **完整** `content`）
-- 禁止出现 `tool` role 与非用户可见注入
+- `messages`：与 `transcript.json` 相同形状，`[{ "role": "user"|"assistant", "content": "…" }]`，**仅本 turn 新增的用户可见轮次**（通常为该 turn 的用户行 + 最终助手可见回复），避免每行审计重复整段会话导致 JSONL 体积二次增长。
+- 同行可选字段：`tool_count`、`final_assistant_preview`、`truncated_by_max_steps`、`local_slash`（与 `turn_complete` 一致）。
+- 禁止出现 `tool` role 与非用户可见注入。
+- 若 `turn_complete` 未带 `messages`（异常路径），Sink 3 最多回退写入当前 Transcript **末尾两条**可见记录，而非全量快照。
 
 ---
 
@@ -140,7 +142,7 @@ flowchart LR
   N --> S1
   N --> S2
   N --> S3
-  ENG -->|Getter Transcript| S3
+  ENG -->|turn_complete.data.messages + Getter 回退| S3
   MEM[memory BuildTurn / Budget] -.->|新 Event 或 session 补发| S2
   LOOP[loop RunTurn] -.->|OnModelStepRecorded 或扩 Event| S1
 ```
@@ -154,7 +156,7 @@ flowchart LR
 
 - **Sink 1**：体积最大，建议 **按配置** 开关「是否存 request 全文」「assistant 全文上限」。
 - **Sink 2**：tool/recall 全文建议 **单字段字节上限** + 溢出写 sidecar 或只留 hash。
-- **Sink 3**：**默认不截断**；若极端大会话，仅提供 **显式** `MaxAssistantRunes` 配置并打审计告警。
+- **Sink 3**：按 turn 追加 **增量** `messages`；若需整会话对账以 **TranscriptPath / transcript.json** 为准。远期可选显式 `MaxAssistantRunes` 与告警。
 - **写盘**：**按 `(agent_segment, 日更文件路径)` mutex**（不同 Agent 分文件，不共锁）；失败 `error` + `EmitSafe` 日志，**不回滚**会话。
 
 ---

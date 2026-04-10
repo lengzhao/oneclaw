@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -23,6 +24,14 @@ func TestTool_Name_stablePrefix(t *testing.T) {
 	tool := NewTool(stubCaller{}, "myserver", mt, 0)
 	if got := tool.Name(); !strings.HasPrefix(got, "mcp_") {
 		t.Fatalf("name=%q", got)
+	}
+}
+
+func TestTruncateUTF8StringByBytes(t *testing.T) {
+	s := "hello" + string([]byte{0xe2}) // incomplete rune at end if cut wrong
+	full := s + "世"
+	if got := truncateUTF8StringByBytes(full, 8); utf8.ValidString(got) != true {
+		t.Fatalf("invalid utf8: %q", got)
 	}
 }
 

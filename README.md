@@ -138,14 +138,14 @@ flowchart TB
 ## 环境与配置
 
 - **Go**：`1.26.1+`（见 [`go.mod`](go.mod)）。
-- **模型**：OpenAI 兼容 HTTP API。在 YAML 中配置 `openai.api_key`、可选 `openai.base_url`（自定义网关时需含 `/v1/` 后缀）等，见 **[`docs/config.md`](docs/config.md)** 与 [`config/project_init.example.yaml`](config/project_init.example.yaml)。
+- **模型**：OpenAI 兼容 HTTP API。在 YAML 中配置 `openai.api_key`、可选 `openai.base_url`（自定义网关时需含 `/v1/` 后缀）等，见 **[`docs/config.md`](docs/config.md)** 与 [`config/init_template/config.yaml`](config/init_template/config.yaml)。
 
 建议复制示例配置后按需修改：
 
 ```bash
 cp env.example .env   # 可选：给其他工具用；oneclaw 以 YAML 为准
 go run ./cmd/oneclaw -init
-# 或手动：cp config/project_init.example.yaml <项目>/.oneclaw/config.yaml
+# 或手动：cp config/init_template/config.yaml <项目>/.oneclaw/config.yaml
 ```
 
 **常用 YAML 段**：`model`、`chat.transport`、`openai.*`、`paths.*`、`budget.*`、`maintain.*`、`features.disable_*`、`log.*`、`usage.*`、`schedule.*` — 字段说明与默认值见 [`docs/config.md`](docs/config.md)。

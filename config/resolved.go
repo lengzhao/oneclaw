@@ -60,9 +60,13 @@ const (
 	defaultMainAgentMaxSteps = 100
 	minMainAgentMaxSteps     = 1
 	maxMainAgentMaxSteps     = 256
+
+	defaultMainAgentMaxCompletionTokens int64 = 32768
+	minMainAgentMaxCompletionTokens     int64 = 1024
+	maxMainAgentMaxCompletionTokens     int64 = 131072
 )
 
-// MainAgentMaxSteps returns agent.max_steps from YAML, clamped to [1, 256]; 0/unset → 32.
+// MainAgentMaxSteps returns agent.max_steps from YAML, clamped to [1, 256]; 0/unset → defaultMainAgentMaxSteps (100).
 func (r *Resolved) MainAgentMaxSteps() int {
 	if r == nil {
 		return defaultMainAgentMaxSteps
@@ -78,6 +82,26 @@ func (r *Resolved) MainAgentMaxSteps() int {
 		n = maxMainAgentMaxSteps
 	}
 	return n
+}
+
+// MainAgentMaxCompletionTokens returns agent.max_tokens for the main chat loop (API max_completion_tokens per step).
+// 0/unset in YAML yields defaultMainAgentMaxCompletionTokens; values are clamped to
+// [minMainAgentMaxCompletionTokens, maxMainAgentMaxCompletionTokens].
+func (r *Resolved) MainAgentMaxCompletionTokens() int64 {
+	if r == nil {
+		return defaultMainAgentMaxCompletionTokens
+	}
+	t := r.merged.Agent.MaxTokens
+	if t <= 0 {
+		return defaultMainAgentMaxCompletionTokens
+	}
+	if t < minMainAgentMaxCompletionTokens {
+		t = minMainAgentMaxCompletionTokens
+	}
+	if t > maxMainAgentMaxCompletionTokens {
+		t = maxMainAgentMaxCompletionTokens
+	}
+	return t
 }
 
 // ClawbridgeConfigForRun returns merged clawbridge config for clawbridge.New.

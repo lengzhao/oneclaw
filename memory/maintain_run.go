@@ -155,7 +155,6 @@ func runDistill(ctx context.Context, layout Layout, client *openai.Client, p dis
 		logPathwaySkip(p.pathway, "auto_memory_disabled")
 		return
 	}
-	EnsureDefaultAgentMd(layout)
 	model, override := ResolveMaintenanceModel(p.mainChatModel, p.useScheduledModelEnv)
 	if strings.TrimSpace(model) == "" {
 		slog.Warn("memory.maintain.skip", "reason", "empty_model", "pathway", p.pathway)
@@ -230,7 +229,9 @@ func runDistill(ctx context.Context, layout Layout, client *openai.Client, p dis
 			"No daily logs or project topics are included. "
 		turnBlock := "Current turn snapshot (current session only):\n```\n" + postTurnSnap + "\n```\n\n"
 		taskBody := "Then **3–8** short bullet lines (one sentence each; **no** long paragraphs or redundant absolute paths) of **new** durable **episodic** information from **this turn only** (facts, cautions, tool-usage preferences, repeated tool calls and why **only** if stated or clearly implied in the snapshot). " +
-			"Skip anything already in the rules excerpt (paraphrases count as duplicates). " +
+			"Skip anything already in the rules excerpt or **already covered today** in the same-day digest (paraphrases count as duplicates). " +
+			"If the user forbade something and the assistant violated that, write a **correction** bullet instead of claiming success. " +
+			"Prefer tool-verified facts over UI guesses. " +
 			"If nothing new remains for this turn, a single line: \"- (no durable entries)\". No other sections."
 		sameDayNote := ""
 		if hadTodayDigest {
@@ -285,34 +286,68 @@ func runDistill(ctx context.Context, layout Layout, client *openai.Client, p dis
 		reg = tools.NewRegistry()
 	}
 
-	msgs := []openai.ChatCompletionMessageParamUnion{}
 	mt := maintenanceEffectiveMaxTokens(p.maxOutputTokens, p.pathway == pathwayPostTurn)
 	if mt <= 0 || mt > 8192 {
 		mt = 2048
 	}
-	cfg := loop.Config{
-		Client:      client,
-		Model:       model,
-		System:      maintenanceSystemPromptForPathway(p.pathway, layout.CWD, episodePath, rulesPath, dateStr, runTS),
-		MaxTokens:   mt,
-		MaxSteps:    maxSteps,
-		Messages:    &msgs,
-		Registry:    reg,
-		ToolContext: tctx,
+	sys := maintenanceSystemPromptForPathway(p.pathway, layout.CWD, episodePath, rulesPath, dateStr, runTS)
+
+	type modelTry struct {
+		model     string
+		dedicated bool
 	}
-	slog.Info("memory.maintain.request", "model", model, "pathway", p.pathway, "dedicated_model", override)
-	if err := loop.RunTurn(runCtx, cfg, bus.InboundMessage{Content: userPrompt}); err != nil {
-		slog.Warn("memory.maintain.run_failed", "model", model, "pathway", p.pathway, "err", err)
-		return
+	tries := []modelTry{{model, override}}
+	if mainModel := strings.TrimSpace(p.mainChatModel); override && mainModel != "" && mainModel != model {
+		tries = append(tries, modelTry{mainModel, false})
 	}
-	out := strings.TrimSpace(loop.LastAssistantDisplay(msgs))
-	out = stripMarkdownFences(out)
+
+	var out string
+	var usedModel string
+	for i, tr := range tries {
+		msgs := []openai.ChatCompletionMessageParamUnion{}
+		cfg := loop.Config{
+			Client:      client,
+			Model:       tr.model,
+			System:      sys,
+			MaxTokens:   mt,
+			MaxSteps:    maxSteps,
+			Messages:    &msgs,
+			Registry:    reg,
+			ToolContext: tctx,
+		}
+		if i == 0 {
+			slog.Info("memory.maintain.request", "model", tr.model, "pathway", p.pathway, "dedicated_model", tr.dedicated)
+		} else {
+			slog.Warn("memory.maintain.retry_main_model", "pathway", p.pathway, "model", tr.model, "after_model", tries[0].model)
+		}
+		if err := loop.RunTurn(runCtx, cfg, bus.InboundMessage{Content: userPrompt}); err != nil {
+			slog.Warn("memory.maintain.run_failed", "model", tr.model, "pathway", p.pathway, "err", err)
+			if i == len(tries)-1 {
+				return
+			}
+			continue
+		}
+		cand := strings.TrimSpace(loop.LastAssistantDisplay(msgs))
+		cand = stripMarkdownFences(cand)
+		if cand == "" {
+			slog.Warn("memory.maintain.empty_output", "model", tr.model, "pathway", p.pathway)
+			if i == len(tries)-1 {
+				return
+			}
+			continue
+		}
+		if !strings.Contains(cand, digestHeader) {
+			slog.Warn("memory.maintain.missing_header", "model", tr.model, "pathway", p.pathway, "preview", utf8SafePrefix(cand, 120))
+			if i == len(tries)-1 {
+				return
+			}
+			continue
+		}
+		out = cand
+		usedModel = tr.model
+		break
+	}
 	if out == "" {
-		slog.Warn("memory.maintain.empty_output", "model", model, "pathway", p.pathway)
-		return
-	}
-	if !strings.Contains(out, digestHeader) {
-		slog.Warn("memory.maintain.missing_header", "model", model, "pathway", p.pathway, "preview", utf8SafePrefix(out, 120))
 		return
 	}
 	episodicSansToday := existing
@@ -332,6 +367,7 @@ func runDistill(ctx context.Context, layout Layout, client *openai.Client, p dis
 		return
 	}
 	merged := mergeSameDayAutoMaintainedBlocks(existing[spanStart:spanEnd], out, digestHeader, dedupeCorpus)
+	merged = trimEpisodicAutoMaintainSection(merged, digestHeader, defaultEpisodicAutoMaintainMaxBytes)
 	if maintenanceSectionOnlyNoDurable(merged) {
 		persistScheduledMaintainSuccess(incrementalStatePath, p)
 		slog.Info("memory.maintain.skip", "reason", "merge_no_net_bullets", "date", dateStr, "pathway", p.pathway)
@@ -358,7 +394,7 @@ func runDistill(ctx context.Context, layout Layout, client *openai.Client, p dis
 	slog.Info(logMsg,
 		"path", episodePath,
 		"date", dateStr,
-		"model", model,
+		"model", usedModel,
 		"pathway", p.pathway,
 		"audit_source", auditSrc,
 		"section_bytes", len(merged),

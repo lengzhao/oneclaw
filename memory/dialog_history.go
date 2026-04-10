@@ -12,6 +12,24 @@ import (
 	"github.com/openai/openai-go"
 )
 
+// maxDialogHistoryMessages caps stored messages (user+assistant pairs count as two). Oldest entries drop first.
+var maxDialogHistoryMessages = 400
+
+func trimDialogHistoryFront(msgs []json.RawMessage, max int) []json.RawMessage {
+	if max <= 0 || len(msgs) <= max {
+		return msgs
+	}
+	out := msgs
+	for len(out) > max {
+		if len(out) >= 2 {
+			out = out[2:]
+			continue
+		}
+		out = out[1:]
+	}
+	return out
+}
+
 // AppendDialogHistoryPair appends one slim user message and one assistant message to the day's dialog_history.json.
 // sessionID selects a per-session file under the date directory when non-empty; otherwise the legacy single file path is used.
 func AppendDialogHistoryPair(layout Layout, date, sessionID string, user, assistant openai.ChatCompletionMessageParamUnion) error {
@@ -46,6 +64,11 @@ func AppendDialogHistoryPair(layout Layout, date, sessionID string, user, assist
 		return fmt.Errorf("marshal assistant message: %w", err)
 	}
 	wrap.Messages = append(wrap.Messages, ub, ab)
+	before := len(wrap.Messages)
+	wrap.Messages = trimDialogHistoryFront(wrap.Messages, maxDialogHistoryMessages)
+	if len(wrap.Messages) < before {
+		slog.Info("memory.dialog_history.trimmed", "path", path, "dropped", before-len(wrap.Messages), "kept", len(wrap.Messages), "cap", maxDialogHistoryMessages)
+	}
 
 	out, err := json.MarshalIndent(wrap, "", "  ")
 	if err != nil {

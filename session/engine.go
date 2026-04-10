@@ -84,7 +84,7 @@ func NewEngine(cwd string, reg *tools.Registry) *Engine {
 	e := &Engine{
 		Client:    openai.NewClient(),
 		Model:     string(openai.ChatModelGPT4o),
-		MaxTokens: 8192,
+		MaxTokens: 32768,
 		MaxSteps:  32,
 		System:    "",
 		Registry:  reg,
@@ -111,6 +111,7 @@ func (e *Engine) SubmitUser(ctx context.Context, in bus.InboundMessage) error {
 
 	turnID := newTurnID()
 	corrID := strings.TrimSpace(in.MessageID)
+	turnT0 := time.Now()
 	if e.hasNotify() {
 		ev := notify.NewEvent(notify.EventInboundReceived, "")
 		e.applyNotifyCorrelation(&ev, turnID, corrID)
@@ -138,6 +139,12 @@ func (e *Engine) SubmitUser(ctx context.Context, in bus.InboundMessage) error {
 		}
 		return err
 	}
+	slog.Info("session.turn_prepared",
+		"prepare_ms", time.Since(turnT0).Milliseconds(),
+		"cwd", e.CWD,
+		"model", e.Model,
+		"channel", strings.TrimSpace(in.Channel),
+	)
 	bg := prep.bg
 	memOK := prep.memOK
 	layout := prep.layout
@@ -188,6 +195,7 @@ func (e *Engine) SubmitUser(ctx context.Context, in bus.InboundMessage) error {
 		Lifecycle: e.buildLoopLifecycle(turnID, corrID, prep.tctx.AgentID),
 	}
 
+	visibleCountBefore := len(loop.ToUserVisibleMessages(e.Transcript))
 	// Claude Code–style: record user turn before query loop so crash/interrupt still leaves the request on disk.
 	e.Transcript = append(e.Transcript, openai.UserMessage(SlimTranscriptUserLine(text, atts)))
 	if err := e.SaveTranscript(); err != nil {
@@ -211,6 +219,11 @@ func (e *Engine) SubmitUser(ctx context.Context, in bus.InboundMessage) error {
 		notify.EmitSafe(e.Notify, ctx, ev)
 	}
 
+	slog.Info("session.model_loop_start",
+		"since_inbound_ms", time.Since(turnT0).Milliseconds(),
+		"live_messages", len(e.Messages),
+		"turn_id", turnID,
+	)
 	err = loop.RunTurn(ctx, cfg, in)
 	if err != nil {
 		if e.hasNotify() {
@@ -237,6 +250,7 @@ func (e *Engine) SubmitUser(ctx context.Context, in bus.InboundMessage) error {
 			"tool_count":              toolCount,
 			"final_assistant_preview": notify.Preview(loop.LastAssistantDisplay(e.Messages), notify.DefaultPreviewRunes),
 			"truncated_by_max_steps": false,
+			"messages":                loop.VisibleTranscriptAppendSince(e.Transcript, visibleCountBefore),
 		}
 		notify.EmitSafe(e.Notify, ctx, ev)
 	}
@@ -337,6 +351,7 @@ func (e *Engine) submitLocalSlashTurn(ctx context.Context, in bus.InboundMessage
 	e.Messages = append(e.Messages, openai.AssistantMessage(reply))
 	e.Messages = loop.ToUserVisibleMessages(e.Messages)
 
+	visibleCountBefore := len(loop.ToUserVisibleMessages(e.Transcript))
 	e.Transcript = append(e.Transcript, openai.UserMessage(SlimTranscriptUserLine(text, atts)))
 	e.Transcript = append(e.Transcript, openai.AssistantMessage(reply))
 	if err := e.SaveTranscript(); err != nil {
@@ -359,6 +374,7 @@ func (e *Engine) submitLocalSlashTurn(ctx context.Context, in bus.InboundMessage
 			"local_slash":             true,
 			"final_assistant_preview": notify.Preview(reply, notify.DefaultPreviewRunes),
 			"truncated_by_max_steps":  false,
+			"messages":                loop.VisibleTranscriptAppendSince(e.Transcript, visibleCountBefore),
 		}
 		notify.EmitSafe(e.Notify, ctx, ev)
 	}

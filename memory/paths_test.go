@@ -29,46 +29,15 @@ func TestExpandTilde(t *testing.T) {
 	}
 }
 
-func TestEnsureDefaultAgentMd_MigratesRootToDot(t *testing.T) {
+func TestEnsureDirs_CreatesWriteRoots(t *testing.T) {
 	cwd := t.TempDir()
 	home := t.TempDir()
 	lay := DefaultLayout(cwd, home)
-	root := filepath.Join(cwd, AgentInstructionsFile)
-	if err := os.WriteFile(root, []byte("legacy root content\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	EnsureDefaultAgentMd(lay)
-	dot := filepath.Join(cwd, DotDir, AgentInstructionsFile)
-	b, err := os.ReadFile(dot)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(b) != "legacy root content\n" {
-		t.Fatalf("migrated content = %q", string(b))
-	}
-}
-
-func TestEnsureDefaultAgentMd_CreatesDotOneclaw(t *testing.T) {
-	cwd := t.TempDir()
-	home := t.TempDir()
-	lay := DefaultLayout(cwd, home)
-	EnsureDefaultAgentMd(lay)
-	dot := filepath.Join(cwd, DotDir, AgentInstructionsFile)
-	b, err := os.ReadFile(dot)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(b) < 20 {
-		t.Fatalf("unexpected stub: %q", b)
-	}
-	// Idempotent
-	EnsureDefaultAgentMd(lay)
-	b2, err := os.ReadFile(dot)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(b2) != string(b) {
-		t.Fatal("second call should not overwrite")
+	lay.EnsureDirs()
+	for _, d := range lay.WriteRoots() {
+		if st, err := os.Stat(d); err != nil || !st.IsDir() {
+			t.Fatalf("expected dir %s: err=%v", d, err)
+		}
 	}
 }
 

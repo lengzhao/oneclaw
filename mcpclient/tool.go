@@ -18,6 +18,25 @@ import (
 
 const defaultMaxInlineRunes = 16 * 1024
 
+// maxMCPArtifactFileBytes caps bytes written to .oneclaw/artifacts/mcp/*.txt (DOM dumps, etc.).
+const maxMCPArtifactFileBytes = 256 * 1024
+
+const mcpArtifactTruncNote = "\n\n[truncated: MCP artifact file byte cap]\n"
+
+func truncateUTF8StringByBytes(s string, maxBytes int) string {
+	if len(s) <= maxBytes {
+		return s
+	}
+	if maxBytes <= 0 {
+		return ""
+	}
+	s = s[:maxBytes]
+	for len(s) > 0 && !utf8.ValidString(s) {
+		s = s[:len(s)-1]
+	}
+	return s
+}
+
 // ToolCaller is implemented by *Manager.
 type ToolCaller interface {
 	CallTool(ctx context.Context, serverName, toolName string, arguments map[string]any) (*mcp.CallToolResult, error)
@@ -250,7 +269,16 @@ func (t *Tool) formatResult(content []mcp.Content, tctx *toolctx.Context) (strin
 		return "", fmt.Errorf("mcp artifact file: %w", err)
 	}
 	path := f.Name()
-	if _, err := f.WriteString(out); err != nil {
+	artifactOut := out
+	if len(artifactOut) > maxMCPArtifactFileBytes {
+		budget := maxMCPArtifactFileBytes - len(mcpArtifactTruncNote)
+		if budget < 0 {
+			budget = 0
+		}
+		artifactOut = truncateUTF8StringByBytes(artifactOut, budget) + mcpArtifactTruncNote
+		slog.Warn("mcp.artifact_truncated", "tool", t.mcpTool.Name, "orig_bytes", len(out), "cap", maxMCPArtifactFileBytes)
+	}
+	if _, err := f.WriteString(artifactOut); err != nil {
 		_ = f.Close()
 		_ = os.Remove(path)
 		return "", err
@@ -260,5 +288,8 @@ func (t *Tool) formatResult(content []mcp.Content, tctx *toolctx.Context) (strin
 		return "", err
 	}
 	n := utf8.RuneCountInString(out)
+	if len(out) > maxMCPArtifactFileBytes {
+		return fmt.Sprintf("[MCP returned large text (%d runes; on-disk artifact truncated to %d bytes); saved to %s]", n, len(artifactOut), path), nil
+	}
 	return fmt.Sprintf("[MCP returned large text (%d runes); saved to %s]", n, path), nil
 }

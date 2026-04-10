@@ -51,7 +51,13 @@ func TestAuditSinksWriteJSONL(t *testing.T) {
 	ev3 := notify.NewEvent(notify.EventTurnComplete, "")
 	ev3.SessionID = "s1"
 	ev3.TurnID = "t1"
-	ev3.Data = map[string]any{"tool_count": 0}
+	ev3.Data = map[string]any{
+		"tool_count": 0,
+		"messages": []map[string]string{
+			{"role": "user", "content": "hi"},
+			{"role": "assistant", "content": "hello"},
+		},
+	}
 	if err := vis.Emit(context.Background(), ev3); err != nil {
 		t.Fatal(err)
 	}
@@ -90,6 +96,12 @@ func TestAuditSinksWriteJSONL(t *testing.T) {
 		}
 		if m["kind"] == nil {
 			t.Fatalf("%s", raw)
+		}
+		if sub == "visible" {
+			msgs, _ := m["messages"].([]any)
+			if len(msgs) != 2 {
+				t.Fatalf("visible messages: want 2 got %d: %s", len(msgs), raw)
+			}
 		}
 	}
 }

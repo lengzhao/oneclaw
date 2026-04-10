@@ -43,3 +43,4 @@ test/e2e/~/
 config.yaml
 # Local LLM credentials for opt-in e2e (see test/e2e/live_llm.config.example.yaml)
 test/e2e/live_llm.config.yaml
+tmp/
