@@ -33,6 +33,24 @@ func TestE2E_113_SlashHelpSkipsModel(t *testing.T) {
 	}
 }
 
+// E2E-116 /status 不调用模型
+func TestE2E_116_SlashStatusSkipsModel(t *testing.T) {
+	stub := openaistub.New(t)
+	e2eEnvMinimal(t, stub)
+	e := newStubEngine(t, stub, t.TempDir())
+	err := e.SubmitUser(context.Background(), bus.InboundMessage{Content: "/status", Channel: "cli"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := len(stub.ChatRequestBodies()); n != 0 {
+		t.Fatalf("expected no chat/completions calls, got %d", n)
+	}
+	last := loop.LastAssistantDisplay(e.Messages)
+	if !strings.Contains(last, "会话 ID:") {
+		t.Fatalf("expected status body, got %q", last)
+	}
+}
+
 // E2E-114 入站 meta 进入首轮 API 请求；附件路径留在折叠后的 Messages（inbound 不常驻内存以省 token）
 func TestE2E_114_InboundMetaAndAttachmentInHistory(t *testing.T) {
 	stub := openaistub.New(t)

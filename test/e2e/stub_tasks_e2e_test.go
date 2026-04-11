@@ -25,7 +25,7 @@ import (
 // E2E-108 存在 tasks.json 时 system 含 Task list 与任务摘要。
 func TestE2E_108_TasksBlockInSystemPrompt(t *testing.T) {
 	cwd := t.TempDir()
-	if _, err := tasks.Create(cwd, false, []tasks.CreateInput{{Subject: "E2E108_SUBJECT", Status: "in_progress"}}); err != nil {
+	if _, err := tasks.Create(cwd, false, false, []tasks.CreateInput{{Subject: "E2E108_SUBJECT", Status: "in_progress"}}); err != nil {
 		t.Fatal(err)
 	}
 

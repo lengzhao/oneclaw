@@ -55,6 +55,7 @@ paths:
 # 多会话（IM 线程隔离）；主进程 cmd/oneclaw 使用 SessionResolver：每个 channel + session_key 独立 Engine。
 # 转写文件：<UserDataRoot>/sessions/<stable_id>/.oneclaw/transcript.json 与 working_transcript.json（与下方 paths.transcript 覆盖关系见 docs/config.md）。
 # SQLite：会话元数据 + memory recall 去重状态；路径相对 UserDataRoot。
+# isolate_workspace：true 时每个会话的 Engine.CWD 为 sessions/<id>/.oneclaw（文件工具互不干扰）；false（默认）时 CWD 为 UserDataRoot，多会话共享同一工作区。
 # -----------------------------------------------------------------------------
 sessions:
   # true：不打开 SQLite，仅文件（测试或极简环境）
@@ -63,6 +64,8 @@ sessions:
   sqlite_path: ""
   # cmd/oneclaw 固定 worker 数（按 session 哈希分片）；0 或未设置则运行时默认 8；不会随会话数无限增加 goroutine
   worker_count: 0
+  # false：共享 ~/.oneclaw 为工作目录；true：每会话 ~/.oneclaw/sessions/<id>/.oneclaw
+  isolate_workspace: false
 
 # -----------------------------------------------------------------------------
 # IM 总线（github.com/lengzhao/clawbridge）；形状与 clawbridge config.Config 一致，见该仓库 config.example.yaml。

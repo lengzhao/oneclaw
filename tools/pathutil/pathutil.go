@@ -2,7 +2,6 @@ package pathutil
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 )
@@ -32,16 +31,4 @@ func ResolveUnderRoot(root, userPath string) (string, error) {
 		return "", fmt.Errorf("path escapes working directory")
 	}
 	return targetAbs, nil
-}
-
-// FileExists reports whether path is a regular file.
-func FileExists(path string) (bool, error) {
-	st, err := os.Stat(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return false, nil
-		}
-		return false, err
-	}
-	return !st.IsDir(), nil
 }

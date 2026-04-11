@@ -79,5 +79,5 @@ func (TaskCreateTool) Execute(ctx context.Context, input json.RawMessage, tctx *
 			Metadata:    row.Metadata,
 		})
 	}
-	return tasks.Create(tctx.CWD, in.Replace, ins)
+	return tasks.Create(tctx.CWD, tctx.WorkspaceFlat, in.Replace, ins)
 }

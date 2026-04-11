@@ -214,6 +214,10 @@ func RunTurn(ctx context.Context, cfg Config, in bus.InboundMessage) (err error)
 			inbound = cfg.ToolContext.TurnInbound
 			depth = cfg.ToolContext.SubagentDepth
 		}
+		wf := false
+		if cfg.ToolContext != nil {
+			wf = cfg.ToolContext.WorkspaceFlat
+		}
 		usageledger.MaybeRecord(usageledger.RecordParams{
 			CWD:              cwd,
 			SessionID:        cfg.SessionID,
@@ -225,6 +229,7 @@ func RunTurn(ctx context.Context, cfg Config, in bus.InboundMessage) (err error)
 			TotalTokens:      completion.Usage.TotalTokens,
 			UsageJSON:        completion.Usage.RawJSON(),
 			Inbound:          inbound,
+			WorkspaceFlat:    wf,
 		})
 
 		if choice.FinishReason != "tool_calls" {

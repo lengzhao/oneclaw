@@ -37,6 +37,7 @@ func (e *Engine) prepareSharedTurn(ctx context.Context, in bus.InboundMessage, a
 	p.tctx = toolctx.New(e.CWD, ctx)
 	p.tctx.SessionID = e.SessionID
 	p.tctx.HostDataRoot = e.UserDataRoot
+	p.tctx.WorkspaceFlat = e.WorkspaceFlat
 	p.tctx.AgentID = e.EffectiveRootAgentID()
 	if wireSendMessage {
 		p.tctx.SendMessage = e.SendMessage
@@ -47,7 +48,7 @@ func (e *Engine) prepareSharedTurn(ctx context.Context, in bus.InboundMessage, a
 	}
 	p.memOK = herr == nil && !rtopts.Current().DisableMemory
 	if p.memOK {
-		p.layout = memory.DefaultLayout(e.CWD, home)
+		p.layout = e.MemoryLayout(home)
 		p.bundle = memory.BuildTurn(p.layout, home, preview, &e.RecallState, p.bg.RecallBytes())
 		memory.ApplyTurnBudget(&p.bundle, p.bg)
 		if p.bundle.UpdatedRecall != nil {
@@ -67,7 +68,7 @@ func (e *Engine) prepareSharedTurn(ctx context.Context, in bus.InboundMessage, a
 			return e.PublishOutbound(ctx, msg)
 		}
 	}
-	cat := subagent.LoadCatalog(e.CWD)
+	cat := subagent.LoadCatalog(e.CWD, e.WorkspaceFlat)
 	p.catalog = cat
 	p.system = e.buildTurnSystem(p.memOK, p.bundle, p.bg, home, herr, cat)
 	p.tctx.Subagent = &subRunner{

@@ -16,8 +16,8 @@ func userSkillsRoot(home string) string {
 	return filepath.Join(home, memory.DotDir, "skills")
 }
 
-func projectSkillsRoot(cwd string) string {
-	return filepath.Join(cwd, memory.DotDir, "skills")
+func projectSkillsRoot(cwd string, workspaceFlat bool) string {
+	return memory.JoinSessionWorkspace(cwd, workspaceFlat, "skills")
 }
 
 func mergeSkillsFromRoot(byName map[string]Skill, root string) {
@@ -56,12 +56,12 @@ func mergeSkillsFromRoot(byName map[string]Skill, root string) {
 	}
 }
 
-// LoadAll returns skills from ~/.oneclaw/skills then <cwd>/.oneclaw/skills (project overrides user on same name).
+// LoadAll returns skills from ~/.oneclaw/skills then project skills under cwd (flat vs .oneclaw/ per workspaceFlat).
 // Invalid YAML frontmatter skips that file (best-effort).
-func LoadAll(cwd, home string) []Skill {
+func LoadAll(cwd, home string, workspaceFlat bool) []Skill {
 	byName := make(map[string]Skill)
 	mergeSkillsFromRoot(byName, userSkillsRoot(home))
-	mergeSkillsFromRoot(byName, projectSkillsRoot(cwd))
+	mergeSkillsFromRoot(byName, projectSkillsRoot(cwd, workspaceFlat))
 	out := make([]Skill, 0, len(byName))
 	for _, s := range byName {
 		out = append(out, s)
@@ -71,14 +71,14 @@ func LoadAll(cwd, home string) []Skill {
 }
 
 // Lookup returns a skill by canonical name, or false.
-func Lookup(cwd, home, name string) (Skill, bool) {
+func Lookup(cwd, home, name string, workspaceFlat bool) (Skill, bool) {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return Skill{}, false
 	}
 	// Strip leading slash (slash-command style).
 	name = strings.TrimPrefix(name, "/")
-	all := LoadAll(cwd, home)
+	all := LoadAll(cwd, home, workspaceFlat)
 	for _, s := range all {
 		if s.Name == name {
 			return s, true

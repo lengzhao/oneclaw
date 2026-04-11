@@ -88,7 +88,7 @@ flowchart TB
 - **prepareSharedTurn**：注入 `MEMORY.md` / recall、预算、`ToolContext` 与入站路由字段合并（见入站设计文档 §2.1）。
 - **loop.RunTurn**：模型 ↔ 工具循环；工具轨迹可在 `ToolTraceSink` 中收集，供 `PostTurnInput` 与 notify 使用。
 - **PostTurn**：同步写回合相关记忆管线（如 daily log）；**MaybePostTurnMaintain** 在独立 goroutine 中执行，**不阻塞**渠道返回。
-- **本地 slash**（如 `/exit`）：走 `submitLocalSlashTurn`，**不**调用 `loop.RunTurn`，**不**走 `PostTurn` / `MaybePostTurnMaintain`（刻意设计）。
+- **本地 slash**（如 `/help`、`/status`、`/paths`、`/recall reset`；CLI 的 `/exit` 由终端处理）：走 `submitLocalSlashTurn`，**不**调用 `loop.RunTurn`，**不**走 `PostTurn` / `MaybePostTurnMaintain`（刻意设计）。内置列表见 `session/slash_local.go` 与 `/help`。
 
 ---
 

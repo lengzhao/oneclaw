@@ -3,7 +3,6 @@ package config
 import (
 	"fmt"
 	"log/slog"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -47,12 +46,6 @@ func (r *Resolved) UserDataRoot() string {
 	}
 	return filepath.Join(r.home, memory.DotDir)
 }
-
-// CWD returns UserDataRoot (alias for callers that expect a single data root path).
-func (r *Resolved) CWD() string { return r.UserDataRoot() }
-
-// ExplicitPath returns the raw --config argument, if any.
-func (r *Resolved) ExplicitPath() string { return r.explicitConfig }
 
 // HasAPIKey reports whether a non-empty API key is set in merged YAML.
 func (r *Resolved) HasAPIKey() bool { return strings.TrimSpace(r.merged.OpenAI.APIKey) != "" }
@@ -192,26 +185,6 @@ func (r *Resolved) LogFile(cliOverride string) string {
 	return ResolveLogPath(base, r.merged.Log.File)
 }
 
-// TranscriptPath resolves transcript file path from YAML and defaults.
-func (r *Resolved) TranscriptPath() string {
-	if r.transcriptDisabled() {
-		return ""
-	}
-	p := strings.TrimSpace(r.merged.Paths.Transcript)
-	base := r.UserDataRoot()
-	if p == "" {
-		return filepath.Join(base, "transcript.json")
-	}
-	if filepath.IsAbs(p) {
-		return filepath.Clean(p)
-	}
-	abs, err := filepath.Abs(filepath.Join(base, p))
-	if err != nil {
-		return filepath.Join(base, p)
-	}
-	return abs
-}
-
 // WorkingTranscriptMaxMessages caps how many tail messages are written to working_transcript.json
 // (after user-visible collapse). 0 means default 30. Negative means no limit.
 func (r *Resolved) WorkingTranscriptMaxMessages() int {
@@ -219,27 +192,6 @@ func (r *Resolved) WorkingTranscriptMaxMessages() int {
 		return 0
 	}
 	return r.merged.Paths.WorkingTranscriptMaxMessages
-}
-
-// WorkingTranscriptPath persists the user-visible message list (same shape as in-memory Messages after each turn).
-// When transcript is disabled, returns empty. Default: <UserDataRoot>/working_transcript.json.
-func (r *Resolved) WorkingTranscriptPath() string {
-	if r.transcriptDisabled() {
-		return ""
-	}
-	p := strings.TrimSpace(r.merged.Paths.WorkingTranscript)
-	base := r.UserDataRoot()
-	if p == "" {
-		return filepath.Join(base, "working_transcript.json")
-	}
-	if filepath.IsAbs(p) {
-		return filepath.Clean(p)
-	}
-	abs, err := filepath.Abs(filepath.Join(base, p))
-	if err != nil {
-		return filepath.Join(base, p)
-	}
-	return abs
 }
 
 func (r *Resolved) transcriptDisabled() bool {
@@ -290,6 +242,14 @@ func (r *Resolved) SessionWorkerCount() int {
 		return 0
 	}
 	return r.merged.Sessions.WorkerCount
+}
+
+// SessionIsolateWorkspace reports sessions.isolate_workspace (default false: shared UserDataRoot as Engine.CWD).
+func (r *Resolved) SessionIsolateWorkspace() bool {
+	if r == nil {
+		return false
+	}
+	return boolPtrTrue(r.merged.Sessions.IsolateWorkspace)
 }
 
 // SessionTranscriptPaths returns per-session transcript.json and working_transcript.json paths.
@@ -362,20 +322,4 @@ func (r *Resolved) MaintainLoopInterval() time.Duration {
 		return time.Hour
 	}
 	return d
-}
-
-// ValidateUserConfigPath returns an error if home-relative config exists but is not readable YAML (optional helper).
-func ValidateUserConfigPath(home string) error {
-	p := filepath.Join(home, UserRelPath)
-	if _, err := os.Stat(p); err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return err
-	}
-	_, err := readFileLayer(p)
-	if err != nil {
-		return fmt.Errorf("config: %s: %w", p, err)
-	}
-	return nil
 }

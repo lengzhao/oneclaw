@@ -73,7 +73,7 @@ func validatedSkillStem(ruleName string) (string, error) {
 	return name, nil
 }
 
-func resolveBehaviorPolicyPath(cwd, target, ruleName string) (string, error) {
+func resolveBehaviorPolicyPath(cwd string, workspaceFlat bool, target, ruleName string) (string, error) {
 	switch target {
 	case "rule":
 		name := strings.TrimSpace(ruleName)
@@ -94,18 +94,18 @@ func resolveBehaviorPolicyPath(cwd, target, ruleName string) (string, error) {
 		if !strings.HasSuffix(strings.ToLower(name), ".md") {
 			name += ".md"
 		}
-		dir := filepath.Join(cwd, memory.DotDir, "rules")
+		dir := memory.JoinSessionWorkspace(cwd, workspaceFlat, "rules")
 		return filepath.Join(dir, name), nil
 	case "skill":
 		stem, err := validatedSkillStem(ruleName)
 		if err != nil {
 			return "", fmt.Errorf("skill: %w", err)
 		}
-		return filepath.Join(cwd, memory.DotDir, "skills", stem, skillEntryFile), nil
+		return memory.JoinSessionWorkspace(cwd, workspaceFlat, "skills", stem, skillEntryFile), nil
 	case "agent_md":
-		return filepath.Join(cwd, memory.DotDir, memory.AgentInstructionsFile), nil
+		return memory.JoinSessionWorkspace(cwd, workspaceFlat, memory.AgentInstructionsFile), nil
 	case "memory":
-		return memory.ProjectMemoryMdPath(cwd), nil
+		return memory.JoinSessionWorkspace(cwd, workspaceFlat, "memory", "MEMORY.md"), nil
 	default:
 		return "", fmt.Errorf("unknown target %q", target)
 	}
@@ -141,11 +141,11 @@ func (WriteBehaviorPolicyTool) Execute(_ context.Context, input json.RawMessage,
 	if home == "" {
 		home, _ = os.UserHomeDir()
 	}
-	abs, err := resolveBehaviorPolicyPath(tctx.CWD, target, in.RuleName)
+	abs, err := resolveBehaviorPolicyPath(tctx.CWD, tctx.WorkspaceFlat, target, in.RuleName)
 	if err != nil {
 		return "", err
 	}
-	lay := memory.DefaultLayout(tctx.CWD, home)
+	lay := memory.LayoutForIMWorkspace(tctx.CWD, home, tctx.HostDataRoot, tctx.WorkspaceFlat)
 	if err := validatePolicyPath(lay, abs, target); err != nil {
 		return "", err
 	}
@@ -164,26 +164,26 @@ func validatePolicyPath(lay memory.Layout, abs, target string) error {
 	abs = filepath.Clean(abs)
 	switch target {
 	case "rule":
-		rulesDir := filepath.Clean(filepath.Join(lay.CWD, memory.DotDir, "rules"))
+		rulesDir := filepath.Clean(filepath.Join(lay.DotOrDataRoot(), "rules"))
 		if !memory.PathUnderRoot(abs, rulesDir) {
-			return fmt.Errorf("internal error: rule path outside .oneclaw/rules")
+			return fmt.Errorf("internal error: rule path outside rules dir")
 		}
 	case "skill":
-		skillsRoot := filepath.Clean(filepath.Join(lay.CWD, memory.DotDir, "skills"))
+		skillsRoot := filepath.Clean(filepath.Join(lay.DotOrDataRoot(), "skills"))
 		if !memory.PathUnderRoot(abs, skillsRoot) || filepath.Base(abs) != skillEntryFile {
-			return fmt.Errorf("internal error: skill path outside .oneclaw/skills or wrong file")
+			return fmt.Errorf("internal error: skill path outside skills root or wrong file")
 		}
 		rel, err := filepath.Rel(skillsRoot, filepath.Dir(abs))
 		if err != nil || rel == "." || strings.Contains(rel, "..") || strings.Contains(rel, string(filepath.Separator)) {
-			return fmt.Errorf("internal error: skill must be <cwd>/.oneclaw/skills/<name>/SKILL.md")
+			return fmt.Errorf("internal error: skill must be <workspace>/skills/<name>/SKILL.md")
 		}
 	case "agent_md":
-		want := filepath.Clean(filepath.Join(lay.CWD, memory.DotDir, memory.AgentInstructionsFile))
+		want := filepath.Clean(filepath.Join(lay.DotOrDataRoot(), memory.AgentInstructionsFile))
 		if abs != want {
 			return fmt.Errorf("internal error: agent path mismatch")
 		}
 	case "memory":
-		want := filepath.Clean(memory.ProjectMemoryMdPath(lay.CWD))
+		want := filepath.Clean(filepath.Join(lay.Project, lay.EntrypointName))
 		if abs != want {
 			return fmt.Errorf("internal error: memory entrypoint path mismatch")
 		}

@@ -49,7 +49,7 @@ func (InvokeSkillTool) Execute(ctx context.Context, input json.RawMessage, tctx 
 	if err != nil {
 		return "", fmt.Errorf("user home: %w", err)
 	}
-	sk, ok := skills.Lookup(tctx.CWD, home, name)
+	sk, ok := skills.Lookup(tctx.CWD, home, name, tctx.WorkspaceFlat)
 	if !ok {
 		return "", fmt.Errorf("unknown skill %q (expected a folder under .oneclaw/skills with SKILL.md)", name)
 	}
@@ -57,7 +57,7 @@ func (InvokeSkillTool) Execute(ctx context.Context, input json.RawMessage, tctx 
 	if err != nil {
 		return "", err
 	}
-	if err := skills.RecordUse(tctx.CWD, sk.Name); err != nil {
+	if err := skills.RecordUse(tctx.CWD, sk.Name, tctx.WorkspaceFlat); err != nil {
 		slog.Warn("skills.recent_write", "err", err)
 	}
 	return body, nil

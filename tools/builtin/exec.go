@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lengzhao/oneclaw/memory"
 	"github.com/lengzhao/oneclaw/toolctx"
 	"github.com/openai/openai-go"
 )
@@ -164,7 +165,7 @@ func execExecuteForegroundWaitOrDetach(ctx context.Context, in execInput, tctx *
 		base = ctx
 	}
 
-	_, runLogPath, err := execSessionDir(tctx.CWD, tctx.SessionID)
+	_, runLogPath, err := execSessionDir(tctx.CWD, tctx.SessionID, tctx.WorkspaceFlat)
 	if err != nil {
 		return "", err
 	}
@@ -271,11 +272,11 @@ func shellSingleQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'"'"'`) + "'"
 }
 
-// execSessionDir creates <cwd>/.oneclaw/exec_log/<unix_ts>/ (cwd is session workspace or project root in tests).
-func execSessionDir(cwd, sessionID string) (dir string, runLogPath string, err error) {
+// execSessionDir creates exec_log/<unix_ts>/ under the session workspace (see memory.JoinSessionWorkspace).
+func execSessionDir(cwd, sessionID string, workspaceFlat bool) (dir string, runLogPath string, err error) {
 	_ = sessionID
 	ts := fmt.Sprintf("%d", time.Now().Unix())
-	dir = filepath.Join(cwd, ".oneclaw", "exec_log", ts)
+	dir = memory.JoinSessionWorkspace(cwd, workspaceFlat, "exec_log", ts)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", "", fmt.Errorf("exec: mkdir exec_log dir: %w", err)
 	}
@@ -284,7 +285,7 @@ func execSessionDir(cwd, sessionID string) (dir string, runLogPath string, err e
 }
 
 func execExecuteBackground(ctx context.Context, in execInput, tctx *toolctx.Context) (string, error) {
-	_, runLogPath, err := execSessionDir(tctx.CWD, tctx.SessionID)
+	_, runLogPath, err := execSessionDir(tctx.CWD, tctx.SessionID, tctx.WorkspaceFlat)
 	if err != nil {
 		return "", err
 	}

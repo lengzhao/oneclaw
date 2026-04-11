@@ -41,12 +41,12 @@ func TestEnsureDirs_CreatesWriteRoots(t *testing.T) {
 	}
 }
 
-func TestProjectMemoryMdPath(t *testing.T) {
+func TestProjectMemoryDir(t *testing.T) {
 	cwd := "/tmp/proj"
-	got := ProjectMemoryMdPath(cwd)
-	want := filepath.Join(cwd, DotDir, "memory", "MEMORY.md")
+	got := ProjectMemoryDir(cwd)
+	want := filepath.Join(cwd, DotDir, "memory")
 	if got != want {
-		t.Fatalf("ProjectMemoryMdPath = %q; want %q", got, want)
+		t.Fatalf("ProjectMemoryDir = %q; want %q", got, want)
 	}
 }
 
@@ -57,6 +57,35 @@ func TestMemoryBaseDir_ExpandsTildeInEnv(t *testing.T) {
 	want := filepath.Join("/Users/someone", "custom-base")
 	if got != filepath.Clean(want) {
 		t.Fatalf("MemoryBaseDir = %q; want %q", got, want)
+	}
+}
+
+func TestSessionDotLayout_ProjectAndFlat(t *testing.T) {
+	home := "/Users/x"
+	dot := filepath.Join(home, ".oneclaw", "sessions", "abc", ".oneclaw")
+	lay := SessionDotLayout(dot, home)
+	if !lay.HostUserData {
+		t.Fatal("HostUserData")
+	}
+	wantProj := filepath.Join(dot, "memory")
+	if lay.Project != wantProj {
+		t.Fatalf("Project = %q want %q", lay.Project, wantProj)
+	}
+}
+
+func TestLayoutForIMWorkspace(t *testing.T) {
+	home := "/Users/x"
+	ur := filepath.Join(home, ".oneclaw")
+	if lay := LayoutForIMWorkspace(ur, home, ur, true); !lay.HostUserData {
+		t.Fatal("shared root should be IM host layout")
+	}
+	dot := filepath.Join(ur, "sessions", "s1", ".oneclaw")
+	if lay := LayoutForIMWorkspace(dot, home, ur, true); lay.Project != filepath.Join(dot, "memory") {
+		t.Fatalf("session dot layout: %+v", lay)
+	}
+	tmp := t.TempDir()
+	if lay := LayoutForIMWorkspace(tmp, home, "", false); lay.HostUserData {
+		t.Fatal("repo layout should not set HostUserData")
 	}
 }
 

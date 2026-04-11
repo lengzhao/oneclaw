@@ -6,20 +6,32 @@ import (
 	"testing"
 )
 
+// testFuncSink is a minimal Sink for this package's tests (replaces removed FuncSink).
+type testFuncSink struct {
+	fn func(context.Context, Event) error
+}
+
+func (s testFuncSink) Emit(ctx context.Context, ev Event) error {
+	if s.fn == nil {
+		return nil
+	}
+	return s.fn(ctx, ev)
+}
+
 func TestMultiEmit(t *testing.T) {
 	var n int
-	s1 := FuncSink(func(ctx context.Context, ev Event) error {
+	s1 := testFuncSink{fn: func(ctx context.Context, ev Event) error {
 		n++
 		return nil
-	})
-	s2 := FuncSink(func(ctx context.Context, ev Event) error {
+	}}
+	s2 := testFuncSink{fn: func(ctx context.Context, ev Event) error {
 		n++
 		return errors.New("x")
-	})
-	s3 := FuncSink(func(ctx context.Context, ev Event) error {
+	}}
+	s3 := testFuncSink{fn: func(ctx context.Context, ev Event) error {
 		n++
 		return nil
-	})
+	}}
 	m := Multi{s1, s2, s3}
 	err := m.Emit(context.Background(), NewEvent(EventTurnComplete, ""))
 	if err == nil || err.Error() != "x" {
@@ -37,10 +49,10 @@ func TestEmitSafeNil(t *testing.T) {
 func TestMultiRegister(t *testing.T) {
 	var m Multi
 	var n int
-	m.Register(nil, FuncSink(func(ctx context.Context, ev Event) error {
+	m.Register(nil, testFuncSink{fn: func(ctx context.Context, ev Event) error {
 		n++
 		return nil
-	}))
+	}})
 	if len(m) != 1 {
 		t.Fatalf("len=%d", len(m))
 	}
@@ -51,8 +63,8 @@ func TestMultiRegister(t *testing.T) {
 }
 
 func TestEmitSafePanic(t *testing.T) {
-	s := FuncSink(func(ctx context.Context, ev Event) error {
+	s := testFuncSink{fn: func(ctx context.Context, ev Event) error {
 		panic("boom")
-	})
+	}}
 	EmitSafe(s, context.Background(), NewEvent(EventTurnComplete, ""))
 }

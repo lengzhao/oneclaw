@@ -3,6 +3,7 @@ package skills
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/lengzhao/oneclaw/memory"
@@ -40,7 +41,7 @@ description: from project
 ---
 `), 0o644)
 
-	all := LoadAll(cwd, home)
+	all := LoadAll(cwd, home, false)
 	if len(all) != 1 {
 		t.Fatalf("len=%d", len(all))
 	}
@@ -68,7 +69,7 @@ func TestFormatIndexBudget(t *testing.T) {
 		{Name: "y", Description: "second"},
 	}
 	// Very small budget: should get at least one line (full or short)
-	s := FormatIndex(all, 50)
+	s := strings.Join(FormatIndexLines(all, 50), "\n")
 	if s == "" {
 		t.Fatal("empty")
 	}
@@ -76,16 +77,16 @@ func TestFormatIndexBudget(t *testing.T) {
 
 func TestRecordUse(t *testing.T) {
 	cwd := t.TempDir()
-	if err := RecordUse(cwd, "one"); err != nil {
+	if err := RecordUse(cwd, "one", false); err != nil {
 		t.Fatal(err)
 	}
-	if err := RecordUse(cwd, "two"); err != nil {
+	if err := RecordUse(cwd, "two", false); err != nil {
 		t.Fatal(err)
 	}
-	if err := RecordUse(cwd, "one"); err != nil {
+	if err := RecordUse(cwd, "one", false); err != nil {
 		t.Fatal(err)
 	}
-	rec, err := LoadRecent(RecentFilePath(cwd))
+	rec, err := LoadRecent(RecentFilePath(cwd, false))
 	if err != nil {
 		t.Fatal(err)
 	}

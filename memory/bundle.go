@@ -47,6 +47,11 @@ func BuildTurn(layout Layout, home, userText string, recall *RecallState, recall
 			body := LoadMarkdownBody(chunk.Path)
 			ctx.WriteString(fmt.Sprintf("### %s:%s\n\n%s\n\n", chunk.Kind, chunk.Path, body))
 		}
+	} else if filepath.Clean(layout.CWD) != filepath.Clean(layout.MemoryBase) {
+		for _, chunk := range DiscoverFlatDotRootInstructions(layout.CWD) {
+			body := LoadMarkdownBody(chunk.Path)
+			ctx.WriteString(fmt.Sprintf("### %s:%s\n\n%s\n\n", chunk.Kind, chunk.Path, body))
+		}
 	}
 	appendMemoryRulesEntrypoint(&ctx, "project:memory", filepath.Join(layout.Project, entrypointName))
 	appendMemoryRulesEntrypoint(&ctx, "team (user):memory", filepath.Join(layout.TeamUser, entrypointName))

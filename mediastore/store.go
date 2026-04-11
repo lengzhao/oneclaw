@@ -6,7 +6,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -54,53 +53,6 @@ func StoreBytes(cwd, logicalName string, body []byte, maxBytes int) (relToCwd st
 	if err := os.WriteFile(abs, body, 0o644); err != nil {
 		return "", fmt.Errorf("mediastore: write: %w", err)
 	}
-	rel, err := filepath.Rel(filepath.Clean(cwd), abs)
-	if err != nil {
-		_ = os.Remove(abs)
-		return "", fmt.Errorf("mediastore: rel path: %w", err)
-	}
-	return filepath.ToSlash(rel), nil
-}
-
-// StoreReader streams up to maxBytes+1 bytes; if more than maxBytes, removes file and returns error.
-func StoreReader(cwd, logicalName string, r io.Reader, maxBytes int) (relToCwd string, err error) {
-	if cwd == "" {
-		return "", fmt.Errorf("mediastore: empty cwd")
-	}
-	dir, err := inboundDayDir(cwd)
-	if err != nil {
-		return "", err
-	}
-	id := randomID()
-	safe := sanitizeFileSuffix(logicalName)
-	finalName := id + "_" + safe
-	abs := filepath.Join(dir, finalName)
-	f, err := os.OpenFile(abs, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
-	if err != nil {
-		return "", fmt.Errorf("mediastore: create: %w", err)
-	}
-	ok := false
-	defer func() {
-		if !ok {
-			_ = f.Close()
-			_ = os.Remove(abs)
-		}
-	}()
-	n, err := io.Copy(f, io.LimitReader(r, int64(maxBytes)+1))
-	if err != nil {
-		return "", fmt.Errorf("mediastore: copy: %w", err)
-	}
-	if int(n) > maxBytes {
-		return "", fmt.Errorf("mediastore: payload exceeds %d bytes", maxBytes)
-	}
-	if n == 0 {
-		return "", fmt.Errorf("mediastore: empty payload")
-	}
-	if err := f.Close(); err != nil {
-		_ = os.Remove(abs)
-		return "", err
-	}
-	ok = true
 	rel, err := filepath.Rel(filepath.Clean(cwd), abs)
 	if err != nil {
 		_ = os.Remove(abs)

@@ -46,7 +46,7 @@
 | 传输 | `chat.transport` | `auto`（先流式、失败再非流式）、`non_stream`、`stream`；兼容网关仅支持非流式时建议 `non_stream` |
 | OpenAI 兼容 | `openai.api_key`、`openai.base_url`、`openai.org_id`、`openai.project_id` | `base_url` 需含 `/v1/` 后缀（若网关要求） |
 | 路径 | `paths.memory_base`、`paths.transcript`、`paths.working_transcript`、`paths.working_transcript_max_messages` | 相对路径相对 **`UserDataRoot()`**（默认 `~/.oneclaw`）；IM 下每会话转写见下节「会话」。`working_transcript_max_messages` 仍适用。单 `Engine` 时：每轮成功 `RunTurn` 后折叠 **内存 `Messages`** 为**用户可见**；`working_transcript` 与内存同形；`working_transcript_max_messages` 截尾部可见条数，`0` 默认 **30**，负数不限制 |
-| 会话 | `sessions.disable_sqlite`、`sessions.sqlite_path`、`sessions.worker_count` | 见下 **「会话与多通道（`cmd/oneclaw`）」** |
+| 会话 | `sessions.disable_sqlite`、`sessions.sqlite_path`、`sessions.worker_count`、`sessions.isolate_workspace` | 见下 **「会话与多通道（`cmd/oneclaw`）」** |
 | 预算 | `budget.*` | 见下表 |
 | 开关 | `features.disable_*` | `true` 为关闭；省略或 `false` 为开启 |
 | 通知审计 | `features.disable_audit_sinks`、`disable_audit_llm`、`disable_audit_orchestration`、`disable_audit_visible` | 默认三路全开；`disable_audit_sinks` 关闭全部；其余按路径关闭。`cmd/oneclaw` 有 `SessionID` 时 JSONL 在 `.oneclaw/sessions/<id>/audit/...`（见 [notify-sinks-audit-design.md](notify-sinks-audit-design.md)） |
@@ -86,10 +86,10 @@
 |------|------|
 | **session_key** | 来自 clawbridge `bus.InboundMessage` 的线程/话题键（`session.InboundSessionKey`）；决定「哪一条会话」 |
 | **Engine.SessionID** | 由 `Source` + `session_key` **稳定派生**的十六进制 id（`session.StableSessionID`），用于 sqlite、分文件等 |
-| **Engine.CWD（IM）** | **会话工作区**：`<UserDataRoot>/sessions/<SessionID>/`（`UserDataRoot` = `config.Resolved.UserDataRoot()`，默认 `~/.oneclaw` 或 `paths.memory_base`）。exec / tasks / 会话级 `.oneclaw` 均相对此目录 |
-| **转写文件（IM）** | `<UserDataRoot>/sessions/<SessionID>/.oneclaw/transcript.json` 与 `working_transcript.json`（与 YAML `paths.transcript` 无关） |
+| **Engine.CWD（IM）** | 由 **`sessions.isolate_workspace`** 控制（默认 **false**）：**false** 时 CWD = `UserDataRoot`（多会话共享 `~/.oneclaw` 下 tasks/memory/exec 等）；**true** 时 CWD = `<UserDataRoot>/sessions/<SessionID>/.oneclaw`（每会话独立工作区） |
+| **转写文件（IM）** | 始终 `<UserDataRoot>/sessions/<SessionID>/.oneclaw/transcript.json` 与 `working_transcript.json`（与 YAML `paths.transcript` 无关） |
 | **SQLite（IM）** | 默认 `<UserDataRoot>/sessions.sqlite`（可用 `sessions.sqlite_path` 覆盖，相对路径相对 `UserDataRoot`） |
-| **审计 JSONL（IM）** | `<会话工作区>/.oneclaw/audit/<agent>/…`（不再使用 `sessions/<id>/audit` 嵌套） |
+| **审计 JSONL（IM）** | `<Engine.CWD>/audit/<agent>/…`（扁平工作区下 CWD 已是 `.oneclaw` 目录，故为 `…/audit` 而非 `…/.oneclaw/audit`） |
 | **定时任务文件（IM）** | `<UserDataRoot>/scheduled_jobs.json`（与项目树下 `.oneclaw/scheduled_jobs.json` 二选一：工具通过 `HostDataRoot` 写用户根） |
 | **dialog_history** | 维护布局见 `memory.IMHostMaintainLayout`：主机级 episodic 在 `<UserDataRoot>/memory/…` 下按日与会话分文件（实现细节以代码为准） |
 
@@ -97,9 +97,9 @@
 
 **`sessions.worker_count`**：主进程用于处理入站回合的 **固定 worker 数**（默认 **8**，配置为 **0** 或未写时与 `<1` 同样走默认）。每个 session 按稳定哈希落到其中一个 worker，**同一 session 内消息在该 worker 上串行**；每条消息 **临时 `NewEngine`、落盘后丢弃**，避免无限增长的内存 map。worker 数不随会话数量增加。
 
-### LLM 用量（会话工作区下 `.oneclaw/usage/`）
+### LLM 用量（`usage/` 目录）
 
-每次成功的 chat completion（含工具多步）在 `ToolContext.CWD` 非空且返回非零 token 时落盘。
+每次成功的 chat completion（含工具多步）在 `ToolContext.CWD` 非空且返回非零 token 时落盘。路径为 **`<Engine.CWD>/usage/`**（IM 主进程下 CWD 为扁平 `UserDataRoot` 或 `sessions/<id>/.oneclaw`，不再多嵌一层 `.oneclaw`）。
 
 | YAML（`usage.*`） | 说明 |
 |-------------------|------|

@@ -51,7 +51,7 @@ func TestWriteBehaviorPolicyMemory(t *testing.T) {
 	if _, err := tool.Execute(context.Background(), payload, tctx); err != nil {
 		t.Fatal(err)
 	}
-	want := memory.ProjectMemoryMdPath(cwd)
+	want := filepath.Join(memory.ProjectMemoryDir(cwd), "MEMORY.md")
 	b, err := os.ReadFile(want)
 	if err != nil || string(b) != "# MEMORY\n\n- ok\n" {
 		t.Fatalf("read back: %v %q", err, string(b))

@@ -2,7 +2,6 @@ package notify
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 )
 
@@ -56,24 +55,4 @@ func (m *Multi) Register(sinks ...Sink) {
 			*m = append(*m, s)
 		}
 	}
-}
-
-// FuncSink adapts a function to Sink.
-type FuncSink func(ctx context.Context, ev Event) error
-
-func (f FuncSink) Emit(ctx context.Context, ev Event) error {
-	if f == nil {
-		return nil
-	}
-	return f(ctx, ev)
-}
-
-// ErrSink is a Sink that always returns err (for tests).
-type ErrSink struct{ Err error }
-
-func (e ErrSink) Emit(ctx context.Context, ev Event) error {
-	if e.Err == nil {
-		return errors.New("notify.ErrSink")
-	}
-	return e.Err
 }

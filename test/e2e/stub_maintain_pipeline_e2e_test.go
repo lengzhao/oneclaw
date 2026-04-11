@@ -95,7 +95,7 @@ func TestE2E_101_PostTurnMaintainPromptSessionOnly(t *testing.T) {
 		}
 	}
 
-	epPath := memory.ProjectEpisodeDailyPath(cwd, date)
+	epPath := filepath.Join(memory.ProjectMemoryDir(cwd), date+".md")
 	raw := e2eWaitForFile(t, epPath, 3*time.Second)
 	if !strings.Contains(string(raw), "E2E101_NEW_FACT") {
 		t.Fatalf("expected new fact in daily digest:\n%s", string(raw))
@@ -159,7 +159,7 @@ func TestE2E_113_ScheduledMaintainPromptToolOrientedPaths(t *testing.T) {
 		t.Fatalf("parse maintain request: %v", err)
 	}
 	rulesMem := filepath.Join(memDir, "MEMORY.md")
-	epPath := memory.ProjectEpisodeDailyPath(cwd, date)
+	epPath := filepath.Join(memory.ProjectMemoryDir(cwd), date+".md")
 	todayLog := filepath.Clean(memory.DailyLogPath(lay.Auto, date))
 	for _, sub := range []string{
 		"far-field",

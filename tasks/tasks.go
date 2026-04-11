@@ -12,16 +12,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lengzhao/oneclaw/budget"
 	"github.com/lengzhao/oneclaw/memory"
 	"github.com/lengzhao/oneclaw/rtopts"
 )
 
 const fileName = "tasks.json"
 
-// Path returns the absolute path to <cwd>/.oneclaw/tasks.json.
-func Path(cwd string) string {
-	return filepath.Join(cwd, memory.DotDir, fileName)
+// PathForWorkspace returns tasks.json under cwd; when workspaceFlat is true, CWD is already the logical .oneclaw directory.
+func PathForWorkspace(cwd string, workspaceFlat bool) string {
+	return memory.JoinSessionWorkspace(cwd, workspaceFlat, fileName)
 }
 
 // Disabled reports features.disable_tasks from config.
@@ -127,11 +126,11 @@ type CreateInput struct {
 }
 
 // Create appends tasks or replaces the list when replace is true.
-func Create(cwd string, replace bool, inputs []CreateInput) (string, error) {
+func Create(cwd string, workspaceFlat bool, replace bool, inputs []CreateInput) (string, error) {
 	if Disabled() {
 		return "", fmt.Errorf("tasks are disabled (features.disable_tasks in config)")
 	}
-	path := Path(cwd)
+	path := PathForWorkspace(cwd, workspaceFlat)
 	fileMu.Lock()
 	defer fileMu.Unlock()
 	f, err := Read(path)
@@ -217,7 +216,7 @@ type UpdatePatch struct {
 }
 
 // Update mutates a single task.
-func Update(cwd, taskID string, patch UpdatePatch) (string, error) {
+func Update(cwd string, workspaceFlat bool, taskID string, patch UpdatePatch) (string, error) {
 	if Disabled() {
 		return "", fmt.Errorf("tasks are disabled (features.disable_tasks in config)")
 	}
@@ -225,7 +224,7 @@ func Update(cwd, taskID string, patch UpdatePatch) (string, error) {
 	if id == "" {
 		return "", fmt.Errorf("task_id is required")
 	}
-	path := Path(cwd)
+	path := PathForWorkspace(cwd, workspaceFlat)
 	fileMu.Lock()
 	defer fileMu.Unlock()
 	f, err := Read(path)
@@ -317,7 +316,6 @@ func Update(cwd, taskID string, patch UpdatePatch) (string, error) {
 }
 
 const maxSystemItems = 48
-const maxSystemBytes = 12000
 
 func taskLineForPrompt(it *Item) string {
 	line := fmt.Sprintf("- **[%s]** `%s` — %s", it.Status, it.ID, it.Subject)
@@ -333,13 +331,13 @@ func taskLineForPrompt(it *Item) string {
 	return line
 }
 
-// PromptTaskLines returns tasks.json path and one markdown bullet per task (same lines as SystemBlock).
+// PromptTaskLines returns tasks.json path and one markdown bullet per task.
 // omitted is how many items exist beyond maxSystemItems. Empty result when disabled, missing file, or no items.
-func PromptTaskLines(cwd string) (filePath string, lines []string, omitted int) {
+func PromptTaskLines(cwd string, workspaceFlat bool) (filePath string, lines []string, omitted int) {
 	if Disabled() {
 		return "", nil, 0
 	}
-	path := Path(cwd)
+	path := PathForWorkspace(cwd, workspaceFlat)
 	f, err := Read(path)
 	if err != nil || len(f.Items) == 0 {
 		return "", nil, 0
@@ -355,24 +353,4 @@ func PromptTaskLines(cwd string) (filePath string, lines []string, omitted int) 
 		lines = append(lines, taskLineForPrompt(&it))
 	}
 	return path, lines, omitted
-}
-
-// SystemBlock returns a markdown section for the model (empty if disabled, missing file, or no items).
-func SystemBlock(cwd string) string {
-	path, lines, omitted := PromptTaskLines(cwd)
-	if len(lines) == 0 {
-		return ""
-	}
-	var b strings.Builder
-	b.WriteString("\n## Task list (persisted)\n\n")
-	b.WriteString("Structured work items are stored at `" + path + "`. Use `task_create` / `task_update` to keep them accurate across turns and restarts.\n\n")
-	for _, ln := range lines {
-		b.WriteString(ln)
-		b.WriteByte('\n')
-	}
-	if omitted > 0 {
-		fmt.Fprintf(&b, "\n… and %d more (not shown; see file or use tools)\n", omitted)
-	}
-	out := b.String()
-	return budget.TruncateUTF8(out, maxSystemBytes)
 }

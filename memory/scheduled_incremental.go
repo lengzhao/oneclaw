@@ -184,20 +184,6 @@ func parseDailyLogLineTime(line string) (time.Time, bool) {
 	return t.UTC(), true
 }
 
-func maxDailyLogLineTimeInBody(body string) (time.Time, bool) {
-	var maxT time.Time
-	var ok bool
-	for _, line := range strings.Split(body, "\n") {
-		if t, p := parseDailyLogLineTime(line); p {
-			if !ok || t.After(maxT) {
-				maxT = t
-				ok = true
-			}
-		}
-	}
-	return maxT, ok
-}
-
 func filterDailyLogBytesAfter(data []byte, minExclusive time.Time, untilUTC time.Time) []byte {
 	if len(data) == 0 {
 		return nil
@@ -228,69 +214,4 @@ func truncateToLocalDate(t time.Time) time.Time {
 	t = t.In(time.Local)
 	y, m, d := t.Date()
 	return time.Date(y, m, d, 0, 0, 0, 0, time.Local)
-}
-
-// collectIncrementalDailyLogCorpus builds scheduled prompt text from daily log **lines** whose embedded
-// timestamps fall in (minLineExclusive, nowUTC], using calendar-day files from first relevant day through today.
-// highWater is the previous pass watermark (nil on first run): lines with ts > highWater - overlap are included.
-// First run (no state) uses a lookback of interval (capped by maintenanceIncrementalMaxSpan).
-func collectIncrementalDailyLogCorpus(autoDir string, highWater *time.Time, interval time.Duration, minTotalBytes, maxPerSection, maxTotal int) (excerpt string, rawIncluded int, maxLine time.Time, maxOK bool) {
-	if interval <= 0 || maxTotal <= 0 {
-		return "", 0, time.Time{}, false
-	}
-	nowUTC := time.Now().UTC()
-	untilUTC := nowUTC
-	minExclusive := incrementalLineMinExclusive(nil, highWater, interval)
-
-	startDay := truncateToLocalDate(minExclusive)
-	endDay := truncateToLocalDate(nowUTC)
-
-	var sections strings.Builder
-	sumRaw := 0
-	maxSeen := time.Time{}
-	hasMax := false
-
-	for d := endDay; !d.Before(startDay); d = d.AddDate(0, 0, -1) {
-		ds := d.Format("2006-01-02")
-		p := DailyLogPath(autoDir, ds)
-		data, err := os.ReadFile(p)
-		if err != nil || len(data) == 0 {
-			continue
-		}
-		filtered := filterDailyLogBytesAfter(data, minExclusive, untilUTC)
-		if len(filtered) == 0 {
-			continue
-		}
-		body := string(filtered)
-		sumRaw += len(filtered)
-		if mx, ok := maxDailyLogLineTimeInBody(body); ok {
-			if !hasMax || mx.After(maxSeen) {
-				maxSeen = mx
-				hasMax = true
-			}
-		}
-		excerptPart := body
-		if len(excerptPart) > maxPerSection {
-			excerptPart = strings.TrimRight(utf8SafePrefix(excerptPart, maxPerSection), "\n") + "\n\n…"
-		}
-		if sections.Len() > 0 {
-			sections.WriteString("\n---\n")
-		}
-		sections.WriteString("### Daily log ")
-		sections.WriteString(ds)
-		sections.WriteString("\n\n")
-		sections.WriteString(excerptPart)
-		if sections.Len() >= maxTotal {
-			s := sections.String()
-			s = strings.TrimRight(utf8SafePrefix(s, maxTotal), "\n") + "\n\n…"
-			// Truncated for prompt; watermark still from full filtered lines (maxSeen).
-			return s, sumRaw, maxSeen, hasMax
-		}
-	}
-
-	out := strings.TrimSpace(sections.String())
-	if out == "" || sumRaw < minTotalBytes {
-		return "", sumRaw, maxSeen, hasMax
-	}
-	return out, sumRaw, maxSeen, hasMax
 }

@@ -23,7 +23,7 @@ go run ./cmd/oneclaw
 # 可选：go run ./cmd/oneclaw -config ./my-layer.yaml  # 相对路径相对于 ~/.oneclaw/
 ```
 
-`cmd/oneclaw` 支持 **`-config`**（额外 YAML 层，相对路径相对于 **`~/.oneclaw/`**，见 [`docs/config.md`](docs/config.md)）、**`-init`**（初始化 **`$HOME/.oneclaw`**）、**`-maintain-once`**（单次远场维护后退出）、**`-export-session`** 等。Transcript 等路径由 YAML 与 `Resolved.UserDataRoot()` 决定（默认每会话在 **`~/.oneclaw/sessions/<id>/.oneclaw/`** 下）；**每轮 `SubmitUser` 成功结束后**会自动写入。关闭落盘：`features.disable_transcript`（Slack 等渠道可自行设置 `Engine.TranscriptPath`）。
+`cmd/oneclaw` 支持 **`-config`**（额外 YAML 层，相对路径相对于 **`~/.oneclaw/`**，见 [`docs/config.md`](docs/config.md)）、**`-init`**（初始化 **`$HOME/.oneclaw`**）、**`-maintain-once`**（单次远场维护后退出）、**`-export-session`** 等。转写仍默认在 **`~/.oneclaw/sessions/<id>/.oneclaw/`**；**文件工具工作目录**（`Engine.CWD`）由 **`sessions.isolate_workspace`** 控制：默认 **false** 时为共享 **`~/.oneclaw`**，**true** 时为 **`~/.oneclaw/sessions/<id>/.oneclaw`**。**每轮 `SubmitUser` 成功结束后**会写转写。关闭落盘：`features.disable_transcript`。
 
 常用 REPL 命令：`/exit` 退出。对话落盘依赖配置中的 transcript 路径及每轮成功结束后的自动保存（见上段）；另存副本请用外部工具复制该文件。
 

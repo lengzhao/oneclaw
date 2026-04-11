@@ -52,6 +52,9 @@ type Engine struct {
 	Transcript []openai.ChatCompletionMessageParamUnion
 	Registry   *tools.Registry
 	CWD        string
+	// WorkspaceFlat: when true, session files (tasks.json, memory/, agents/, exec_log/, …) live directly under CWD
+	// (CWD is ~/.oneclaw or ~/.oneclaw/sessions/<id>/.oneclaw). When false, legacy layout uses CWD/.oneclaw/.
+	WorkspaceFlat bool
 	// UserDataRoot is the IM host directory (~/.oneclaw): shared config parent; cron/schedule jobs file; empty in tests or non-IM engines.
 	UserDataRoot string
 	CanUseTool tools.CanUseTool
@@ -532,7 +535,7 @@ func (e *Engine) appendDialogHistoryIfComplete() {
 		slog.Warn("session.dialog_history.home", "err", err)
 		return
 	}
-	layout := memory.DefaultLayout(e.CWD, home)
+	layout := e.MemoryLayout(home)
 	date := time.Now().Format("2006-01-02")
 	if err := memory.AppendDialogHistoryPair(layout, date, e.SessionID, u, a); err != nil {
 		slog.Warn("session.dialog_history.append", "err", err)

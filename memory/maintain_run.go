@@ -139,13 +139,6 @@ func MaybePostTurnMaintain(ctx context.Context, layout Layout, client *openai.Cl
 	RunPostTurnMaintain(ctx, layout, client, mainChatModel, maxTokens, turn)
 }
 
-// MaybeMaintain is a deprecated alias for MaybePostTurnMaintain without a turn snapshot.
-//
-// Deprecated: use MaybePostTurnMaintain.
-func MaybeMaintain(ctx context.Context, layout Layout, client *openai.Client, mainChatModel string, maxTokens int64) {
-	MaybePostTurnMaintain(ctx, layout, client, mainChatModel, maxTokens, nil)
-}
-
 func runDistill(ctx context.Context, layout Layout, client *openai.Client, p distillConfig) {
 	if client == nil {
 		logPathwaySkip(p.pathway, "nil_client")

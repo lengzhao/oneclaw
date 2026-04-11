@@ -50,20 +50,6 @@ func formatInboundAttachmentUserText(a Attachment) string {
 	return ""
 }
 
-// FormatInboundAttachmentMessages turns normalized attachments into user message bodies.
-func FormatInboundAttachmentMessages(atts []Attachment) []string {
-	if len(atts) == 0 {
-		return nil
-	}
-	out := make([]string, 0, len(atts))
-	for _, a := range atts {
-		if s := formatInboundAttachmentUserText(a); strings.TrimSpace(s) != "" {
-			out = append(out, s)
-		}
-	}
-	return out
-}
-
 // ModelUserLine is the primary user message line sent to the model (placeholder when only attachments).
 func ModelUserLine(text string, hasAttachments bool) string {
 	t := strings.TrimSpace(text)

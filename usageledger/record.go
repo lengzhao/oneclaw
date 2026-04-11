@@ -28,7 +28,10 @@ func estimateCostEnabled() bool {
 	return rtopts.Current().UsageEstimateCost
 }
 
-func usageRoot(cwd string) string {
+func usageRoot(cwd string, workspaceFlat bool) string {
+	if workspaceFlat {
+		return filepath.Join(cwd, "usage")
+	}
 	return filepath.Join(cwd, dotDir, "usage")
 }
 
@@ -80,6 +83,8 @@ type RecordParams struct {
 	// UsageJSON is completion.Usage.RawJSON() from the provider (source of truth for tokens).
 	UsageJSON string
 	Inbound   bus.InboundMessage
+	// WorkspaceFlat matches toolctx.Context.WorkspaceFlat (flat vs .oneclaw/ under cwd).
+	WorkspaceFlat bool
 }
 
 // MaybeRecord appends an interaction line and updates daily + per-user rollups under <cwd>/.oneclaw/usage/.
@@ -131,7 +136,7 @@ func MaybeRecord(p RecordParams) {
 	}
 	recordMu.Lock()
 	defer recordMu.Unlock()
-	root := usageRoot(p.CWD)
+	root := usageRoot(p.CWD, p.WorkspaceFlat)
 	if err := os.MkdirAll(root, 0o750); err != nil {
 		slog.Warn("usageledger.mkdir", "path", root, "err", err)
 		return

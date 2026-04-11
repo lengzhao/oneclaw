@@ -1,0 +1,106 @@
+package session
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/lengzhao/clawbridge/bus"
+	"github.com/lengzhao/oneclaw/loop"
+	"github.com/lengzhao/oneclaw/memory"
+)
+
+func (e *Engine) slashSession(in bus.InboundMessage, args string) string {
+	a := strings.ToLower(strings.TrimSpace(args))
+	switch a {
+	case "", "short":
+		return fmt.Sprintf("会话 ID: %s\n工作目录: %s", e.SessionID, e.CWD)
+	case "full", "status", "info":
+		return e.slashStatus(in)
+	default:
+		return fmt.Sprintf("未知子命令 %q。用法：/session 或 /session full（同 /status）", strings.TrimSpace(args))
+	}
+}
+
+func (e *Engine) slashStatus(in bus.InboundMessage) string {
+	var b strings.Builder
+	ch := strings.TrimSpace(in.Channel)
+	if ch != "" {
+		fmt.Fprintf(&b, "渠道 Channel: %s\n", ch)
+	}
+	fmt.Fprintf(&b, "会话 ID: %s\n", e.SessionID)
+	fmt.Fprintf(&b, "工作目录 CWD: %s\n", e.CWD)
+	if ur := strings.TrimSpace(e.UserDataRoot); ur != "" {
+		fmt.Fprintf(&b, "用户数据根 UserDataRoot: %s\n", ur)
+	}
+	fmt.Fprintf(&b, "WorkspaceFlat: %v\n", e.WorkspaceFlat)
+	fmt.Fprintf(&b, "模型 Model: %s\n", strings.TrimSpace(e.Model))
+	fmt.Fprintf(&b, "MaxSteps: %d  MaxTokens: %d\n", e.MaxSteps, e.MaxTokens)
+	fmt.Fprintf(&b, "RootAgentID: %s\n", e.EffectiveRootAgentID())
+	if tp := strings.TrimSpace(e.TranscriptPath); tp != "" {
+		fmt.Fprintf(&b, "TranscriptPath: %s\n", tp)
+	} else {
+		b.WriteString("TranscriptPath: （未配置）\n")
+	}
+	if wp := strings.TrimSpace(e.WorkingTranscriptPath); wp != "" {
+		fmt.Fprintf(&b, "WorkingTranscriptPath: %s\n", wp)
+	} else {
+		b.WriteString("WorkingTranscriptPath: （未配置）\n")
+	}
+	if e.WorkingTranscriptMaxMessages != 0 {
+		fmt.Fprintf(&b, "WorkingTranscriptMaxMessages: %d\n", e.WorkingTranscriptMaxMessages)
+	}
+	vis := loop.ToUserVisibleMessages(e.Messages)
+	fmt.Fprintf(&b, "可见 API 消息条数: %d\n", len(vis))
+	fmt.Fprintf(&b, "Transcript 条数: %d\n", len(e.Transcript))
+	nPaths := 0
+	if e.RecallState.SurfacedPaths != nil {
+		nPaths = len(e.RecallState.SurfacedPaths)
+	}
+	fmt.Fprintf(&b, "Recall: %d 条已展示路径, 累计约 %d 字节\n", nPaths, e.RecallState.SurfacedBytes)
+	return strings.TrimRight(b.String(), "\n")
+}
+
+func (e *Engine) slashPaths() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Sprintf("无法解析用户主目录: %v", err)
+	}
+	layout := e.MemoryLayout(home)
+	var b strings.Builder
+	fmt.Fprintf(&b, "CWD: %s\n", layout.CWD)
+	fmt.Fprintf(&b, "MemoryBase: %s\n", layout.MemoryBase)
+	fmt.Fprintf(&b, "User: %s\n", layout.User)
+	fmt.Fprintf(&b, "Project: %s\n", layout.Project)
+	fmt.Fprintf(&b, "Auto: %s\n", layout.Auto)
+	fmt.Fprintf(&b, "TeamUser: %s\n", layout.TeamUser)
+	fmt.Fprintf(&b, "TeamProject: %s\n", layout.TeamProject)
+	b.WriteString("AgentDefault:\n")
+	for _, p := range layout.AgentDefault {
+		fmt.Fprintf(&b, "  %s\n", p)
+	}
+	fmt.Fprintf(&b, "Entrypoint: %s\n", layout.EntrypointName)
+	fmt.Fprintf(&b, "HostUserData: %v\n", layout.HostUserData)
+	fmt.Fprintf(&b, "DotOrDataRoot: %s\n", layout.DotOrDataRoot())
+	ep := filepath.Join(layout.Project, layout.EntrypointName)
+	fmt.Fprintf(&b, "项目记忆入口（若存在）: %s\n", ep)
+	return strings.TrimRight(b.String(), "\n")
+}
+
+func (e *Engine) slashRecall(args string) string {
+	a := strings.ToLower(strings.TrimSpace(args))
+	switch a {
+	case "", "help", "h", "?":
+		return strings.TrimSpace(`
+/recall reset — 清空本会话的 recall 展示去重状态（SurfacedPaths / 字节计数），并尝试写回持久化。
+下次对话会重新按规则注入记忆召回。不影响磁盘上的 MEMORY.md 等文件。
+`)
+	case "reset", "clear":
+		e.RecallState = memory.RecallState{SurfacedPaths: make(map[string]struct{})}
+		e.persistRecall()
+		return "已重置 recall 状态并已尝试持久化。"
+	default:
+		return fmt.Sprintf("未知子命令 %q。输入 /recall 查看用法。", strings.TrimSpace(args))
+	}
+}

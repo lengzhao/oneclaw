@@ -137,6 +137,9 @@ type File struct {
 		SQLitePath    string `yaml:"sqlite_path"`
 		// WorkerCount: fixed goroutine shards for cmd/oneclaw (hash session → worker). 0 = default 8.
 		WorkerCount int `yaml:"worker_count"`
+		// IsolateWorkspace: when true, Engine.CWD is <UserDataRoot>/sessions/<id>/.oneclaw (per-session file tools).
+		// When false (default), Engine.CWD is UserDataRoot (~/.oneclaw) and all IM sessions share one workspace; transcripts remain per-session under sessions/<id>/.oneclaw/.
+		IsolateWorkspace *bool `yaml:"isolate_workspace"`
 	} `yaml:"sessions"`
 
 	// Clawbridge is IM 总线配置，形状与 github.com/lengzhao/clawbridge/config.Config 一致（media + clients）。
@@ -362,6 +365,7 @@ func mergeFile(dst *File, src File) {
 	if src.Sessions.WorkerCount != 0 {
 		dst.Sessions.WorkerCount = src.Sessions.WorkerCount
 	}
+	mergeBoolPtr(&dst.Sessions.IsolateWorkspace, src.Sessions.IsolateWorkspace)
 	mergeMCP(&dst.MCP, src.MCP)
 }
 

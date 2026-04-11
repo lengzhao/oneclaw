@@ -4,6 +4,7 @@ package e2e_test
 
 import (
 	"context"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -40,7 +41,7 @@ func TestE2E_92_AutoMaintenanceAppends(t *testing.T) {
 	}
 	e2eWaitMinChatRequests(t, stub, 2, 5*time.Second)
 
-	epPath := memory.ProjectEpisodeDailyPath(cwd, date)
+	epPath := filepath.Join(memory.ProjectMemoryDir(cwd), date+".md")
 	raw := e2eWaitForFile(t, epPath, 3*time.Second)
 	if !strings.Contains(string(raw), "E2E92_MAINTAIN_MARKER") {
 		t.Fatalf("expected maintainer marker in:\n%s", string(raw))

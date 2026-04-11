@@ -22,13 +22,18 @@ type Catalog struct {
 	byName map[string]Definition
 }
 
-// LoadCatalog loads `.oneclaw/agents/*.md` under cwd and merges built-ins.
-func LoadCatalog(cwd string) *Catalog {
+// LoadCatalog loads agent markdown under cwd: when workspaceFlat is true, uses <cwd>/agents/*.md; otherwise <cwd>/.oneclaw/agents/*.md.
+func LoadCatalog(cwd string, workspaceFlat bool) *Catalog {
 	byName := make(map[string]Definition)
 	for _, d := range builtinDefinitions() {
 		byName[d.AgentType] = d
 	}
-	dir := filepath.Join(cwd, ".oneclaw", "agents")
+	var dir string
+	if workspaceFlat {
+		dir = filepath.Join(cwd, "agents")
+	} else {
+		dir = filepath.Join(cwd, ".oneclaw", "agents")
+	}
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		if !os.IsNotExist(err) {

@@ -39,15 +39,18 @@ func MainEngineFactory(deps MainEngineFactoryDeps) func(SessionHandle) (*Engine,
 		if userRoot == "" {
 			return nil, fmt.Errorf("session: empty UserDataRoot (config not loaded with Home?)")
 		}
-		sessionHome := filepath.Join(userRoot, "sessions", sid)
-		dot := filepath.Join(sessionHome, memory.DotDir)
-		if err := os.MkdirAll(dot, 0o755); err != nil {
+		workspaceCWD := userRoot
+		if deps.Resolved.SessionIsolateWorkspace() {
+			workspaceCWD = filepath.Join(userRoot, "sessions", sid, memory.DotDir)
+		}
+		if err := os.MkdirAll(workspaceCWD, 0o755); err != nil {
 			return nil, fmt.Errorf("session: mkdir session workspace: %w", err)
 		}
 
-		eng := NewEngine(sessionHome, deps.Registry)
+		eng := NewEngine(workspaceCWD, deps.Registry)
 		eng.SessionID = sid
 		eng.UserDataRoot = userRoot
+		eng.WorkspaceFlat = true
 		eng.Client = deps.Client
 		eng.Model = deps.Model
 		eng.MaxSteps = deps.Resolved.MainAgentMaxSteps()

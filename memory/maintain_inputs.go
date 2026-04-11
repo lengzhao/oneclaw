@@ -2,9 +2,6 @@ package memory
 
 import (
 	"os"
-	"path/filepath"
-	"sort"
-	"strings"
 	"time"
 
 	"github.com/lengzhao/oneclaw/rtopts"
@@ -79,47 +76,7 @@ func maintenanceTopicExcerptBytes() int {
 	return n
 }
 
-// collectRecentDailyLogs concatenates up to `days` daily logs ending at `anchorDate` (YYYY-MM-DD),
-// newest first in the output. Each file is capped to maxPerFile runes-bytes via utf8SafePrefix;
-// total output is capped to maxTotal bytes.
-func collectRecentDailyLogs(autoDir, anchorDate string, days, minBytesPerFile, maxPerFile, maxTotal int) (combined string, includedBytes int) {
-	if days < 1 || maxTotal <= 0 {
-		return "", 0
-	}
-	t, err := time.ParseInLocation("2006-01-02", anchorDate, time.Local)
-	if err != nil {
-		return "", 0
-	}
-	var b strings.Builder
-	for d := 0; d < days; d++ {
-		day := t.AddDate(0, 0, -d)
-		ds := day.Format("2006-01-02")
-		p := DailyLogPath(autoDir, ds)
-		data, err := os.ReadFile(p)
-		if err != nil || len(data) < minBytesPerFile {
-			continue
-		}
-		includedBytes += len(data)
-		excerpt := string(data)
-		if len(excerpt) > maxPerFile {
-			excerpt = strings.TrimRight(utf8SafePrefix(excerpt, maxPerFile), "\n") + "\n\n…"
-		}
-		if b.Len() > 0 {
-			b.WriteString("\n---\n")
-		}
-		b.WriteString("### Daily log ")
-		b.WriteString(ds)
-		b.WriteString("\n\n")
-		b.WriteString(excerpt)
-		if b.Len() >= maxTotal {
-			s := b.String()
-			return strings.TrimRight(utf8SafePrefix(s, maxTotal), "\n") + "\n\n…", includedBytes
-		}
-	}
-	return b.String(), includedBytes
-}
-
-// countRecentDailyLogBytes sums raw on-disk bytes for the same calendar-day window as collectRecentDailyLogs (no prompt build).
+// countRecentDailyLogBytes sums raw on-disk bytes for a recent calendar-day window of daily logs (no prompt build).
 func countRecentDailyLogBytes(autoDir, anchorDate string, days, minBytesPerFile int) int {
 	if days < 1 {
 		return 0
@@ -140,55 +97,4 @@ func countRecentDailyLogBytes(autoDir, anchorDate string, days, minBytesPerFile 
 		sum += len(data)
 	}
 	return sum
-}
-
-// collectProjectTopicExcerpts lists `*.md` directly under project memory (excluding MEMORY.md)
-// and returns a bounded markdown block for the maintenance prompt.
-func collectProjectTopicExcerpts(projectDir string, maxFiles, excerptBytes, maxTotal int) string {
-	if maxFiles <= 0 || maxTotal <= 0 {
-		return ""
-	}
-	entries, err := os.ReadDir(projectDir)
-	if err != nil {
-		return ""
-	}
-	var names []string
-	for _, e := range entries {
-		if e.IsDir() {
-			continue
-		}
-		n := e.Name()
-		if !strings.EqualFold(filepath.Ext(n), ".md") {
-			continue
-		}
-		if strings.EqualFold(n, entrypointName) {
-			continue
-		}
-		names = append(names, n)
-	}
-	sort.Strings(names)
-	if len(names) > maxFiles {
-		names = names[:maxFiles]
-	}
-	var b strings.Builder
-	for _, name := range names {
-		p := filepath.Join(projectDir, name)
-		data, err := os.ReadFile(p)
-		if err != nil || len(data) == 0 {
-			continue
-		}
-		body := string(data)
-		if len(body) > excerptBytes {
-			body = strings.TrimRight(utf8SafePrefix(body, excerptBytes), "\n") + "\n\n…"
-		}
-		block := "### topic: " + name + "\n\n```\n" + body + "\n```\n"
-		if b.Len()+len(block) >= maxTotal {
-			if b.Len() == 0 {
-				return strings.TrimRight(utf8SafePrefix(block, maxTotal), "\n") + "\n\n…"
-			}
-			break
-		}
-		b.WriteString(block)
-	}
-	return strings.TrimSpace(b.String())
 }

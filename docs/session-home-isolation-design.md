@@ -213,7 +213,7 @@ flowchart LR
 已在主进程落地（`home` 非空的 `config.Load` 路径）：
 
 - `config.Resolved.UserDataRoot()`、`SessionTranscriptPaths` / `SessionsSQLitePath` / 默认 media 等与用户数据根对齐。
-- `MainEngineFactory`：`Engine.CWD = <UserDataRoot>/sessions/<StableSessionID>/`，`Engine.UserDataRoot` 供 cron / system 提示；启动时 `MkdirAll` 会话下 `.oneclaw`。
+- `MainEngineFactory`：`Engine.CWD` 由 **`sessions.isolate_workspace`** 决定（默认 **false**：`CWD = UserDataRoot`；**true**：`CWD = <UserDataRoot>/sessions/<StableSessionID>/.oneclaw`）。`Engine.UserDataRoot` 供 cron / system 提示；`Engine.WorkspaceFlat = true` 时 tasks/exec_log/agents 等直接位于 `CWD` 下，不再拼 `CWD/.oneclaw/`。
 - `toolctx.HostDataRoot`：`schedule.Add/List/Remove` 写入 `<UserDataRoot>/scheduled_jobs.json`；`StartHostPollerIfEnabled` 使用同一根目录。
 - 审计：`RegisterAuditSinks` 使用会话工作区 + 空 `AuditSessionID`，路径为 `<SessionHome>/.oneclaw/audit/…`。
 - exec：`run.log` 位于 `<SessionHome>/.oneclaw/exec_log/<ts>/`。

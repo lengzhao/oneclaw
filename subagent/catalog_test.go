@@ -46,7 +46,7 @@ Custom explore body.
 	if err := os.WriteFile(filepath.Join(agents, "explore.md"), custom, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	cat := LoadCatalog(cwd)
+	cat := LoadCatalog(cwd, false)
 	d, ok := cat.Get("explore")
 	if !ok {
 		t.Fatal("missing explore")
@@ -57,7 +57,7 @@ Custom explore body.
 }
 
 func TestPromptCatalogLines_byteBudget(t *testing.T) {
-	cat := LoadCatalog(t.TempDir())
+	cat := LoadCatalog(t.TempDir(), false)
 	lines := cat.PromptCatalogLines(500)
 	if len(lines) < 2 {
 		t.Fatalf("expected at least built-in agents, got %d lines", len(lines))

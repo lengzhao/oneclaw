@@ -60,12 +60,12 @@ func (e *Engine) buildTurnSystem(memOK bool, bundle memory.TurnBundle, bg budget
 	if memOK {
 		d.MemoryPromptBlock = strings.TrimSpace(bundle.SystemSuffix)
 	}
-	p, lines, omit := tasks.PromptTaskLines(e.CWD)
+	p, lines, omit := tasks.PromptTaskLines(e.CWD, e.WorkspaceFlat)
 	d.TasksFilePath = p
 	d.TaskLines = lines
 	d.TasksOmitted = omit
 	if herr == nil {
-		d.SkillLines = skills.PromptSkillLines(e.CWD, home, bg.SkillIndexMaxBytes())
+		d.SkillLines = skills.PromptSkillLines(e.CWD, home, bg.SkillIndexMaxBytes(), e.WorkspaceFlat)
 	}
 	if cat != nil {
 		d.AgentCatalogLines = cat.PromptCatalogLines(bg.SkillIndexMaxBytes())

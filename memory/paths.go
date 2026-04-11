@@ -90,21 +90,6 @@ func ProjectMemoryDir(cwd string) string {
 	return filepath.Join(cwd, DotDir, "memory")
 }
 
-// ProjectMemoryMdPath returns <cwd>/.oneclaw/memory/MEMORY.md (project entrypoint).
-func ProjectMemoryMdPath(cwd string) string {
-	return filepath.Join(ProjectMemoryDir(cwd), entrypointName)
-}
-
-// ProjectEpisodeDailyPath returns <cwd>/.oneclaw/memory/YYYY-MM-DD.md (dateStr at least 10 chars).
-// Auto-maintained episodic digests live next to MEMORY.md; recall includes these files and skips MEMORY.md at the root.
-func ProjectEpisodeDailyPath(cwd, dateYYYYMMDD string) string {
-	dateYYYYMMDD = strings.TrimSpace(dateYYYYMMDD)
-	if len(dateYYYYMMDD) >= 10 {
-		dateYYYYMMDD = dateYYYYMMDD[:10]
-	}
-	return filepath.Join(ProjectMemoryDir(cwd), dateYYYYMMDD+".md")
-}
-
 // AgentMemoryDir returns the on-disk directory for an agent type and scope.
 func AgentMemoryDir(cwd, memoryBase, agentType string, scope AgentScope) string {
 	dir := sanitizeDirName(agentType)
@@ -221,6 +206,40 @@ func DefaultLayout(cwd, home string) Layout {
 		AgentDefault:   agentDefaultPair(cwd, mb, "default"),
 		EntrypointName: entrypointName,
 	}
+}
+
+// SessionDotLayout is for per-session workspace when Engine.CWD is already
+// <UserDataRoot>/sessions/<id>/.oneclaw (flat layout under that directory).
+func SessionDotLayout(dotRoot, home string) Layout {
+	mb := MemoryBaseDir(home)
+	dot := filepath.Clean(dotRoot)
+	agentProj := filepath.Join(dot, "agent-memory", "default")
+	return Layout{
+		CWD:            dot,
+		MemoryBase:     mb,
+		User:           UserMemoryDir(mb),
+		Project:        filepath.Join(dot, "memory"),
+		Auto:           AutoMemoryDir(dot, mb),
+		TeamUser:       TeamMemoryDirUser(mb),
+		TeamProject:    filepath.Join(dot, "team-memory"),
+		AgentDefault:   []string{filepath.Join(mb, "agent-memory", "default"), agentProj},
+		EntrypointName: entrypointName,
+		HostUserData:   true,
+	}
+}
+
+// LayoutForIMWorkspace selects memory layout for an Engine: repo-style DefaultLayout when WorkspaceFlat is false;
+// when true, IM shared root uses IMHostMaintainLayout, otherwise SessionDotLayout (per-session .oneclaw directory).
+func LayoutForIMWorkspace(cwd, home, userDataRoot string, workspaceFlat bool) Layout {
+	if !workspaceFlat {
+		return DefaultLayout(cwd, home)
+	}
+	ur := filepath.Clean(strings.TrimSpace(userDataRoot))
+	cleanCWD := filepath.Clean(cwd)
+	if ur != "" && cleanCWD == ur {
+		return IMHostMaintainLayout(ur, home)
+	}
+	return SessionDotLayout(cleanCWD, home)
 }
 
 // IMHostMaintainLayout is for cmd/oneclaw IM mode: userDataRoot is config.UserDataRoot() (~/.oneclaw).
