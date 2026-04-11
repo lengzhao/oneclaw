@@ -1,23 +1,20 @@
 package session
 
 import (
-	"strings"
-
 	"github.com/lengzhao/oneclaw/loop"
 	"github.com/lengzhao/oneclaw/notify/sinks"
 	"github.com/openai/openai-go"
 )
 
-// RegisterAuditSinks registers JSONL audit sinks under
-// .oneclaw/sessions/<SessionID>/audit/<agent_segment>/{llm,orchestration,visible}/... when SessionID is set,
-// else .oneclaw/audit/<agent_segment>/...
+// RegisterAuditSinks registers JSONL audit sinks under <Engine.CWD>/.oneclaw/audit/<agent_segment>/...
+// Engine.CWD is the per-session workspace (~/.oneclaw/sessions/<id>/); AuditSessionID is left empty so paths do not nest another sessions/<id>.
 // Pass true per path to enable that sink; all false is a no-op.
 // Agent segment is derived from Engine.RootAgentID (see sinks.SanitizeAgentSegment).
 func (e *Engine) RegisterAuditSinks(llm, orchestration, visible bool) {
 	if e == nil || (!llm && !orchestration && !visible) {
 		return
 	}
-	o := sinks.Options{CWD: e.CWD, AgentID: e.EffectiveRootAgentID(), AuditSessionID: strings.TrimSpace(e.SessionID)}
+	o := sinks.Options{CWD: e.CWD, AgentID: e.EffectiveRootAgentID(), AuditSessionID: ""}
 	if llm {
 		e.RegisterNotify(sinks.NewLLMAuditSink(o))
 	}

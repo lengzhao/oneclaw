@@ -63,7 +63,7 @@ func TestAddEveryAndCollectDue(t *testing.T) {
 	if err := write(path, f); err != nil {
 		t.Fatal(err)
 	}
-	d, err := CollectDue(cwd, "cli", time.Now().UTC())
+	d, err := CollectDue(cwd, "", "cli", time.Now().UTC())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +112,7 @@ func TestCollectDueAtRemovesJob(t *testing.T) {
 	if err := write(path, f); err != nil {
 		t.Fatal(err)
 	}
-	d, err := CollectDue(cwd, "cli", time.Now().UTC())
+	d, err := CollectDue(cwd, "", "cli", time.Now().UTC())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,7 +142,7 @@ func TestCompactDisabledJobsOnList(t *testing.T) {
 	if err := write(path, f); err != nil {
 		t.Fatal(err)
 	}
-	_, err := ListText(cwd)
+	_, err := ListText(cwd, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -158,7 +158,7 @@ func TestCompactDisabledJobsOnList(t *testing.T) {
 func TestAddAtFuture(t *testing.T) {
 	cwd := t.TempDir()
 	at := time.Now().UTC().Add(24 * time.Hour).Format(time.RFC3339)
-	msg, err := Add(cwd, AddInput{
+	msg, err := Add(cwd, "", AddInput{
 		Message: "x",
 		Schedule: ScheduleSpec{
 			AtRFC3339: at,
@@ -210,7 +210,7 @@ func TestNextWakeDuration(t *testing.T) {
 	if err := write(path, f); err != nil {
 		t.Fatal(err)
 	}
-	d, ok := NextWakeDuration(cwd, "cli", time.Now().UTC())
+	d, ok := NextWakeDuration(cwd, "", "cli", time.Now().UTC())
 	if !ok || d != 0 {
 		t.Fatalf("want overdue (d=0), got d=%v ok=%v", d, ok)
 	}
@@ -219,7 +219,7 @@ func TestNextWakeDuration(t *testing.T) {
 func TestAddAtPastRejected(t *testing.T) {
 	cwd := t.TempDir()
 	at := time.Now().UTC().Add(-time.Hour).Format(time.RFC3339)
-	_, err := Add(cwd, AddInput{
+	_, err := Add(cwd, "", AddInput{
 		Message: "x",
 		Schedule: ScheduleSpec{
 			AtRFC3339: at,

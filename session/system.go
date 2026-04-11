@@ -80,7 +80,7 @@ func (e *Engine) buildTurnSystem(memOK bool, bundle memory.TurnBundle, bg budget
 		return fallbackMainThreadSystem(d)
 	}
 	out = strings.TrimRight(out, "\n")
-	if sb := schedule.SystemBlock(e.CWD); sb != "" {
+	if sb := schedule.SystemBlock(e.CWD, e.UserDataRoot); sb != "" {
 		out += sb + "\n"
 	}
 	return out + "\n"
@@ -127,7 +127,7 @@ func fallbackMainThreadSystem(d MainThreadSystemData) string {
 		b.WriteString("\n")
 	}
 	out := strings.TrimRight(b.String(), "\n")
-	if sb := schedule.SystemBlock(d.CWD); sb != "" {
+	if sb := schedule.SystemBlock(d.CWD, ""); sb != "" {
 		out += sb + "\n"
 	}
 	return out + "\n"

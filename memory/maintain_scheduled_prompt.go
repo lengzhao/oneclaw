@@ -37,10 +37,10 @@ func buildScheduledToolUserPrompt(layout Layout, rulesMemPath, episodePath strin
 		}
 	}
 
-	agentDot := filepath.Join(layout.CWD, DotDir, AgentInstructionsFile)
-	dialogDay := filepath.Clean(filepath.Join(layout.CWD, DotDir, "memory", dateStr, "dialog_history.json"))
-	workingT := filepath.Clean(filepath.Join(layout.CWD, DotDir, "working_transcript.json"))
-	slimT := filepath.Clean(filepath.Join(layout.CWD, DotDir, "transcript.json"))
+	agentDot := filepath.Join(layout.DotOrDataRoot(), AgentInstructionsFile)
+	dialogDay := filepath.Clean(layout.DialogHistoryPath(dateStr))
+	workingT := filepath.Clean(filepath.Join(layout.DotOrDataRoot(), "working_transcript.json"))
+	slimT := filepath.Clean(filepath.Join(layout.DotOrDataRoot(), "transcript.json"))
 
 	sameDayNote := ""
 	if sameDayDigest {
@@ -66,6 +66,7 @@ func buildScheduledToolUserPrompt(layout Layout, rulesMemPath, episodePath strin
 			"- Cumulative slim transcript, optional: `%s`\n\n"+
 			"%s"+
 			"**Task:** Read what you need via tools. Merge duplicates and capture durable **episodic** facts into the digest file. "+
+			"When you see **repeated tool patterns** or **user corrections** that define reusable procedure, **try** **`write_behavior_policy`** to add or update **`.oneclaw/skills/<name>/SKILL.md`** (playbook), not only a digest bullet — digest stays for one-off facts. "+
 			"For **standing rules** (how the agent should behave), prefer **`.oneclaw/AGENT.md`**, **rules**, **skills**, or **`MEMORY.md`** via `write_behavior_policy` — keep MEMORY.md compact. "+
 			"Be **terse**: one short sentence per bullet; **do not** paste long paths unless the path itself is the fact; **do not** claim a file exists unless you read it successfully.\n\n"+
 			"**Final assistant message (markdown only):** first line must be **exactly**:\n%s\n\n"+

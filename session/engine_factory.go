@@ -1,22 +1,25 @@
 package session
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 
 	"github.com/lengzhao/clawbridge"
 	"github.com/lengzhao/oneclaw/config"
+	"github.com/lengzhao/oneclaw/memory"
 	"github.com/lengzhao/oneclaw/tools"
 	"github.com/openai/openai-go"
 )
 
 // MainEngineFactoryDeps wires a cmd/oneclaw-style Engine for each worker-pool job.
 type MainEngineFactoryDeps struct {
-	CWD           string
-	Resolved      *config.Resolved
-	Registry      *tools.Registry
-	Client        openai.Client
-	Model         string
+	Resolved *config.Resolved
+	Registry *tools.Registry
+	Client   openai.Client
+	Model    string
+	// MCPSystemNote is optional MCP section for the main-thread system prompt.
 	MCPSystemNote string
 	LLMAudit      bool
 	OrchAudit     bool
@@ -28,22 +31,34 @@ type MainEngineFactoryDeps struct {
 // MainEngineFactory returns a factory suitable for NewWorkerPool.
 func MainEngineFactory(deps MainEngineFactoryDeps) func(SessionHandle) (*Engine, error) {
 	return func(h SessionHandle) (*Engine, error) {
-		eng := NewEngine(deps.CWD, deps.Registry)
+		if deps.Resolved == nil {
+			return nil, fmt.Errorf("session: MainEngineFactory: nil Resolved")
+		}
 		sid := StableSessionID(h)
+		userRoot := deps.Resolved.UserDataRoot()
+		if userRoot == "" {
+			return nil, fmt.Errorf("session: empty UserDataRoot (config not loaded with Home?)")
+		}
+		sessionHome := filepath.Join(userRoot, "sessions", sid)
+		dot := filepath.Join(sessionHome, memory.DotDir)
+		if err := os.MkdirAll(dot, 0o755); err != nil {
+			return nil, fmt.Errorf("session: mkdir session workspace: %w", err)
+		}
+
+		eng := NewEngine(sessionHome, deps.Registry)
 		eng.SessionID = sid
+		eng.UserDataRoot = userRoot
 		eng.Client = deps.Client
 		eng.Model = deps.Model
-		if deps.Resolved != nil {
-			eng.MaxSteps = deps.Resolved.MainAgentMaxSteps()
-			eng.MaxTokens = deps.Resolved.MainAgentMaxCompletionTokens()
-			eng.ChatTransport = deps.Resolved.ChatTransport()
-			tp, wp := deps.Resolved.SessionTranscriptPaths(sid)
-			eng.TranscriptPath = tp
-			eng.WorkingTranscriptPath = wp
-			eng.WorkingTranscriptMaxMessages = deps.Resolved.WorkingTranscriptMaxMessages()
-			eng.DisableMultimodalImage = deps.Resolved.MultimodalImageDisabled()
-			eng.DisableMultimodalAudio = deps.Resolved.MultimodalAudioDisabled()
-		}
+		eng.MaxSteps = deps.Resolved.MainAgentMaxSteps()
+		eng.MaxTokens = deps.Resolved.MainAgentMaxCompletionTokens()
+		eng.ChatTransport = deps.Resolved.ChatTransport()
+		tp, wp := deps.Resolved.SessionTranscriptPaths(sid)
+		eng.TranscriptPath = tp
+		eng.WorkingTranscriptPath = wp
+		eng.WorkingTranscriptMaxMessages = deps.Resolved.WorkingTranscriptMaxMessages()
+		eng.DisableMultimodalImage = deps.Resolved.MultimodalImageDisabled()
+		eng.DisableMultimodalAudio = deps.Resolved.MultimodalAudioDisabled()
 		if deps.MCPSystemNote != "" {
 			eng.MCPSystemNote = deps.MCPSystemNote
 		}

@@ -8,18 +8,17 @@ import (
 
 func TestExportSessionSnapshot(t *testing.T) {
 	t.Parallel()
-	cwd := t.TempDir()
-	dot := filepath.Join(cwd, DotDir)
-	if err := os.MkdirAll(filepath.Join(dot, "memory", "2026-04-10"), 0o755); err != nil {
+	dataRoot := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dataRoot, "memory", "2026-04-10"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dot, "transcript.json"), []byte("{}"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dataRoot, "transcript.json"), []byte("{}"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dot, "memory", "2026-04-10", "x.md"), []byte("hi"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dataRoot, "memory", "2026-04-10", "x.md"), []byte("hi"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	artDir := filepath.Join(dot, "memory", "2026-04-10", "artifacts", "mcp")
+	artDir := filepath.Join(dataRoot, "memory", "2026-04-10", "artifacts", "mcp")
 	if err := os.MkdirAll(artDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -28,7 +27,7 @@ func TestExportSessionSnapshot(t *testing.T) {
 	}
 
 	out := t.TempDir()
-	if err := ExportSessionSnapshot(cwd, out); err != nil {
+	if err := ExportSessionSnapshot(dataRoot, out); err != nil {
 		t.Fatal(err)
 	}
 	dst := filepath.Join(out, DotDir, "transcript.json")

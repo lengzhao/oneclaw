@@ -9,21 +9,22 @@ import (
 	"time"
 )
 
-// ExportSessionSnapshot copies selected `.oneclaw` artifacts into outDir for offline review or bug reports.
-// Large `artifacts/` under `.oneclaw` is skipped by default to avoid huge DOM dumps.
-func ExportSessionSnapshot(cwd, outDir string) error {
-	if cwd == "" {
-		return fmt.Errorf("memory: empty cwd")
+// ExportSessionSnapshot copies host data from dataRoot (typically ~/.oneclaw) into outDir for offline review or bug reports.
+// Output keeps a `.oneclaw/` subdirectory mirroring the old export layout for compatibility.
+// Large `artifacts/` trees are skipped by default to avoid huge DOM dumps.
+func ExportSessionSnapshot(dataRoot, outDir string) error {
+	if dataRoot == "" {
+		return fmt.Errorf("memory: empty data root")
 	}
-	outDir = filepath.Clean(outDir)
-	if outDir == "" || outDir == "." {
-		return fmt.Errorf("memory: invalid export output directory")
-	}
-	srcRoot := filepath.Join(cwd, DotDir)
+	srcRoot := filepath.Clean(dataRoot)
 	if st, err := os.Stat(srcRoot); err != nil {
 		return fmt.Errorf("stat %s: %w", srcRoot, err)
 	} else if !st.IsDir() {
 		return fmt.Errorf("not a directory: %s", srcRoot)
+	}
+	outDir = filepath.Clean(outDir)
+	if outDir == "" || outDir == "." {
+		return fmt.Errorf("memory: invalid export output directory")
 	}
 	if err := os.MkdirAll(outDir, 0o755); err != nil {
 		return fmt.Errorf("mkdir export dir: %w", err)
@@ -32,11 +33,10 @@ func ExportSessionSnapshot(cwd, outDir string) error {
 	summary := fmt.Sprintf(
 		"oneclaw session export\n"+
 			"generated_utc: %s\n"+
-			"source_cwd: %s\n"+
-			"source_dotdir: %s\n\n"+
-			"Includes: transcript, working_transcript, tasks, config, memory/, sidechain/ (if present).\n"+
-			"Excludes: .oneclaw/artifacts/ (use your own copy if needed).\n",
-		time.Now().UTC().Format(time.RFC3339), cwd, srcRoot,
+			"source_data_root: %s\n\n"+
+			"Includes: top-level config/sqlite/jobs, memory/, sessions/, sidechain/ when present.\n"+
+			"Excludes: artifacts/ (use your own copy if needed).\n",
+		time.Now().UTC().Format(time.RFC3339), srcRoot,
 	)
 	if err := os.WriteFile(readme, []byte(summary), 0o644); err != nil {
 		return fmt.Errorf("write readme: %w", err)
@@ -49,13 +49,14 @@ func ExportSessionSnapshot(cwd, outDir string) error {
 		"config.yaml",
 		"scheduled_maintain_state.json",
 		"scheduled_jobs.json",
+		"sessions.sqlite",
 	}
 	for _, name := range files {
 		if err := copyFileIfExists(filepath.Join(srcRoot, name), filepath.Join(dstDot, name)); err != nil {
 			return err
 		}
 	}
-	for _, dir := range []string{"memory", "sidechain"} {
+	for _, dir := range []string{"memory", "sessions", "sidechain", "media"} {
 		sp := filepath.Join(srcRoot, dir)
 		if _, err := os.Stat(sp); err != nil {
 			if os.IsNotExist(err) {

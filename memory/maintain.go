@@ -14,11 +14,14 @@ import (
 
 // MaintainPromptData fills maintenance system templates for memory distillation.
 type MaintainPromptData struct {
-	CWD             string // project working directory
-	Today           string // YYYY-MM-DD, same as digest day
-	MemoryPath      string // episodic digest file for this calendar day (.oneclaw/memory/YYYY-MM-DD.md)
-	RulesMemoryPath string // project MEMORY.md (rules only; excerpt for dedupe)
-	RunTS           string // RFC3339 UTC, wall time of this maintain pass
+	CWD                   string // workspace / data root label for prompts
+	Today                 string // YYYY-MM-DD, same as digest day
+	MemoryPath            string // episodic digest file for this calendar day
+	RulesMemoryPath       string // project MEMORY.md (rules only; excerpt for dedupe)
+	RunTS                 string // RFC3339 UTC, wall time of this maintain pass
+	DialogHistoryPath     string // scheduled: today's dialog_history.json (absolute)
+	WorkingTranscriptPath string // scheduled: working_transcript.json (absolute)
+	TranscriptPath        string // scheduled: transcript.json (absolute)
 }
 
 // Audit sources for AppendMemoryAudit when appending Auto-maintained sections.
@@ -27,8 +30,18 @@ const (
 	AuditSourceScheduledMaintain = "scheduled_maintain"
 )
 
-func maintenanceSystemPromptForPathway(p maintainPathway, cwd, episodePath, rulesPath, today, runTS string) string {
-	d := MaintainPromptData{CWD: cwd, Today: today, MemoryPath: episodePath, RulesMemoryPath: rulesPath, RunTS: runTS}
+func maintenanceSystemPromptForPathway(p maintainPathway, layout Layout, episodePath, rulesPath, today, runTS string) string {
+	root := layout.DotOrDataRoot()
+	d := MaintainPromptData{
+		CWD:                   layout.CWD,
+		Today:                 today,
+		MemoryPath:            episodePath,
+		RulesMemoryPath:       rulesPath,
+		RunTS:                 runTS,
+		DialogHistoryPath:     filepath.Clean(layout.DialogHistoryPath(today)),
+		WorkingTranscriptPath: filepath.Clean(filepath.Join(root, "working_transcript.json")),
+		TranscriptPath:        filepath.Clean(filepath.Join(root, "transcript.json")),
+	}
 	name := prompts.NameMaintenanceSystemScheduled
 	if p == pathwayPostTurn {
 		name = prompts.NameMaintenanceSystemPostTurn
@@ -36,12 +49,12 @@ func maintenanceSystemPromptForPathway(p maintainPathway, cwd, episodePath, rule
 	s, err := prompts.Render(name, d)
 	if err != nil {
 		slog.Error("memory.prompts.maintenance_system", "pathway", p, "err", err)
-		return fallbackMaintenanceSystemPrompt(cwd, episodePath, rulesPath, today, runTS, p == pathwayPostTurn)
+		return fallbackMaintenanceSystemPrompt(layout, episodePath, rulesPath, today, runTS, p == pathwayPostTurn)
 	}
 	return s
 }
 
-func fallbackMaintenanceSystemPrompt(cwd, episodePath, rulesPath, today, runTS string, postTurn bool) string {
+func fallbackMaintenanceSystemPrompt(layout Layout, episodePath, rulesPath, today, runTS string, postTurn bool) string {
 	kind := "consolidation"
 	if postTurn {
 		kind = "post-turn"
@@ -50,10 +63,14 @@ func fallbackMaintenanceSystemPrompt(cwd, episodePath, rulesPath, today, runTS s
 	if postTurn {
 		scope = "Near-field: only this finished user turn (snapshot); episodic digest → `" + episodePath + "`; rules excerpt → `" + rulesPath + "` for dedupe."
 	}
-	out := "You are a silent memory indexer for a coding agent (" + kind + "). Scope: project `" + cwd + "`, calendar date " + today + ", episodic digest `" + episodePath + "`, rules `" + rulesPath + "`.\n" +
+	dialog := filepath.Clean(layout.DialogHistoryPath(today))
+	root := layout.DotOrDataRoot()
+	workT := filepath.Clean(filepath.Join(root, "working_transcript.json"))
+	slimT := filepath.Clean(filepath.Join(root, "transcript.json"))
+	out := "You are a silent memory indexer for a coding agent (" + kind + "). Scope: project `" + layout.CWD + "`, calendar date " + today + ", episodic digest `" + episodePath + "`, rules `" + rulesPath + "`.\n" +
 		scope + "\n"
 	if !postTurn {
-		out += "Session records (optional; read-only tools): per-day slim dialogue JSON `" + cwd + "/.oneclaw/memory/" + today + "/dialog_history.json` (other days: replace date segment); model context `" + cwd + "/.oneclaw/working_transcript.json`; cumulative slim `" + cwd + "/.oneclaw/transcript.json`.\n"
+		out += "Session records (optional; read-only tools): per-day slim dialogue JSON `" + dialog + "` (other days: replace date segment); model context `" + workT + "`; cumulative slim `" + slimT + "`.\n"
 	}
 	out += "Maintenance run started (UTC): " + runTS + ".\n" +
 		"Follow the user message format exactly.\n" +
@@ -63,7 +80,7 @@ func fallbackMaintenanceSystemPrompt(cwd, episodePath, rulesPath, today, runTS s
 
 func isEpisodeDigestFile(layout Layout, memPath string) bool {
 	clean := filepath.Clean(memPath)
-	projMem := filepath.Clean(ProjectMemoryDir(layout.CWD))
+	projMem := filepath.Clean(layout.Project)
 	if !PathUnderRoot(clean, projMem) {
 		return false
 	}

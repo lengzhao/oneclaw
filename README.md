@@ -14,26 +14,23 @@ go build -o oneclaw ./cmd/oneclaw
 # 可选：独立维护进程仍可用 go build -o maintain ./cmd/maintain
 ```
 
-在项目根执行 **`go run ./cmd/oneclaw -init`**（或 `-cwd <dir> -init`）可生成或更新 **`<cwd>/.oneclaw/config.yaml`**（无则写入完整内置模板；已有则只补上模板里缺失的键、不覆盖你的配置）并创建记忆目录；再按需编辑密钥与渠道。
+执行 **`go run ./cmd/oneclaw -init`** 会在 **`$HOME/.oneclaw/`** 生成或更新 **`config.yaml`**（无则写入完整内置模板；已有则只补上模板里缺失的键、不覆盖你的配置）并创建记忆目录；再按需编辑密钥与渠道。
 
-配置 OpenAI 兼容 API 后启动 REPL：在 **`~/.oneclaw/config.yaml`** 或 **`<项目>/.oneclaw/config.yaml`**（或 **`-config`** 额外层）中填写 `openai.api_key`、`openai.base_url` 等；合并与 `PushRuntime` 见 **[`docs/config.md`](docs/config.md)**。可选用 `github.com/lengzhao/conf` 加载 `.env` 供**其他**依赖使用，**oneclaw 运行时配置以 YAML 为准**。
+配置 OpenAI 兼容 API 后启动常驻服务：在 **`~/.oneclaw/config.yaml`** 与可选 **`-config`** 额外层中填写 `openai.api_key`、`openai.base_url` 等；合并与 `PushRuntime` 见 **[`docs/config.md`](docs/config.md)**。可选用 `github.com/lengzhao/conf` 加载 `.env` 供**其他**依赖使用，**oneclaw 运行时配置以 YAML 为准**。
 
 ```bash
-cd /path/to/project         # 工具与会话 cwd 均为当前工作目录
 go run ./cmd/oneclaw
-# 可选：go run ./cmd/oneclaw -config ./my-layer.yaml
+# 可选：go run ./cmd/oneclaw -config ./my-layer.yaml  # 相对路径相对于 ~/.oneclaw/
 ```
 
-`cmd/oneclaw` 支持 **`-config`**（额外 YAML 层，覆盖顺序见 [`docs/config.md`](docs/config.md)）、**`-cwd`**（项目根，默认当前目录）、**`-init`**（初始化 `.oneclaw`）、**`-maintain-once`**（单次远场维护后退出）。Transcript 路径由 YAML `paths.transcript` 决定（未设置则 **`<cwd>/.oneclaw/transcript.json`**）；**每轮 `SubmitUser` 成功结束后**会自动写入。关闭落盘：`features.disable_transcript`（Slack 等渠道可自行设置 `Engine.TranscriptPath`）。
+`cmd/oneclaw` 支持 **`-config`**（额外 YAML 层，相对路径相对于 **`~/.oneclaw/`**，见 [`docs/config.md`](docs/config.md)）、**`-init`**（初始化 **`$HOME/.oneclaw`**）、**`-maintain-once`**（单次远场维护后退出）、**`-export-session`** 等。Transcript 等路径由 YAML 与 `Resolved.UserDataRoot()` 决定（默认每会话在 **`~/.oneclaw/sessions/<id>/.oneclaw/`** 下）；**每轮 `SubmitUser` 成功结束后**会自动写入。关闭落盘：`features.disable_transcript`（Slack 等渠道可自行设置 `Engine.TranscriptPath`）。
 
 常用 REPL 命令：`/exit` 退出。对话落盘依赖配置中的 transcript 路径及每轮成功结束后的自动保存（见上段）；另存副本请用外部工具复制该文件。
 
-**Memory 维护**：**回合后**由 `MaybePostTurnMaintain`（`features.disable_auto_maintenance`）；**定时**由 **`RunScheduledMaintain`** —— 将可整理要点写入 **`<cwd>/.oneclaw/memory/YYYY-MM-DD.md`**；**`<cwd>/.oneclaw/memory/MEMORY.md`** 仅作**规则**（与 `AGENT.md` 类似，进 prompt），不由维护追加大块 episodic 正文。合并 YAML 里 **`maintain.interval` 非空** 时主进程内 **`maintainloop`** 周期唤醒，**或** **`oneclaw -maintain-once`** / **`cmd/maintain`**（`-interval` / `-once`）。关闭后台定时（不挡单次维护）：`features.disable_scheduled_maintenance`。详见 [`docs/config.md`](docs/config.md)、[`docs/memory-maintain-dual-entry-design.md`](docs/memory-maintain-dual-entry-design.md)。
+**Memory 维护**：**回合后**由 `MaybePostTurnMaintain`（`features.disable_auto_maintenance`）；**定时**由 **`RunScheduledMaintain`** —— 在 IM 主机路径上将可整理要点写入 **`<UserDataRoot>/memory/YYYY-MM-DD.md`**（默认 **`~/.oneclaw/memory/…`**）；同目录下 **`MEMORY.md`** 仅作**规则**（与 `AGENT.md` 类似，进 prompt），不由维护追加大块 episodic 正文。合并 YAML 里 **`maintain.interval` 非空** 时主进程内 **`maintainloop`** 周期唤醒，**或** **`oneclaw -maintain-once`**。关闭后台定时（不挡单次维护）：`features.disable_scheduled_maintenance`。详见 [`docs/config.md`](docs/config.md)、[`docs/memory-maintain-dual-entry-design.md`](docs/memory-maintain-dual-entry-design.md)。
 
 ```bash
-go run ./cmd/oneclaw -cwd . -maintain-once
-# 或独立二进制：go run ./cmd/maintain --cwd . -once
-# 仅 cmd/maintain：go run ./cmd/maintain --cwd . -interval 30m
+go run ./cmd/oneclaw -maintain-once
 ```
 
 ---
@@ -56,7 +53,7 @@ go run ./cmd/oneclaw -cwd . -maintain-once
 
 1. **文件型记忆平面**持续更新：`MEMORY.md` 索引、topic、daily log（先追加、后整理）。
 2. **规则与策略**可持久化到 `.oneclaw/AGENT.md`、`.oneclaw/rules/*.md`、agent 专属 memory。
-3. **维护型子任务**（**`MaybePostTurnMaintain`** + **`RunScheduledMaintain`** / **`oneclaw -maintain-once`** / [`cmd/maintain`](cmd/maintain)，见 [`docs/memory-maintain-dual-entry-design.md`](docs/memory-maintain-dual-entry-design.md)）整理日志与既有 memory。
+3. **维护型子任务**（**`MaybePostTurnMaintain`** + **`RunScheduledMaintain`** / **`oneclaw -maintain-once`**，见 [`docs/memory-maintain-dual-entry-design.md`](docs/memory-maintain-dual-entry-design.md)）整理日志与既有 memory。
 4. **护栏**：全局 prompt 字节预算、工具权限收缩、memory 写入审计（append-only JSONL 等）。
 
 更细的实验与验收思路见 [`docs/self-evolution-plan.md`](docs/self-evolution-plan.md)。任务勾选与阶段验收见 [`docs/todo.md`](docs/todo.md)。
@@ -77,7 +74,7 @@ go run ./cmd/oneclaw -cwd . -maintain-once
 ## 核心能力一览
 
 - **执行循环**：模型 ↔ 工具 ↔ 回灌；流式/非流式；Abort；`log/slog` 日志。
-- **内置工具**：`read_file`、`write_file`、`grep`、**`exec`**（对标 picoclaw 的 shell 执行工具名；`sh -c`、前台默认最多等 30s 后返回部分信息、可选 background）、`run_agent`、`fork_context`、`task_create` / `task_update`、**`cron`**（定时/周期提醒，落盘 `.oneclaw/scheduled_jobs.json`，进程内轮询到期后注入用户消息；对标 picoclaw 的同名能力，简化版不含计划 shell 命令）、**`send_message`**（主动推送文本/附件到当前或指定 channel 实例，不经模型再生成一轮）（注册表 + schema；只读并行、写串行等保守策略）。
+- **内置工具**：`read_file`、`write_file`、`grep`、**`exec`**（对标 picoclaw 的 shell 执行工具名；`sh -c`、前台默认最多等 30s 后返回部分信息、可选 background）、`run_agent`、`fork_context`、`task_create` / `task_update`、**`cron`**（定时/周期提醒，落盘 **`scheduled_jobs.json`**（默认在 **`UserDataRoot`**，如 `~/.oneclaw/`），进程内轮询到期后注入用户消息；对标 picoclaw 的同名能力，简化版不含计划 shell 命令）、**`send_message`**（主动推送文本/附件到当前或指定 channel 实例，不经模型再生成一轮）（注册表 + schema；只读并行、写串行等保守策略）。
 - **Memory**：user / project / local / auto / team / agent 等作用域；发现、注入、recall、与维护管道（回合内工具轨迹经内存进入 `PostTurn` / maintain，不再写 `.oneclaw/traces/`）。
 - **子 Agent**：`.oneclaw/agents/*.md`；嵌套隔离上下文与工具面收缩。
 - **路由抽象**：入站 `Inbound`、出站 `Record` / `Sink`，便于在 CLI 之外接 HTTP / webhook 等（见 `routing/` 与设计文档）。
@@ -87,8 +84,7 @@ go run ./cmd/oneclaw -cwd . -maintain-once
 ## 仓库布局
 
 ```text
-cmd/oneclaw/     主 CLI / REPL（-init、-maintain-once、-cwd、渠道）
-cmd/maintain/    可选：独立定时或单次 memory 蒸馏
+cmd/oneclaw/     主 CLI / REPL（-init、-maintain-once、渠道）
 budget/          全局上下文字节预算
 config/          统一 YAML 配置加载与合并（见 docs/config.md）
 loop/            主循环、展示、工具 trace、历史预算等
@@ -145,7 +141,7 @@ flowchart TB
 ```bash
 cp env.example .env   # 可选：给其他工具用；oneclaw 以 YAML 为准
 go run ./cmd/oneclaw -init
-# 或手动：cp config/init_template/config.yaml <项目>/.oneclaw/config.yaml
+# 或手动：cp config/init_template/config.yaml ~/.oneclaw/config.yaml
 ```
 
 **常用 YAML 段**：`model`、`chat.transport`、`openai.*`、`paths.*`、`budget.*`、`maintain.*`、`features.disable_*`、`log.*`、`usage.*`、`schedule.*` — 字段说明与默认值见 [`docs/config.md`](docs/config.md)。
@@ -158,22 +154,13 @@ go run ./cmd/oneclaw -init
 
 | 标志 | 说明 |
 |------|------|
-| `-cwd` | 可选；项目根（memory / `.oneclaw/config.yaml` 根；默认当前工作目录） |
-| `-config` | 可选；额外 YAML 配置层（相对路径相对于 `-cwd` 或当前目录） |
-| `-init` | 创建记忆目录；`config.yaml` 不存在则写入内置模板，已存在则合并补全缺失键（不覆盖已有值），然后退出 |
+| `-config` | 可选；额外 YAML 配置层（相对路径相对于 **`~/.oneclaw/`**） |
+| `-init` | 在 **`$HOME/.oneclaw/`** 创建记忆目录；`config.yaml` 不存在则写入内置模板，已存在则合并补全缺失键（不覆盖已有值），然后退出 |
 | `-maintain-once` | 单次 `RunScheduledMaintain` 后退出（需 API 密钥；不启动渠道） |
-| `-log-level` / `-log-format` | 可选；覆盖日志（`-maintain-once` / 正常模式在加载配置后生效；`-init` 仅用 CLI 标志） |
+| `-export-session` | 将主机数据从 **`UserDataRoot`** 导出到指定目录后退出 |
+| `-log-level` / `-log-format` / `-log-file` | 可选；覆盖日志（相对 **`UserDataRoot`** 等规则见 [`docs/config.md`](docs/config.md)） |
 
-工作目录默认**进程当前目录**；指定 `-cwd` 时以其为项目根。日志与 transcript 见 YAML 或 `-log-*` 标志。
-
-**`cmd/maintain`**
-
-| 标志 | 说明 |
-|------|------|
-| `-cwd` | 项目根（memory 布局根） |
-| `-config` | 可选；额外 YAML 配置层（相对路径相对于 `-cwd`） |
-| `-once` | 只跑一轮蒸馏后退出（适合系统 crontab）；优先于间隔循环 |
-| `-interval` | 循环间隔；`0` 等价单次；默认来自合并后的 YAML `maintain.interval`（代码内另有默认） |
+配置与主机数据根为 **`Resolved.UserDataRoot()`**（默认 **`~/.oneclaw`**）；**不再**使用进程工作目录或「项目 `-cwd`」解析配置。
 
 ---
 

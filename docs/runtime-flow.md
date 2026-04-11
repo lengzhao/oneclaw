@@ -6,7 +6,7 @@
 
 ## 1. 进程入口：`cmd/oneclaw`
 
-解析 `-cwd`、`-config` 后，按标志分为三条互斥路径：
+解析 **`$HOME`**、**`-config`**（可选）后，按标志分为多条互斥路径（**`-init` / `-export-session` / `-maintain-once` / 常驻**）：
 
 | 路径 | 条件 | 行为摘要 |
 |------|------|----------|
@@ -18,8 +18,8 @@
 
 ```mermaid
 flowchart TB
-  start([main 启动]) --> cwd[解析 cwd / home]
-  cwd --> init{-init?}
+  start([main 启动]) --> home[home + UserDataRoot]
+  home --> init{-init?}
   init -->|是| ws[InitWorkspace] --> exit1([退出])
   init -->|否| load[Load 合并 YAML + PushRuntime]
   load --> mo{-maintain-once?}
@@ -61,7 +61,7 @@ flowchart TB
 ```
 
 - **WorkerPool**：按 `hash(session_key) % N` 分片，**同一会话固定落在同一 worker**，每轮任务 **新建 Engine**（`factory`），执行完 `SubmitUser` 后丢弃，避免无界 Engine 映射。
-- **SessionHandle**：由入站的 `Channel` + 会话键派生；**StableSessionID**（SHA256 截断）用于 transcript / recall 等落盘路径。
+- **SessionHandle**：由入站的 `Channel` + 会话键派生；**StableSessionID**（SHA256 截断）用于 sqlite、目录名等。**Engine.CWD** 为 `<UserDataRoot>/sessions/<StableSessionID>/`（见 `config.UserDataRoot()` 与 [session-home-isolation-design.md](session-home-isolation-design.md)）。
 
 ---
 
@@ -137,7 +137,7 @@ flowchart TB
 
 ## 6. Agent 定时任务（`cron` 工具 / `scheduled_jobs.json`）
 
-- 任务持久化在 **`<cwd>/.oneclaw/scheduled_jobs.json`**。
+- 任务持久化在 **`UserDataRoot` 下的 `scheduled_jobs.json`**（默认 **`~/.oneclaw/scheduled_jobs.json`**；见 `schedule.JobsFilePath`）。
 - 每个启用的 clawbridge **client** 可启动 **`schedule.StartHostPollerIfEnabled`**：轮询到期任务，构造 **合成入站** `bus.InboundMessage`，调用与人工消息相同的 **`workerPool.SubmitUser`**，从而走完整模型回合。
 
 ```mermaid

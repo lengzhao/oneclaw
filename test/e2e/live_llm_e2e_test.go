@@ -35,14 +35,13 @@ func testLiveConfigPath(t *testing.T) string {
 	return filepath.Join(filepath.Dir(file), "live_llm.config.yaml")
 }
 
-func loadLiveResolved(t *testing.T, cfgPath string, cwd, home string) *config.Resolved {
+func loadLiveResolved(t *testing.T, cfgPath string, home string) *config.Resolved {
 	t.Helper()
 	absCfg, err := filepath.Abs(cfgPath)
 	if err != nil {
 		t.Fatal(err)
 	}
 	r, err := config.Load(config.LoadOptions{
-		Cwd:          cwd,
 		Home:         home,
 		ExplicitPath: absCfg,
 	})
@@ -85,17 +84,20 @@ func TestLiveLLM_ChatRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cwd := t.TempDir()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("OPENAI_BASE_URL", "")
 
-	r := loadLiveResolved(t, cfgPath, cwd, home)
+	r := loadLiveResolved(t, cfgPath, home)
 	r.PushRuntime()
 	s := rtopts.Current()
 	s.DisableMemory = true
 	rtopts.Set(&s)
-	e := newLiveEngine(t, r, cwd)
+	sessionHome := filepath.Join(r.UserDataRoot(), "sessions", "e2e-live")
+	if err := os.MkdirAll(filepath.Join(sessionHome, memory.DotDir), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	e := newLiveEngine(t, r, sessionHome)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
@@ -123,12 +125,11 @@ func TestLiveLLM_DailyLogExtract(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cwd := t.TempDir()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("OPENAI_BASE_URL", "")
 
-	r := loadLiveResolved(t, cfgPath, cwd, home)
+	r := loadLiveResolved(t, cfgPath, home)
 	r.PushRuntime()
 	s2 := rtopts.Current()
 	s2.MemoryBase = filepath.Join(home, memory.DotDir)
@@ -137,7 +138,11 @@ func TestLiveLLM_DailyLogExtract(t *testing.T) {
 	s2.DisableAutoMemory = false
 	rtopts.Set(&s2)
 
-	e := newLiveEngine(t, r, cwd)
+	sessionHome := filepath.Join(r.UserDataRoot(), "sessions", "e2e-live-mem")
+	if err := os.MkdirAll(filepath.Join(sessionHome, memory.DotDir), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	e := newLiveEngine(t, r, sessionHome)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
@@ -151,7 +156,7 @@ func TestLiveLLM_DailyLogExtract(t *testing.T) {
 		t.Fatal("empty assistant reply")
 	}
 
-	layout := memory.DefaultLayout(cwd, home)
+	layout := memory.DefaultLayout(sessionHome, home)
 	today := time.Now().Format("2006-01-02")
 	logPath := memory.DailyLogPath(layout.Auto, today)
 	b, err := os.ReadFile(logPath)

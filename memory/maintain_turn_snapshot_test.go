@@ -9,10 +9,13 @@ import (
 
 func TestFormatMaintainToolDetail(t *testing.T) {
 	got := formatMaintainToolDetail([]loop.ToolTraceEntry{
-		{Step: 1, Name: "exec", OK: true, ArgsPreview: `{"cmd":"ls"}`},
+		{Step: 1, Name: "exec", OK: true, ArgsPreview: `{"cmd":"ls"}`, OutPreview: "a.go b.go"},
 		{Step: 2, Name: "exec", OK: false, Err: "exit 1"},
 		{Step: 3, Name: "grep", OK: true},
 	})
+	if !strings.Contains(got, "out=a.go b.go") {
+		t.Fatalf("expected out preview: %q", got)
+	}
 	if !strings.Contains(got, "step 1 exec ok") || !strings.Contains(got, "step 2 exec err") {
 		t.Fatalf("missing steps: %q", got)
 	}

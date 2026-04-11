@@ -375,7 +375,7 @@ func runOneTool(ctx context.Context, c toolCallInv, cfg Config, modelStep int) (
 			ToolUseID:   c.ID,
 			Name:        c.Name,
 			OK:          ok,
-			Err:         truncateRunes(errText, 200),
+			Err:         truncateRunes(errText, toolTraceErrMaxRunes),
 			ArgsPreview: previewArgsJSON(c.Args),
 			OutPreview:  previewToolOut(out),
 			DurationMs:  time.Since(t0).Milliseconds(),

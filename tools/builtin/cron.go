@@ -108,7 +108,7 @@ func (CronTool) Execute(ctx context.Context, input json.RawMessage, tctx *toolct
 		uid := session.InboundUserID(tctx.TurnInbound)
 		ten := session.InboundTenantHint(tctx.TurnInbound)
 		pk := strings.TrimSpace(tctx.TurnInbound.Peer.Kind)
-		return schedule.Add(tctx.CWD, schedule.AddInput{
+		return schedule.Add(tctx.CWD, tctx.HostDataRoot, schedule.AddInput{
 			Name:         in.Name,
 			Message:      in.Message,
 			TargetSource: ts,
@@ -121,9 +121,9 @@ func (CronTool) Execute(ctx context.Context, input json.RawMessage, tctx *toolct
 			AtSeconds:    s.AtSeconds,
 		})
 	case "list":
-		return schedule.ListText(tctx.CWD)
+		return schedule.ListText(tctx.CWD, tctx.HostDataRoot)
 	case "remove":
-		return schedule.Remove(tctx.CWD, in.JobID)
+		return schedule.Remove(tctx.CWD, tctx.HostDataRoot, in.JobID)
 	default:
 		return "", fmt.Errorf("unknown action %q", in.Action)
 	}

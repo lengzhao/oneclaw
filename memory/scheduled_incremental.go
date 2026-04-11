@@ -13,12 +13,12 @@ import (
 
 const scheduledMaintainStateFile = "scheduled_maintain_state.json"
 
-// scheduledMaintainStatePath is always under the project cwd's .oneclaw (not under project memory), so we do not nest `.oneclaw/memory/.oneclaw/`.
+// scheduledMaintainStatePath is under layout.DotOrDataRoot() (repo: <cwd>/.oneclaw; IM host: user data root).
 func scheduledMaintainStatePath(layout Layout) string {
-	return filepath.Join(layout.CWD, DotDir, scheduledMaintainStateFile)
+	return filepath.Join(layout.DotOrDataRoot(), scheduledMaintainStateFile)
 }
 
-// migrateScheduledMaintainState moves state from the legacy path layout.Project/.oneclaw/ to layout.CWD/.oneclaw/.
+// migrateScheduledMaintainState moves state from the legacy path layout.Project/.oneclaw/ to DotOrDataRoot().
 func migrateScheduledMaintainState(layout Layout) {
 	newPath := scheduledMaintainStatePath(layout)
 	oldPath := filepath.Join(layout.Project, DotDir, scheduledMaintainStateFile)

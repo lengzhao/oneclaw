@@ -30,6 +30,9 @@ type Context struct {
 
 	CWD string
 
+	// HostDataRoot is the IM config/data root (~/.oneclaw) for host-wide files (e.g. scheduled_jobs.json). Empty uses project-style paths under CWD only.
+	HostDataRoot string
+
 	// SessionID is the stable logical session (e.g. Engine.SessionID / SQLite session row). Empty in tests or non-session hosts.
 	SessionID string
 
@@ -166,6 +169,7 @@ func (c *Context) ChildContext() *Context {
 	child.SessionHost = c.SessionHost
 	child.MemoryWriteRoots = append([]string(nil), c.MemoryWriteRoots...)
 	child.HomeDir = c.HomeDir
+	child.HostDataRoot = c.HostDataRoot
 	child.SessionID = c.SessionID
 	child.AgentID = c.AgentID
 	child.MaxSubagentDepth = c.MaxSubagentDepth

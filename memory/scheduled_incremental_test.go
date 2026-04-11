@@ -93,6 +93,16 @@ func TestScheduledMaintainStatePathAndMigrate(t *testing.T) {
 	}
 }
 
+func TestScheduledMaintainStatePath_IMHostLayout(t *testing.T) {
+	home := t.TempDir()
+	ur := filepath.Join(home, DotDir)
+	lay := IMHostMaintainLayout(ur, home)
+	want := filepath.Join(ur, scheduledMaintainStateFile)
+	if got := scheduledMaintainStatePath(lay); got != want {
+		t.Fatalf("scheduledMaintainStatePath = %q want %q", got, want)
+	}
+}
+
 func TestCollectIncrementalFirstRunLookback(t *testing.T) {
 	dir := t.TempDir()
 	today := time.Now().Format("2006-01-02")

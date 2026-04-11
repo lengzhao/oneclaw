@@ -87,13 +87,17 @@ func formatMaintainToolDetail(entries []loop.ToolTraceEntry) string {
 			b.WriteString(" err")
 			if strings.TrimSpace(e.Err) != "" {
 				b.WriteString("(")
-				b.WriteString(oneLine(e.Err, 72))
+				b.WriteString(oneLine(e.Err, 200))
 				b.WriteString(")")
 			}
 		}
 		if strings.TrimSpace(e.ArgsPreview) != "" {
 			b.WriteString(" args=")
 			b.WriteString(oneLine(e.ArgsPreview, 100))
+		}
+		if strings.TrimSpace(e.OutPreview) != "" {
+			b.WriteString(" out=")
+			b.WriteString(oneLine(e.OutPreview, 200))
 		}
 		b.WriteByte('\n')
 	}

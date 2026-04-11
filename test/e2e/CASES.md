@@ -251,13 +251,13 @@
 
 ### E2E-96
 
-- **前置**：预写当日 daily log（定时路径读 log）；受 YAML **`maintain.min_log_bytes`** 等约束；stub 一次 `CompletionStop`（维护段 + 唯一标记）；子进程配置含 **`openai.base_url`**、**`chat.transport: non_stream`**；子进程 `HOME` 为 `t.TempDir()` 以隔离 memory layout。
-- **E2E-96**：`go build ./cmd/oneclaw` 后执行 `-cwd <tmp> -maintain-once`，期望当日 **`memory/YYYY-MM-DD.md`** 含维护标记。
+- **前置**：预写当日 daily log（定时路径读 log）；受 YAML **`maintain.min_log_bytes`** 等约束；stub 一次 `CompletionStop`（维护段 + 唯一标记）；子进程配置写入 **`$HOME/.oneclaw/config.yaml`**（含 **`openai.base_url`**、**`chat.transport: non_stream`**、`paths.memory_base`）；`HOME` 为 `t.TempDir()` 以隔离数据根。
+- **E2E-96**：`go build ./cmd/oneclaw` 后执行 **`-maintain-once`**（无 `-cwd`），期望 **`$HOME/.oneclaw/memory/YYYY-MM-DD.md`** 含维护标记。
 - **说明**：`go build` 子进程将 `HOME` 设为包 init 时保存的真实 HOME，避免模块缓存写入 `t.TempDir()` 导致只读文件清理失败。
 
 ### E2E-97
 
-- **E2E-97**：`go build ./cmd/oneclaw` 后执行 `-cwd <tmp> -init`，期望 `<tmp>/.oneclaw/config.yaml` 存在且含 `openai:`；无需 API。
+- **E2E-97**：`go build ./cmd/oneclaw` 后设置 `HOME=<tmp>` 并执行 **`-init`**，期望 **`$HOME/.oneclaw/config.yaml`** 存在且含 `openai:`；无需 API。
 
 ---
 

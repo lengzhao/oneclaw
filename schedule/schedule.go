@@ -26,6 +26,15 @@ func Path(cwd string) string {
 	return filepath.Join(cwd, memory.DotDir, fileName)
 }
 
+// JobsFilePath returns scheduled_jobs.json: under hostDataRoot directly when non-empty (IM host, e.g. ~/.oneclaw/scheduled_jobs.json),
+// else project layout via Path(projectCWD).
+func JobsFilePath(projectCWD, hostDataRoot string) string {
+	if strings.TrimSpace(hostDataRoot) != "" {
+		return filepath.Join(filepath.Clean(hostDataRoot), fileName)
+	}
+	return Path(projectCWD)
+}
+
 // Disabled reports features.disable_scheduled_tasks from config.
 func Disabled() bool {
 	return rtopts.Current().DisableScheduledTasks
@@ -270,8 +279,8 @@ type AddInput struct {
 	AtSeconds    int
 }
 
-// Add appends a job after validation.
-func Add(cwd string, in AddInput) (string, error) {
+// Add appends a job after validation. hostDataRoot when non-empty selects flat ~/.oneclaw-style job file; cwd is ignored then.
+func Add(cwd, hostDataRoot string, in AddInput) (string, error) {
 	if Disabled() {
 		return "", fmt.Errorf("scheduled tasks are disabled (features.disable_scheduled_tasks in config)")
 	}
@@ -287,7 +296,7 @@ func Add(cwd string, in AddInput) (string, error) {
 	if ts == "" {
 		ts = "cli"
 	}
-	path := Path(cwd)
+	path := JobsFilePath(cwd, hostDataRoot)
 	fileMu.Lock()
 	f, err := Read(path)
 	if err != nil {
@@ -365,8 +374,8 @@ func compactDisabledJobs(f *File) int {
 	return n - len(f.Jobs)
 }
 
-// Remove deletes a job by id.
-func Remove(cwd, jobID string) (string, error) {
+// Remove deletes a job by id (same cwd / hostDataRoot rules as Add).
+func Remove(cwd, hostDataRoot, jobID string) (string, error) {
 	if Disabled() {
 		return "", fmt.Errorf("scheduled tasks are disabled (features.disable_scheduled_tasks in config)")
 	}
@@ -374,7 +383,7 @@ func Remove(cwd, jobID string) (string, error) {
 	if id == "" {
 		return "", fmt.Errorf("job_id is required")
 	}
-	path := Path(cwd)
+	path := JobsFilePath(cwd, hostDataRoot)
 	fileMu.Lock()
 	f, err := Read(path)
 	if err != nil {
@@ -409,11 +418,11 @@ func Remove(cwd, jobID string) (string, error) {
 }
 
 // ListText returns a human-readable list for the tool.
-func ListText(cwd string) (string, error) {
+func ListText(cwd, hostDataRoot string) (string, error) {
 	if Disabled() {
 		return "scheduled tasks are disabled", nil
 	}
-	path := Path(cwd)
+	path := JobsFilePath(cwd, hostDataRoot)
 	fileMu.Lock()
 	defer fileMu.Unlock()
 	f, err := Read(path)
@@ -505,11 +514,11 @@ type TurnDelivery struct {
 
 // CollectDue finds jobs for targetSource due at or before `now`, updates their next_run / last_run in the file, and returns deliveries.
 // Must be called without holding fileMu; this function locks internally.
-func CollectDue(cwd, targetSource string, now time.Time) ([]TurnDelivery, error) {
+func CollectDue(cwd, hostDataRoot, targetSource string, now time.Time) ([]TurnDelivery, error) {
 	if Disabled() {
 		return nil, nil
 	}
-	path := Path(cwd)
+	path := JobsFilePath(cwd, hostDataRoot)
 	fileMu.Lock()
 	defer fileMu.Unlock()
 	f, err := Read(path)

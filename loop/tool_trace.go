@@ -20,7 +20,8 @@ type ToolTraceEntry struct {
 }
 
 const toolTraceArgsMaxRunes = 120
-const toolTraceOutMaxRunes = 160
+const toolTraceOutMaxRunes = 200
+const toolTraceErrMaxRunes = 400
 
 // ToolTraceSink collects ToolTraceEntry values from a single RunTurn (safe for concurrent tool batches).
 type ToolTraceSink struct {
@@ -90,5 +91,20 @@ func previewToolOut(s string) string {
 	if !utf8.ValidString(s) {
 		return ""
 	}
-	return truncateRunes(trimSpaceOneLine(s), toolTraceOutMaxRunes)
+	one := trimSpaceOneLine(s)
+	runes := []rune(one)
+	if len(runes) <= toolTraceOutMaxRunes {
+		return string(runes)
+	}
+	const sep = " … "
+	sepR := []rune(sep)
+	remain := toolTraceOutMaxRunes - len(sepR)
+	if remain < 8 {
+		return truncateRunes(one, toolTraceOutMaxRunes)
+	}
+	headLen := remain / 2
+	tailLen := remain - headLen
+	head := string(runes[:headLen])
+	tail := string(runes[len(runes)-tailLen:])
+	return head + sep + tail
 }

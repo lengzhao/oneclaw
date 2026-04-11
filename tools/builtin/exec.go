@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -32,11 +33,65 @@ func (in *execInput) shellCommand() string {
 	return strings.TrimSpace(in.Cmd)
 }
 
+func execShellChainHasRmGlobAll(cmdLine string) bool {
+	for _, part := range shellChainSplitRE.Split(cmdLine, -1) {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		if rmGlobAllAtStartRE.MatchString(part) {
+			return true
+		}
+	}
+	return false
+}
+
+// execValidateSafety blocks commands that would kill the agent or its parent, or rm with a bare * in cwd.
+func execValidateSafety(cmdLine string) error {
+	cmdLine = strings.TrimSpace(cmdLine)
+	if cmdLine == "" {
+		return nil
+	}
+	if strings.Contains(cmdLine, "$PPID") || strings.Contains(cmdLine, "${PPID}") {
+		return fmt.Errorf("exec: forbidden: command references $PPID (cannot target parent process)")
+	}
+	if execShellChainHasRmGlobAll(cmdLine) {
+		return fmt.Errorf("exec: forbidden: rm with bare * (delete-all in cwd); use explicit paths or narrower globs (e.g. *.go)")
+	}
+	if !killWordRE.MatchString(cmdLine) {
+		return nil
+	}
+	ppid := os.Getppid()
+	pid := os.Getpid()
+	if ppid > 0 {
+		re := regexp.MustCompile(`\b` + regexp.QuoteMeta(strconv.Itoa(ppid)) + `\b`)
+		if re.MatchString(cmdLine) {
+			return fmt.Errorf("exec: forbidden: kill targets parent process (pid %d)", ppid)
+		}
+	}
+	if pid > 0 {
+		re := regexp.MustCompile(`\b` + regexp.QuoteMeta(strconv.Itoa(pid)) + `\b`)
+		if re.MatchString(cmdLine) {
+			return fmt.Errorf("exec: forbidden: kill targets the agent process (pid %d)", pid)
+		}
+	}
+	return nil
+}
+
 // backgroundStartTimeout caps how long we wait for the wrapper shell to start the job and write the pid file.
 const backgroundStartTimeout = 15 * time.Second
 
 // foregroundSyncWait is how long the tool waits for a foreground command before returning partial info (timed_out + run_log + pid). Overridable in tests.
 var foregroundSyncWait = 30 * time.Second
+
+// rmGlobAllAtStartRE matches an rm whose last path arg is a bare cwd-wide glob, only at the
+// start of a shell chain segment (split on ; && ||). So "echo rm *" is allowed; "cd x && rm *" is not.
+var rmGlobAllAtStartRE = regexp.MustCompile(`(?i)^rm(?:\s+[^\s*]+)*\s+(?:\./)?\*(\s|$|[;&|])`)
+
+// killWordRE matches the kill(1) command name only (word boundaries; not substrings like "skill").
+var killWordRE = regexp.MustCompile(`(?i)\bkill\b`)
+
+var shellChainSplitRE = regexp.MustCompile(`\s*(?:&&|\|\||;)\s*`)
 
 // ExecTool runs a shell command in the working directory (unsafe; gate with CanUseTool in production).
 // Naming and primary parameter align with picoclaw's exec tool; this build does not implement
@@ -52,7 +107,7 @@ func (ExecTool) Description() string {
 		"Prefer: sudo -n, ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new, git with GIT_TERMINAL_PROMPT=0 (set automatically), npm --yes. " +
 		"Foreground: the tool waits up to 30 seconds; if the command finishes in time, full output is returned. If not, returns partial info (timed_out, pid, run_log) while the process may still run — you choose follow-up (e.g. read_file on run.log, or background: true). " +
 		"pid in that case is cmd.Process.Pid (the sh -c child). " +
-		"Run log path: <cwd>/.oneclaw/sessions/<session_id>/exec_log/<timestamp>/run.log (stdout+stderr only). Background: pid is the detached job ($!). Do not add a trailing & to command."
+		"Run log path: <cwd>/.oneclaw/exec_log/<timestamp>/run.log (stdout+stderr only; cwd is the session workspace). Background: pid is the detached job ($!). Do not add a trailing & to command."
 }
 
 func (ExecTool) Parameters() openai.FunctionParameters {
@@ -67,7 +122,7 @@ func (ExecTool) Parameters() openai.FunctionParameters {
 		},
 		"background": map[string]any{
 			"type":        "boolean",
-			"description": "If true, run detached under <cwd>/.oneclaw/sessions/<session_id>/exec_log/<timestamp>/run.log; response includes pid and run_log path. Omit trailing & in command.",
+			"description": "If true, run detached under <cwd>/.oneclaw/exec_log/<timestamp>/run.log; response includes pid and run_log path. Omit trailing & in command.",
 		},
 	}, []string{"command"})
 }
@@ -82,6 +137,9 @@ func (ExecTool) Execute(ctx context.Context, input json.RawMessage, tctx *toolct
 		return "", fmt.Errorf("exec: empty command (set command, or cmd as alias)")
 	}
 	in.Command = cmdLine
+	if err := execValidateSafety(cmdLine); err != nil {
+		return "", err
+	}
 	if in.Background {
 		return execExecuteBackground(ctx, in, tctx)
 	}
@@ -163,13 +221,13 @@ func execExecuteForegroundWaitOrDetach(ctx context.Context, in execInput, tctx *
 }
 
 func formatForegroundLogOutput(logBytes []byte, waitErr error) string {
-	out := string(logBytes)
+	var b strings.Builder
 	if waitErr != nil {
-		if out != "" {
-			out += "\n"
-		}
-		out += fmt.Sprintf("error: %v", waitErr)
+		// Lead with failure so tool-trace / notify previews (prefix-limited) still surface the reason.
+		fmt.Fprintf(&b, "exec_failed: %v\n", waitErr)
 	}
+	b.Write(logBytes)
+	out := b.String()
 	if strings.TrimSpace(out) == "" {
 		return "(no output)"
 	}
@@ -183,6 +241,9 @@ func execDetachedResponse(tctx *toolctx.Context, runLogAbs, pid string, wrapperE
 		relFromCWD = runLogAbs
 	}
 	var b strings.Builder
+	if wrapperErr != nil {
+		fmt.Fprintf(&b, "exec_wrapper_error: %v\n", wrapperErr)
+	}
 	switch kind {
 	case "wait_timeout":
 		b.WriteString("timed_out: true\n")
@@ -194,7 +255,7 @@ func execDetachedResponse(tctx *toolctx.Context, runLogAbs, pid string, wrapperE
 	if sid := strings.TrimSpace(tctx.SessionID); sid != "" {
 		fmt.Fprintf(&b, "session_id: %s\n", sid)
 	} else {
-		b.WriteString("session_id: (empty; log dir uses \"_\" under .oneclaw/sessions/)\n")
+		b.WriteString("session_id: (empty)\n")
 	}
 	if pid != "" {
 		fmt.Fprintf(&b, "pid: %s\n", pid)
@@ -203,9 +264,6 @@ func execDetachedResponse(tctx *toolctx.Context, runLogAbs, pid string, wrapperE
 	}
 	fmt.Fprintf(&b, "run_log: %s\n", runLogAbs)
 	fmt.Fprintf(&b, "run_log_rel_cwd: %s\n", relFromCWD)
-	if wrapperErr != nil {
-		fmt.Fprintf(&b, "wrapper_error: %v\n", wrapperErr)
-	}
 	return b.String()
 }
 
@@ -213,25 +271,11 @@ func shellSingleQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'"'"'`) + "'"
 }
 
-func execSessionPathSegment(id string) string {
-	id = strings.TrimSpace(id)
-	if id == "" {
-		return "_"
-	}
-	id = strings.ReplaceAll(id, string(filepath.Separator), "_")
-	id = strings.ReplaceAll(id, "..", "")
-	id = strings.TrimSpace(id)
-	if id == "" {
-		return "_"
-	}
-	return id
-}
-
-// execSessionDir creates .oneclaw/sessions/<session_id>/exec_log/<unix_ts>/ under cwd and returns the path to run.log.
+// execSessionDir creates <cwd>/.oneclaw/exec_log/<unix_ts>/ (cwd is session workspace or project root in tests).
 func execSessionDir(cwd, sessionID string) (dir string, runLogPath string, err error) {
+	_ = sessionID
 	ts := fmt.Sprintf("%d", time.Now().Unix())
-	sid := execSessionPathSegment(sessionID)
-	dir = filepath.Join(cwd, ".oneclaw", "sessions", sid, "exec_log", ts)
+	dir = filepath.Join(cwd, ".oneclaw", "exec_log", ts)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", "", fmt.Errorf("exec: mkdir exec_log dir: %w", err)
 	}

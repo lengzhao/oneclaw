@@ -183,6 +183,27 @@ type Layout struct {
 	TeamProject    string
 	AgentDefault   []string // user + project agent memory roots for "default"
 	EntrypointName string
+	// HostUserData is true when CWD is the IM user data root (~/.oneclaw): config, AGENT.md, audit, and
+	// scheduled_maintain_state live directly under CWD, not under CWD/.oneclaw/.
+	HostUserData bool
+}
+
+// DotOrDataRoot returns the directory holding host-style dot files: for a repo cwd layout it is
+// <cwd>/.oneclaw; for IM host layout it is the user data root itself.
+func (l Layout) DotOrDataRoot() string {
+	if l.HostUserData {
+		return filepath.Clean(l.CWD)
+	}
+	return filepath.Join(l.CWD, DotDir)
+}
+
+// EpisodeDailyPath returns the episodic digest markdown path for the given calendar day (YYYY-MM-DD prefix).
+func (l Layout) EpisodeDailyPath(dateYYYYMMDD string) string {
+	dateYYYYMMDD = strings.TrimSpace(dateYYYYMMDD)
+	if len(dateYYYYMMDD) >= 10 {
+		dateYYYYMMDD = dateYYYYMMDD[:10]
+	}
+	return filepath.Join(l.Project, dateYYYYMMDD+".md")
 }
 
 // DefaultLayout builds standard paths for cwd and home directory.
@@ -199,6 +220,29 @@ func DefaultLayout(cwd, home string) Layout {
 		TeamProject:    TeamMemoryDirProject(cwd),
 		AgentDefault:   agentDefaultPair(cwd, mb, "default"),
 		EntrypointName: entrypointName,
+	}
+}
+
+// IMHostMaintainLayout is for cmd/oneclaw IM mode: userDataRoot is config.UserDataRoot() (~/.oneclaw).
+// Scheduled / host-wide maintenance targets shared trees under that root without duplicating a nested .oneclaw prefix.
+func IMHostMaintainLayout(userDataRoot, home string) Layout {
+	mb := MemoryBaseDir(home)
+	ur := filepath.Clean(userDataRoot)
+	if ur == "" {
+		ur = mb
+	}
+	agentHost := filepath.Join(ur, "agent-memory", "default")
+	return Layout{
+		CWD:            ur,
+		MemoryBase:     mb,
+		User:           UserMemoryDir(mb),
+		Project:        filepath.Join(ur, "memory"),
+		Auto:           AutoMemoryDir(ur, mb),
+		TeamUser:       TeamMemoryDirUser(mb),
+		TeamProject:    filepath.Join(ur, "team-memory"),
+		AgentDefault:   []string{filepath.Join(mb, "agent-memory", "default"), agentHost},
+		EntrypointName: entrypointName,
+		HostUserData:   true,
 	}
 }
 
@@ -228,9 +272,9 @@ func (l Layout) AuditWriteRoots() []string {
 	for _, p := range l.WriteRoots() {
 		add(p)
 	}
-	add(filepath.Join(l.CWD, DotDir, "rules"))
+	add(filepath.Join(l.DotOrDataRoot(), "rules"))
 	add(filepath.Join(l.MemoryBase, "rules"))
-	add(filepath.Join(l.CWD, DotDir, "skills"))
+	add(filepath.Join(l.DotOrDataRoot(), "skills"))
 	add(filepath.Join(l.MemoryBase, "skills"))
 	return out
 }
@@ -240,7 +284,7 @@ func (l Layout) AuditWriteRoots() []string {
 func (l Layout) IsBehaviorPolicyFile(abs string) bool {
 	abs = filepath.Clean(abs)
 	candidates := []string{
-		filepath.Join(l.CWD, DotDir, AgentInstructionsFile),
+		filepath.Join(l.DotOrDataRoot(), AgentInstructionsFile),
 		filepath.Join(l.MemoryBase, AgentInstructionsFile),
 	}
 	for _, c := range candidates {

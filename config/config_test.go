@@ -3,7 +3,6 @@ package config
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	cbconfig "github.com/lengzhao/clawbridge/config"
@@ -12,41 +11,44 @@ import (
 
 func boolPtr(b bool) *bool { return &b }
 
+func userConfigDir(home string) string {
+	return filepath.Join(home, memory.DotDir)
+}
+
 func TestMainAgentMaxSteps(t *testing.T) {
 	home := t.TempDir()
-	cwd := t.TempDir()
-	projDir := filepath.Join(cwd, memory.DotDir)
-	if err := os.MkdirAll(projDir, 0o755); err != nil {
+	ud := userConfigDir(home)
+	if err := os.MkdirAll(ud, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(projDir, "config.yaml"), []byte(`
+	if err := os.WriteFile(filepath.Join(ud, "config.yaml"), []byte(`
 agent:
   max_steps: 48
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	r, err := Load(LoadOptions{Home: home, Cwd: cwd})
+	r, err := Load(LoadOptions{Home: home})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if r.MainAgentMaxSteps() != 48 {
 		t.Fatalf("got %d", r.MainAgentMaxSteps())
 	}
-	emptyCwd := t.TempDir()
-	empty, err := Load(LoadOptions{Home: home, Cwd: emptyCwd})
+	emptyHome := t.TempDir()
+	empty, err := Load(LoadOptions{Home: emptyHome})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if empty.MainAgentMaxSteps() != 100 {
 		t.Fatalf("default max steps: %d", empty.MainAgentMaxSteps())
 	}
-	if err := os.WriteFile(filepath.Join(projDir, "config.yaml"), []byte(`
+	if err := os.WriteFile(filepath.Join(ud, "config.yaml"), []byte(`
 agent:
   max_steps: 999
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	r3, err := Load(LoadOptions{Home: home, Cwd: cwd})
+	r3, err := Load(LoadOptions{Home: home})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,39 +59,38 @@ agent:
 
 func TestMainAgentMaxCompletionTokens(t *testing.T) {
 	home := t.TempDir()
-	cwd := t.TempDir()
-	projDir := filepath.Join(cwd, memory.DotDir)
-	if err := os.MkdirAll(projDir, 0o755); err != nil {
+	ud := userConfigDir(home)
+	if err := os.MkdirAll(ud, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(projDir, "config.yaml"), []byte(`
+	if err := os.WriteFile(filepath.Join(ud, "config.yaml"), []byte(`
 agent:
   max_tokens: 16384
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	r, err := Load(LoadOptions{Home: home, Cwd: cwd})
+	r, err := Load(LoadOptions{Home: home})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if r.MainAgentMaxCompletionTokens() != 16384 {
 		t.Fatalf("got %d", r.MainAgentMaxCompletionTokens())
 	}
-	emptyCwd := t.TempDir()
-	empty, err := Load(LoadOptions{Home: home, Cwd: emptyCwd})
+	emptyHome := t.TempDir()
+	empty, err := Load(LoadOptions{Home: emptyHome})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if empty.MainAgentMaxCompletionTokens() != 32768 {
 		t.Fatalf("default max tokens: %d", empty.MainAgentMaxCompletionTokens())
 	}
-	if err := os.WriteFile(filepath.Join(projDir, "config.yaml"), []byte(`
+	if err := os.WriteFile(filepath.Join(ud, "config.yaml"), []byte(`
 agent:
   max_tokens: 9999999
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	r2, err := Load(LoadOptions{Home: home, Cwd: cwd})
+	r2, err := Load(LoadOptions{Home: home})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,31 +99,27 @@ agent:
 	}
 }
 
-func TestMerge_projectOverridesUser(t *testing.T) {
+func TestMerge_explicitOverridesUser(t *testing.T) {
 	home := t.TempDir()
-	cwd := t.TempDir()
-	userDir := filepath.Join(home, memory.DotDir)
-	projDir := filepath.Join(cwd, memory.DotDir)
-	if err := os.MkdirAll(userDir, 0o755); err != nil {
+	ud := userConfigDir(home)
+	if err := os.MkdirAll(ud, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(projDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(userDir, "config.yaml"), []byte(`
+	if err := os.WriteFile(filepath.Join(ud, "config.yaml"), []byte(`
 model: from-user
 openai:
   api_key: user-key
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(projDir, "config.yaml"), []byte(`
+	explicit := filepath.Join(t.TempDir(), "overlay.yaml")
+	if err := os.WriteFile(explicit, []byte(`
 model: from-project
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	r, err := Load(LoadOptions{Home: home, Cwd: cwd})
+	r, err := Load(LoadOptions{Home: home, ExplicitPath: explicit})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,12 +133,11 @@ model: from-project
 
 func TestMerge_explicitHighest(t *testing.T) {
 	home := t.TempDir()
-	cwd := t.TempDir()
-	projDir := filepath.Join(cwd, memory.DotDir)
-	if err := os.MkdirAll(projDir, 0o755); err != nil {
+	ud := userConfigDir(home)
+	if err := os.MkdirAll(ud, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(projDir, "config.yaml"), []byte(`model: proj`), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(ud, "config.yaml"), []byte(`model: proj`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	explicit := filepath.Join(t.TempDir(), "extra.yaml")
@@ -149,7 +145,7 @@ func TestMerge_explicitHighest(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	r, err := Load(LoadOptions{Home: home, Cwd: cwd, ExplicitPath: explicit})
+	r, err := Load(LoadOptions{Home: home, ExplicitPath: explicit})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -160,8 +156,7 @@ func TestMerge_explicitHighest(t *testing.T) {
 
 func TestLoad_explicitMissing(t *testing.T) {
 	home := t.TempDir()
-	cwd := t.TempDir()
-	_, err := Load(LoadOptions{Home: home, Cwd: cwd, ExplicitPath: "/nonexistent/oneclaw-config.yaml"})
+	_, err := Load(LoadOptions{Home: home, ExplicitPath: "/nonexistent/oneclaw-config.yaml"})
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -169,12 +164,11 @@ func TestLoad_explicitMissing(t *testing.T) {
 
 func TestMerge_mcpEnabled(t *testing.T) {
 	home := t.TempDir()
-	cwd := t.TempDir()
-	projDir := filepath.Join(cwd, memory.DotDir)
-	if err := os.MkdirAll(projDir, 0o755); err != nil {
+	ud := userConfigDir(home)
+	if err := os.MkdirAll(ud, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(projDir, "config.yaml"), []byte(`
+	if err := os.WriteFile(filepath.Join(ud, "config.yaml"), []byte(`
 mcp:
   enabled: true
   max_inline_text_runes: 1234
@@ -185,7 +179,7 @@ mcp:
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	r, err := Load(LoadOptions{Home: home, Cwd: cwd})
+	r, err := Load(LoadOptions{Home: home})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -201,18 +195,13 @@ mcp:
 	}
 }
 
-func TestMerge_clawbridgeProjectOverridesUser(t *testing.T) {
+func TestMerge_clawbridgeExplicitOverridesUser(t *testing.T) {
 	home := t.TempDir()
-	cwd := t.TempDir()
-	userDir := filepath.Join(home, memory.DotDir)
-	projDir := filepath.Join(cwd, memory.DotDir)
-	if err := os.MkdirAll(userDir, 0o755); err != nil {
+	ud := userConfigDir(home)
+	if err := os.MkdirAll(ud, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(projDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(userDir, "config.yaml"), []byte(`
+	if err := os.WriteFile(filepath.Join(ud, "config.yaml"), []byte(`
 clawbridge:
   clients:
     - id: user-bot
@@ -221,7 +210,8 @@ clawbridge:
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(projDir, "config.yaml"), []byte(`
+	explicit := filepath.Join(t.TempDir(), "cb.yaml")
+	if err := os.WriteFile(explicit, []byte(`
 clawbridge:
   clients:
     - id: proj-bot
@@ -231,7 +221,7 @@ clawbridge:
 		t.Fatal(err)
 	}
 
-	r, err := Load(LoadOptions{Home: home, Cwd: cwd})
+	r, err := Load(LoadOptions{Home: home, ExplicitPath: explicit})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -246,12 +236,11 @@ clawbridge:
 
 func TestMerge_clawbridgeMediaRootFromExplicit(t *testing.T) {
 	home := t.TempDir()
-	cwd := t.TempDir()
-	projDir := filepath.Join(cwd, memory.DotDir)
-	if err := os.MkdirAll(projDir, 0o755); err != nil {
+	ud := userConfigDir(home)
+	if err := os.MkdirAll(ud, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(projDir, "config.yaml"), []byte(`
+	if err := os.WriteFile(filepath.Join(ud, "config.yaml"), []byte(`
 clawbridge:
   clients:
     - id: a
@@ -268,7 +257,7 @@ clawbridge:
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	r, err := Load(LoadOptions{Home: home, Cwd: cwd, ExplicitPath: explicit})
+	r, err := Load(LoadOptions{Home: home, ExplicitPath: explicit})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -285,20 +274,20 @@ clawbridge:
 }
 
 func TestClawbridgeConfigForRun_defaultMediaRoot(t *testing.T) {
-	cwd := t.TempDir()
+	home := t.TempDir()
 	r := &Resolved{
 		merged: File{
 			Clawbridge: cbconfig.Config{
 				Clients: []cbconfig.ClientConfig{{ID: "x", Driver: "noop", Enabled: true}},
 			},
 		},
-		cwd: cwd,
+		home: home,
 	}
 	cb, err := r.ClawbridgeConfigForRun()
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := filepath.Join(cwd, memory.DotDir, "media")
+	want := filepath.Join(home, memory.DotDir, "media")
 	if cb.Media.Root != want {
 		t.Fatalf("default media root: got %q want %q", cb.Media.Root, want)
 	}
@@ -350,17 +339,18 @@ func TestNotifyAuditSinkPaths_perPath(t *testing.T) {
 }
 
 func TestSessionTranscriptPaths(t *testing.T) {
-	cwd := filepath.Join(t.TempDir(), "proj")
+	home := t.TempDir()
+	ur := filepath.Join(home, memory.DotDir)
 	f := File{}
-	r := &Resolved{merged: f, cwd: cwd}
+	r := &Resolved{merged: f, home: home}
 	tp, wp := r.SessionTranscriptPaths("abc123")
-	wantT := filepath.Join(cwd, memory.DotDir, "sessions", "abc123", "transcript.json")
-	wantW := filepath.Join(cwd, memory.DotDir, "sessions", "abc123", "working_transcript.json")
+	wantT := filepath.Join(ur, "sessions", "abc123", memory.DotDir, "transcript.json")
+	wantW := filepath.Join(ur, "sessions", "abc123", memory.DotDir, "working_transcript.json")
 	if tp != wantT || wp != wantW {
 		t.Fatalf("got transcript=%q working=%q", tp, wp)
 	}
 	f.Features.DisableTranscript = boolPtr(true)
-	r2 := &Resolved{merged: f, cwd: cwd}
+	r2 := &Resolved{merged: f, home: home}
 	tp2, wp2 := r2.SessionTranscriptPaths("abc123")
 	if tp2 != "" || wp2 != "" {
 		t.Fatalf("disabled transcript: got %q %q", tp2, wp2)
@@ -368,37 +358,37 @@ func TestSessionTranscriptPaths(t *testing.T) {
 }
 
 func TestSessionWorkerCount(t *testing.T) {
-	cwd := filepath.Join(t.TempDir(), "proj")
-	r := &Resolved{merged: File{}, cwd: cwd}
+	r := &Resolved{merged: File{}}
 	if r.SessionWorkerCount() != 0 {
 		t.Fatalf("unset: %d", r.SessionWorkerCount())
 	}
 	f := File{}
 	f.Sessions.WorkerCount = 16
-	r2 := &Resolved{merged: f, cwd: cwd}
+	r2 := &Resolved{merged: f}
 	if r2.SessionWorkerCount() != 16 {
 		t.Fatalf("got %d", r2.SessionWorkerCount())
 	}
 }
 
 func TestSessionsSQLitePath(t *testing.T) {
-	cwd := filepath.Join(t.TempDir(), "proj")
+	home := t.TempDir()
+	ur := filepath.Join(home, memory.DotDir)
 	f := File{}
-	r := &Resolved{merged: f, cwd: cwd}
+	r := &Resolved{merged: f, home: home}
 	got := r.SessionsSQLitePath()
-	want := filepath.Join(cwd, memory.DotDir, "sessions.sqlite")
+	want := filepath.Join(ur, "sessions.sqlite")
 	if got != want {
 		t.Fatalf("got %q want %q", got, want)
 	}
 	f.Sessions.DisableSQLite = boolPtr(true)
-	r2 := &Resolved{merged: f, cwd: cwd}
+	r2 := &Resolved{merged: f, home: home}
 	if r2.SessionsSQLitePath() != "" {
 		t.Fatal("expected empty when disabled")
 	}
 	f = File{}
 	f.Sessions.SQLitePath = "custom.db"
-	r3 := &Resolved{merged: f, cwd: cwd}
-	if r3.SessionsSQLitePath() != filepath.Join(cwd, "custom.db") {
+	r3 := &Resolved{merged: f, home: home}
+	if r3.SessionsSQLitePath() != filepath.Join(ur, "custom.db") {
 		t.Fatalf("relative: %q", r3.SessionsSQLitePath())
 	}
 }
@@ -444,30 +434,49 @@ func TestResolveLogPath(t *testing.T) {
 func TestResolved_LogFile(t *testing.T) {
 	t.Parallel()
 	home := t.TempDir()
-	cwd := t.TempDir()
-	proj := filepath.Join(cwd, memory.DotDir)
-	if err := os.MkdirAll(proj, 0o755); err != nil {
+	ud := userConfigDir(home)
+	if err := os.MkdirAll(ud, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(proj, "config.yaml"), []byte(`
+	if err := os.WriteFile(filepath.Join(ud, "config.yaml"), []byte(`
 log:
-  file: ".oneclaw/run.log"
+  file: "run.log"
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	r, err := Load(LoadOptions{Home: home, Cwd: cwd})
+	r, err := Load(LoadOptions{Home: home})
 	if err != nil {
 		t.Fatal(err)
 	}
 	got := r.LogFile("")
-	if !strings.HasSuffix(got, filepath.Join(".oneclaw", "run.log")) {
-		t.Fatalf("LogFile: %q", got)
+	ur := r.UserDataRoot()
+	want := filepath.Join(ur, "run.log")
+	if got != want {
+		t.Fatalf("LogFile: got %q want %q", got, want)
 	}
-	ov, err := filepath.Abs(filepath.Join(cwd, "override.log"))
+	ov, err := filepath.Abs(filepath.Join(ur, "override.log"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if r.LogFile(ov) != ov {
 		t.Fatalf("cli override: %q", r.LogFile(ov))
+	}
+}
+
+func TestLoad_explicitRelativeUnderUserDotDir(t *testing.T) {
+	home := t.TempDir()
+	ud := userConfigDir(home)
+	if err := os.MkdirAll(ud, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(ud, "layer.yaml"), []byte(`model: from-relative`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	r, err := Load(LoadOptions{Home: home, ExplicitPath: "layer.yaml"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.ChatModel() != "from-relative" {
+		t.Fatalf("model: %q", r.ChatModel())
 	}
 }

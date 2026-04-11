@@ -9,7 +9,7 @@ import (
 	"github.com/lengzhao/oneclaw/memory"
 )
 
-// InitWorkspace creates <cwd>/.oneclaw when needed. It copies `config/init_template/` into the directory
+// InitWorkspace creates <home>/.oneclaw when needed (first argument is the user home directory or parent of the dot dir). It copies `config/init_template/` into the directory
 // for any file that does not already exist (never overwrites user files). If `config.yaml` already existed
 // before this copy, merges in any keys from the embedded template that the file lacks (recursive for maps);
 // existing user values are never overwritten. Arrays are kept as-is when the key exists. If the merge adds

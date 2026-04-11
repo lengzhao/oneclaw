@@ -15,11 +15,10 @@ func TestInitWorkspaceWritesConfigAndDirs(t *testing.T) {
 	closeLog := logx.Init("error", "text", "")
 	defer closeLog()
 	home := t.TempDir()
-	cwd := t.TempDir()
-	if err := config.InitWorkspace(cwd, home); err != nil {
+	if err := config.InitWorkspace(home, home); err != nil {
 		t.Fatal(err)
 	}
-	cfgPath := filepath.Join(cwd, memory.DotDir, "config.yaml")
+	cfgPath := filepath.Join(home, memory.DotDir, "config.yaml")
 	if _, err := os.Stat(cfgPath); err != nil {
 		t.Fatalf("config: %v", err)
 	}
@@ -30,8 +29,7 @@ func TestInitWorkspaceWritesConfigAndDirs(t *testing.T) {
 	if len(raw) < 100 || raw[0] != '#' {
 		t.Fatalf("unexpected config content")
 	}
-	// Second run: must not error and must not truncate config
-	if err := config.InitWorkspace(cwd, home); err != nil {
+	if err := config.InitWorkspace(home, home); err != nil {
 		t.Fatal(err)
 	}
 	raw2, err := os.ReadFile(cfgPath)
@@ -41,11 +39,11 @@ func TestInitWorkspaceWritesConfigAndDirs(t *testing.T) {
 	if string(raw) != string(raw2) {
 		t.Fatal("config should be unchanged on second init")
 	}
-	memPath := filepath.Join(cwd, memory.DotDir, "memory", "MEMORY.md")
+	memPath := filepath.Join(home, memory.DotDir, "memory", "MEMORY.md")
 	if _, err := os.Stat(memPath); err != nil {
 		t.Fatalf("MEMORY.md from init template: %v", err)
 	}
-	agentPath := filepath.Join(cwd, memory.DotDir, "AGENT.md")
+	agentPath := filepath.Join(home, memory.DotDir, "AGENT.md")
 	if _, err := os.Stat(agentPath); err != nil {
 		t.Fatalf("AGENT.md from init template: %v", err)
 	}
@@ -55,8 +53,7 @@ func TestInitWorkspaceMergesMissingKeys(t *testing.T) {
 	closeLog := logx.Init("error", "text", "")
 	defer closeLog()
 	home := t.TempDir()
-	cwd := t.TempDir()
-	dot := filepath.Join(cwd, memory.DotDir)
+	dot := filepath.Join(home, memory.DotDir)
 	if err := os.MkdirAll(dot, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +62,7 @@ func TestInitWorkspaceMergesMissingKeys(t *testing.T) {
 	if err := os.WriteFile(cfgPath, orig, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := config.InitWorkspace(cwd, home); err != nil {
+	if err := config.InitWorkspace(home, home); err != nil {
 		t.Fatal(err)
 	}
 	out, err := os.ReadFile(cfgPath)
@@ -83,8 +80,7 @@ func TestInitWorkspaceInvalidYAML(t *testing.T) {
 	closeLog := logx.Init("error", "text", "")
 	defer closeLog()
 	home := t.TempDir()
-	cwd := t.TempDir()
-	dot := filepath.Join(cwd, memory.DotDir)
+	dot := filepath.Join(home, memory.DotDir)
 	if err := os.MkdirAll(dot, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +88,7 @@ func TestInitWorkspaceInvalidYAML(t *testing.T) {
 	if err := os.WriteFile(cfgPath, []byte("openai: [\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := config.InitWorkspace(cwd, home); err == nil {
+	if err := config.InitWorkspace(home, home); err == nil {
 		t.Fatal("expected error for invalid YAML")
 	}
 }

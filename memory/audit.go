@@ -14,9 +14,8 @@ import (
 	"github.com/lengzhao/oneclaw/rtopts"
 )
 
-// Append-only audit of writes under memory WriteRoots, project `.oneclaw/rules`,
-// user `~/.oneclaw/rules`, and canonical AGENT paths (project `.oneclaw/AGENT.md`, user `~/.oneclaw/AGENT.md`). Log path:
-//   <cwd>/.oneclaw/audit/memory-write.jsonl
+// Append-only audit of writes under memory WriteRoots, project/user rules dirs,
+// and canonical AGENT paths. Log path: <layout.DotOrDataRoot()>/audit/memory-write.jsonl
 // Each line is a JSON object: ts, source, path, bytes, sha256.
 // Writes under <memory_base>/projects/ (per-repo auto memory and daily logs) are not audited here.
 // Disable with features.disable_memory_audit in config.
@@ -65,7 +64,7 @@ func AppendMemoryAudit(layout Layout, absPath, source string, content []byte) {
 	}
 	line = append(line, '\n')
 
-	auditPath := filepath.Join(cwd, DotDir, "audit", "memory-write.jsonl")
+	auditPath := filepath.Join(layout.DotOrDataRoot(), "audit", "memory-write.jsonl")
 	auditMu.Lock()
 	defer auditMu.Unlock()
 	if err := os.MkdirAll(filepath.Dir(auditPath), 0o755); err != nil {

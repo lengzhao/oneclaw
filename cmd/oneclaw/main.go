@@ -29,15 +29,14 @@ import (
 )
 
 func main() {
-	configPath := flag.String("config", "", "path to extra YAML layer (merged after ~/.oneclaw/config.yaml and <cwd>/.oneclaw/config.yaml)")
-	cwdFlag := flag.String("cwd", "", "project root directory (default: current working directory)")
+	configPath := flag.String("config", "", "path to extra YAML layer (merged after ~/.oneclaw/config.yaml; relative paths are under ~/.oneclaw/)")
 	maintainOnce := flag.Bool("maintain-once", false, "run one scheduled memory distill pass and exit (no channels)")
-	initFlag := flag.Bool("init", false, "create <cwd>/.oneclaw; write config.yaml from built-in example if missing, else merge in missing keys without overwriting user values; then exit")
-	exportSession := flag.String("export-session", "", "copy transcripts, tasks, memory, and sidechain from <cwd>/.oneclaw into this directory, then exit (no API key required)")
+	initFlag := flag.Bool("init", false, "create ~/.oneclaw from template; merge config keys if config.yaml already exists; then exit")
+	exportSession := flag.String("export-session", "", "copy host data from ~/.oneclaw into this directory, then exit (no API key required)")
 	probeMaintainModel := flag.Bool("probe-maintain-model", false, "send a minimal chat request for each configured maintenance model, then exit (needs API key)")
 	logLevel := flag.String("log-level", "", "debug|info|warn|error (overrides config log.level when non-empty)")
 	logFormat := flag.String("log-format", "", "text|json (overrides config log.format when non-empty)")
-	logFile := flag.String("log-file", "", "append logs to this file (UTF-8) in addition to stderr; overrides config log.file when non-empty; relative to -cwd")
+	logFile := flag.String("log-file", "", "append logs to this file (UTF-8) in addition to stderr; overrides config log.file when non-empty; relative to ~/.oneclaw after first load, else ~/.oneclaw for early init/export")
 	flag.Parse()
 
 	if *maintainOnce && *initFlag {
@@ -62,16 +61,12 @@ func main() {
 		os.Exit(2)
 	}
 
-	absCwd, err := resolveCwd(*cwdFlag)
-	if err != nil {
-		slog.Error("cwd", "err", err)
-		os.Exit(1)
-	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		slog.Error("user home", "err", err)
 		os.Exit(1)
 	}
+	userDataRoot := filepath.Join(home, memory.DotDir)
 
 	var logClose func()
 	defer func() {
@@ -81,8 +76,8 @@ func main() {
 	}()
 
 	if *initFlag {
-		logClose = logx.Init(*logLevel, *logFormat, config.ResolveLogPath(absCwd, *logFile))
-		if err := config.InitWorkspace(absCwd, home); err != nil {
+		logClose = logx.Init(*logLevel, *logFormat, config.ResolveLogPath(userDataRoot, *logFile))
+		if err := config.InitWorkspace(home, home); err != nil {
 			slog.Error("init", "err", err)
 			os.Exit(1)
 		}
@@ -90,16 +85,16 @@ func main() {
 	}
 
 	if *exportSession != "" {
-		logClose = logx.Init(*logLevel, *logFormat, config.ResolveLogPath(absCwd, *logFile))
-		if err := memory.ExportSessionSnapshot(absCwd, *exportSession); err != nil {
+		logClose = logx.Init(*logLevel, *logFormat, config.ResolveLogPath(userDataRoot, *logFile))
+		if err := memory.ExportSessionSnapshot(userDataRoot, *exportSession); err != nil {
 			slog.Error("export-session", "err", err)
 			os.Exit(1)
 		}
-		slog.Info("export-session.done", "cwd", absCwd, "out", *exportSession)
+		slog.Info("export-session.done", "data_root", userDataRoot, "out", *exportSession)
 		return
 	}
 
-	cfg, err := config.Load(config.LoadOptions{Cwd: absCwd, Home: home, ExplicitPath: *configPath})
+	cfg, err := config.Load(config.LoadOptions{Home: home, ExplicitPath: *configPath})
 	if err != nil {
 		slog.Error("config.load", "err", err)
 		os.Exit(1)
@@ -111,7 +106,6 @@ func main() {
 		if !cfg.HasAPIKey() {
 			slog.Error("missing API key: set openai.api_key in config",
 				"user_config", filepath.Join(home, config.UserRelPath),
-				"project_config", filepath.Join(absCwd, memory.DotDir, "config.yaml"),
 			)
 			os.Exit(1)
 		}
@@ -134,7 +128,6 @@ func main() {
 		if !cfg.HasAPIKey() {
 			slog.Error("missing API key: set openai.api_key in config",
 				"user_config", filepath.Join(home, config.UserRelPath),
-				"project_config", filepath.Join(absCwd, memory.DotDir, "config.yaml"),
 			)
 			os.Exit(1)
 		}
@@ -145,8 +138,9 @@ func main() {
 		}
 		maxTok := memory.MaintenanceMaxOutputTokens(8192)
 		reg := builtin.ScheduledMaintainReadRegistry()
-		slog.Info("memory.maintain.scheduled_pass", "reason", "maintain-once", "cwd", absCwd)
-		memory.RunScheduledMaintain(context.Background(), memory.DefaultLayout(absCwd, home), &client, mainModel, maxTok,
+		ur := cfg.UserDataRoot()
+		slog.Info("memory.maintain.scheduled_pass", "reason", "maintain-once", "data_root", ur)
+		memory.RunScheduledMaintain(context.Background(), memory.IMHostMaintainLayout(ur, home), &client, mainModel, maxTok,
 			&memory.ScheduledMaintainOpts{ToolRegistry: reg})
 		return
 	}
@@ -174,7 +168,6 @@ func main() {
 	if !cfg.HasAPIKey() {
 		slog.Error("missing API key: set openai.api_key in config",
 			"user_config", filepath.Join(home, config.UserRelPath),
-			"project_config", filepath.Join(absCwd, memory.DotDir, "config.yaml"),
 		)
 		os.Exit(1)
 	}
@@ -182,7 +175,7 @@ func main() {
 	rootCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	mcpMgr, mcpNote, err := mcpclient.RegisterIfEnabled(rootCtx, cfg, sharedReg, absCwd)
+	mcpMgr, mcpNote, err := mcpclient.RegisterIfEnabled(rootCtx, cfg, sharedReg, cfg.UserDataRoot())
 	if err != nil {
 		slog.Error("mcp.register", "err", err)
 		os.Exit(1)
@@ -192,7 +185,6 @@ func main() {
 	}
 
 	deps := session.MainEngineFactoryDeps{
-		CWD:           absCwd,
 		Resolved:      cfg,
 		Registry:      sharedReg,
 		Client:        sharedClient,
@@ -219,7 +211,7 @@ func main() {
 
 	maintainloop.Start(rootCtx, maintainloop.Params{
 		Interval:          cfg.EmbeddedScheduledMaintainInterval(),
-		Layout:            memory.DefaultLayout(absCwd, home),
+		Layout:            memory.IMHostMaintainLayout(cfg.UserDataRoot(), home),
 		Client:            &sharedClient,
 		MainModel:         mainModel,
 		MaxMaintainTokens: 8192,
@@ -233,7 +225,7 @@ func main() {
 	if len(cbCfg.Clients) == 0 {
 		slog.Error("no IM clients in config",
 			"hint", "add clawbridge.clients (driver feishu, slack, noop, webchat, …) under clawbridge: in config; see https://github.com/lengzhao/clawbridge/blob/main/config.example.yaml",
-			"cwd", absCwd,
+			"data_root", cfg.UserDataRoot(),
 		)
 		os.Exit(1)
 	}
@@ -261,7 +253,7 @@ func main() {
 		if !c.Enabled {
 			continue
 		}
-		if err := schedule.StartHostPollerIfEnabled(rootCtx, absCwd, c.ID, workerPool.SubmitUser); err != nil {
+		if err := schedule.StartHostPollerIfEnabled(rootCtx, cfg.UserDataRoot(), c.ID, workerPool.SubmitUser); err != nil {
 			slog.Error("schedule.poller", "client_id", c.ID, "err", err)
 			os.Exit(1)
 		}
@@ -282,7 +274,6 @@ func main() {
 			inboundInflight.Add(1)
 			go func() {
 				defer inboundInflight.Done()
-				// Use rootCtx so SIGINT/SIGTERM cancels model/tool work (see Engine.SubmitUser).
 				if err := workerPool.SubmitUser(rootCtx, m); err != nil {
 					slog.Warn("session.submit_user", "err", err)
 				}
@@ -292,15 +283,4 @@ func main() {
 
 	<-rootCtx.Done()
 	inboundInflight.Wait()
-}
-
-func resolveCwd(flagCwd string) (string, error) {
-	if flagCwd != "" {
-		return filepath.Abs(flagCwd)
-	}
-	wd, err := os.Getwd()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Abs(wd)
 }

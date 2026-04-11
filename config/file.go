@@ -2,6 +2,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -106,7 +107,7 @@ type File struct {
 	Log struct {
 		Level  string `yaml:"level"`
 		Format string `yaml:"format"`
-		// File: append logs here (UTF-8) in addition to stderr; relative paths are resolved from -cwd.
+		// File: append logs here (UTF-8) in addition to stderr; relative paths resolve from UserDataRoot (~/.oneclaw).
 		File string `yaml:"file"`
 	} `yaml:"log"`
 
@@ -139,7 +140,7 @@ type File struct {
 	} `yaml:"sessions"`
 
 	// Clawbridge is IM 总线配置，形状与 github.com/lengzhao/clawbridge/config.Config 一致（media + clients）。
-	// 见 clawbridge 仓库 config.example.yaml。media.root 留空时运行时默认为 <cwd>/.oneclaw/media。
+	// 见 clawbridge 仓库 config.example.yaml。media.root 留空时运行时默认为 <UserDataRoot>/media。
 	Clawbridge cbconfig.Config `yaml:"clawbridge"`
 
 	MCP MCPFile `yaml:"mcp"`
@@ -370,17 +371,19 @@ func mergeBoolPtr(dst **bool, src *bool) {
 	}
 }
 
-// LoadOptions selects config paths. Cwd and Home should be absolute.
+// LoadOptions selects config paths. Home must be non-empty (typically os.UserHomeDir()); use absolute paths.
 type LoadOptions struct {
-	Cwd          string
 	Home         string
-	ExplicitPath string // --config; highest precedence layer
+	ExplicitPath string // --config; merged after user config; highest precedence
 }
 
-// Load reads and merges YAML layers: user ~/.oneclaw/config.yaml, then project <cwd>/.oneclaw/config.yaml,
-// then ExplicitPath when set. Missing optional files are ignored. If ExplicitPath is non-empty and missing,
-// returns an error.
+// Load reads and merges YAML layers: user ~/.oneclaw/config.yaml, then ExplicitPath when set.
+// Relative ExplicitPath is resolved from <home>/.oneclaw/. Missing user config is ignored.
+// If ExplicitPath is non-empty and missing, returns an error.
 func Load(opt LoadOptions) (*Resolved, error) {
+	if strings.TrimSpace(opt.Home) == "" {
+		return nil, fmt.Errorf("config.load: empty Home")
+	}
 	var merged File
 
 	userPath := filepath.Join(opt.Home, UserRelPath)
@@ -394,22 +397,11 @@ func Load(opt LoadOptions) (*Resolved, error) {
 		return nil, err
 	}
 
-	projPath := filepath.Join(opt.Cwd, memory.DotDir, "config.yaml")
-	if _, err := os.Stat(projPath); err == nil {
-		layer, err := readFileLayer(projPath)
-		if err != nil {
-			return nil, err
-		}
-		mergeFile(&merged, layer)
-	} else if !os.IsNotExist(err) {
-		return nil, err
-	}
-
 	explicit := strings.TrimSpace(opt.ExplicitPath)
 	if explicit != "" {
 		p := explicit
 		if !filepath.IsAbs(p) {
-			p = filepath.Join(opt.Cwd, p)
+			p = filepath.Join(opt.Home, memory.DotDir, p)
 		}
 		p = filepath.Clean(p)
 		if _, err := os.Stat(p); err != nil {
@@ -422,5 +414,5 @@ func Load(opt LoadOptions) (*Resolved, error) {
 		mergeFile(&merged, layer)
 	}
 
-	return &Resolved{merged: merged, cwd: opt.Cwd, explicitConfig: explicit}, nil
+	return &Resolved{merged: merged, home: opt.Home, explicitConfig: explicit}, nil
 }

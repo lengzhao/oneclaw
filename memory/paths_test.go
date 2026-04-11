@@ -59,3 +59,20 @@ func TestMemoryBaseDir_ExpandsTildeInEnv(t *testing.T) {
 		t.Fatalf("MemoryBaseDir = %q; want %q", got, want)
 	}
 }
+
+func TestIMHostMaintainLayout_DotOrDataRootAndEpisode(t *testing.T) {
+	home := "/Users/x"
+	ur := filepath.Join(home, DotDir)
+	lay := IMHostMaintainLayout(ur, home)
+	if !lay.HostUserData {
+		t.Fatal("HostUserData")
+	}
+	if got := lay.DotOrDataRoot(); got != filepath.Clean(ur) {
+		t.Fatalf("DotOrDataRoot = %q want %q", got, ur)
+	}
+	date := "2026-04-11"
+	wantEp := filepath.Join(ur, "memory", date+".md")
+	if got := lay.EpisodeDailyPath(date); got != wantEp {
+		t.Fatalf("EpisodeDailyPath = %q want %q", got, wantEp)
+	}
+}

@@ -10,22 +10,23 @@ import (
 )
 
 // StartHostPollerIfEnabled runs the due-job poller and submits synthetic inbound messages (same role as legacy channel.schedule_poll).
-func StartHostPollerIfEnabled(ctx context.Context, cwd, clientID string, submit func(context.Context, bus.InboundMessage) error) error {
+// userDataRoot is config.UserDataRoot() (e.g. ~/.oneclaw); scheduled_jobs.json lives directly under that directory.
+func StartHostPollerIfEnabled(ctx context.Context, userDataRoot, clientID string, submit func(context.Context, bus.InboundMessage) error) error {
 	if Disabled() {
 		return nil
 	}
-	if cwd == "" {
-		return fmt.Errorf("schedule: empty cwd for host poller")
+	if userDataRoot == "" {
+		return fmt.Errorf("schedule: empty user data root for host poller")
 	}
 	if submit == nil {
 		return fmt.Errorf("schedule: nil submit")
 	}
-	go runHostSchedulePoller(ctx, cwd, clientID, submit)
+	go runHostSchedulePoller(ctx, userDataRoot, clientID, submit)
 	return nil
 }
 
-func deliverHostScheduledTurns(ctx context.Context, cwd, source string, submit func(context.Context, bus.InboundMessage) error) {
-	deliveries, err := CollectDue(cwd, source, time.Now())
+func deliverHostScheduledTurns(ctx context.Context, userDataRoot, source string, submit func(context.Context, bus.InboundMessage) error) {
+	deliveries, err := CollectDue("", userDataRoot, source, time.Now())
 	if err != nil {
 		slog.Warn("schedule.collect_due", "err", err)
 		return
@@ -50,7 +51,7 @@ func deliverHostScheduledTurns(ctx context.Context, cwd, source string, submit f
 	}
 }
 
-func runHostSchedulePoller(ctx context.Context, cwd, source string, submit func(context.Context, bus.InboundMessage) error) {
+func runHostSchedulePoller(ctx context.Context, userDataRoot, source string, submit func(context.Context, bus.InboundMessage) error) {
 	wakeCh, wakeCancel := SubscribeWake()
 	defer wakeCancel()
 	minSleep := MinTimerSleep()
@@ -61,9 +62,9 @@ func runHostSchedulePoller(ctx context.Context, cwd, source string, submit func(
 			return
 		}
 		now := time.Now()
-		d, ok := NextWakeDuration(cwd, source, now)
+		d, ok := NextWakeDuration("", userDataRoot, source, now)
 		if ok && d <= 0 {
-			deliverHostScheduledTurns(ctx, cwd, source, submit)
+			deliverHostScheduledTurns(ctx, userDataRoot, source, submit)
 			continue
 		}
 
@@ -95,6 +96,6 @@ func runHostSchedulePoller(ctx context.Context, cwd, source string, submit func(
 		case <-t.C:
 		}
 
-		deliverHostScheduledTurns(ctx, cwd, source, submit)
+		deliverHostScheduledTurns(ctx, userDataRoot, source, submit)
 	}
 }

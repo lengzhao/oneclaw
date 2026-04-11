@@ -28,6 +28,10 @@ func TestMaintenanceSystemPromptData(t *testing.T) {
 		"MEMORY.md",
 		"2026-04-05T12:00:00Z",
 		"header + bullets",
+		"Tool trace is authoritative",
+		"tools (this turn)",
+		"Skills promotion",
+		"write_behavior_policy",
 	} {
 		if !strings.Contains(got, sub) {
 			t.Fatalf("maintenance_system missing %q in:\n%s", sub, got)

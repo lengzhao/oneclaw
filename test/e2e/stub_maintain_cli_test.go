@@ -80,7 +80,7 @@ func repoRoot(t *testing.T) string {
 	}
 }
 
-// E2E-96 oneclaw -maintain-once：子进程 + stub，一轮蒸馏写入 project `.oneclaw/memory/YYYY-MM-DD.md`
+// E2E-96 oneclaw -maintain-once：子进程 + stub，一轮蒸馏写入 UserDataRoot 下 memory/YYYY-MM-DD.md
 func TestE2E_96_MaintainCLIOnce(t *testing.T) {
 	stub := openaistub.New(t)
 	date := time.Now().Format("2006-01-02")
@@ -88,10 +88,9 @@ func TestE2E_96_MaintainCLIOnce(t *testing.T) {
 	stub.Enqueue(openaistub.CompletionStop("", section))
 
 	home := t.TempDir()
-	cwd := t.TempDir()
 	t.Setenv("HOME", home)
 	memBase := filepath.Join(home, memory.DotDir)
-	if err := os.MkdirAll(filepath.Join(cwd, memory.DotDir), 0o755); err != nil {
+	if err := os.MkdirAll(memBase, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	var projCfg config.File
@@ -106,11 +105,12 @@ func TestE2E_96_MaintainCLIOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(cwd, memory.DotDir, "config.yaml"), cfgBody, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(memBase, "config.yaml"), cfgBody, 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	lay := memory.DefaultLayout(cwd, home)
+	ur := memBase
+	lay := memory.IMHostMaintainLayout(ur, home)
 	logPath := memory.DailyLogPath(lay.Auto, date)
 	if err := os.MkdirAll(filepath.Dir(logPath), 0o755); err != nil {
 		t.Fatal(err)
@@ -121,14 +121,14 @@ func TestE2E_96_MaintainCLIOnce(t *testing.T) {
 	}
 
 	bin := buildOneclawBinary(t, repoRoot(t))
-	cmd := exec.Command(bin, "-cwd", cwd, "-maintain-once")
+	cmd := exec.Command(bin, "-maintain-once")
 	cmd.Env = mergeEnv("HOME", home)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("oneclaw -maintain-once: %v\n%s", err, out)
 	}
 
-	epPath := memory.ProjectEpisodeDailyPath(cwd, date)
+	epPath := lay.EpisodeDailyPath(date)
 	raw, err := os.ReadFile(epPath)
 	if err != nil {
 		t.Fatalf("episodic digest: %v", err)
@@ -138,21 +138,20 @@ func TestE2E_96_MaintainCLIOnce(t *testing.T) {
 	}
 }
 
-// E2E-97 oneclaw -init：子进程写入项目 .oneclaw/config.yaml（无需 API）
+// E2E-97 oneclaw -init：子进程写入 $HOME/.oneclaw/config.yaml（无需 API）
 func TestE2E_97_OneclawInitWritesProjectConfig(t *testing.T) {
 	home := t.TempDir()
-	cwd := t.TempDir()
 	t.Setenv("HOME", home)
 
 	bin := buildOneclawBinary(t, repoRoot(t))
-	cmd := exec.Command(bin, "-cwd", cwd, "-init", "-log-level", "error")
+	cmd := exec.Command(bin, "-init", "-log-level", "error")
 	cmd.Env = mergeEnv("HOME", home)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("oneclaw -init: %v\n%s", err, out)
 	}
 
-	cfgPath := filepath.Join(cwd, memory.DotDir, "config.yaml")
+	cfgPath := filepath.Join(home, memory.DotDir, "config.yaml")
 	raw, err := os.ReadFile(cfgPath)
 	if err != nil {
 		t.Fatalf("config.yaml: %v", err)

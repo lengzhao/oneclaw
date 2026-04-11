@@ -1,5 +1,5 @@
-# 新项目默认配置：`oneclaw -init` 会将 `config/init_template/` 整棵复制到 <cwd>/.oneclaw/（目标文件已存在则跳过）。
-# 本文件也可手动复制到 ~/.oneclaw/config.yaml 或 <项目>/.oneclaw/config.yaml；合并与优先级见 docs/config.md。
+# 默认配置：`oneclaw -init` 会将 `config/init_template/` 整棵复制到 ~/.oneclaw/（目标文件已存在则跳过）。
+# 本文件也可手动复制到 ~/.oneclaw/config.yaml；合并与优先级见 docs/config.md。
 # 入口 Load 后应调用 PushRuntime()：将合并结果写入 rtopts；运行时以 YAML 为准，不读 ONCLAW_* / OPENAI_* 环境变量做配置。
 # 「关闭类」 features.disable_*：true 为关闭；省略或 false 为开启。
 
@@ -35,7 +35,7 @@ chat:
 log:
   level: info
   format: text
-  # 可选：除 stderr 外追加落盘（UTF-8）；相对路径相对项目 -cwd
+  # 可选：除 stderr 外追加落盘（UTF-8）；相对路径相对 UserDataRoot（默认 ~/.oneclaw）
   # file: ".oneclaw/oneclaw.log"
 
 # -----------------------------------------------------------------------------
@@ -44,22 +44,22 @@ log:
 paths:
   # 留空则记忆根目录为 ~/.oneclaw
   memory_base: ""
-  # 留空：transcript 为 <cwd>/.oneclaw/transcript.json
+  # 留空：全局默认 transcript 为 <UserDataRoot>/transcript.json；cmd/oneclaw IM 每会话见 sessions 段
   transcript: ""
-  # 留空：working_transcript 为 <cwd>/.oneclaw/working_transcript.json（与内存 Messages 一致：用户可见对话，无 tool 轮次）
+  # 留空：全局默认 working_transcript 为 <UserDataRoot>/working_transcript.json（与内存 Messages 一致：用户可见对话，无 tool 轮次）
   working_transcript: ""
   # 写入 working_transcript 时最多保留的尾部消息条数；0=默认 30；负数=不限制
   working_transcript_max_messages: 0
 
 # -----------------------------------------------------------------------------
 # 多会话（IM 线程隔离）；主进程 cmd/oneclaw 使用 SessionResolver：每个 channel + session_key 独立 Engine。
-# 转写文件：<cwd>/.oneclaw/sessions/<stable_id>/transcript.json 与 working_transcript.json（与下方 paths.transcript  YAML 无关）。
-# SQLite：会话元数据 + memory recall 去重状态；文件型 MEMORY.md / 审计 jsonl 等仍按原路径。
+# 转写文件：<UserDataRoot>/sessions/<stable_id>/.oneclaw/transcript.json 与 working_transcript.json（与下方 paths.transcript 覆盖关系见 docs/config.md）。
+# SQLite：会话元数据 + memory recall 去重状态；路径相对 UserDataRoot。
 # -----------------------------------------------------------------------------
 sessions:
   # true：不打开 SQLite，仅文件（测试或极简环境）
   disable_sqlite: false
-  # 留空：默认 <cwd>/.oneclaw/sessions.sqlite；可填绝对路径或相对 -cwd 的路径
+  # 留空：默认 <UserDataRoot>/sessions.sqlite；可填绝对路径或相对 UserDataRoot 的路径
   sqlite_path: ""
   # cmd/oneclaw 固定 worker 数（按 session 哈希分片）；0 或未设置则运行时默认 8；不会随会话数无限增加 goroutine
   worker_count: 0
@@ -67,7 +67,7 @@ sessions:
 # -----------------------------------------------------------------------------
 # IM 总线（github.com/lengzhao/clawbridge）；形状与 clawbridge config.Config 一致，见该仓库 config.example.yaml。
 # client id = bus.InboundMessage.Channel / OutboundMessage.ClientID；driver = feishu | slack | noop | webchat | …
-# media.root 留空则运行时使用 <cwd>/.oneclaw/media。
+# media.root 留空则运行时使用 <UserDataRoot>/media（见 clawbridge 适配）。
 # 至少配置一个 client，否则 oneclaw 无法启动 IM 宿主循环。
 # -----------------------------------------------------------------------------
 clawbridge:
@@ -117,7 +117,7 @@ clawbridge:
 # -----------------------------------------------------------------------------
 # MCP 工具（连接外部 MCP Server；需显式 enabled: true）
 # 实现：github.com/modelcontextprotocol/go-sdk；传输 stdio / sse / http 与 picoclaw 对齐。
-# 工具名注册为 mcp_<server>_<tool>；超长结果可落盘 <cwd>/.oneclaw/artifacts/mcp/
+# 工具名注册为 mcp_<server>_<tool>；超长结果可落盘会话目录下 .oneclaw/artifacts/mcp/（见实现）
 # -----------------------------------------------------------------------------
 # mcp:
 #   enabled: true
@@ -146,7 +146,7 @@ features:
   disable_auto_maintenance: false
   disable_memory_audit: false
   disable_context_budget: false
-  # 通知审计 JSONL：无 SessionID 时 .oneclaw/audit/<agent>/...；有 SessionID 时 .oneclaw/sessions/<id>/audit/<agent>/...
+  # 通知审计 JSONL：无 SessionID 时 <UserDataRoot>/audit/<agent>/...；有 SessionID 时 sessions/<id>/.oneclaw/audit/<agent>/...
   disable_audit_sinks: false
   disable_audit_llm: false
   disable_audit_orchestration: false
@@ -159,12 +159,12 @@ features:
 # -----------------------------------------------------------------------------
 # 自动维护（将 daily log 蒸馏进 MEMORY.md）
 # -----------------------------------------------------------------------------
-# 代码上分为两入口：回合后 MaybePostTurnMaintain（近场）与定时 RunScheduledMaintain（oneclaw -maintain-once / cmd/maintain / 可选进程内 loop）。
+# 代码上分为两入口：回合后 MaybePostTurnMaintain（近场）与定时 RunScheduledMaintain（oneclaw -maintain-once / 可选进程内 loop）。
 # 回合后：maintain.post_turn.*（见 docs/config.md）。
 # 进程内定时：仅当下面 interval 在 YAML 中非空时 oneclaw 才启动 maintainloop；留空则不启（避免默认多扣 API）。
-# 未写 interval 时仍可用 oneclaw -maintain-once、cmd/maintain；间隔默认值见 MaintainLoopInterval。
-# interval 模式（进程内 loop / cmd/maintain -interval）：远场 daily log 为增量（行内时间戳），状态 .oneclaw/scheduled_maintain_state.json。
-# oneclaw -maintain-once / maintain -once：按天 LOG_DAYS 窗口。
+# 未写 interval 时仍可用 oneclaw -maintain-once；间隔默认值见 MaintainLoopInterval。
+# interval 模式（进程内 loop）：远场 daily log 为增量（行内时间戳），状态文件在 UserDataRoot 下 scheduled_maintain_state.json（IM 主机布局）。
+# oneclaw -maintain-once：按天 LOG_DAYS 窗口。
 maintain:
   # interval: 8h
   model: ""

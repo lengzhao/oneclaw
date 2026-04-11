@@ -13,15 +13,43 @@ import (
 	"github.com/openai/openai-go/option"
 )
 
-// Resolved is the merged YAML plus cwd; accessors read file values only (see docs/config.md).
+func expandTilde(home, p string) string {
+	if home == "" || p == "" {
+		return p
+	}
+	if p == "~" {
+		return home
+	}
+	if len(p) >= 2 && p[0] == '~' {
+		sep := p[1]
+		if sep == filepath.Separator || sep == '/' || sep == '\\' {
+			return filepath.Join(home, p[2:])
+		}
+	}
+	return p
+}
+
+// Resolved is the merged YAML plus home; accessors read file values only (see docs/config.md).
 type Resolved struct {
 	merged         File
-	cwd            string
+	home           string
 	explicitConfig string
 }
 
-// CWD returns the absolute working directory passed to Load.
-func (r *Resolved) CWD() string { return r.cwd }
+// UserDataRoot is the host data directory (~/.oneclaw or paths.memory_base): sessions, sqlite, and flat host files.
+func (r *Resolved) UserDataRoot() string {
+	if r == nil || r.home == "" {
+		return ""
+	}
+	mb := strings.TrimSpace(r.merged.Paths.MemoryBase)
+	if mb != "" {
+		return filepath.Clean(expandTilde(r.home, mb))
+	}
+	return filepath.Join(r.home, memory.DotDir)
+}
+
+// CWD returns UserDataRoot (alias for callers that expect a single data root path).
+func (r *Resolved) CWD() string { return r.UserDataRoot() }
 
 // ExplicitPath returns the raw --config argument, if any.
 func (r *Resolved) ExplicitPath() string { return r.explicitConfig }
@@ -105,14 +133,14 @@ func (r *Resolved) MainAgentMaxCompletionTokens() int64 {
 }
 
 // ClawbridgeConfigForRun returns merged clawbridge config for clawbridge.New.
-// When media.root is empty in YAML, it defaults to <cwd>/.oneclaw/media.
+// When media.root is empty in YAML, it defaults to <UserDataRoot>/media.
 func (r *Resolved) ClawbridgeConfigForRun() (cbconfig.Config, error) {
 	if r == nil {
 		return cbconfig.Config{}, fmt.Errorf("config: nil resolved")
 	}
 	cfg := r.merged.Clawbridge
 	if strings.TrimSpace(cfg.Media.Root) == "" {
-		cfg.Media.Root = filepath.Join(r.cwd, memory.DotDir, "media")
+		cfg.Media.Root = filepath.Join(r.UserDataRoot(), "media")
 	}
 	return cfg, nil
 }
@@ -155,12 +183,13 @@ func ResolveLogPath(cwd, p string) string {
 }
 
 // LogFile returns an absolute log file path: CLI override wins, then YAML log.file.
-// Empty string means file logging is disabled. Relative paths are resolved from Load CWD.
+// Empty string means file logging is disabled. Relative paths resolve from UserDataRoot.
 func (r *Resolved) LogFile(cliOverride string) string {
+	base := r.UserDataRoot()
 	if v := strings.TrimSpace(cliOverride); v != "" {
-		return ResolveLogPath(r.cwd, v)
+		return ResolveLogPath(base, v)
 	}
-	return ResolveLogPath(r.cwd, r.merged.Log.File)
+	return ResolveLogPath(base, r.merged.Log.File)
 }
 
 // TranscriptPath resolves transcript file path from YAML and defaults.
@@ -169,15 +198,16 @@ func (r *Resolved) TranscriptPath() string {
 		return ""
 	}
 	p := strings.TrimSpace(r.merged.Paths.Transcript)
+	base := r.UserDataRoot()
 	if p == "" {
-		return filepath.Join(r.cwd, memory.DotDir, "transcript.json")
+		return filepath.Join(base, "transcript.json")
 	}
 	if filepath.IsAbs(p) {
 		return filepath.Clean(p)
 	}
-	abs, err := filepath.Abs(filepath.Join(r.cwd, p))
+	abs, err := filepath.Abs(filepath.Join(base, p))
 	if err != nil {
-		return filepath.Join(r.cwd, p)
+		return filepath.Join(base, p)
 	}
 	return abs
 }
@@ -192,21 +222,22 @@ func (r *Resolved) WorkingTranscriptMaxMessages() int {
 }
 
 // WorkingTranscriptPath persists the user-visible message list (same shape as in-memory Messages after each turn).
-// When transcript is disabled, returns empty. Default: <cwd>/.oneclaw/working_transcript.json
+// When transcript is disabled, returns empty. Default: <UserDataRoot>/working_transcript.json.
 func (r *Resolved) WorkingTranscriptPath() string {
 	if r.transcriptDisabled() {
 		return ""
 	}
 	p := strings.TrimSpace(r.merged.Paths.WorkingTranscript)
+	base := r.UserDataRoot()
 	if p == "" {
-		return filepath.Join(r.cwd, memory.DotDir, "working_transcript.json")
+		return filepath.Join(base, "working_transcript.json")
 	}
 	if filepath.IsAbs(p) {
 		return filepath.Clean(p)
 	}
-	abs, err := filepath.Abs(filepath.Join(r.cwd, p))
+	abs, err := filepath.Abs(filepath.Join(base, p))
 	if err != nil {
-		return filepath.Join(r.cwd, p)
+		return filepath.Join(base, p)
 	}
 	return abs
 }
@@ -230,26 +261,27 @@ func (r *Resolved) SessionsSQLitePath() string {
 		return ""
 	}
 	p := strings.TrimSpace(r.merged.Sessions.SQLitePath)
+	base := r.UserDataRoot()
 	if p == "" {
-		return filepath.Join(r.cwd, memory.DotDir, "sessions.sqlite")
+		return filepath.Join(base, "sessions.sqlite")
 	}
 	if filepath.IsAbs(p) {
 		return filepath.Clean(p)
 	}
-	abs, err := filepath.Abs(filepath.Join(r.cwd, p))
+	abs, err := filepath.Abs(filepath.Join(base, p))
 	if err != nil {
-		return filepath.Join(r.cwd, p)
+		return filepath.Join(base, p)
 	}
 	return abs
 }
 
-// SessionTranscriptDir is the directory for one logical session's transcript files (under .oneclaw/sessions/).
+// SessionTranscriptDir is the session workspace root: <userDataRoot>/sessions/<id>/.
 func (r *Resolved) SessionTranscriptDir(sessionSegment string) string {
 	seg := strings.TrimSpace(sessionSegment)
 	if seg == "" {
 		seg = "default"
 	}
-	return filepath.Join(r.cwd, memory.DotDir, "sessions", seg)
+	return filepath.Join(r.UserDataRoot(), "sessions", seg)
 }
 
 // SessionWorkerCount returns sessions.worker_count; values < 1 mean the session package default (8).
@@ -267,7 +299,8 @@ func (r *Resolved) SessionTranscriptPaths(sessionSegment string) (transcript, wo
 		return "", ""
 	}
 	dir := r.SessionTranscriptDir(sessionSegment)
-	return filepath.Join(dir, "transcript.json"), filepath.Join(dir, "working_transcript.json")
+	dot := filepath.Join(dir, memory.DotDir)
+	return filepath.Join(dot, "transcript.json"), filepath.Join(dot, "working_transcript.json")
 }
 
 // NotifyAuditSinkPaths returns which notify audit JSONL sinks should register.

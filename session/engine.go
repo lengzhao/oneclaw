@@ -52,6 +52,8 @@ type Engine struct {
 	Transcript []openai.ChatCompletionMessageParamUnion
 	Registry   *tools.Registry
 	CWD        string
+	// UserDataRoot is the IM host directory (~/.oneclaw): shared config parent; cron/schedule jobs file; empty in tests or non-IM engines.
+	UserDataRoot string
 	CanUseTool tools.CanUseTool
 	SessionID string
 	// RootAgentID is the stable id of this Engine (main thread only). It is copied into toolctx.Context.AgentID each turn; subagents use their own ctx.AgentID. Empty means DefaultRootAgentID in EffectiveRootAgentID.
@@ -104,6 +106,11 @@ func NewEngine(cwd string, reg *tools.Registry) *Engine {
 // in.Content is the primary user line; MediaPaths add leading user messages after normalization.
 // Cancel ctx to abort in-flight model and tool calls.
 func (e *Engine) SubmitUser(ctx context.Context, in bus.InboundMessage) (err error) {
+	defer func() {
+		if err != nil && e != nil {
+			e.publishOutboundSubmitUserError(context.WithoutCancel(ctx), &in, err)
+		}
+	}()
 	atts, err := e.prepareInboundFromBus(&in)
 	if err != nil {
 		return err
@@ -402,6 +409,23 @@ func (e *Engine) persistRecall() {
 	}
 	if err := e.RecallPersister.SaveRecall(e.SessionID, e.RecallState); err != nil {
 		slog.Warn("session.recall_persist", "session_id", e.SessionID, "err", err)
+	}
+}
+
+// publishOutboundSubmitUserError sends a user-visible assistant line with the failure reason when
+// PublishOutbound is configured and the inbound message has channel addressing (same rules as normal replies).
+func (e *Engine) publishOutboundSubmitUserError(ctx context.Context, in *bus.InboundMessage, err error) {
+	if e == nil || err == nil || e.PublishOutbound == nil || in == nil {
+		return
+	}
+	text := fmt.Sprintf("处理失败：%v", err)
+	msg := assistantTextOutbound(in, text)
+	if msg == nil {
+		slog.Debug("session.submit_user_error_outbound_skip", "reason", "no_channel_or_chat")
+		return
+	}
+	if pubErr := e.PublishOutbound(ctx, msg); pubErr != nil {
+		slog.Warn("session.submit_user_error_outbound", "err", pubErr)
 	}
 }
 
