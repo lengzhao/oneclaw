@@ -39,18 +39,18 @@
 
 ## 3. 入站：原 `Inbound` 与 `InboundMessage` 首层字段对齐
 
-`bus.InboundMessage` 已有字段：`Channel`、`ChatID`、`MessageID`、`Sender`（`SenderInfo`）、`Peer`、`Content`、`MediaPaths`、`ReceivedAt`、`Metadata`。
+`bus.InboundMessage`（**clawbridge v0.2+**）首层字段：`ClientID`、`SessionID`、`MessageID`、`Sender`（`SenderInfo`）、`Peer`、`Content`、`MediaPaths`、`ReceivedAt`、`Metadata`。（v0.1 的 `Channel` / `ChatID` 已分别更名为 `ClientID` / `SessionID`。）
 
 **约定**：oneclaw 所需语义 **优先只使用上述首层字段**（及 `SenderInfo` / `Peer` 子结构），**不为** `session_key`、`user_id`、`tenant_id`、`correlation_id`、`locale` 等再定义 `Metadata` 键；driver 在入站时负责填好 clawbridge 模型。`Metadata` 保留给 **平台特有、Host 不依赖** 的扩展，或由 clawbridge 文档另行约定，**不**作为 oneclaw 核心契约的一部分。
 
 | 原 `routing.Inbound` | `InboundMessage`（及子结构）用法 |
 |----------------------|----------------------------------|
-| `Source` | `Channel`：与配置里 **client id**（原 `channels[].id`）一致，用于 driver 选择与出站 `OutboundMessage.ClientID`。 |
+| `Source` | `ClientID`：与配置里 **client id**（`clawbridge.clients[].id`）一致，用于 driver 选择与出站 `OutboundMessage.ClientID`。 |
 | `Text` | `Content`。 |
 | `Attachments` | `MediaPaths`（+ `media.Backend` 解析）；内联类附件的表达方式以 clawbridge / driver 约定为准。 |
-| `SessionKey` | **`Peer`**：逻辑线程/话题用 `Peer.Kind` + `Peer.ID` 表达（与各 IM driver 的平台语义对齐，如线程 ts、话题 id）。无独立线程时 `Peer` 可为空，会话边界由 `ChatID` 决定。 |
+| `SessionKey` | **`SessionID`**：driver 定义的**稳定会话/投递键**（opaque）；Host 的 `InboundSessionKey` 优先取 `SessionID`，否则回退 `Peer.ID`。`Peer.Kind` + `Peer.ID` 仍表达会话侧端点语义（与各 IM driver 对齐）。 |
 | `UserID` | **`Sender`**：业务主键优先 **`CanonicalID`**，否则 **`PlatformID`**（Host 与 driver **固定一种优先级**，写在 clawbridge 或本文补充说明中）。 |
-| `TenantID` | **租户/工作区**：通常已由 **`ChatID`**（及多账号时的 **`Channel`**）在平台侧限定作用域；若必须显式工作区/团队 id，由 driver 填入 **`Sender.Platform`** / **`Sender.PlatformID`** 的组合语义（按平台文档约定，例如团队级 id 走 `PlatformID`）。 |
+| `TenantID` | **租户/工作区**：通常已由 **`SessionID`**（及多账号时的 **`ClientID`**）在平台侧限定作用域；若必须显式工作区/团队 id，由 driver 填入 **`Sender.Platform`** / **`Sender.PlatformID`** 的组合语义（按平台文档约定，例如团队级 id 走 `PlatformID`）。 |
 | `CorrelationID` | 与**本条平台消息**强相关时复用 **`MessageID`**；若为与消息 id 无关的内部 trace，**不**经 `Metadata` 塞进 oneclaw 契约，可依赖日志/追踪；若未来需要稳定入 Host，应在 **clawbridge 为首层增加字段**。 |
 | `Locale` | 当前 `InboundMessage` **无**对等首层字段：**不**用 `Metadata` 承载；Host 使用配置默认语言，或由 **clawbridge 后续增加**可选字段（如 `Locale string`）后统一使用。 |
 | `RawRef` | 同上：不定义 oneclaw 专用 `Metadata`；若 Host 必须持有句柄，在 **clawbridge 扩展首层字段** 或接受「本轮不传递、仅日志」。 |
@@ -64,8 +64,8 @@
 ### 4.1 行为
 
 - Host（`session` / `loop`）在本轮内可 **任意次** 调用 `PublishOutbound`，每次构造完整的 `OutboundMessage`：
-  - `ClientID`：与入站 `Channel` 一致。
-  - `To`：`Recipient`（`ChatID`、`Kind`、`UserID` 等）须与入站 `Peer`/平台约定一致，保证消息回到正确会话。
+  - `ClientID`：与入站 `ClientID` 一致。
+  - `To`：`Recipient`（`SessionID`、`Kind`、`UserID` 等）须与入站 `Peer`/平台约定一致，保证消息回到正确会话。
   - `Text` / `Parts`：至少其一非空（遵循 clawbridge 现有校验）。
   - `ReplyToID` / `ThreadID`：按平台语义选填。
 
@@ -138,3 +138,4 @@ sequenceDiagram
 |------|------|
 | 2026-04-08 | 初稿：非流式、单次交互、允许多次 `PublishOutbound`；§3 仅复用 clawbridge 首层字段，不定义 oneclaw 专用 Metadata 键 |
 | 2026-04-08 | 实现落地：移除 `channel/`、`routing/`；`go.mod` 钉 `clawbridge v0.1.0`（`v0.1.1` 待上游 tag）；e2e 默认 `//go:build e2e` |
+| 2026-04-12 | 抬升至 `clawbridge v0.2.0`：`InboundMessage` 的 `Channel`→`ClientID`、`ChatID`→`SessionID`；`Recipient.ChatID`→`Recipient.SessionID`；oneclaw 全库与定时任务磁盘字段（JSON 仍为 `target_chat_id`）对齐 |

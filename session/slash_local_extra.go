@@ -2,6 +2,7 @@ package session
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,7 +16,7 @@ func (e *Engine) slashSession(in bus.InboundMessage, args string) string {
 	a := strings.ToLower(strings.TrimSpace(args))
 	switch a {
 	case "", "short":
-		return fmt.Sprintf("会话 ID: %s\n工作目录: %s", e.SessionID, e.CWD)
+		return e.slashSessionShort(in)
 	case "full", "status", "info":
 		return e.slashStatus(in)
 	default:
@@ -23,13 +24,51 @@ func (e *Engine) slashSession(in bus.InboundMessage, args string) string {
 	}
 }
 
+// slashSessionShort is the default /session reply: driver envelope + workspace id + cwd.
+func (e *Engine) slashSessionShort(in bus.InboundMessage) string {
+	var b strings.Builder
+	dClient := strings.TrimSpace(in.ClientID)
+	dSess := strings.TrimSpace(in.SessionID)
+	route := InboundSessionKey(in)
+	if dClient != "" {
+		fmt.Fprintf(&b, "driver client_id: %s\n", dClient)
+	} else {
+		b.WriteString("driver client_id: （空）\n")
+	}
+	if dSess != "" {
+		fmt.Fprintf(&b, "driver session_id (bus.SessionID): %s\n", dSess)
+	} else {
+		b.WriteString("driver session_id (bus.SessionID): （空）\n")
+	}
+	if route != "" {
+		fmt.Fprintf(&b, "路由 session_id (send_message / OutboundMessage.To): %s\n", route)
+	} else {
+		b.WriteString("路由 session_id (send_message): （空）\n")
+	}
+	fmt.Fprintf(&b, "工作区会话 ID (勿当 send_message 目标): %s\n工作目录: %s", e.SessionID, e.CWD)
+	return strings.TrimRight(b.String(), "\n")
+}
+
 func (e *Engine) slashStatus(in bus.InboundMessage) string {
 	var b strings.Builder
-	ch := strings.TrimSpace(in.Channel)
+	ch := strings.TrimSpace(in.ClientID)
 	if ch != "" {
-		fmt.Fprintf(&b, "渠道 Channel: %s\n", ch)
+		fmt.Fprintf(&b, "driver client_id: %s\n", ch)
+	} else {
+		b.WriteString("driver client_id: （空）\n")
 	}
-	fmt.Fprintf(&b, "会话 ID: %s\n", e.SessionID)
+	ds := strings.TrimSpace(in.SessionID)
+	if ds != "" {
+		fmt.Fprintf(&b, "driver session_id (bus.SessionID): %s\n", ds)
+	} else {
+		b.WriteString("driver session_id (bus.SessionID): （空）\n")
+	}
+	if rs := InboundSessionKey(in); rs != "" {
+		fmt.Fprintf(&b, "路由 session_id (send_message / clawbridge): %s\n", rs)
+	} else {
+		b.WriteString("路由 session_id (send_message): （空）\n")
+	}
+	fmt.Fprintf(&b, "工作区会话 ID (StableSessionID，勿填 send_message.session_id): %s\n", e.SessionID)
 	fmt.Fprintf(&b, "工作目录 CWD: %s\n", e.CWD)
 	if ur := strings.TrimSpace(e.UserDataRoot); ur != "" {
 		fmt.Fprintf(&b, "用户数据根 UserDataRoot: %s\n", ur)
@@ -86,6 +125,28 @@ func (e *Engine) slashPaths() string {
 	ep := filepath.Join(layout.Project, layout.EntrypointName)
 	fmt.Fprintf(&b, "项目记忆入口（若存在）: %s\n", ep)
 	return strings.TrimRight(b.String(), "\n")
+}
+
+// slashReset clears in-memory chat state and persisted slim/working transcripts for this session,
+// and resets recall dedupe (same as /recall reset). Does not delete MEMORY.md or other memory files.
+func (e *Engine) slashReset(args string) string {
+	if strings.TrimSpace(args) != "" {
+		return fmt.Sprintf("用法：仅发送 /reset（不要附加参数）。收到：%q", strings.TrimSpace(args))
+	}
+	e.Messages = nil
+	e.Transcript = nil
+	e.RecallState = memory.RecallState{SurfacedPaths: make(map[string]struct{})}
+	if err := e.SaveTranscript(); err != nil {
+		slog.Error("session.transcript_save_reset", "err", err)
+	}
+	if err := e.SaveWorkingTranscript(); err != nil {
+		slog.Error("session.working_transcript_save_reset", "err", err)
+	}
+	e.persistRecall()
+	return strings.TrimSpace(`
+已清空本会话的模型上下文与 slim 转录（内存与已配置的磁盘路径），并重置 recall 去重状态。
+磁盘上的 MEMORY.md 等记忆文件未删除。本地斜杠命令的确认文案不会写入会话转录。
+`)
 }
 
 func (e *Engine) slashRecall(args string) string {

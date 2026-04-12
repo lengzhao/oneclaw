@@ -35,8 +35,8 @@ func TestSubmitUser_publishesOutboundOnFailure(t *testing.T) {
 	}
 
 	in := bus.InboundMessage{
-		Channel:   "cli",
-		ChatID:    "C1",
+		ClientID:  "cli",
+		SessionID: "C1",
 		MessageID: "m1",
 		Content:   "hi",
 		Peer:      bus.Peer{Kind: "channel"},
@@ -55,7 +55,7 @@ func TestSubmitUser_publishesOutboundOnFailure(t *testing.T) {
 	if !strings.Contains(body, err.Error()) {
 		t.Fatalf("outbound should include error text: outbound=%q err=%v", body, err)
 	}
-	if published[0].ClientID != "cli" || published[0].To.ChatID != "C1" {
+	if published[0].ClientID != "cli" || published[0].To.SessionID != "C1" {
 		t.Fatalf("addressing: %+v", published[0])
 	}
 }
@@ -86,6 +86,6 @@ func TestSubmitUser_errorOutboundSkippedWithoutAddressing(t *testing.T) {
 		t.Fatal("expected error")
 	}
 	if len(published) != 0 {
-		t.Fatalf("without Channel/ChatID no outbound: got %+v", published)
+		t.Fatalf("without ClientID/SessionID no outbound: got %+v", published)
 	}
 }

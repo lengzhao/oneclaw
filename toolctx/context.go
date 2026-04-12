@@ -3,6 +3,7 @@ package toolctx
 
 import (
 	"context"
+	"maps"
 	"strings"
 	"sync"
 
@@ -81,7 +82,7 @@ func New(cwd string, abort context.Context) *Context {
 }
 
 // ApplyTurnInboundToToolContext merges envelope routing into TurnInbound.
-// RunTurn calls this at the start of each turn so tools see Channel/Peer/… and nested Content-only turns do not keep parent MediaPaths.
+// RunTurn calls this at the start of each turn so tools see ClientID/SessionID/Peer/… and nested Content-only turns do not keep parent MediaPaths.
 func (c *Context) ApplyTurnInboundToToolContext(in bus.InboundMessage) {
 	if c == nil {
 		return
@@ -95,11 +96,11 @@ func mergeTurnInbound(dst *bus.InboundMessage, src bus.InboundMessage) {
 	if dst == nil {
 		return
 	}
-	if s := strings.TrimSpace(src.Channel); s != "" {
-		dst.Channel = s
+	if s := strings.TrimSpace(src.ClientID); s != "" {
+		dst.ClientID = s
 	}
-	if s := strings.TrimSpace(src.ChatID); s != "" {
-		dst.ChatID = s
+	if s := strings.TrimSpace(src.SessionID); s != "" {
+		dst.SessionID = s
 	}
 	if s := strings.TrimSpace(src.MessageID); s != "" {
 		dst.MessageID = s
@@ -117,6 +118,17 @@ func mergeTurnInbound(dst *bus.InboundMessage, src bus.InboundMessage) {
 	}
 	if src.ReceivedAt != 0 {
 		dst.ReceivedAt = src.ReceivedAt
+	}
+	if len(src.Metadata) > 0 {
+		if dst.Metadata == nil {
+			dst.Metadata = maps.Clone(src.Metadata)
+		} else {
+			for k, v := range src.Metadata {
+				if strings.TrimSpace(v) != "" {
+					dst.Metadata[k] = v
+				}
+			}
+		}
 	}
 }
 

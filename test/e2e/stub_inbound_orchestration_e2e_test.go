@@ -4,6 +4,7 @@ package e2e_test
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -20,16 +21,26 @@ func TestE2E_113_SlashHelpSkipsModel(t *testing.T) {
 	stub := openaistub.New(t)
 	e2eEnvMinimal(t, stub)
 	e := newStubEngine(t, stub, t.TempDir())
-	err := e.SubmitUser(context.Background(), bus.InboundMessage{Content: "/help", Channel: "cli"})
+	var out string
+	e.PublishOutbound = func(_ context.Context, msg *bus.OutboundMessage) error {
+		if msg != nil {
+			out = msg.Text
+		}
+		return nil
+	}
+	in := bus.InboundMessage{Content: "/help", ClientID: "cli", SessionID: "t113", Peer: bus.Peer{Kind: "channel"}}
+	err := e.SubmitUser(context.Background(), in)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if n := len(stub.ChatRequestBodies()); n != 0 {
 		t.Fatalf("expected no chat/completions calls, got %d", n)
 	}
-	last := loop.LastAssistantDisplay(e.Messages)
-	if !strings.Contains(last, "/model") {
-		t.Fatalf("expected help body, got %q", last)
+	if len(e.Messages) != 0 {
+		t.Fatalf("expected local slash not in engine Messages, got %d", len(e.Messages))
+	}
+	if !strings.Contains(out, "/model") {
+		t.Fatalf("expected help body in outbound, got %q", out)
 	}
 }
 
@@ -38,16 +49,97 @@ func TestE2E_116_SlashStatusSkipsModel(t *testing.T) {
 	stub := openaistub.New(t)
 	e2eEnvMinimal(t, stub)
 	e := newStubEngine(t, stub, t.TempDir())
-	err := e.SubmitUser(context.Background(), bus.InboundMessage{Content: "/status", Channel: "cli"})
+	var out string
+	e.PublishOutbound = func(_ context.Context, msg *bus.OutboundMessage) error {
+		if msg != nil {
+			out = msg.Text
+		}
+		return nil
+	}
+	in := bus.InboundMessage{Content: "/status", ClientID: "cli", SessionID: "t116", Peer: bus.Peer{Kind: "channel"}}
+	err := e.SubmitUser(context.Background(), in)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if n := len(stub.ChatRequestBodies()); n != 0 {
 		t.Fatalf("expected no chat/completions calls, got %d", n)
 	}
-	last := loop.LastAssistantDisplay(e.Messages)
-	if !strings.Contains(last, "会话 ID:") {
-		t.Fatalf("expected status body, got %q", last)
+	if len(e.Messages) != 0 {
+		t.Fatalf("expected local slash not in engine Messages, got %d", len(e.Messages))
+	}
+	if !strings.Contains(out, "工作区会话 ID") {
+		t.Fatalf("expected status body in outbound, got %q", out)
+	}
+}
+
+// E2E-117 /stop 不调用模型
+func TestE2E_117_SlashStopSkipsModel(t *testing.T) {
+	stub := openaistub.New(t)
+	e2eEnvMinimal(t, stub)
+	e := newStubEngine(t, stub, t.TempDir())
+	var out string
+	e.PublishOutbound = func(_ context.Context, msg *bus.OutboundMessage) error {
+		if msg != nil {
+			out = msg.Text
+		}
+		return nil
+	}
+	in := bus.InboundMessage{Content: "/stop", ClientID: "cli", SessionID: "t117", Peer: bus.Peer{Kind: "channel"}}
+	err := e.SubmitUser(context.Background(), in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := len(stub.ChatRequestBodies()); n != 0 {
+		t.Fatalf("expected no chat/completions calls, got %d", n)
+	}
+	if len(e.Messages) != 0 {
+		t.Fatalf("expected local slash not in engine Messages, got %d", len(e.Messages))
+	}
+	if !strings.Contains(out, "/stop") {
+		t.Fatalf("expected stop reply in outbound, got %q", out)
+	}
+}
+
+// E2E-118 /reset 不调用模型，且清空此前回合在内存中的可见历史
+func TestE2E_118_SlashResetSkipsModelAndClearsHistory(t *testing.T) {
+	stub := openaistub.New(t)
+	stub.Enqueue(openaistub.CompletionStop("", "UNIQUE_FIRST_ASSISTANT_REPLY"))
+	e2eEnvMinimal(t, stub)
+	e := newStubEngine(t, stub, t.TempDir())
+	var lastOutbound string
+	e.PublishOutbound = func(_ context.Context, msg *bus.OutboundMessage) error {
+		if msg != nil && strings.TrimSpace(msg.Text) != "" {
+			lastOutbound = msg.Text
+		}
+		return nil
+	}
+	thread := bus.InboundMessage{ClientID: "cli", SessionID: "t118", Peer: bus.Peer{ID: "p1", Kind: "channel"}}
+	if err := e.SubmitUser(context.Background(), bus.InboundMessage{Content: "hello", ClientID: thread.ClientID, SessionID: thread.SessionID, Peer: thread.Peer}); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.SubmitUser(context.Background(), bus.InboundMessage{Content: "/reset", ClientID: thread.ClientID, SessionID: thread.SessionID, Peer: thread.Peer}); err != nil {
+		t.Fatal(err)
+	}
+	if n := len(stub.ChatRequestBodies()); n != 1 {
+		t.Fatalf("expected one chat/completions call (first turn only), got %d", n)
+	}
+	vis := loop.ToUserVisibleMessages(e.Messages)
+	joinedBytes, err := json.Marshal(vis)
+	if err != nil {
+		t.Fatal(err)
+	}
+	joined := string(joinedBytes)
+	if strings.Contains(joined, "UNIQUE_FIRST_ASSISTANT_REPLY") {
+		t.Fatalf("expected prior assistant text cleared from visible messages, got:\n%s", joined)
+	}
+	if strings.Contains(joined, "/reset") {
+		t.Fatalf("expected /reset not persisted in visible messages, got:\n%s", joined)
+	}
+	if len(vis) != 0 {
+		t.Fatalf("expected empty visible messages after reset, got %d: %s", len(vis), joined)
+	}
+	if !strings.Contains(lastOutbound, "已清空") {
+		t.Fatalf("expected reset confirmation in outbound, got %q", lastOutbound)
 	}
 }
 
@@ -71,7 +163,7 @@ func TestE2E_114_InboundMetaAndAttachmentInHistory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(reqText, "<inbound-context>") || !strings.Contains(reqText, "session_key:") {
+	if !strings.Contains(reqText, "<inbound-context>") || !strings.Contains(reqText, "session_key:") || !strings.Contains(reqText, "workspace_session_id:") {
 		t.Fatalf("missing inbound meta in first request:\n%s", reqText)
 	}
 	s := concatUserText(e.Messages)

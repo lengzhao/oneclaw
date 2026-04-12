@@ -11,11 +11,17 @@ import (
 // (see docs/inbound-routing-design.md).
 func InboundMetaForModel(in bus.InboundMessage) string {
 	var lines []string
-	if s := strings.TrimSpace(in.Channel); s != "" {
+	if s := strings.TrimSpace(in.ClientID); s != "" {
 		lines = append(lines, "source: "+s)
 	}
-	if s := strings.TrimSpace(in.Peer.ID); s != "" {
-		lines = append(lines, "session_key: "+s)
+	// Driver delivery key for send_message / OutboundMessage.To.SessionID (e.g. webchat wc-…).
+	// Do not confuse with workspace_session_id (StableSessionID / transcript folder hash).
+	if sk := InboundSessionKey(in); sk != "" {
+		lines = append(lines, "session_key: "+sk)
+	}
+	if src := strings.TrimSpace(in.ClientID); src != "" {
+		h := SessionHandle{Source: src, SessionKey: InboundSessionKey(in)}
+		lines = append(lines, "workspace_session_id: "+StableSessionID(h))
 	}
 	if s := InboundUserID(in); s != "" {
 		lines = append(lines, "user_id: "+s)

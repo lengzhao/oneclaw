@@ -103,27 +103,27 @@ func (CronTool) Execute(ctx context.Context, input json.RawMessage, tctx *toolct
 			EverySeconds: s.EverySeconds,
 			CronExpr:     strings.TrimSpace(s.CronExpr),
 		}
-		ts := strings.TrimSpace(tctx.TurnInbound.Channel)
+		ts := strings.TrimSpace(tctx.TurnInbound.ClientID)
 		sk := session.InboundSessionKey(tctx.TurnInbound)
 		uid := session.InboundUserID(tctx.TurnInbound)
 		ten := session.InboundTenantHint(tctx.TurnInbound)
 		pk := strings.TrimSpace(tctx.TurnInbound.Peer.Kind)
-		return schedule.Add(tctx.CWD, tctx.HostDataRoot, schedule.AddInput{
-			Name:         in.Name,
-			Message:      in.Message,
-			TargetSource: ts,
-			SessionKey:   sk,
-			TargetChatID: strings.TrimSpace(tctx.TurnInbound.ChatID),
-			PeerKind:     pk,
-			UserID:       uid,
-			TenantID:     ten,
-			Schedule:     spec,
-			AtSeconds:    s.AtSeconds,
+		return schedule.Add(tctx.CWD, tctx.HostDataRoot, tctx.WorkspaceFlat, schedule.AddInput{
+			Name:            in.Name,
+			Message:         in.Message,
+			TargetSource:    ts,
+			SessionKey:      sk,
+			TargetSessionID: strings.TrimSpace(tctx.TurnInbound.SessionID),
+			PeerKind:        pk,
+			UserID:          uid,
+			TenantID:        ten,
+			Schedule:        spec,
+			AtSeconds:       s.AtSeconds,
 		})
 	case "list":
-		return schedule.ListText(tctx.CWD, tctx.HostDataRoot)
+		return schedule.ListText(tctx.CWD, tctx.HostDataRoot, tctx.WorkspaceFlat)
 	case "remove":
-		return schedule.Remove(tctx.CWD, tctx.HostDataRoot, in.JobID)
+		return schedule.Remove(tctx.CWD, tctx.HostDataRoot, tctx.WorkspaceFlat, in.JobID)
 	default:
 		return "", fmt.Errorf("unknown action %q", in.Action)
 	}

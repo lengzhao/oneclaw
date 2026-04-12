@@ -80,12 +80,12 @@
 
 ### 会话与多通道（`cmd/oneclaw`）
 
-主进程 **`oneclaw`（非 `-init` / `-maintain-once`）** 使用 **`session.SessionResolver`**：按 **入站 `Channel` + `Peer.ID`（逻辑 session_key）** 懒创建 **`session.Engine`**，**同一 handle 内串行**处理回合，避免多线程共用一个 `Engine` 的 data race。
+主进程 **`oneclaw`（非 `-init` / `-maintain-once`）** 使用 **`session.SessionResolver`**：按 **入站 `ClientID` + `InboundSessionKey`（优先 `SessionID`，否则 `Peer.ID`）** 懒创建 **`session.Engine`**，**同一 handle 内串行**处理回合，避免多线程共用一个 `Engine` 的 data race。
 
 | 概念 | 说明 |
 |------|------|
 | **session_key** | 来自 clawbridge `bus.InboundMessage` 的线程/话题键（`session.InboundSessionKey`）；决定「哪一条会话」 |
-| **Engine.SessionID** | 由 `Source` + `session_key` **稳定派生**的十六进制 id（`session.StableSessionID`），用于 sqlite、分文件等 |
+| **Engine.SessionID** | 由 `ClientID`（`SessionHandle.Source`）+ `session_key` **稳定派生**的十六进制 id（`session.StableSessionID`），用于 sqlite、分文件等 |
 | **Engine.CWD（IM）** | 由 **`sessions.isolate_workspace`** 控制（默认 **false**）：**false** 时 CWD = `UserDataRoot`（多会话共享 `~/.oneclaw` 下 tasks/memory/exec 等）；**true** 时 CWD = `<UserDataRoot>/sessions/<SessionID>/.oneclaw`（每会话独立工作区） |
 | **转写文件（IM）** | 始终 `<UserDataRoot>/sessions/<SessionID>/.oneclaw/transcript.json` 与 `working_transcript.json`（与 YAML `paths.transcript` 无关） |
 | **SQLite（IM）** | 默认 `<UserDataRoot>/sessions.sqlite`（可用 `sessions.sqlite_path` 覆盖，相对路径相对 `UserDataRoot`） |

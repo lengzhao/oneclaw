@@ -3,11 +3,12 @@ module github.com/lengzhao/oneclaw
 go 1.26.1
 
 require (
-	github.com/lengzhao/clawbridge v0.1.3
+	github.com/lengzhao/clawbridge v0.2.1
 	github.com/modelcontextprotocol/go-sdk v1.4.1
 	github.com/openai/openai-go v1.12.0
 	github.com/robfig/cron/v3 v3.0.1
 	golang.org/x/sync v0.16.0
+	golang.org/x/term v0.13.0
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.42.2
 )
@@ -49,7 +50,6 @@ require (
 	golang.org/x/exp v0.0.0-20250620022241-b7579e27df2b // indirect
 	golang.org/x/oauth2 v0.34.0 // indirect
 	golang.org/x/sys v0.40.0 // indirect
-	golang.org/x/term v0.13.0 // indirect
 	modernc.org/libc v1.66.10 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect

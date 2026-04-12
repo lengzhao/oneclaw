@@ -33,3 +33,10 @@ func ParseLeadingSlash(text string) (cmd, args string, ok bool) {
 	}
 	return cmd, args, true
 }
+
+// IsStopSlashCommand reports a bare /stop line (no arguments), used to cancel the
+// in-flight turn for this session before the stop message is enqueued.
+func IsStopSlashCommand(content string) bool {
+	cmd, args, ok := ParseLeadingSlash(content)
+	return ok && cmd == "stop" && strings.TrimSpace(args) == ""
+}

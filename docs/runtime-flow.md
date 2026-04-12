@@ -61,7 +61,7 @@ flowchart TB
 ```
 
 - **WorkerPool**：按 `hash(session_key) % N` 分片，**同一会话固定落在同一 worker**，每轮任务 **新建 Engine**（`factory`），执行完 `SubmitUser` 后丢弃，避免无界 Engine 映射。
-- **SessionHandle**：由入站的 `Channel` + 会话键派生；**StableSessionID**（SHA256 截断）用于 sqlite、目录名等。**Engine.CWD** 为 `<UserDataRoot>/sessions/<StableSessionID>/`（见 `config.UserDataRoot()` 与 [session-home-isolation-design.md](session-home-isolation-design.md)）。
+- **SessionHandle**：由入站的 `ClientID`（clawbridge client id）+ 会话键（`InboundSessionKey`：优先 `SessionID`，否则 `Peer.ID`）派生；**StableSessionID**（SHA256 截断）用于 sqlite、目录名等。**Engine.CWD** 为 `<UserDataRoot>/sessions/<StableSessionID>/`（见 `config.UserDataRoot()` 与 [session-home-isolation-design.md](session-home-isolation-design.md)）。
 
 ---
 
@@ -88,7 +88,7 @@ flowchart TB
 - **prepareSharedTurn**：注入 `MEMORY.md` / recall、预算、`ToolContext` 与入站路由字段合并（见入站设计文档 §2.1）。
 - **loop.RunTurn**：模型 ↔ 工具循环；工具轨迹可在 `ToolTraceSink` 中收集，供 `PostTurnInput` 与 notify 使用。
 - **PostTurn**：同步写回合相关记忆管线（如 daily log）；**MaybePostTurnMaintain** 在独立 goroutine 中执行，**不阻塞**渠道返回。
-- **本地 slash**（如 `/help`、`/status`、`/paths`、`/recall reset`；CLI 的 `/exit` 由终端处理）：走 `submitLocalSlashTurn`，**不**调用 `loop.RunTurn`，**不**走 `PostTurn` / `MaybePostTurnMaintain`（刻意设计）。内置列表见 `session/slash_local.go` 与 `/help`。
+- **本地 slash**（如 `/help`、`/status`、`/paths`、`/recall reset`、`/reset`、`/stop`；CLI 的 `/exit` 由终端处理）：走 `submitLocalSlashTurn`，**不**调用 `loop.RunTurn`，**不**走 `PostTurn` / `MaybePostTurnMaintain`（刻意设计）。`/stop` 在入站 goroutine 内还会先调用 `WorkerPool.CancelInflightTurn` 取消**当前已在执行**的该会话轮次（`context.WithCancel(root)`）。内置列表见 `session/slash_local.go` 与 `/help`。
 
 ---
 

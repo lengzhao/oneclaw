@@ -19,13 +19,13 @@ func TestEngineSendMessage(t *testing.T) {
 	}
 
 	err := eng.SendMessage(context.Background(), bus.InboundMessage{
-		Channel:       "ch1",
-		ChatID:        "C123",
-		MessageID:     "cron-1",
-		Content:       "notify",
-		MediaPaths:    nil,
-		Peer:          bus.Peer{Kind: "channel"},
-		Sender:        bus.SenderInfo{PlatformID: "U1"},
+		ClientID:   "ch1",
+		SessionID:  "C123",
+		MessageID:  "cron-1",
+		Content:    "notify",
+		MediaPaths: nil,
+		Peer:       bus.Peer{Kind: "channel"},
+		Sender:     bus.SenderInfo{PlatformID: "U1"},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -37,25 +37,53 @@ func TestEngineSendMessage(t *testing.T) {
 	if msg.ClientID != "ch1" || msg.Text != "notify" {
 		t.Fatalf("outbound %+v", msg)
 	}
-	if msg.To.ChatID != "C123" {
+	if msg.To.SessionID != "C123" {
 		t.Fatalf("chat id %+v", msg.To)
 	}
 }
 
-func TestEngineSendMessageRequiresChannel(t *testing.T) {
+func TestEngineSendMessage_recipientUserIDFromMetadata(t *testing.T) {
+	cwd := t.TempDir()
+	var published []*bus.OutboundMessage
+	eng := NewEngine(cwd, tools.NewRegistry())
+	eng.PublishOutbound = func(_ context.Context, msg *bus.OutboundMessage) error {
+		published = append(published, msg)
+		return nil
+	}
+	in := bus.InboundMessage{
+		ClientID:  "ch1",
+		SessionID: "S1",
+		Content:   "dm",
+		Peer:      bus.Peer{Kind: "direct"},
+		Metadata: map[string]string{
+			MetadataKeyOutboundRecipientUserID: "U-remote",
+		},
+	}
+	if err := eng.SendMessage(context.Background(), in); err != nil {
+		t.Fatal(err)
+	}
+	if len(published) != 1 {
+		t.Fatalf("got %d", len(published))
+	}
+	if published[0].To.UserID != "U-remote" {
+		t.Fatalf("To.UserID: %+v", published[0].To)
+	}
+}
+
+func TestEngineSendMessageRequiresClientID(t *testing.T) {
 	eng := NewEngine(t.TempDir(), tools.NewRegistry())
 	eng.PublishOutbound = func(context.Context, *bus.OutboundMessage) error { return nil }
-	err := eng.SendMessage(context.Background(), bus.InboundMessage{Content: "x", ChatID: "C1"})
-	if err == nil || !strings.Contains(err.Error(), "Channel") {
-		t.Fatalf("expected Channel error, got %v", err)
+	err := eng.SendMessage(context.Background(), bus.InboundMessage{Content: "x", SessionID: "C1"})
+	if err == nil || !strings.Contains(err.Error(), "ClientID") {
+		t.Fatalf("expected ClientID error, got %v", err)
 	}
 }
 
 func TestEngineSendMessageNoChat(t *testing.T) {
 	eng := NewEngine(t.TempDir(), tools.NewRegistry())
 	eng.PublishOutbound = func(context.Context, *bus.OutboundMessage) error { return nil }
-	err := eng.SendMessage(context.Background(), bus.InboundMessage{Channel: "x", Content: "hi"})
-	if err == nil || !strings.Contains(err.Error(), "ChatID") {
-		t.Fatalf("expected ChatID error, got %v", err)
+	err := eng.SendMessage(context.Background(), bus.InboundMessage{ClientID: "x", Content: "hi"})
+	if err == nil || !strings.Contains(err.Error(), "SessionID") {
+		t.Fatalf("expected SessionID error, got %v", err)
 	}
 }

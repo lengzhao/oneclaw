@@ -35,3 +35,15 @@ func TestNewWorkerPool_nilFactory(t *testing.T) {
 		t.Fatal("expected error")
 	}
 }
+
+func TestWorkerPool_CancelInflightTurn_idleNoPanic(t *testing.T) {
+	t.Parallel()
+	wp, err := NewWorkerPool(1, func(SessionHandle) (*Engine, error) {
+		return NewEngine(t.TempDir(), tools.NewRegistry()), nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer wp.Close()
+	wp.CancelInflightTurn(SessionHandle{Source: "c", SessionKey: "k"})
+}

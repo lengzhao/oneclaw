@@ -1,6 +1,8 @@
 package session
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
@@ -9,6 +11,7 @@ import (
 	"github.com/lengzhao/clawbridge"
 	"github.com/lengzhao/oneclaw/config"
 	"github.com/lengzhao/oneclaw/memory"
+	"github.com/lengzhao/oneclaw/toolctx"
 	"github.com/lengzhao/oneclaw/tools"
 	"github.com/openai/openai-go"
 )
@@ -52,6 +55,12 @@ func MainEngineFactory(deps MainEngineFactoryDeps) func(SessionHandle) (*Engine,
 		eng.UserDataRoot = userRoot
 		eng.WorkspaceFlat = true
 		eng.Client = deps.Client
+		eng.CanUseTool = func(_ context.Context, name string, input json.RawMessage, tctx *toolctx.Context) (bool, string) {
+			if deny, reason := denySendMessageOnSyntheticScheduleTurn(tctx, name, input); deny {
+				return false, reason
+			}
+			return true, ""
+		}
 		eng.Model = deps.Model
 		eng.MaxSteps = deps.Resolved.MainAgentMaxSteps()
 		eng.MaxTokens = deps.Resolved.MainAgentMaxCompletionTokens()

@@ -64,7 +64,7 @@ func inboundWithPersistedAttachments(t *testing.T, cwd, content, channel, peerID
 		}
 	}
 	return bus.InboundMessage{
-		Channel:    channel,
+		ClientID:   channel,
 		Content:    strings.TrimSpace(content),
 		Peer:       bus.Peer{ID: peerID},
 		MediaPaths: paths,

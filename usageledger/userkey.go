@@ -13,7 +13,7 @@ func UserInteractionKey(in bus.InboundMessage) string {
 		u = strings.TrimSpace(in.Sender.PlatformID)
 	}
 	t := strings.TrimSpace(in.Sender.Platform)
-	src := strings.TrimSpace(in.Channel)
+	src := strings.TrimSpace(in.ClientID)
 	if src == "" {
 		src = "unknown"
 	}
@@ -27,8 +27,8 @@ func UserInteractionKey(in bus.InboundMessage) string {
 	if sk != "" {
 		return "session:" + sk + "@" + src
 	}
-	if chat := strings.TrimSpace(in.ChatID); chat != "" {
-		return "chat:" + chat + "@" + src
+	if sid := strings.TrimSpace(in.SessionID); sid != "" {
+		return "session_id:" + sid + "@" + src
 	}
 	return "anon@" + src
 }

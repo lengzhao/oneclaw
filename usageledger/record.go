@@ -58,7 +58,7 @@ type InteractionLine struct {
 	SessionID        string          `json:"session_id"`
 	CorrelationID    string          `json:"correlation_id"`
 	UserKey          string          `json:"user_key"`
-	Source           string          `json:"source"` // client id (Channel)
+	Source           string          `json:"source"` // clawbridge client id (bus ClientID)
 	Model            string          `json:"model"`
 	Step             int             `json:"step"`
 	SubagentDepth    int             `json:"subagent_depth"`
@@ -123,7 +123,7 @@ func MaybeRecord(p RecordParams) {
 		SessionID:        p.SessionID,
 		CorrelationID:    strings.TrimSpace(p.Inbound.MessageID),
 		UserKey:          userKey,
-		Source:           strings.TrimSpace(p.Inbound.Channel),
+		Source:           strings.TrimSpace(p.Inbound.ClientID),
 		Model:            p.Model,
 		Step:             p.Step,
 		SubagentDepth:    p.SubagentDepth,

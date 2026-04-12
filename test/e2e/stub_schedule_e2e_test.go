@@ -41,7 +41,7 @@ func TestE2E_111_CronToolWritesFile(t *testing.T) {
 		Messages:    &msgs,
 		Registry:    builtin.DefaultRegistry(),
 		ToolContext: toolctx.New(cwd, context.Background()),
-	}, bus.InboundMessage{Content: "schedule a job", Channel: "cli"})
+	}, bus.InboundMessage{Content: "schedule a job", ClientID: "cli"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +68,7 @@ func TestE2E_111_CronToolWritesFile(t *testing.T) {
 // E2E-112 存在启用的 scheduled job 时 system 含 Scheduled jobs 段
 func TestE2E_112_ScheduledJobsBlockInSystemPrompt(t *testing.T) {
 	cwd := t.TempDir()
-	if _, err := schedule.Add(cwd, "", schedule.AddInput{
+	if _, err := schedule.Add(cwd, "", false, schedule.AddInput{
 		Name:    "E2E112",
 		Message: "E2E112_MSG",
 		Schedule: schedule.ScheduleSpec{

@@ -21,18 +21,30 @@ import (
 
 const fileName = "scheduled_jobs.json"
 
-// Path returns the absolute path to <cwd>/.oneclaw/scheduled_jobs.json.
+// Path returns the absolute path to <cwd>/.oneclaw/scheduled_jobs.json (non-flat / repo-style cwd).
 func Path(cwd string) string {
 	return filepath.Join(cwd, memory.DotDir, fileName)
 }
 
-// JobsFilePath returns scheduled_jobs.json: under hostDataRoot directly when non-empty (IM host, e.g. ~/.oneclaw/scheduled_jobs.json),
-// else project layout via Path(projectCWD).
-func JobsFilePath(projectCWD, hostDataRoot string) string {
-	if strings.TrimSpace(hostDataRoot) != "" {
-		return filepath.Join(filepath.Clean(hostDataRoot), fileName)
+// JobsFilePath returns the absolute path to scheduled_jobs.json.
+//   - When hostDataRoot is set and projectCWD is empty: <hostDataRoot>/scheduled_jobs.json (host poller compat).
+//   - When hostDataRoot is set and projectCWD equals hostDataRoot (shared IM workspace): same flat file under user root.
+//   - Otherwise: memory.JoinSessionWorkspace(projectCWD, workspaceFlat, scheduled_jobs.json) — per-session when isolate_workspace
+//     places Engine.CWD under sessions/<id>/.oneclaw while HostDataRoot stays ~/.oneclaw.
+func JobsFilePath(projectCWD, hostDataRoot string, workspaceFlat bool) string {
+	ur := strings.TrimSpace(hostDataRoot)
+	pc := strings.TrimSpace(projectCWD)
+	if ur != "" && pc == "" {
+		return filepath.Join(filepath.Clean(ur), fileName)
 	}
-	return Path(projectCWD)
+	p := filepath.Clean(pc)
+	if ur != "" {
+		u := filepath.Clean(ur)
+		if p == u {
+			return filepath.Join(u, fileName)
+		}
+	}
+	return memory.JoinSessionWorkspace(p, workspaceFlat, fileName)
 }
 
 // Disabled reports features.disable_scheduled_tasks from config.
@@ -53,17 +65,17 @@ type Job struct {
 	Name    string `json:"name,omitempty"`
 	Message string `json:"message"`
 	// Enabled is always true for new jobs; false rows are removed on the next write (list/add/remove/collect) so the job list stays small.
-	Enabled      bool         `json:"enabled"`
-	TargetSource string       `json:"target_source"`
-	SessionKey   string       `json:"session_key,omitempty"`
-	// TargetChatID is the bus inbound chat_id at job creation (e.g. webchat tab); required for assistant outbound to the same UI.
-	TargetChatID string       `json:"target_chat_id,omitempty"`
-	PeerKind     string       `json:"peer_kind,omitempty"`
-	UserID       string       `json:"user_id,omitempty"`
-	TenantID     string       `json:"tenant_id,omitempty"`
-	Schedule     ScheduleSpec `json:"schedule"`
-	NextRun      time.Time    `json:"next_run"`
-	LastRun      *time.Time   `json:"last_run,omitempty"`
+	Enabled      bool   `json:"enabled"`
+	TargetSource string `json:"target_source"`
+	SessionKey   string `json:"session_key,omitempty"`
+	// TargetSessionID is the bus inbound SessionID at job creation (e.g. webchat tab); JSON key remains target_chat_id for existing files.
+	TargetSessionID string       `json:"target_chat_id,omitempty"`
+	PeerKind        string       `json:"peer_kind,omitempty"`
+	UserID          string       `json:"user_id,omitempty"`
+	TenantID        string       `json:"tenant_id,omitempty"`
+	Schedule        ScheduleSpec `json:"schedule"`
+	NextRun         time.Time    `json:"next_run"`
+	LastRun         *time.Time   `json:"last_run,omitempty"`
 }
 
 // ScheduleSpec defines when to fire (exactly one variant should be set; see Validate).
@@ -267,20 +279,20 @@ func initialNextRun(spec ScheduleSpec, now time.Time) (time.Time, error) {
 
 // AddInput is the payload for adding a job.
 type AddInput struct {
-	Name         string
-	Message      string
-	TargetSource string
-	SessionKey   string
-	TargetChatID string
-	PeerKind     string
-	UserID       string
-	TenantID     string
-	Schedule     ScheduleSpec
-	AtSeconds    int
+	Name            string
+	Message         string
+	TargetSource    string
+	SessionKey      string
+	TargetSessionID string
+	PeerKind        string
+	UserID          string
+	TenantID        string
+	Schedule        ScheduleSpec
+	AtSeconds       int
 }
 
-// Add appends a job after validation. hostDataRoot when non-empty selects flat ~/.oneclaw-style job file; cwd is ignored then.
-func Add(cwd, hostDataRoot string, in AddInput) (string, error) {
+// Add appends a job after validation. See JobsFilePath for path rules; workspaceFlat must match Engine.WorkspaceFlat.
+func Add(cwd, hostDataRoot string, workspaceFlat bool, in AddInput) (string, error) {
 	if Disabled() {
 		return "", fmt.Errorf("scheduled tasks are disabled (features.disable_scheduled_tasks in config)")
 	}
@@ -296,7 +308,7 @@ func Add(cwd, hostDataRoot string, in AddInput) (string, error) {
 	if ts == "" {
 		ts = "cli"
 	}
-	path := JobsFilePath(cwd, hostDataRoot)
+	path := JobsFilePath(cwd, hostDataRoot, workspaceFlat)
 	fileMu.Lock()
 	f, err := Read(path)
 	if err != nil {
@@ -322,18 +334,18 @@ func Add(cwd, hostDataRoot string, in AddInput) (string, error) {
 		name = truncate(msg, 40)
 	}
 	f.Jobs = append(f.Jobs, Job{
-		ID:           id,
-		Name:         name,
-		Message:      msg,
-		Enabled:      true,
-		TargetSource: ts,
-		SessionKey:   strings.TrimSpace(in.SessionKey),
-		TargetChatID: strings.TrimSpace(in.TargetChatID),
-		PeerKind:     strings.TrimSpace(in.PeerKind),
-		UserID:       strings.TrimSpace(in.UserID),
-		TenantID:     strings.TrimSpace(in.TenantID),
-		Schedule:     spec,
-		NextRun:      next.UTC(),
+		ID:              id,
+		Name:            name,
+		Message:         msg,
+		Enabled:         true,
+		TargetSource:    ts,
+		SessionKey:      strings.TrimSpace(in.SessionKey),
+		TargetSessionID: strings.TrimSpace(in.TargetSessionID),
+		PeerKind:        strings.TrimSpace(in.PeerKind),
+		UserID:          strings.TrimSpace(in.UserID),
+		TenantID:        strings.TrimSpace(in.TenantID),
+		Schedule:        spec,
+		NextRun:         next.UTC(),
 	})
 	err = write(path, f)
 	fileMu.Unlock()
@@ -374,8 +386,8 @@ func compactDisabledJobs(f *File) int {
 	return n - len(f.Jobs)
 }
 
-// Remove deletes a job by id (same cwd / hostDataRoot rules as Add).
-func Remove(cwd, hostDataRoot, jobID string) (string, error) {
+// Remove deletes a job by id (same path rules as Add).
+func Remove(cwd, hostDataRoot string, workspaceFlat bool, jobID string) (string, error) {
 	if Disabled() {
 		return "", fmt.Errorf("scheduled tasks are disabled (features.disable_scheduled_tasks in config)")
 	}
@@ -383,7 +395,7 @@ func Remove(cwd, hostDataRoot, jobID string) (string, error) {
 	if id == "" {
 		return "", fmt.Errorf("job_id is required")
 	}
-	path := JobsFilePath(cwd, hostDataRoot)
+	path := JobsFilePath(cwd, hostDataRoot, workspaceFlat)
 	fileMu.Lock()
 	f, err := Read(path)
 	if err != nil {
@@ -418,11 +430,11 @@ func Remove(cwd, hostDataRoot, jobID string) (string, error) {
 }
 
 // ListText returns a human-readable list for the tool.
-func ListText(cwd, hostDataRoot string) (string, error) {
+func ListText(cwd, hostDataRoot string, workspaceFlat bool) (string, error) {
 	if Disabled() {
 		return "scheduled tasks are disabled", nil
 	}
-	path := JobsFilePath(cwd, hostDataRoot)
+	path := JobsFilePath(cwd, hostDataRoot, workspaceFlat)
 	fileMu.Lock()
 	defer fileMu.Unlock()
 	f, err := Read(path)
@@ -454,8 +466,8 @@ func ListText(cwd, hostDataRoot string) (string, error) {
 		if j.SessionKey != "" {
 			sk = " session_key=" + j.SessionKey
 		}
-		if j.TargetChatID != "" {
-			sk += " chat_id=" + j.TargetChatID
+		if j.TargetSessionID != "" {
+			sk += " session_id=" + j.TargetSessionID
 		}
 		fmt.Fprintf(&b, "- %s id=%s target=%s%s next=%s — %s\n  schedule: %s\n", j.Name, j.ID, j.TargetSource, sk, next, j.Message, sch)
 	}
@@ -503,22 +515,22 @@ func formatScheduledTaskLine(name, id string) string {
 
 // TurnDelivery is one injected user turn produced by CollectDue.
 type TurnDelivery struct {
-	Text          string
-	CorrelationID string
-	SessionKey    string
-	TargetChatID  string
-	PeerKind      string
-	UserID        string
-	TenantID      string
+	Text            string
+	CorrelationID   string
+	SessionKey      string
+	TargetSessionID string
+	PeerKind        string
+	UserID          string
+	TenantID        string
 }
 
 // CollectDue finds jobs for targetSource due at or before `now`, updates their next_run / last_run in the file, and returns deliveries.
 // Must be called without holding fileMu; this function locks internally.
-func CollectDue(cwd, hostDataRoot, targetSource string, now time.Time) ([]TurnDelivery, error) {
+func CollectDue(cwd, hostDataRoot string, workspaceFlat bool, targetSource string, now time.Time) ([]TurnDelivery, error) {
 	if Disabled() {
 		return nil, nil
 	}
-	path := JobsFilePath(cwd, hostDataRoot)
+	path := JobsFilePath(cwd, hostDataRoot, workspaceFlat)
 	fileMu.Lock()
 	defer fileMu.Unlock()
 	f, err := Read(path)
@@ -550,13 +562,13 @@ func CollectDue(cwd, hostDataRoot, targetSource string, now time.Time) ([]TurnDe
 		text := FormatScheduledUserText(j.Name, j.ID, firedAt, j.Message)
 		corr := fmt.Sprintf("schedule-%s-%d", j.ID, firedAt.UnixNano())
 		deliveries = append(deliveries, TurnDelivery{
-			Text:          text,
-			CorrelationID: corr,
-			SessionKey:    j.SessionKey,
-			TargetChatID:  j.TargetChatID,
-			PeerKind:      j.PeerKind,
-			UserID:        j.UserID,
-			TenantID:      j.TenantID,
+			Text:            text,
+			CorrelationID:   corr,
+			SessionKey:      j.SessionKey,
+			TargetSessionID: j.TargetSessionID,
+			PeerKind:        j.PeerKind,
+			UserID:          j.UserID,
+			TenantID:        j.TenantID,
 		})
 		changed = true
 

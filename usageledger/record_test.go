@@ -13,14 +13,14 @@ import (
 
 func TestUserInteractionKey(t *testing.T) {
 	k := UserInteractionKey(bus.InboundMessage{
-		Channel: "slack",
+		ClientID: "slack",
 		Sender:  bus.SenderInfo{CanonicalID: "U1", Platform: "T"},
 	})
 	if k != "T/U1@slack" {
 		t.Fatalf("got %q", k)
 	}
 	k2 := UserInteractionKey(bus.InboundMessage{
-		Channel: "cli",
+		ClientID: "cli",
 		Peer:    bus.Peer{ID: "th"},
 	})
 	if k2 != "session:th@cli" {
@@ -42,7 +42,7 @@ func TestMaybeRecord_writesFiles(t *testing.T) {
 		TotalTokens:      150,
 		UsageJSON:        `{"prompt_tokens":100,"completion_tokens":50,"total_tokens":150}`,
 		Inbound: bus.InboundMessage{
-			Channel: "cli",
+			ClientID: "cli",
 			Sender:  bus.SenderInfo{CanonicalID: "alice"},
 		},
 	})
@@ -87,7 +87,7 @@ func TestMaybeRecord_costFromUsageJSON(t *testing.T) {
 		CompletionTokens: 5,
 		TotalTokens:      15,
 		UsageJSON:        `{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15,"cost_usd":0.001}`,
-		Inbound:          bus.InboundMessage{Channel: "cli"},
+		Inbound:          bus.InboundMessage{ClientID: "cli"},
 	})
 	raw, err := os.ReadFile(filepath.Join(cwd, dotDir, "usage", "interactions.jsonl"))
 	if err != nil {
@@ -109,7 +109,7 @@ func TestMaybeRecord_estimateCostEnv(t *testing.T) {
 		CompletionTokens: 0,
 		TotalTokens:      1_000_000,
 		UsageJSON:        `{"prompt_tokens":1000000,"completion_tokens":0,"total_tokens":1000000}`,
-		Inbound:          bus.InboundMessage{Channel: "cli"},
+		Inbound:          bus.InboundMessage{ClientID: "cli"},
 	})
 	raw, err := os.ReadFile(filepath.Join(cwd, dotDir, "usage", "interactions.jsonl"))
 	if err != nil {
@@ -124,7 +124,7 @@ func TestMaybeRecord_skipsWhenDisabled(t *testing.T) {
 	t.Cleanup(func() { rtopts.Set(nil) })
 	rtopts.Set(&rtopts.Snapshot{DisableUsageLedger: true})
 	cwd := t.TempDir()
-	MaybeRecord(RecordParams{CWD: cwd, Model: "gpt-4o", PromptTokens: 1, CompletionTokens: 1, Inbound: bus.InboundMessage{Channel: "x"}})
+	MaybeRecord(RecordParams{CWD: cwd, Model: "gpt-4o", PromptTokens: 1, CompletionTokens: 1, Inbound: bus.InboundMessage{ClientID: "x"}})
 	if _, err := os.Stat(filepath.Join(cwd, dotDir, "usage")); err == nil {
 		t.Fatal("expected no usage dir when disabled")
 	}

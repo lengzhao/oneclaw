@@ -100,7 +100,7 @@ eng.Notify.Register(myJSONL, notify.FuncSink(func(ctx context.Context, ev notify
 
 用户数据在 session 层已就绪（附件处理、`prepareInboundFromBus` 成功之后）。
 
-**`data` 建议字段**：`channel`、`chat_id`（若有）、`message_id`、`content_preview`（截断）、`attachment_count`、`has_media`。
+**`data` 建议字段**：`client_id`、`session_id`（若有）、`message_id`、`content_preview`（截断）、`attachment_count`、`has_media`。
 
 ### 3.2 `agent_turn_start`
 

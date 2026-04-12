@@ -18,15 +18,49 @@ type sendMessageAttachmentIn struct {
 	Text string `json:"text"`
 }
 
+// sendMessageToolInput aligns with clawbridge bus addressing (see bus.InboundMessage / Recipient).
+// Legacy JSON keys remain accepted: source, session_key, user_id, correlation_id.
 type sendMessageToolInput struct {
-	Text          string                    `json:"text"`
-	Source        string                    `json:"source"`
-	SessionKey    string                    `json:"session_key"`
-	UserID        string                    `json:"user_id"`
-	TenantID      string                    `json:"tenant_id"`
-	CorrelationID string                    `json:"correlation_id"`
-	RawRef        json.RawMessage           `json:"raw_ref"`
-	Attachments   []sendMessageAttachmentIn `json:"attachments"`
+	Text        string                    `json:"text"`
+	ClientID    string                    `json:"client_id"`
+	SessionID   string                    `json:"session_id"`
+	PeerKind    string                    `json:"peer_kind"`
+	PeerID      string                    `json:"peer_id"`
+	ToUserID    string                    `json:"to_user_id"`
+	TenantID    string                    `json:"tenant_id"`
+	ReplyToID   string                    `json:"reply_to_id"`
+	LegacySrc   string                    `json:"source"`
+	LegacySess  string                    `json:"session_key"`
+	LegacyUser  string                    `json:"user_id"`
+	LegacyReply string                    `json:"correlation_id"`
+	Attachments []sendMessageAttachmentIn `json:"attachments"`
+}
+
+func (in *sendMessageToolInput) mergeLegacy() {
+	if strings.TrimSpace(in.ClientID) == "" {
+		in.ClientID = in.LegacySrc
+	}
+	if strings.TrimSpace(in.SessionID) == "" {
+		in.SessionID = in.LegacySess
+	}
+	if strings.TrimSpace(in.ToUserID) == "" {
+		in.ToUserID = in.LegacyUser
+	}
+	if strings.TrimSpace(in.ReplyToID) == "" {
+		in.ReplyToID = in.LegacyReply
+	}
+}
+
+func (in *sendMessageToolInput) routingArgs() session.SendMessageRoutingArgs {
+	in.mergeLegacy()
+	return session.SendMessageRoutingArgs{
+		ClientID:  strings.TrimSpace(in.ClientID),
+		SessionID: strings.TrimSpace(in.SessionID),
+		PeerKind:  strings.TrimSpace(in.PeerKind),
+		PeerID:    strings.TrimSpace(in.PeerID),
+		ToUserID:  strings.TrimSpace(in.ToUserID),
+		TenantID:  strings.TrimSpace(in.TenantID),
+	}
 }
 
 // SendMessageTool pushes text and/or media via clawbridge without ending the model turn (proactive notify).
@@ -36,9 +70,12 @@ func (SendMessageTool) Name() string          { return "send_message" }
 func (SendMessageTool) ConcurrencySafe() bool { return false }
 
 func (SendMessageTool) Description() string {
-	return "Proactively notify the user or another configured channel/thread: send text and optional attachments (project-relative media paths under .oneclaw/media/inbound/…, or small inline text bodies). " +
-		"Use when the user should get an immediate ping (e.g. long doc finished, timer reminder) or when delivering files outside the normal assistant reply. " +
-		"Defaults: source/session_key/user_id/tenant_id come from the current turn when omitted."
+	return "Proactive outbound via clawbridge: deliver text and/or attachments to a client + session (bus OutboundMessage). " +
+		"Defaults match the current turn. " +
+		"IMPORTANT: session_id must be the driver routing key (same as inbound <inbound-context> session_key, e.g. webchat wc-…). " +
+		"Do NOT use workspace_session_id from inbound context nor the hex id from /status “工作区会话 ID”—those are transcript/CWD hashes, not clawbridge subscribers. " +
+		"To reach another tab/thread set session_id to that tab's session_key; another IM client set client_id. " +
+		"Legacy keys still work: source, session_key, user_id, correlation_id."
 }
 
 func (SendMessageTool) Parameters() openai.FunctionParameters {
@@ -56,29 +93,33 @@ func (SendMessageTool) Parameters() openai.FunctionParameters {
 			"type":        "string",
 			"description": "Message body (required unless attachments only)",
 		},
-		"source": map[string]any{
+		"client_id": map[string]any{
 			"type":        "string",
-			"description": "Channel instance id (config channels[].id); default: current turn's client id",
+			"description": "clawbridge client id (config clients[].id); default: current turn ClientID",
 		},
-		"session_key": map[string]any{
+		"session_id": map[string]any{
 			"type":        "string",
-			"description": "Optional: target thread/session (Peer.ID)",
+			"description": "Clawbridge OutboundMessage.To.SessionID: same value as inbound session_key (e.g. wc-… for webchat). Not the workspace_session_id / /status 工作区 hex id.",
 		},
-		"user_id": map[string]any{
+		"peer_kind": map[string]any{
 			"type":        "string",
-			"description": "Optional: sender/recipient user id (Sender)",
+			"description": "Optional: bus.Peer.Kind / Recipient.Kind (e.g. direct, channel)",
+		},
+		"peer_id": map[string]any{
+			"type":        "string",
+			"description": "Optional: bus.Peer.ID when the platform threads by peer id (distinct from session_id)",
+		},
+		"to_user_id": map[string]any{
+			"type":        "string",
+			"description": "Optional: bus.Recipient.UserID for DM-style delivery when the driver uses it",
 		},
 		"tenant_id": map[string]any{
 			"type":        "string",
-			"description": "Optional: tenant hint (Sender.Platform)",
+			"description": "Optional: Sender.Platform workspace hint (rare)",
 		},
-		"correlation_id": map[string]any{
+		"reply_to_id": map[string]any{
 			"type":        "string",
-			"description": "Optional: MessageID / correlation for logging",
-		},
-		"raw_ref": map[string]any{
-			"type":        "object",
-			"description": "Deprecated: ignored in clawbridge host",
+			"description": "Optional: OutboundMessage.reply_to_id (platform message to thread under)",
 		},
 		"attachments": map[string]any{
 			"type":        "array",
@@ -89,22 +130,7 @@ func (SendMessageTool) Parameters() openai.FunctionParameters {
 }
 
 func routingTargetOverridesTurn(in sendMessageToolInput, tctx *toolctx.Context) bool {
-	tin := tctx.TurnInbound
-	if strings.TrimSpace(in.Source) != "" && strings.TrimSpace(in.Source) != strings.TrimSpace(tin.Channel) {
-		return true
-	}
-	if strings.TrimSpace(in.SessionKey) != "" && strings.TrimSpace(in.SessionKey) != strings.TrimSpace(tin.Peer.ID) {
-		return true
-	}
-	uid := session.InboundUserID(tin)
-	if strings.TrimSpace(in.UserID) != "" && strings.TrimSpace(in.UserID) != uid {
-		return true
-	}
-	th := session.InboundTenantHint(tin)
-	if strings.TrimSpace(in.TenantID) != "" && strings.TrimSpace(in.TenantID) != th {
-		return true
-	}
-	return false
+	return session.SendMessageTargetOverridesTurn(tctx.TurnInbound, in.routingArgs())
 }
 
 func (SendMessageTool) Execute(ctx context.Context, input json.RawMessage, tctx *toolctx.Context) (string, error) {
@@ -115,31 +141,40 @@ func (SendMessageTool) Execute(ctx context.Context, input json.RawMessage, tctx 
 	if err := json.Unmarshal(input, &in); err != nil {
 		return "", err
 	}
-	src := strings.TrimSpace(in.Source)
+	in.mergeLegacy()
+	src := strings.TrimSpace(in.ClientID)
 	if src == "" {
-		src = strings.TrimSpace(tctx.TurnInbound.Channel)
+		src = strings.TrimSpace(tctx.TurnInbound.ClientID)
 	}
 	if src == "" {
-		return "", fmt.Errorf("send_message: need source (or a turn with channel context)")
+		return "", fmt.Errorf("send_message: need client_id (or a turn with ClientID context)")
 	}
 
 	out := tctx.TurnInbound
-	out.Channel = src
+	out.ClientID = src
 	out.Content = strings.TrimSpace(in.Text)
 	out.MediaPaths = nil
 
-	if sk := strings.TrimSpace(in.SessionKey); sk != "" {
-		out.Peer.ID = sk
+	if sid := strings.TrimSpace(in.SessionID); sid != "" {
+		out.SessionID = sid
 	}
-	if u := strings.TrimSpace(in.UserID); u != "" {
-		out.Sender.PlatformID = u
-		out.Sender.CanonicalID = u
+	if pk := strings.TrimSpace(in.PeerKind); pk != "" {
+		out.Peer.Kind = pk
+	}
+	if pid := strings.TrimSpace(in.PeerID); pid != "" {
+		out.Peer.ID = pid
 	}
 	if ten := strings.TrimSpace(in.TenantID); ten != "" {
 		out.Sender.Platform = ten
 	}
-	if corr := strings.TrimSpace(in.CorrelationID); corr != "" {
-		out.MessageID = corr
+	if u := strings.TrimSpace(in.ToUserID); u != "" {
+		if out.Metadata == nil {
+			out.Metadata = make(map[string]string)
+		}
+		out.Metadata[session.MetadataKeyOutboundRecipientUserID] = u
+	}
+	if rid := strings.TrimSpace(in.ReplyToID); rid != "" {
+		out.MessageID = rid
 	} else if !routingTargetOverridesTurn(in, tctx) {
 		out.MessageID = strings.TrimSpace(tctx.TurnInbound.MessageID)
 	}

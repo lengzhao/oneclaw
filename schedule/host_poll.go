@@ -4,14 +4,21 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/lengzhao/clawbridge/bus"
+	"github.com/lengzhao/oneclaw/memory"
 )
 
 // StartHostPollerIfEnabled runs the due-job poller and submits synthetic inbound messages (same role as legacy channel.schedule_poll).
-// userDataRoot is config.UserDataRoot() (e.g. ~/.oneclaw); scheduled_jobs.json lives directly under that directory.
-func StartHostPollerIfEnabled(ctx context.Context, userDataRoot, clientID string, submit func(context.Context, bus.InboundMessage) error) error {
+// userDataRoot is config.UserDataRoot() (e.g. ~/.oneclaw). When sessionIsolateWorkspace is false, jobs are read from
+// <userDataRoot>/scheduled_jobs.json. When true, each session workspace <userDataRoot>/sessions/<id>/.oneclaw/scheduled_jobs.json
+// is polled (matches cron tool persistence under sessions.isolate_workspace).
+func StartHostPollerIfEnabled(ctx context.Context, userDataRoot string, sessionIsolateWorkspace bool, clientID string, submit func(context.Context, bus.InboundMessage) error) error {
 	if Disabled() {
 		return nil
 	}
@@ -21,16 +28,50 @@ func StartHostPollerIfEnabled(ctx context.Context, userDataRoot, clientID string
 	if submit == nil {
 		return fmt.Errorf("schedule: nil submit")
 	}
-	go runHostSchedulePoller(ctx, userDataRoot, clientID, submit)
+	go runHostSchedulePoller(ctx, userDataRoot, sessionIsolateWorkspace, clientID, submit)
 	return nil
 }
 
-func deliverHostScheduledTurns(ctx context.Context, userDataRoot, source string, submit func(context.Context, bus.InboundMessage) error) {
-	deliveries, err := CollectDue("", userDataRoot, source, time.Now())
-	if err != nil {
-		slog.Warn("schedule.collect_due", "err", err)
+func deliverHostScheduledTurns(ctx context.Context, userDataRoot string, sessionIsolate bool, source string, submit func(context.Context, bus.InboundMessage) error) {
+	if !sessionIsolate {
+		deliveries, err := CollectDue(userDataRoot, userDataRoot, true, source, time.Now())
+		if err != nil {
+			slog.Warn("schedule.collect_due", "err", err)
+			return
+		}
+		submitScheduleDeliveries(ctx, deliveries, source, submit)
 		return
 	}
+	dir := filepath.Join(userDataRoot, "sessions")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			slog.Warn("schedule.collect_due.isolated", "dir", dir, "err", err)
+		}
+		return
+	}
+	names := make([]string, 0, len(entries))
+	for _, e := range entries {
+		if e.IsDir() && !strings.HasPrefix(e.Name(), ".") {
+			names = append(names, e.Name())
+		}
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		sessionCWD := filepath.Join(userDataRoot, "sessions", name, memory.DotDir)
+		if st, err := os.Stat(sessionCWD); err != nil || !st.IsDir() {
+			continue
+		}
+		deliveries, err := CollectDue(sessionCWD, "", true, source, time.Now())
+		if err != nil {
+			slog.Warn("schedule.collect_due", "session_workspace", sessionCWD, "err", err)
+			continue
+		}
+		submitScheduleDeliveries(ctx, deliveries, source, submit)
+	}
+}
+
+func submitScheduleDeliveries(ctx context.Context, deliveries []TurnDelivery, source string, submit func(context.Context, bus.InboundMessage) error) {
 	for _, d := range deliveries {
 		turnCtx := context.Background()
 		msg := syntheticInboundFromDelivery(source, d)
@@ -51,7 +92,38 @@ func deliverHostScheduledTurns(ctx context.Context, userDataRoot, source string,
 	}
 }
 
-func runHostSchedulePoller(ctx context.Context, userDataRoot, source string, submit func(context.Context, bus.InboundMessage) error) {
+func nextWakeHost(userDataRoot string, sessionIsolate bool, targetSource string, now time.Time) (d time.Duration, ok bool) {
+	if !sessionIsolate {
+		return NextWakeDuration(userDataRoot, userDataRoot, true, targetSource, now)
+	}
+	dir := filepath.Join(userDataRoot, "sessions")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return 0, false
+	}
+	var minD time.Duration
+	found := false
+	for _, e := range entries {
+		if !e.IsDir() || strings.HasPrefix(e.Name(), ".") {
+			continue
+		}
+		sessionCWD := filepath.Join(userDataRoot, "sessions", e.Name(), memory.DotDir)
+		if st, err := os.Stat(sessionCWD); err != nil || !st.IsDir() {
+			continue
+		}
+		di, oi := NextWakeDuration(sessionCWD, "", true, targetSource, now)
+		if !oi {
+			continue
+		}
+		if !found || di < minD {
+			minD = di
+			found = true
+		}
+	}
+	return minD, found
+}
+
+func runHostSchedulePoller(ctx context.Context, userDataRoot string, sessionIsolate bool, source string, submit func(context.Context, bus.InboundMessage) error) {
 	wakeCh, wakeCancel := SubscribeWake()
 	defer wakeCancel()
 	minSleep := MinTimerSleep()
@@ -62,9 +134,9 @@ func runHostSchedulePoller(ctx context.Context, userDataRoot, source string, sub
 			return
 		}
 		now := time.Now()
-		d, ok := NextWakeDuration("", userDataRoot, source, now)
+		d, ok := nextWakeHost(userDataRoot, sessionIsolate, source, now)
 		if ok && d <= 0 {
-			deliverHostScheduledTurns(ctx, userDataRoot, source, submit)
+			deliverHostScheduledTurns(ctx, userDataRoot, sessionIsolate, source, submit)
 			continue
 		}
 
@@ -96,6 +168,6 @@ func runHostSchedulePoller(ctx context.Context, userDataRoot, source string, sub
 		case <-t.C:
 		}
 
-		deliverHostScheduledTurns(ctx, userDataRoot, source, submit)
+		deliverHostScheduledTurns(ctx, userDataRoot, sessionIsolate, source, submit)
 	}
 }

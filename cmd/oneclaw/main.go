@@ -31,7 +31,7 @@ import (
 func main() {
 	configPath := flag.String("config", "", "path to extra YAML layer (merged after ~/.oneclaw/config.yaml; relative paths are under ~/.oneclaw/)")
 	maintainOnce := flag.Bool("maintain-once", false, "run one scheduled memory distill pass and exit (no channels)")
-	initFlag := flag.Bool("init", false, "create ~/.oneclaw from template; merge config keys if config.yaml already exists; then exit")
+	initFlag := flag.Bool("init", false, "create ~/.oneclaw from template; merge config keys if config.yaml already exists; if stdin is a TTY, prompt for openai, model, maintain models, sessions.isolate_workspace, clawbridge.clients preset; then exit")
 	exportSession := flag.String("export-session", "", "copy host data from ~/.oneclaw into this directory, then exit (no API key required)")
 	probeMaintainModel := flag.Bool("probe-maintain-model", false, "send a minimal chat request for each configured maintenance model, then exit (needs API key)")
 	logLevel := flag.String("log-level", "", "debug|info|warn|error (overrides config log.level when non-empty)")
@@ -78,6 +78,11 @@ func main() {
 	if *initFlag {
 		logClose = logx.Init(*logLevel, *logFormat, config.ResolveLogPath(userDataRoot, *logFile))
 		if err := config.InitWorkspace(home, home); err != nil {
+			slog.Error("init", "err", err)
+			os.Exit(1)
+		}
+		cfgPath := filepath.Join(userDataRoot, "config.yaml")
+		if err := config.PromptInitIfTerminal(cfgPath, os.Stdin, os.Stdout); err != nil {
 			slog.Error("init", "err", err)
 			os.Exit(1)
 		}
@@ -209,6 +214,14 @@ func main() {
 	}
 	defer workerPool.Close()
 
+	submitInbound := func(ctx context.Context, m bus.InboundMessage) error {
+		h := session.SessionHandle{Source: m.ClientID, SessionKey: session.InboundSessionKey(m)}
+		if session.IsStopSlashCommand(m.Content) {
+			workerPool.CancelInflightTurn(h)
+		}
+		return workerPool.SubmitUser(ctx, m)
+	}
+
 	maintainloop.Start(rootCtx, maintainloop.Params{
 		Interval:          cfg.EmbeddedScheduledMaintainInterval(),
 		Layout:            memory.IMHostMaintainLayout(cfg.UserDataRoot(), home),
@@ -253,7 +266,7 @@ func main() {
 		if !c.Enabled {
 			continue
 		}
-		if err := schedule.StartHostPollerIfEnabled(rootCtx, cfg.UserDataRoot(), c.ID, workerPool.SubmitUser); err != nil {
+		if err := schedule.StartHostPollerIfEnabled(rootCtx, cfg.UserDataRoot(), cfg.SessionIsolateWorkspace(), c.ID, submitInbound); err != nil {
 			slog.Error("schedule.poller", "client_id", c.ID, "err", err)
 			os.Exit(1)
 		}
@@ -274,7 +287,7 @@ func main() {
 			inboundInflight.Add(1)
 			go func() {
 				defer inboundInflight.Done()
-				if err := workerPool.SubmitUser(rootCtx, m); err != nil {
+				if err := submitInbound(rootCtx, m); err != nil {
 					slog.Warn("session.submit_user", "err", err)
 				}
 			}()

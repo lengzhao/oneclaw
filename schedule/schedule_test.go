@@ -63,7 +63,7 @@ func TestAddEveryAndCollectDue(t *testing.T) {
 	if err := write(path, f); err != nil {
 		t.Fatal(err)
 	}
-	d, err := CollectDue(cwd, "", "cli", time.Now().UTC())
+	d, err := CollectDue(cwd, "", false, "cli", time.Now().UTC())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +112,7 @@ func TestCollectDueAtRemovesJob(t *testing.T) {
 	if err := write(path, f); err != nil {
 		t.Fatal(err)
 	}
-	d, err := CollectDue(cwd, "", "cli", time.Now().UTC())
+	d, err := CollectDue(cwd, "", false, "cli", time.Now().UTC())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,7 +142,7 @@ func TestCompactDisabledJobsOnList(t *testing.T) {
 	if err := write(path, f); err != nil {
 		t.Fatal(err)
 	}
-	_, err := ListText(cwd, "")
+	_, err := ListText(cwd, "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -158,7 +158,7 @@ func TestCompactDisabledJobsOnList(t *testing.T) {
 func TestAddAtFuture(t *testing.T) {
 	cwd := t.TempDir()
 	at := time.Now().UTC().Add(24 * time.Hour).Format(time.RFC3339)
-	msg, err := Add(cwd, "", AddInput{
+	msg, err := Add(cwd, "", false, AddInput{
 		Message: "x",
 		Schedule: ScheduleSpec{
 			AtRFC3339: at,
@@ -210,7 +210,7 @@ func TestNextWakeDuration(t *testing.T) {
 	if err := write(path, f); err != nil {
 		t.Fatal(err)
 	}
-	d, ok := NextWakeDuration(cwd, "", "cli", time.Now().UTC())
+	d, ok := NextWakeDuration(cwd, "", false, "cli", time.Now().UTC())
 	if !ok || d != 0 {
 		t.Fatalf("want overdue (d=0), got d=%v ok=%v", d, ok)
 	}
@@ -219,7 +219,7 @@ func TestNextWakeDuration(t *testing.T) {
 func TestAddAtPastRejected(t *testing.T) {
 	cwd := t.TempDir()
 	at := time.Now().UTC().Add(-time.Hour).Format(time.RFC3339)
-	_, err := Add(cwd, "", AddInput{
+	_, err := Add(cwd, "", false, AddInput{
 		Message: "x",
 		Schedule: ScheduleSpec{
 			AtRFC3339: at,
@@ -227,5 +227,26 @@ func TestAddAtPastRejected(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected error")
+	}
+}
+
+func TestJobsFilePathSharedVsIsolated(t *testing.T) {
+	home := t.TempDir()
+	ur := filepath.Join(home, ".oneclaw")
+	sessionDot := filepath.Join(ur, "sessions", "abc123", memory.DotDir)
+	if err := os.MkdirAll(sessionDot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	shared := JobsFilePath(ur, ur, true)
+	if want := filepath.Join(ur, "scheduled_jobs.json"); shared != want {
+		t.Fatalf("shared path: got %q want %q", shared, want)
+	}
+	isol := JobsFilePath(sessionDot, ur, true)
+	if want := filepath.Join(sessionDot, "scheduled_jobs.json"); isol != want {
+		t.Fatalf("isolated path: got %q want %q", isol, want)
+	}
+	legacyEmptyCWD := JobsFilePath("", ur, true)
+	if legacyEmptyCWD != filepath.Join(ur, "scheduled_jobs.json") {
+		t.Fatalf("legacy poller path: %q", legacyEmptyCWD)
 	}
 }

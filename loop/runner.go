@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/oneclaw/budget"
 	"github.com/lengzhao/oneclaw/model"
-	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/oneclaw/toolctx"
 	"github.com/lengzhao/oneclaw/tools"
 	"github.com/lengzhao/oneclaw/usageledger"
@@ -20,13 +20,13 @@ import (
 
 // Config drives one user turn (may include multiple model round-trips for tools).
 type Config struct {
-	Client      *openai.Client
-	Model       string
-	System      string
-	MaxTokens   int64
+	Client    *openai.Client
+	Model     string
+	System    string
+	MaxTokens int64
 	// MaxSteps is the number of model calls per user turn. The last call is made without tools
 	// so the model can only answer in text; earlier calls include tools when MaxSteps > 1.
-	MaxSteps int
+	MaxSteps    int
 	Messages    *[]openai.ChatCompletionMessageParamUnion
 	Registry    *tools.Registry
 	ToolContext *toolctx.Context
@@ -232,11 +232,9 @@ func RunTurn(ctx context.Context, cfg Config, in bus.InboundMessage) (err error)
 			WorkspaceFlat:    wf,
 		})
 
-		if choice.FinishReason != "tool_calls" {
-			recordSlimTranscript()
-			return nil
-		}
-
+		// Decide tool rounds from the message payload, not only finish_reason: some gateways
+		// leave finish_reason empty when returning tool_calls, which would otherwise skip tools
+		// and end the turn with no assistant text (and no webchat outbound).
 		calls := collectToolCalls(choice.Message)
 		if len(calls) == 0 {
 			recordSlimTranscript()

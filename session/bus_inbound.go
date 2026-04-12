@@ -6,8 +6,11 @@ import (
 	"github.com/lengzhao/clawbridge/bus"
 )
 
-// InboundSessionKey returns the logical thread/topic key from Peer.ID.
+// InboundSessionKey returns the driver session thread key: bus SessionID when set, else Peer.ID.
 func InboundSessionKey(in bus.InboundMessage) string {
+	if s := strings.TrimSpace(in.SessionID); s != "" {
+		return s
+	}
 	return strings.TrimSpace(in.Peer.ID)
 }
 
@@ -29,12 +32,12 @@ func assistantTextOutbound(turn *bus.InboundMessage, text string) *bus.OutboundM
 	if turn == nil || strings.TrimSpace(text) == "" {
 		return nil
 	}
-	if strings.TrimSpace(turn.Channel) == "" || strings.TrimSpace(turn.ChatID) == "" {
+	if strings.TrimSpace(turn.ClientID) == "" || strings.TrimSpace(turn.SessionID) == "" {
 		return nil
 	}
 	return &bus.OutboundMessage{
-		ClientID:  turn.Channel,
-		To:        bus.Recipient{ChatID: turn.ChatID, Kind: turn.Peer.Kind},
+		ClientID:  turn.ClientID,
+		To:        bus.Recipient{SessionID: turn.SessionID, Kind: turn.Peer.Kind},
 		Text:      text,
 		ReplyToID: turn.MessageID,
 	}
@@ -50,12 +53,12 @@ func assistantOutboundWithMedia(turn *bus.InboundMessage, text string, parts []b
 		return nil
 	}
 	if msg == nil {
-		if strings.TrimSpace(turn.Channel) == "" || strings.TrimSpace(turn.ChatID) == "" {
+		if strings.TrimSpace(turn.ClientID) == "" || strings.TrimSpace(turn.SessionID) == "" {
 			return nil
 		}
 		msg = &bus.OutboundMessage{
-			ClientID:  turn.Channel,
-			To:        bus.Recipient{ChatID: turn.ChatID, Kind: turn.Peer.Kind},
+			ClientID:  turn.ClientID,
+			To:        bus.Recipient{SessionID: turn.SessionID, Kind: turn.Peer.Kind},
 			ReplyToID: turn.MessageID,
 		}
 	}
@@ -72,12 +75,12 @@ func InboundUpdateStatusRequest(in *bus.InboundMessage, state string) *bus.Updat
 	if strings.TrimSpace(in.MessageID) == "" {
 		return nil
 	}
-	if strings.TrimSpace(in.Channel) == "" || strings.TrimSpace(in.ChatID) == "" {
+	if strings.TrimSpace(in.ClientID) == "" || strings.TrimSpace(in.SessionID) == "" {
 		return nil
 	}
 	return &bus.UpdateStatusRequest{
-		ClientID:  strings.TrimSpace(in.Channel),
-		To:        bus.Recipient{ChatID: strings.TrimSpace(in.ChatID), Kind: in.Peer.Kind},
+		ClientID:  strings.TrimSpace(in.ClientID),
+		To:        bus.Recipient{SessionID: strings.TrimSpace(in.SessionID), Kind: in.Peer.Kind},
 		MessageID: strings.TrimSpace(in.MessageID),
 		State:     state,
 	}

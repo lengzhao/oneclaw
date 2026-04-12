@@ -57,8 +57,8 @@ type Engine struct {
 	WorkspaceFlat bool
 	// UserDataRoot is the IM host directory (~/.oneclaw): shared config parent; cron/schedule jobs file; empty in tests or non-IM engines.
 	UserDataRoot string
-	CanUseTool tools.CanUseTool
-	SessionID string
+	CanUseTool   tools.CanUseTool
+	SessionID    string
 	// RootAgentID is the stable id of this Engine (main thread only). It is copied into toolctx.Context.AgentID each turn; subagents use their own ctx.AgentID. Empty means DefaultRootAgentID in EffectiveRootAgentID.
 	RootAgentID string
 	// Notify is a fan-out list (notify.Multi) of lifecycle sinks; default empty no-op.
@@ -91,16 +91,16 @@ type Engine struct {
 // NewEngine builds an engine with sensible defaults.
 func NewEngine(cwd string, reg *tools.Registry) *Engine {
 	e := &Engine{
-		Client:    openai.NewClient(),
-		Model:     string(openai.ChatModelGPT4o),
-		MaxTokens: 32768,
-		MaxSteps:  32,
-		System:    "",
-		Registry:  reg,
-		CWD:       cwd,
-		SessionID: newSessionID(),
+		Client:      openai.NewClient(),
+		Model:       string(openai.ChatModelGPT4o),
+		MaxTokens:   32768,
+		MaxSteps:    32,
+		System:      "",
+		Registry:    reg,
+		CWD:         cwd,
+		SessionID:   newSessionID(),
 		RootAgentID: DefaultRootAgentID,
-		Notify:    notify.Multi{},
+		Notify:      notify.Multi{},
 	}
 	return e
 }
@@ -166,7 +166,7 @@ func (e *Engine) SubmitUser(ctx context.Context, in bus.InboundMessage) (err err
 		"prepare_ms", time.Since(turnT0).Milliseconds(),
 		"cwd", e.CWD,
 		"model", e.Model,
-		"channel", strings.TrimSpace(in.Channel),
+		"client_id", strings.TrimSpace(in.ClientID),
 	)
 	bg := prep.bg
 	memOK := prep.memOK
@@ -208,10 +208,10 @@ func (e *Engine) SubmitUser(ctx context.Context, in bus.InboundMessage) (err err
 		InboundMeta:             InboundMetaForModel(in),
 		InboundAttachmentChunks: attChunks,
 		UserLine:                userLine,
-		Budget:                bg,
-		ChatTransport:         e.ChatTransport,
-		ToolTrace:             traceSink,
-		OnToolLogged:          onToolLogged,
+		Budget:                  bg,
+		ChatTransport:           e.ChatTransport,
+		ToolTrace:               traceSink,
+		OnToolLogged:            onToolLogged,
 		SlimTranscript: func(assistantText string) {
 			e.Transcript = append(e.Transcript, openai.AssistantMessage(assistantText))
 		},
@@ -272,7 +272,7 @@ func (e *Engine) SubmitUser(ctx context.Context, in bus.InboundMessage) (err err
 		ev.Data = map[string]any{
 			"tool_count":              toolCount,
 			"final_assistant_preview": notify.Preview(loop.LastAssistantDisplay(e.Messages), notify.DefaultPreviewRunes),
-			"truncated_by_max_steps": false,
+			"truncated_by_max_steps":  false,
 			"messages":                loop.VisibleTranscriptAppendSince(e.Transcript, visibleCountBefore),
 		}
 		notify.EmitSafe(e.Notify, ctx, ev)
@@ -307,10 +307,10 @@ func (e *Engine) SubmitUser(ctx context.Context, in bus.InboundMessage) (err err
 }
 
 // SendMessage delivers text and/or attachments without running the model (proactive notify).
-// in.Channel must be the clawbridge client id; ChatID / Peer must allow delivery.
+// in.ClientID must be the clawbridge client id; SessionID / Peer must allow delivery.
 func (e *Engine) SendMessage(ctx context.Context, in bus.InboundMessage) error {
-	if strings.TrimSpace(in.Channel) == "" {
-		return fmt.Errorf("session: SendMessage requires InboundMessage.Channel")
+	if strings.TrimSpace(in.ClientID) == "" {
+		return fmt.Errorf("session: SendMessage requires InboundMessage.ClientID")
 	}
 	inCopy := in
 	atts, err := e.prepareInboundFromBus(&inCopy)
@@ -327,8 +327,19 @@ func (e *Engine) SendMessage(ctx context.Context, in bus.InboundMessage) error {
 	parts := mediaPartsFromAttachments(atts)
 	msg := assistantOutboundWithMedia(&inCopy, body, parts)
 	if msg == nil {
-		return fmt.Errorf("session: SendMessage: missing ChatID (cannot address recipient)")
+		return fmt.Errorf("session: SendMessage: missing SessionID (cannot address recipient)")
 	}
+	if inCopy.Metadata != nil {
+		if u := strings.TrimSpace(inCopy.Metadata[MetadataKeyOutboundRecipientUserID]); u != "" {
+			msg.To.UserID = u
+			delete(inCopy.Metadata, MetadataKeyOutboundRecipientUserID)
+		}
+	}
+	slog.Debug("session.send_message.publish",
+		"client_id", msg.ClientID,
+		"to_session_id", msg.To.SessionID,
+		"to_kind", msg.To.Kind,
+	)
 	return e.PublishOutbound(ctx, msg)
 }
 
@@ -367,23 +378,9 @@ func (e *Engine) submitLocalSlashTurn(ctx context.Context, in bus.InboundMessage
 		notify.EmitSafe(e.Notify, ctx, ev)
 	}
 
-	meta := InboundMetaForModel(in)
-	attChunks := InboundUserChunksForAttachments(e.CWD, atts, !e.DisableMultimodalImage, !e.DisableMultimodalAudio)
-	userLine := ModelUserLine(text, len(atts) > 0)
-	loop.AppendTurnUserMessages(&e.Messages, bundle.AgentMdBlock, bundle.RecallBlock, meta, attChunks, userLine)
-	e.Messages = append(e.Messages, openai.AssistantMessage(reply))
-	e.Messages = loop.ToUserVisibleMessages(e.Messages)
-
 	visibleCountBefore := len(loop.ToUserVisibleMessages(e.Transcript))
-	e.Transcript = append(e.Transcript, openai.UserMessage(SlimTranscriptUserLine(text, atts)))
-	e.Transcript = append(e.Transcript, openai.AssistantMessage(reply))
-	if err := e.SaveTranscript(); err != nil {
-		slog.Error("session.transcript_save_local_slash", "err", err)
-	}
-	if err := e.SaveWorkingTranscript(); err != nil {
-		slog.Error("session.working_transcript_save_local_slash", "err", err)
-	}
-	e.appendDialogHistoryIfComplete()
+	// Local slash replies are user-visible only via PublishOutbound (when configured with ClientID+SessionID).
+	// Do not append to Messages / Transcript / dialog history so they never appear in later turns or on-disk transcripts.
 	if prep.outboundText != nil {
 		if err := prep.outboundText(ctx, reply); err != nil {
 			slog.Warn("session.local_slash.outbound", "err", err)
@@ -424,7 +421,7 @@ func (e *Engine) publishOutboundSubmitUserError(ctx context.Context, in *bus.Inb
 	text := fmt.Sprintf("处理失败：%v", err)
 	msg := assistantTextOutbound(in, text)
 	if msg == nil {
-		slog.Debug("session.submit_user_error_outbound_skip", "reason", "no_channel_or_chat")
+		slog.Debug("session.submit_user_error_outbound_skip", "reason", "no_client_or_session")
 		return
 	}
 	if pubErr := e.PublishOutbound(ctx, msg); pubErr != nil {
@@ -507,8 +504,8 @@ func (e *Engine) stampNotify(ev *notify.Event, turnID, runID, corrID, agentID, p
 func inboundNotifyData(in bus.InboundMessage, text string, atts []Attachment) map[string]any {
 	full := combinedInboundPreview(text, atts)
 	return map[string]any{
-		"channel":          strings.TrimSpace(in.Channel),
-		"chat_id":          strings.TrimSpace(in.ChatID),
+		"client_id":        strings.TrimSpace(in.ClientID),
+		"session_id":       strings.TrimSpace(in.SessionID),
 		"message_id":       strings.TrimSpace(in.MessageID),
 		"content_preview":  notify.Preview(full, notify.DefaultPreviewRunes),
 		"user_content":     full,

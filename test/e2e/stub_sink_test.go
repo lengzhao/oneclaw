@@ -30,7 +30,7 @@ func TestE2E_70_PublishOutboundAssistantText(t *testing.T) {
 		return nil
 	}
 
-	if err := e.SubmitUser(context.Background(), bus.InboundMessage{Channel: "cli", ChatID: "C1", Content: "hello sink"}); err != nil {
+	if err := e.SubmitUser(context.Background(), bus.InboundMessage{ClientID: "cli", SessionID: "C1", Content: "hello sink"}); err != nil {
 		t.Fatal(err)
 	}
 
