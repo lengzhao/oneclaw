@@ -29,6 +29,7 @@
 | [`inbound-routing-design.md`](inbound-routing-design.md) | `Inbound` 字段、`SinkRegistry`、渠道注册 |
 | [`embedded-maintain-scheduler-design.md`](embedded-maintain-scheduler-design.md) | 进程内 `maintainloop` 与 `RunScheduledMaintain` |
 | [`memory-maintain-dual-entry-design.md`](memory-maintain-dual-entry-design.md) | 回合后维护 vs 定时维护双入口 |
+| [`memory-recall-sqlite-design.md`](memory-recall-sqlite-design.md) | **Memory 片段索引与召回**：本地 SQLite **FTS-only**；语义扩展规划为外部 RAG；与 `SelectRecall` 迁移 |
 | [`code-simplification-opportunities.md`](code-simplification-opportunities.md) | 已落实项摘要 + 剩余文档化/可选演进（`DefaultRegistry`、`OutboundSender` 等） |
 | [`orchestrator-business-agents.md`](orchestrator-business-agents.md) | 主编排、`.oneclaw/agents`、`run_agent` 约定 |
 

@@ -56,6 +56,8 @@
 
 实现位置：`memory/recall.go` 中的 `tokenizeRecall`。
 
+**演进（SQLite 索引召回）**：以 **纯 Go + SQLite FTS5** 为本地索引载体的方案见 [`memory-recall-sqlite-design.md`](memory-recall-sqlite-design.md)（**FTS-only**，无进程内向量）；语义/混合检索规划为**外部 RAG** 对接；`memory.recall.backend` 等配置见 [`config.md`](config.md) 中「记忆召回索引」小节。
+
 ---
 
 ## 4. Agent 子系统（对齐 [`claude-code-main-flow-analysis.md`](claude-code-main-flow-analysis.md)）

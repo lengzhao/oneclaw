@@ -131,6 +131,13 @@ type File struct {
 		RecentPath string `yaml:"recent_path"`
 	} `yaml:"skills"`
 
+	Memory struct {
+		Recall struct {
+			Backend    string `yaml:"backend"`
+			SQLitePath string `yaml:"sqlite_path"`
+		} `yaml:"recall"`
+	} `yaml:"memory"`
+
 	// Sessions: per-chat isolation (IM threads). SQLite stores session index + recall state; transcripts stay as files under sessions/<id>/.
 	Sessions struct {
 		DisableSQLite *bool  `yaml:"disable_sqlite"`
@@ -351,6 +358,12 @@ func mergeFile(dst *File, src File) {
 	}
 	if src.Skills.RecentPath != "" {
 		dst.Skills.RecentPath = src.Skills.RecentPath
+	}
+	if src.Memory.Recall.Backend != "" {
+		dst.Memory.Recall.Backend = src.Memory.Recall.Backend
+	}
+	if src.Memory.Recall.SQLitePath != "" {
+		dst.Memory.Recall.SQLitePath = src.Memory.Recall.SQLitePath
 	}
 	if src.Clawbridge.Media.Root != "" {
 		dst.Clawbridge.Media.Root = src.Clawbridge.Media.Root

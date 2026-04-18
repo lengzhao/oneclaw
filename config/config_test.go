@@ -7,6 +7,7 @@ import (
 
 	cbconfig "github.com/lengzhao/clawbridge/config"
 	"github.com/lengzhao/oneclaw/memory"
+	"github.com/lengzhao/oneclaw/rtopts"
 )
 
 func boolPtr(b bool) *bool { return &b }
@@ -390,6 +391,28 @@ func TestSessionsSQLitePath(t *testing.T) {
 	r3 := &Resolved{merged: f, home: home}
 	if r3.SessionsSQLitePath() != filepath.Join(ur, "custom.db") {
 		t.Fatalf("relative: %q", r3.SessionsSQLitePath())
+	}
+}
+
+func TestPushRuntime_MemoryRecallBackend(t *testing.T) {
+	t.Cleanup(func() { rtopts.Set(nil) })
+	f := File{}
+	f.Memory.Recall.Backend = "sqlite"
+	r := &Resolved{merged: f}
+	r.PushRuntime()
+	if got := rtopts.Current().MemoryRecallBackend; got != "sqlite" {
+		t.Fatalf("MemoryRecallBackend = %q, want sqlite", got)
+	}
+}
+
+func TestPushRuntime_MemoryRecallSQLitePath(t *testing.T) {
+	t.Cleanup(func() { rtopts.Set(nil) })
+	f := File{}
+	f.Memory.Recall.SQLitePath = "memory/custom-recall.sqlite"
+	r := &Resolved{merged: f}
+	r.PushRuntime()
+	if got := rtopts.Current().MemoryRecallSQLitePath; got != "memory/custom-recall.sqlite" {
+		t.Fatalf("MemoryRecallSQLitePath = %q, want %q", got, "memory/custom-recall.sqlite")
 	}
 }
 

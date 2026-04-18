@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"context"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -31,33 +32,37 @@ const maxRecallTermCount = 384
 
 // SelectRecall returns markdown snippets from memory dirs relevant to userText, respecting budget and dedupe.
 func SelectRecall(layout Layout, userText string, state *RecallState, budget int) (string, *RecallState) {
-	if budget <= 0 {
-		budget = MaxSurfacedRecallBytes
+	backend := selectRecallBackend()
+	hits, st, err := backend.Recall(context.Background(), RecallRequest{
+		Layout: layout,
+		Query:  userText,
+		Budget: budget,
+		State:  state,
+	})
+	if err != nil {
+		return "", state.cloneMaps()
 	}
-	var st *RecallState
-	if state == nil {
-		st = &RecallState{SurfacedPaths: make(map[string]struct{})}
-	} else {
-		st = state.cloneMaps()
-	}
+	return formatRecallAttachment(hits, st, budget)
+}
 
+type scoredRecallHit struct {
+	path     string
+	score    int
+	body     string
+	bodyBase int // byte offset in on-disk file where `body` begins (after BOM/frontmatter)
+	full     bool // true if entire file (post-frontmatter) fit in scan limit
+}
+
+func scanRecallHits(layout Layout, userText string, st *RecallState) []RecallHit {
 	candidates := listMemoryMarkdownFiles(layout)
 	if len(candidates) == 0 {
-		return "", st
+		return nil
 	}
 	terms := tokenizeRecall(userText)
 	if len(terms) == 0 {
-		return "", st
+		return nil
 	}
-
-	type scored struct {
-		path     string
-		score    int
-		body     string
-		bodyBase int // byte offset in on-disk file where `body` begins (after BOM/frontmatter)
-		full     bool // true if entire file (post-frontmatter) fit in scan limit
-	}
-	var hits []scored
+	var scored []scoredRecallHit
 	for _, p := range candidates {
 		if _, dup := st.SurfacedPaths[p]; dup {
 			continue
@@ -79,52 +84,31 @@ func SelectRecall(layout Layout, userText string, state *RecallState, budget int
 		}
 		low := strings.ToLower(body)
 		base := strings.ToLower(filepath.Base(p))
-		s := scoreRecall(low, base, terms)
-		if s > 0 {
-			hits = append(hits, scored{path: p, score: s, body: body, bodyBase: bodyBase, full: full})
+		score := scoreRecall(low, base, terms)
+		if score > 0 {
+			scored = append(scored, scoredRecallHit{path: p, score: score, body: body, bodyBase: bodyBase, full: full})
 		}
 	}
-	// Highest score first
-	for i := 0; i < len(hits); i++ {
-		for j := i + 1; j < len(hits); j++ {
-			if hits[j].score > hits[i].score {
-				hits[i], hits[j] = hits[j], hits[i]
+	for i := 0; i < len(scored); i++ {
+		for j := i + 1; j < len(scored); j++ {
+			if scored[j].score > scored[i].score {
+				scored[i], scored[j] = scored[j], scored[i]
 			}
 		}
 	}
-
-	var sb strings.Builder
-	remaining := budget - st.SurfacedBytes
-	if remaining <= 0 {
-		return "", st
-	}
-	header := "Attachment: relevant_memories\n\n"
-	if len(header) > remaining {
-		return "", st
-	}
-	sb.WriteString(header)
-	remaining -= len(header)
-
-	for _, h := range hits {
+	hits := make([]RecallHit, 0, len(scored))
+	for _, h := range scored {
 		block := formatRecallMemoryBlock(h.path, h.body, terms, h.full, h.bodyBase)
 		if block == "" {
 			continue
 		}
-		wrapped := "Memory: " + h.path + "\n" + block + "\n\n"
-		if len(wrapped) > remaining {
-			break
-		}
-		sb.WriteString(wrapped)
-		remaining -= len(wrapped)
-		st.SurfacedPaths[h.path] = struct{}{}
-		st.SurfacedBytes += len(wrapped)
+		hits = append(hits, RecallHit{
+			Path:  h.path,
+			Text:  block,
+			Score: h.score,
+		})
 	}
-	out := sb.String()
-	if out == header {
-		return "", st
-	}
-	st.SurfacedBytes += len(header)
-	return strings.TrimRight(out, "\n"), st
+	return hits
 }
 
 type rawMatchSpan struct {

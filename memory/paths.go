@@ -46,6 +46,18 @@ func MemoryBaseDir(home string) string {
 	return filepath.Join(home, DotDir)
 }
 
+func recallSQLitePath(layout Layout) string {
+	p := strings.TrimSpace(rtopts.Current().MemoryRecallSQLitePath)
+	base := layout.MemoryBase
+	if p == "" {
+		return filepath.Join(base, "memory", "recall_index.sqlite")
+	}
+	if filepath.IsAbs(p) {
+		return filepath.Clean(p)
+	}
+	return filepath.Join(base, p)
+}
+
 // AutoMemoryDir is the per-project auto memory directory (<base>/projects/<slug>/memory).
 func AutoMemoryDir(cwd, memoryBase string) string {
 	slug := projectSlug(cwd)

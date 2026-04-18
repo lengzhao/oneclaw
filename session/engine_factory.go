@@ -107,6 +107,11 @@ func MainEngineFactory(deps MainEngineFactoryDeps) func(SessionHandle) (*Engine,
 				return nil, err
 			}
 		}
+		cbCfg, err := deps.Resolved.ClawbridgeConfigForRun()
+		if err != nil {
+			return nil, fmt.Errorf("session: MainEngineFactory: clawbridge config: %w", err)
+		}
+		eng.MediaRoot = filepath.Clean(cbCfg.Media.Root)
 		return eng, nil
 	}
 }

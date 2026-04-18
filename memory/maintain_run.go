@@ -223,6 +223,7 @@ func runDistill(ctx context.Context, layout Layout, client *openai.Client, p dis
 			"No daily logs or project topics are included. "
 		turnBlock := "Current turn snapshot (current session only):\n```\n" + postTurnSnap + "\n```\n\n"
 		taskBody := "Then **3–8** short bullet lines (one sentence each; **no** long paragraphs or redundant absolute paths) of **new** durable **episodic** information from **this turn only** (facts, cautions, tool-usage preferences, repeated tool calls and why **only** if stated or clearly implied in the snapshot). " +
+			"**Language:** use the **same language as the `user:` lines** in the snapshot above for every bullet (including \"(no durable entries)\" if needed). " +
 			"Where repetition or **user correction** implies a **repeatable playbook**, add one bullet as a **skill candidate** (not a full SKILL.md). " +
 			"Skip anything already in the rules excerpt or **already covered today** in the same-day digest (paraphrases count as duplicates). " +
 			"If the user forbade something and the assistant violated that, write a **correction** bullet instead of claiming success. " +

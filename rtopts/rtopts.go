@@ -45,6 +45,9 @@ type Snapshot struct {
 	DisableSkills bool
 	SkillsRecent  string
 
+	MemoryRecallBackend    string
+	MemoryRecallSQLitePath string
+
 	DisableTasks bool
 
 	// Scheduled / post-turn maintenance tuning (defaults in DefaultSnapshot; YAML via PushRuntime).

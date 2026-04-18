@@ -60,6 +60,22 @@ func TestMemoryBaseDir_ExpandsTildeInEnv(t *testing.T) {
 	}
 }
 
+func TestRecallSQLitePath_DefaultAndRelative(t *testing.T) {
+	t.Cleanup(func() { rtopts.Set(nil) })
+	lay := Layout{MemoryBase: "/tmp/oneclaw-home"}
+
+	if got := recallSQLitePath(lay); got != filepath.Join(lay.MemoryBase, "memory", "recall_index.sqlite") {
+		t.Fatalf("default recallSQLitePath = %q", got)
+	}
+
+	s := rtopts.DefaultSnapshot()
+	s.MemoryRecallSQLitePath = "custom/recall.sqlite"
+	rtopts.Set(&s)
+	if got := recallSQLitePath(lay); got != filepath.Join(lay.MemoryBase, "custom", "recall.sqlite") {
+		t.Fatalf("relative recallSQLitePath = %q", got)
+	}
+}
+
 func TestSessionDotLayout_ProjectAndFlat(t *testing.T) {
 	home := "/Users/x"
 	dot := filepath.Join(home, ".oneclaw", "sessions", "abc", ".oneclaw")

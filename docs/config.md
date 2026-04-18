@@ -52,6 +52,7 @@
 | 通知审计 | `features.disable_audit_sinks`、`disable_audit_llm`、`disable_audit_orchestration`、`disable_audit_visible` | 默认三路全开；`disable_audit_sinks` 关闭全部；其余按路径关闭。`cmd/oneclaw` 有 `SessionID` 时 JSONL 在 `.oneclaw/sessions/<id>/audit/...`（见 [notify-sinks-audit-design.md](notify-sinks-audit-design.md)） |
 | 入站多模态 | `features.disable_multimodal_image`、`features.disable_multimodal_audio` | 默认 **不** 禁用：图片注入 Chat Completions `image_url`（data URL），wav/mp3 注入 `input_audio`；任一为 `true` 时对应类型仅保留 read_file 路径提示，不送多模态载荷 |
 | 维护 | `maintain.*` | 定时/远场/回合后参数；`maintain.interval` 非空时主进程内 `maintainloop` 周期唤醒 |
+| 记忆召回索引 | `memory.recall.*` | 可选：SQLite **FTS-only** 索引召回；语义检索走后续外部 RAG；见 [memory-recall-sqlite-design.md](memory-recall-sqlite-design.md) |
 | 日志 | `log.level`、`log.format`、`log.file` | `log.file`：可选，追加落盘（与 stderr 双写）；相对路径相对 `UserDataRoot()`；可被 `-log-file` 覆盖 |
 | 侧链 | `sidechain_merge` | 留空关闭；`1` / `true` / `tool` / `append` / `user` 等见历史设计文档 |
 | 用量 | `usage.*` | 见下节 |
@@ -121,6 +122,18 @@
 `features.disable_auto_maintenance`：关闭回合后维护。`features.disable_scheduled_maintenance`：关闭后台定时循环（见上）。
 
 详见 [memory-maintain-dual-entry-design.md](memory-maintain-dual-entry-design.md)、[embedded-maintain-scheduler-design.md](embedded-maintain-scheduler-design.md)。
+
+### 记忆召回索引（`memory.recall.*`，可选）
+
+设计规格见 [memory-recall-sqlite-design.md](memory-recall-sqlite-design.md)。本地仅 **SQLite FTS**；**不**配置进程内向量扩展或 Embedding。当前已接入 **`memory.recall.backend`** 选择器，默认 / 回退均为 **`scan`**；`sqlite` 后端已具备基础建库、单文件同步与基于索引的召回骨架，但 chunk 细化、freshness 策略与完整排序仍待完善。
+
+| YAML | 说明 |
+|------|------|
+| `memory.recall.backend` | `scan`：当前默认与回退路径；`sqlite`：走 SQLite recall backend（未命中或未同步时仍可回退 `scan`）。 |
+| `memory.recall.sqlite_path` | SQLite recall 索引库路径；相对路径相对 `UserDataRoot()`。 |
+| `memory.recall.fts.top_k` | FTS 候选条数上限（整数）。 |
+
+召回注入总字节仍受 `budget.recall_max_bytes` 约束；会话级已展示路径与 `sessdb` 中 `recall_json` 行为见 [memory-recall-sqlite-design.md](memory-recall-sqlite-design.md) §9。语义/混合检索若需支持，规划为**对接外部 RAG**（见该文 §8），不通过本地 `memory.recall.embedding.*` 扩展。
 
 ## 示例
 

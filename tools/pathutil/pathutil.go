@@ -32,3 +32,23 @@ func ResolveUnderRoot(root, userPath string) (string, error) {
 	}
 	return targetAbs, nil
 }
+
+// IsUnderRoot reports whether path resolves to a location inside root (inclusive of root itself).
+func IsUnderRoot(root, path string) bool {
+	rootAbs, err := filepath.Abs(filepath.Clean(root))
+	if err != nil {
+		return false
+	}
+	pathAbs, err := filepath.Abs(filepath.Clean(path))
+	if err != nil {
+		return false
+	}
+	rel, err := filepath.Rel(rootAbs, pathAbs)
+	if err != nil {
+		return false
+	}
+	if rel == "." {
+		return true
+	}
+	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}

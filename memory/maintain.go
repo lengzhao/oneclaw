@@ -2,6 +2,7 @@ package memory
 
 import (
 	"bytes"
+	"context"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -130,6 +131,7 @@ func fallbackMaintenanceSystemPrompt(layout Layout, episodePath, rulesPath, toda
 		out += "Session records (optional; read-only tools): per-day slim dialogue JSON `" + dialog + "` (other days: replace date segment); model context `" + workT + "`; cumulative slim `" + slimT + "`.\n"
 	}
 	out += "Maintenance run started (UTC): " + runTS + ".\n" +
+		"Write bullets in the same natural language as the user's messages in the input (for recall alignment).\n" +
 		"Follow the user message format exactly.\n" +
 		"Output only the requested markdown section (header + bullets). No preamble or explanation.\n"
 	return out
@@ -177,6 +179,7 @@ func appendMaintenanceSection(layout Layout, memPath, section, auditSource strin
 		if err := os.WriteFile(memPath, []byte(body), 0o644); err != nil {
 			return err
 		}
+		markRecallDirtyAfterMaintenanceWrite(layout, memPath)
 		if auditSource == "" {
 			auditSource = AuditSourceScheduledMaintain
 		}
@@ -198,6 +201,7 @@ func appendMaintenanceSection(layout Layout, memPath, section, auditSource strin
 	if err := os.WriteFile(memPath, []byte(body), 0o644); err != nil {
 		return err
 	}
+	markRecallDirtyAfterMaintenanceWrite(layout, memPath)
 	if auditSource == "" {
 		auditSource = AuditSourceScheduledMaintain
 	}
@@ -221,11 +225,48 @@ func writeMergedOrAppendMaintenanceSection(layout Layout, memPath string, hadSpa
 	if err := os.WriteFile(memPath, []byte(newBody), 0o644); err != nil {
 		return err
 	}
+	markRecallDirtyAfterMaintenanceWrite(layout, memPath)
 	if auditSource == "" {
 		auditSource = AuditSourceScheduledMaintain
 	}
 	AppendMemoryAudit(layout, memPath, auditSource, []byte(mergedSection))
 	return nil
+}
+
+func markRecallDirtyAfterMaintenanceWrite(layout Layout, memPath string) {
+	if !shouldMarkRecallDirtyPath(layout, memPath) {
+		return
+	}
+	if err := selectRecallBackend().MarkDirty(context.Background(), []string{filepath.Clean(memPath)}); err != nil {
+		slog.Warn("memory.recall.mark_dirty", "path", filepath.Clean(memPath), "err", err)
+	}
+}
+
+func shouldMarkRecallDirtyPath(layout Layout, path string) bool {
+	clean := filepath.Clean(path)
+	if !strings.EqualFold(filepath.Ext(clean), ".md") {
+		return false
+	}
+	roots := []string{layout.User, layout.Project, layout.TeamUser, layout.TeamProject}
+	if !AutoMemoryDisabled() {
+		roots = append(roots, layout.Auto)
+	}
+	roots = append(roots, layout.AgentDefault...)
+	for _, root := range roots {
+		root = filepath.Clean(root)
+		rel, err := filepath.Rel(root, clean)
+		if err != nil {
+			continue
+		}
+		if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			continue
+		}
+		if !strings.Contains(rel, string(filepath.Separator)) && strings.EqualFold(filepath.Base(clean), entrypointName) {
+			return false
+		}
+		return true
+	}
+	return false
 }
 
 func autoMaintenanceEnabled() bool {

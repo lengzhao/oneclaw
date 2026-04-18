@@ -66,6 +66,7 @@ func buildScheduledToolUserPrompt(layout Layout, rulesMemPath, episodePath strin
 			"- Cumulative slim transcript, optional: `%s`\n\n"+
 			"%s"+
 			"**Task:** Read what you need via tools. Merge duplicates and capture durable **episodic** facts into the digest file. "+
+			"**Language:** write digest bullets in the **same language as user lines** in the logs/transcripts you rely on (not English by default when the user writes elsewhere). "+
 			"When you see **repeated tool patterns** or **user corrections** that define reusable procedure, **try** **`write_behavior_policy`** to add or update **`.oneclaw/skills/<name>/SKILL.md`** (playbook), not only a digest bullet — digest stays for one-off facts. "+
 			"For **standing rules** (how the agent should behave), prefer **`.oneclaw/AGENT.md`**, **rules**, **skills**, or **`MEMORY.md`** via `write_behavior_policy` — keep MEMORY.md compact. "+
 			"Be **terse**: one short sentence per bullet; **do not** paste long paths unless the path itself is the fact; **do not** claim a file exists unless you read it successfully.\n\n"+

@@ -57,6 +57,8 @@ type Engine struct {
 	WorkspaceFlat bool
 	// UserDataRoot is the IM host directory (~/.oneclaw): shared config parent; cron/schedule jobs file; empty in tests or non-IM engines.
 	UserDataRoot string
+	// MediaRoot is the clawbridge local media store root (default <UserDataRoot>/media). Inbound locators from drivers are ingested into workspace/media/inbound when they sit outside Engine.CWD.
+	MediaRoot string
 	// InstructionRoot is the IM directory containing AGENT.md and MEMORY.md (same dir as CWD/workspace parent); empty for non-IM engines.
 	InstructionRoot string
 	CanUseTool      tools.CanUseTool
@@ -447,6 +449,9 @@ func (e *Engine) applyInboundMessageStatus(ctx context.Context, in bus.InboundMe
 func (e *Engine) prepareInboundFromBus(in *bus.InboundMessage) ([]Attachment, error) {
 	atts := AttachmentsFromMediaPaths(in.MediaPaths)
 	atts = NormalizeAttachments(atts)
+	if err := e.rehomeInboundAttachments(&atts); err != nil {
+		return nil, err
+	}
 	if err := ValidateInboundMediaPaths(e.CWD, atts); err != nil {
 		return nil, err
 	}
