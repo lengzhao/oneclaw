@@ -168,14 +168,19 @@ type Layout struct {
 	TeamProject    string
 	AgentDefault   []string // user + project agent memory roots for "default"
 	EntrypointName string
+	// InstructionRoot is the IM directory containing AGENT.md and MEMORY.md (same dir). Empty for repo-style layouts.
+	InstructionRoot string
 	// HostUserData is true when CWD is the IM user data root (~/.oneclaw): config, AGENT.md, audit, and
 	// scheduled_maintain_state live directly under CWD, not under CWD/.oneclaw/.
 	HostUserData bool
 }
 
 // DotOrDataRoot returns the directory holding host-style dot files: for a repo cwd layout it is
-// <cwd>/.oneclaw; for IM host layout it is the user data root itself.
+// <cwd>/.oneclaw; for IM host layout with InstructionRoot set it is InstructionRoot; otherwise legacy IM host used CWD.
 func (l Layout) DotOrDataRoot() string {
+	if l.InstructionRoot != "" {
+		return filepath.Clean(l.InstructionRoot)
+	}
 	if l.HostUserData {
 		return filepath.Clean(l.CWD)
 	}
@@ -208,8 +213,8 @@ func DefaultLayout(cwd, home string) Layout {
 	}
 }
 
-// SessionDotLayout is for per-session workspace when Engine.CWD is already
-// <UserDataRoot>/sessions/<id>/.oneclaw (flat layout under that directory).
+// SessionDotLayout is for legacy per-session layouts where Engine.CWD was the
+// session dot directory (flat files under that directory, no nested ".oneclaw" segment).
 func SessionDotLayout(dotRoot, home string) Layout {
 	mb := MemoryBaseDir(home)
 	dot := filepath.Clean(dotRoot)
@@ -228,14 +233,52 @@ func SessionDotLayout(dotRoot, home string) Layout {
 	}
 }
 
+// IMSessionLayout is for IM per-session InstructionRoot (~/.oneclaw/sessions/<id>/): CWD is <InstructionRoot>/workspace.
+func IMSessionLayout(instructionRoot, home string) Layout {
+	mb := MemoryBaseDir(home)
+	ir := filepath.Clean(instructionRoot)
+	ws := filepath.Join(ir, IMWorkspaceDirName)
+	projMem := filepath.Join(ir, "memory")
+	agentProj := filepath.Join(ir, "agent-memory", "default")
+	return Layout{
+		CWD:             ws,
+		InstructionRoot: ir,
+		MemoryBase:      mb,
+		User:            UserMemoryDir(mb),
+		Project:         projMem,
+		Auto:            AutoMemoryDir(ws, mb),
+		TeamUser:        TeamMemoryDirUser(mb),
+		TeamProject:     filepath.Join(ir, "team-memory"),
+		AgentDefault:    []string{filepath.Join(mb, "agent-memory", "default"), agentProj},
+		EntrypointName:  entrypointName,
+		HostUserData:    true,
+	}
+}
+
 // LayoutForIMWorkspace selects memory layout for an Engine: repo-style DefaultLayout when WorkspaceFlat is false;
-// when true, IM shared root uses IMHostMaintainLayout, otherwise SessionDotLayout (per-session .oneclaw directory).
-func LayoutForIMWorkspace(cwd, home, userDataRoot string, workspaceFlat bool) Layout {
+// when true, IM shared root uses IMHostMaintainLayout, IMSessionLayout for isolated sessions, or SessionDotLayout (legacy .oneclaw session dir).
+func LayoutForIMWorkspace(cwd, home, userDataRoot string, workspaceFlat bool, instructionRoot string) Layout {
 	if !workspaceFlat {
 		return DefaultLayout(cwd, home)
 	}
-	ur := filepath.Clean(strings.TrimSpace(userDataRoot))
+	// filepath.Clean("") is "." in Go; treat trimmed empty roots as unset.
+	urRaw := strings.TrimSpace(userDataRoot)
+	var ur string
+	if urRaw != "" {
+		ur = filepath.Clean(urRaw)
+	}
+	irRaw := strings.TrimSpace(instructionRoot)
+	var ir string
+	if irRaw != "" {
+		ir = filepath.Clean(irRaw)
+	}
 	cleanCWD := filepath.Clean(cwd)
+	if ir != "" {
+		if ur != "" && ir == ur {
+			return IMHostMaintainLayout(ur, home)
+		}
+		return IMSessionLayout(ir, home)
+	}
 	if ur != "" && cleanCWD == ur {
 		return IMHostMaintainLayout(ur, home)
 	}
@@ -243,7 +286,7 @@ func LayoutForIMWorkspace(cwd, home, userDataRoot string, workspaceFlat bool) La
 }
 
 // IMHostMaintainLayout is for cmd/oneclaw IM mode: userDataRoot is config.UserDataRoot() (~/.oneclaw).
-// Scheduled / host-wide maintenance targets shared trees under that root without duplicating a nested .oneclaw prefix.
+// CWD is <userDataRoot>/workspace; episodic project memory under <userDataRoot>/memory (no nested .oneclaw).
 func IMHostMaintainLayout(userDataRoot, home string) Layout {
 	mb := MemoryBaseDir(home)
 	ur := filepath.Clean(userDataRoot)
@@ -251,17 +294,20 @@ func IMHostMaintainLayout(userDataRoot, home string) Layout {
 		ur = mb
 	}
 	agentHost := filepath.Join(ur, "agent-memory", "default")
+	ws := filepath.Join(ur, IMWorkspaceDirName)
+	projMem := filepath.Join(ur, "memory")
 	return Layout{
-		CWD:            ur,
-		MemoryBase:     mb,
-		User:           UserMemoryDir(mb),
-		Project:        filepath.Join(ur, "memory"),
-		Auto:           AutoMemoryDir(ur, mb),
-		TeamUser:       TeamMemoryDirUser(mb),
-		TeamProject:    filepath.Join(ur, "team-memory"),
-		AgentDefault:   []string{filepath.Join(mb, "agent-memory", "default"), agentHost},
-		EntrypointName: entrypointName,
-		HostUserData:   true,
+		CWD:             ws,
+		InstructionRoot: ur,
+		MemoryBase:      mb,
+		User:            UserMemoryDir(mb),
+		Project:         projMem,
+		Auto:            AutoMemoryDir(ws, mb),
+		TeamUser:        TeamMemoryDirUser(mb),
+		TeamProject:     filepath.Join(ur, "team-memory"),
+		AgentDefault:    []string{filepath.Join(mb, "agent-memory", "default"), agentHost},
+		EntrypointName:  entrypointName,
+		HostUserData:    true,
 	}
 }
 

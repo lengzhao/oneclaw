@@ -2,6 +2,8 @@
 
 本文描述一种**以 `~/.oneclaw` 为全局根**、**以 `~/.oneclaw/sessions/<session_id>/` 替换当前「项目 `-cwd`」** 作为运行时工作目录的模型，使多会话在**默认文件视图**上相互隔离；公共规则从用户根读取。与现状对照见 [config.md](config.md)、[runtime-flow.md](runtime-flow.md)。
 
+**目录布局的推荐真源**（用户根与 `workspace/` 子目录、`AGENT.md` 与 `MEMORY.md` 同目录等）见 **[user-root-workspace-layout.md](user-root-workspace-layout.md)**；下文 §4 的树状示例在实现对齐该文档后可能演进，以 `user-root-workspace-layout` 为准。
+
 ---
 
 ## 1. 背景与动机
@@ -18,8 +20,8 @@
 
 - **用户根（UserRoot）**：`~/.oneclaw`（或通过既有 `paths.memory_base` 解析后的等价基路径，下文默认 `~/.oneclaw`）。
 - **公共只读（概念上）**：用户根下放置 **`AGENT.md`、`rules/`**（及可选 `skills/` 索引策略，见 §7），供所有会话的系统提示与策略引用。
-- **会话家目录（SessionHome）**：`~/.oneclaw/sessions/<session_id>/` **整体作为** `Engine.CWD` / `toolctx.CWD` 的替换值，与当前 `session.StableSessionID(handle)` 对齐。
-- **默认隔离**：不同 `session_id` 下默认 **exec pwd、read/write 的 cwd 语义、tasks.json、本会话下的 `.oneclaw/memory` 等** 互不重叠（在工具策略允许范围内）。
+- **会话根（SessionHome / InstructionRoot）**：`~/.oneclaw/sessions/<session_id>/` 作为**该会话的说明与规则记忆根**（`AGENT.md` / `MEMORY.md` 与全局布局一致），与 `session.StableSessionID(handle)` 对齐；**默认干活目录**为 **`<SessionHome>/workspace`**（即 `Engine.CWD`），与用户数据根树内**不出现嵌套目录名 `.oneclaw`** 的约定一致（见 [user-root-workspace-layout.md](user-root-workspace-layout.md)）。
+- **默认隔离**：不同 `session_id` 下默认 **exec pwd、read/write 的 cwd 语义、tasks、本会话 `memory/` 等** 互不重叠（在工具策略允许范围内）。
 
 ### 2.2 非目标
 
@@ -35,7 +37,7 @@
 |------|------|
 | **UserRoot** | `memory.MemoryBaseDir(home)` 解析结果，默认 `~/.oneclaw` |
 | **session_id** | 与现实现一致：`session.StableSessionID(SessionHandle)`（稳定、可哈希、用于目录名） |
-| **SessionHome** | `filepath.Join(UserRoot, "sessions", session_id)`，**即新的 `Engine.CWD`** |
+| **SessionHome / InstructionRoot** | `filepath.Join(UserRoot, "sessions", session_id)`；**`Engine.CWD`** = `filepath.Join(SessionHome, "workspace")` |
 | **ProjectRoot（旧）** | 当前 `cmd/oneclaw` 的 `-cwd`；本设计在 IM 主路径上**不再**作为工具默认 cwd |
 
 ---
@@ -58,24 +60,23 @@
 
 ### 4.2 会话根（隔离）
 
-将 **SessionHome** 视为**原「项目根」的替身**：其下仍使用与现实现相同的 **`<SessionHome>/.oneclaw/`** 子树语义，便于**少改 builtin 与 memory 布局代码**。
+将 **SessionHome** 视为**小 `UserRoot`**：其下**不再**嵌套名为 `.oneclaw` 的子目录；`AGENT.md`、`MEMORY.md`、`memory/`、`tasks.json`、`audit/` 等与未隔离时的 `~/.oneclaw` **相对结构一致**。
 
 ```text
 ~/.oneclaw/sessions/<session_id>/
-  .oneclaw/
-    memory/
-      MEMORY.md             # 本会话项目型记忆入口（若启用）
-      YYYY-MM-DD.md         # 日更 episodic（若沿用现布局）
-    tasks.json
-    media/                  # 入站附件等（若沿用现 mediastore 根）
-    exec_log/               # 若 exec 改为以 SessionHome 为 cwd，可简化或保留现拼接方式，见 §8
-    sessions/               # 若保留「cwd 下 .oneclaw/sessions/<id>/exec_log」逻辑，会产生嵌套；建议 §8 统一
-    audit/                  # 审计 JSONL（若仍按会话落盘，可与 transcript 同缀）
-    transcript.json         # 可选：与现「每会话转写」一致时可放在此处或 UserRoot 下统一索引
-    working_transcript.json
+  AGENT.md                  # 可选：本会话覆盖/增量
+  MEMORY.md                 # 与 AGENT.md 同目录
+  rules/                    # 可选
+  memory/                   # 日更 episodic 等
+  tasks.json
+  audit/
+  transcript.json
+  working_transcript.json
+  workspace/                # Engine.CWD；exec、read/write 默认锚点
+    media/inbound/          # 入站附件等（实现以代码为准）
 ```
 
-**说明**：上表为逻辑布局；**transcript / sqlite / audit** 的精确路径应与 `config.Resolved` 的派生规则一次性对齐（§5），避免「配置算一套路径、Engine 另一套 cwd」长期分裂。
+**说明**：上表为逻辑布局；**transcript / sqlite / audit** 的精确路径应与 `config.Resolved` 的派生规则一次性对齐（§5），避免「配置算一套路径、Engine 另一套 cwd」长期分裂。按项目分片的自动记忆推荐落在 **`<memory_base>/projects/<slug>/`**（见 `memory.AutoMemoryDir`），**不必**在仓库内再建 `<repo>/.oneclaw/`；旧代码路径仍以 `memory.DefaultLayout` 为准，直至收敛。
 
 ---
 
@@ -91,7 +92,7 @@
 `config.SessionTranscriptPaths(session_id)`、`SessionsSQLitePath()` 等应基于 **同一套「数据根」** 计算：推荐 **UserRoot** 为会话索引根，例如：
 
 - `sessions.sqlite` → `~/.oneclaw/sessions.sqlite`（或 YAML 覆盖）
-- `transcript` → `~/.oneclaw/sessions/<session_id>/transcript.json`（与 SessionHome 同级或置于 `SessionHome/.oneclaw/`，二选一写死并文档化）
+- `transcript` → `~/.oneclaw/sessions/<session_id>/transcript.json`（与 SessionHome 同级，**不**再置于 `SessionHome/.oneclaw/`）
 
 避免 transcript 仍在「旧项目 cwd」而工具已在 SessionHome 的**跨盘不一致**。
 
@@ -111,7 +112,7 @@ flowchart LR
   subgraph job [每轮 Worker Job]
     H[SessionHandle] --> SID[StableSessionID]
     SID --> SH[SessionHome]
-    SH --> ENG["NewEngine(CWD=SessionHome)"]
+    SH --> ENG["NewEngine(CWD=SessionHome/workspace)"]
     Merge --> ENG
   end
 ```
@@ -138,15 +139,15 @@ flowchart LR
 | 来源 | 路径 | 用途 |
 |------|------|------|
 | 全局 | `UserRoot/AGENT.md`、`UserRoot/rules/**` | 所有会话共享的基线 |
-| 会话覆盖（可选） | `SessionHome/.oneclaw/AGENT.md`、`SessionHome/.oneclaw/rules/**` | 仅本会话；合并策略建议：**会话覆盖 > 全局** 或 **拼接（全局 + 会话增量）**，产品二选一并写死 |
+| 会话覆盖（可选） | `SessionHome/AGENT.md`、`SessionHome/rules/**` | 仅本会话；合并策略建议：**会话覆盖 > 全局** 或 **拼接（全局 + 会话增量）**，产品二选一并写死 |
 
-**skills**：若索引扫描仍基于 `toolctx.CWD`，则会话只能看到 `SessionHome/.oneclaw/skills`；若希望共享用户级 skills，需在 `session`/`prompt` 组装处 **额外注入 `UserRoot/.oneclaw/skills` 或既定目录**，与现 `skills.PromptSkillLines(cwd, home, …)` 行为对齐改造。
+**skills**：若索引扫描仍基于 `toolctx.CWD`（`workspace/`），则会话级 skills 可放在 `SessionHome/workspace/skills` 或实现约定的路径（**不在**用户数据根下再嵌套名为 `.oneclaw` 的目录）；若希望共享用户级 skills，需在 `session`/`prompt` 组装处 **额外注入 `UserRoot/...` 下既定目录**，与现 `skills.PromptSkillLines(cwd, home, …)` 行为对齐改造。
 
 ---
 
 ## 8. 工具、exec、附件
 
-- **exec**：`cmd.Dir = SessionHome`（即新的 `tctx.CWD`）；run log 建议固定在 `SessionHome/.oneclaw/exec_log/<ts>/run.log`（**不再**在 cwd 下重复 `sessions/<id>/`，以免嵌套）。
+- **exec**：`cmd.Dir` 与 `tctx.CWD` 对齐（通常为 `SessionHome/workspace`）；run log 建议固定在 `SessionHome/exec_log/<ts>/run.log` 或实现约定路径（**不在** `SessionHome` 下再嵌套 `.oneclaw/`）。
 - **read_file / write_file**：以现 cwd 策略为基础，自然限制在 SessionHome 树内（外加 `MemoryWriteRoots` 等例外）。
 - **入站附件**：`PersistInlineAttachmentFiles`、`mediastore` 根应落在 **SessionHome** 下，避免多会话写入同一项目 `media/`。
 
@@ -166,9 +167,9 @@ flowchart LR
 
 ## 10. MCP、usage、export-session
 
-- **MCP 注册**：stdio 子进程 cwd 或 artifact 目录应基于 **UserRoot** 或 **SessionHome** 明确其一；多会话并发时 artifact 建议 **`SessionHome/.oneclaw/artifacts`**，避免文件名碰撞。
-- **usage 落盘**：现依赖 `ToolContext.CWD`；迁移后会话用量自然分文件，全局统计需在聚合任务中扫描 `sessions/*/.oneclaw/usage/` 或统一到 UserRoot（任选，需一致）。
-- **export-session**：源路径从「`<cwd>/.oneclaw`」改为「`SessionHome/.oneclaw` + UserRoot 中与本 session 相关的条目标记」；或提供「仅导出 SessionHome」模式。
+- **MCP 注册**：stdio 子进程 cwd 或 artifact 目录应基于 **UserRoot** 或 **SessionHome** 明确其一；多会话并发时 artifact 建议 **`SessionHome/artifacts`**（或 `workspace/` 下子目录），避免文件名碰撞。
+- **usage 落盘**：IM 下锚 **InstructionRoot**：`<InstructionRoot>/usage/`；全局统计可扫描 `sessions/*/usage/` 或统一到 UserRoot（任选，需一致）。
+- **export-session**：源路径从「`<cwd>/.oneclaw`」改为「`SessionHome` 下扁平布局 + UserRoot 中与本 session 相关的条目标记」；或提供「仅导出 SessionHome」模式。
 
 ---
 
@@ -177,7 +178,7 @@ flowchart LR
 | 场景 | 行为建议 |
 |------|----------|
 | `oneclaw -init` | 初始化 **UserRoot**（config 模板、全局 AGENT.md/rules）；**不**再要求项目目录（除非指定 ProjectRoot） |
-| 首次某 `session_id` 收到消息 | `MkdirAll(SessionHome/.oneclaw/...)`，可拷贝最小模板（空 MEMORY.md、空 tasks） |
+| 首次某 `session_id` 收到消息 | `MkdirAll(SessionHome/...)`（含 `workspace/`），可拷贝最小模板（空 MEMORY.md、空 tasks） |
 | 从旧部署迁移 | 脚本或文档：按 `StableSessionID` 将 `<旧cwd>/.oneclaw/sessions/<id>/*` 迁到 `~/.oneclaw/sessions/<id>/`；config 迁到 `~/.oneclaw/config.yaml` |
 
 ---
@@ -213,10 +214,10 @@ flowchart LR
 已在主进程落地（`home` 非空的 `config.Load` 路径）：
 
 - `config.Resolved.UserDataRoot()`、`SessionTranscriptPaths` / `SessionsSQLitePath` / 默认 media 等与用户数据根对齐。
-- `MainEngineFactory`：`Engine.CWD` 由 **`sessions.isolate_workspace`** 决定（默认 **false**：`CWD = UserDataRoot`；**true**：`CWD = <UserDataRoot>/sessions/<StableSessionID>/.oneclaw`）。`Engine.UserDataRoot` 供 cron / system 提示；`Engine.WorkspaceFlat = true` 时 tasks/exec_log/agents 等直接位于 `CWD` 下，不再拼 `CWD/.oneclaw/`。
+- `MainEngineFactory`：`Engine.CWD` 由 **`sessions.isolate_workspace`** 决定（默认 **false**：`CWD = <UserDataRoot>/workspace`；**true**：`CWD = <UserDataRoot>/sessions/<StableSessionID>/workspace`）。`Engine.UserDataRoot` 供 cron / system 提示；用户数据根树内**不**再嵌套名为 `.oneclaw` 的目录（tasks、memory、audit 等锚 **InstructionRoot**，见 `memory.JoinSessionWorkspaceWithInstruction`）。
 - `toolctx.HostDataRoot`：`schedule.Add/List/Remove` 写入 `<UserDataRoot>/scheduled_jobs.json`；`StartHostPollerIfEnabled` 使用同一根目录。
-- 审计：`RegisterAuditSinks` 使用会话工作区 + 空 `AuditSessionID`，路径为 `<SessionHome>/.oneclaw/audit/…`。
-- exec：`run.log` 位于 `<SessionHome>/.oneclaw/exec_log/<ts>/`。
+- 审计：`RegisterAuditSinks` 在 IM 下使用 **InstructionRoot** + `OmitDotDir`，路径为 `<InstructionRoot>/audit/…`。
+- exec：`run.log` 位于实现约定路径（如 `<InstructionRoot>/exec_log/<ts>/`），**不**经 `SessionHome/.oneclaw/`。
 - 定时维护：`maintainloop` 使用 `memory.IMHostMaintainLayout(UserDataRoot, home)`。
 
 `config.Load` **仅**合并 `~/.oneclaw/config.yaml` 与可选 `-config`（相对路径相对 `~/.oneclaw/`），**不再**读取项目目录或进程 `cwd`。`-init` / `-export-session` / `-maintain-once` 均以 **`UserDataRoot()`**（默认 `~/.oneclaw`）为数据根。

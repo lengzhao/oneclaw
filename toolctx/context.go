@@ -34,8 +34,10 @@ type Context struct {
 	// HostDataRoot is the IM config/data root (~/.oneclaw) for host-wide files (e.g. scheduled_jobs.json). Empty uses project-style paths under CWD only.
 	HostDataRoot string
 
-	// WorkspaceFlat: when true, tasks.json / agents / exec_log / skills-recent / usage live directly under CWD (see memory.JoinSessionWorkspace).
+	// WorkspaceFlat: when true, tasks.json / agents / exec_log / skills-recent / usage live under <InstructionRoot>/ when set (see memory.JoinSessionWorkspaceWithInstruction).
 	WorkspaceFlat bool
+	// InstructionRoot is the IM directory containing AGENT.md/MEMORY.md; empty in repo-style or legacy contexts.
+	InstructionRoot string
 
 	// SessionID is the stable logical session (e.g. Engine.SessionID / SQLite session row). Empty in tests or non-session hosts.
 	SessionID string
@@ -186,6 +188,7 @@ func (c *Context) ChildContext() *Context {
 	child.HomeDir = c.HomeDir
 	child.HostDataRoot = c.HostDataRoot
 	child.WorkspaceFlat = c.WorkspaceFlat
+	child.InstructionRoot = c.InstructionRoot
 	child.SessionID = c.SessionID
 	child.AgentID = c.AgentID
 	child.MaxSubagentDepth = c.MaxSubagentDepth

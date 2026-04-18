@@ -89,15 +89,15 @@ func FormatIndexLines(ordered []Skill, maxBytes int) []string {
 }
 
 // PromptSkillLines returns skill bullet lines for system prompts (empty if disabled or no skills).
-func PromptSkillLines(cwd, home string, maxBytes int, workspaceFlat bool) []string {
+func PromptSkillLines(cwd, home string, maxBytes int, workspaceFlat bool, instructionRoot string) []string {
 	if rtopts.Current().DisableSkills {
 		return nil
 	}
-	all := LoadAll(cwd, home, workspaceFlat)
+	all := LoadAll(cwd, home, workspaceFlat, instructionRoot)
 	if len(all) == 0 {
 		return nil
 	}
-	rec, err := LoadRecent(RecentFilePath(cwd, workspaceFlat))
+	rec, err := LoadRecent(RecentFilePath(cwd, workspaceFlat, instructionRoot))
 	if err != nil {
 		rec = RecentFile{Version: 1}
 	}

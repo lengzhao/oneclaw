@@ -344,8 +344,8 @@ func TestSessionTranscriptPaths(t *testing.T) {
 	f := File{}
 	r := &Resolved{merged: f, home: home}
 	tp, wp := r.SessionTranscriptPaths("abc123")
-	wantT := filepath.Join(ur, "sessions", "abc123", memory.DotDir, "transcript.json")
-	wantW := filepath.Join(ur, "sessions", "abc123", memory.DotDir, "working_transcript.json")
+	wantT := filepath.Join(ur, "sessions", "abc123", "transcript.json")
+	wantW := filepath.Join(ur, "sessions", "abc123", "working_transcript.json")
 	if tp != wantT || wp != wantW {
 		t.Fatalf("got transcript=%q working=%q", tp, wp)
 	}

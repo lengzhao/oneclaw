@@ -20,7 +20,12 @@ const fileName = "tasks.json"
 
 // PathForWorkspace returns tasks.json under cwd; when workspaceFlat is true, CWD is already the logical .oneclaw directory.
 func PathForWorkspace(cwd string, workspaceFlat bool) string {
-	return memory.JoinSessionWorkspace(cwd, workspaceFlat, fileName)
+	return PathForWorkspaceWithInstruction(cwd, "", workspaceFlat)
+}
+
+// PathForWorkspaceWithInstruction uses <instructionRoot>/ when flat and instructionRoot is set (see docs/user-root-workspace-layout.md).
+func PathForWorkspaceWithInstruction(cwd, instructionRoot string, workspaceFlat bool) string {
+	return memory.JoinSessionWorkspaceWithInstruction(cwd, instructionRoot, workspaceFlat, fileName)
 }
 
 // Disabled reports features.disable_tasks from config.
@@ -127,10 +132,15 @@ type CreateInput struct {
 
 // Create appends tasks or replaces the list when replace is true.
 func Create(cwd string, workspaceFlat bool, replace bool, inputs []CreateInput) (string, error) {
+	return CreateWithInstruction(cwd, "", workspaceFlat, replace, inputs)
+}
+
+// CreateWithInstruction is like Create but anchors session files under instructionRoot when IM workspace split is used.
+func CreateWithInstruction(cwd, instructionRoot string, workspaceFlat bool, replace bool, inputs []CreateInput) (string, error) {
 	if Disabled() {
 		return "", fmt.Errorf("tasks are disabled (features.disable_tasks in config)")
 	}
-	path := PathForWorkspace(cwd, workspaceFlat)
+	path := PathForWorkspaceWithInstruction(cwd, instructionRoot, workspaceFlat)
 	fileMu.Lock()
 	defer fileMu.Unlock()
 	f, err := Read(path)
@@ -217,6 +227,11 @@ type UpdatePatch struct {
 
 // Update mutates a single task.
 func Update(cwd string, workspaceFlat bool, taskID string, patch UpdatePatch) (string, error) {
+	return UpdateWithInstruction(cwd, "", workspaceFlat, taskID, patch)
+}
+
+// UpdateWithInstruction is like Update with IM instruction root anchoring.
+func UpdateWithInstruction(cwd, instructionRoot string, workspaceFlat bool, taskID string, patch UpdatePatch) (string, error) {
 	if Disabled() {
 		return "", fmt.Errorf("tasks are disabled (features.disable_tasks in config)")
 	}
@@ -224,7 +239,7 @@ func Update(cwd string, workspaceFlat bool, taskID string, patch UpdatePatch) (s
 	if id == "" {
 		return "", fmt.Errorf("task_id is required")
 	}
-	path := PathForWorkspace(cwd, workspaceFlat)
+	path := PathForWorkspaceWithInstruction(cwd, instructionRoot, workspaceFlat)
 	fileMu.Lock()
 	defer fileMu.Unlock()
 	f, err := Read(path)
@@ -333,11 +348,11 @@ func taskLineForPrompt(it *Item) string {
 
 // PromptTaskLines returns tasks.json path and one markdown bullet per task.
 // omitted is how many items exist beyond maxSystemItems. Empty result when disabled, missing file, or no items.
-func PromptTaskLines(cwd string, workspaceFlat bool) (filePath string, lines []string, omitted int) {
+func PromptTaskLines(cwd string, workspaceFlat bool, instructionRoot string) (filePath string, lines []string, omitted int) {
 	if Disabled() {
 		return "", nil, 0
 	}
-	path := PathForWorkspace(cwd, workspaceFlat)
+	path := PathForWorkspaceWithInstruction(cwd, instructionRoot, workspaceFlat)
 	f, err := Read(path)
 	if err != nil || len(f.Items) == 0 {
 		return "", nil, 0

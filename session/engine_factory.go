@@ -42,17 +42,18 @@ func MainEngineFactory(deps MainEngineFactoryDeps) func(SessionHandle) (*Engine,
 		if userRoot == "" {
 			return nil, fmt.Errorf("session: empty UserDataRoot (config not loaded with Home?)")
 		}
-		workspaceCWD := userRoot
+		instructionRoot := userRoot
 		if deps.Resolved.SessionIsolateWorkspace() {
-			workspaceCWD = filepath.Join(userRoot, "sessions", sid, memory.DotDir)
+			instructionRoot = filepath.Join(userRoot, "sessions", sid)
 		}
+		workspaceCWD := filepath.Join(instructionRoot, memory.IMWorkspaceDirName)
 		if err := os.MkdirAll(workspaceCWD, 0o755); err != nil {
-			return nil, fmt.Errorf("session: mkdir session workspace: %w", err)
+			return nil, fmt.Errorf("session: mkdir workspace: %w", err)
 		}
-
 		eng := NewEngine(workspaceCWD, deps.Registry)
 		eng.SessionID = sid
 		eng.UserDataRoot = userRoot
+		eng.InstructionRoot = instructionRoot
 		eng.WorkspaceFlat = true
 		eng.Client = deps.Client
 		eng.CanUseTool = func(_ context.Context, name string, input json.RawMessage, tctx *toolctx.Context) (bool, string) {

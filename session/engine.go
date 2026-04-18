@@ -52,13 +52,15 @@ type Engine struct {
 	Transcript []openai.ChatCompletionMessageParamUnion
 	Registry   *tools.Registry
 	CWD        string
-	// WorkspaceFlat: when true, session files (tasks.json, memory/, agents/, exec_log/, …) live directly under CWD
-	// (CWD is ~/.oneclaw or ~/.oneclaw/sessions/<id>/.oneclaw). When false, legacy layout uses CWD/.oneclaw/.
+	// WorkspaceFlat: when true, session runtime files (tasks.json, memory/, agents/, exec_log/, …) live directly under
+	// <InstructionRoot>/ (no nested ".oneclaw"); CWD is <InstructionRoot>/workspace. When false, legacy layout uses CWD/.oneclaw/.
 	WorkspaceFlat bool
 	// UserDataRoot is the IM host directory (~/.oneclaw): shared config parent; cron/schedule jobs file; empty in tests or non-IM engines.
 	UserDataRoot string
-	CanUseTool   tools.CanUseTool
-	SessionID    string
+	// InstructionRoot is the IM directory containing AGENT.md and MEMORY.md (same dir as CWD/workspace parent); empty for non-IM engines.
+	InstructionRoot string
+	CanUseTool      tools.CanUseTool
+	SessionID       string
 	// RootAgentID is the stable id of this Engine (main thread only). It is copied into toolctx.Context.AgentID each turn; subagents use their own ctx.AgentID. Empty means DefaultRootAgentID in EffectiveRootAgentID.
 	RootAgentID string
 	// Notify is a fan-out list (notify.Multi) of lifecycle sinks; default empty no-op.

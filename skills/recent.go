@@ -25,11 +25,11 @@ type RecentFile struct {
 }
 
 // RecentFilePath returns where we persist recent skill usage (project-local by default).
-func RecentFilePath(cwd string, workspaceFlat bool) string {
+func RecentFilePath(cwd string, workspaceFlat bool, instructionRoot string) string {
 	if p := strings.TrimSpace(rtopts.Current().SkillsRecent); p != "" {
 		return filepath.Clean(p)
 	}
-	return memory.JoinSessionWorkspace(cwd, workspaceFlat, "skills-recent.json")
+	return memory.JoinSessionWorkspaceWithInstruction(cwd, instructionRoot, workspaceFlat, "skills-recent.json")
 }
 
 // LoadRecent reads the recent-usage file. Missing or invalid file yields empty Version 1.
@@ -64,12 +64,12 @@ func (r RecentFile) NamesInOrder() []string {
 }
 
 // RecordUse moves name to the front, bumps use count, trims to MaxRecentEntries, and saves atomically.
-func RecordUse(cwd, name string, workspaceFlat bool) error {
+func RecordUse(cwd, name string, workspaceFlat bool, instructionRoot string) error {
 	name = strings.TrimSpace(strings.TrimPrefix(name, "/"))
 	if name == "" {
 		return nil
 	}
-	path := RecentFilePath(cwd, workspaceFlat)
+	path := RecentFilePath(cwd, workspaceFlat, instructionRoot)
 	rec, err := LoadRecent(path)
 	if err != nil {
 		return err

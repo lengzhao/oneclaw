@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/lengzhao/oneclaw/memory"
 )
 
 const maxAgentListingDescRunes = 120
@@ -22,14 +24,17 @@ type Catalog struct {
 	byName map[string]Definition
 }
 
-// LoadCatalog loads agent markdown under cwd: when workspaceFlat is true, uses <cwd>/agents/*.md; otherwise <cwd>/.oneclaw/agents/*.md.
-func LoadCatalog(cwd string, workspaceFlat bool) *Catalog {
+// LoadCatalog loads agent markdown: when workspaceFlat and instructionRoot are set, uses <instructionRoot>/agents/*.md;
+// when workspaceFlat without instructionRoot, <cwd>/agents/*.md; otherwise <cwd>/.oneclaw/agents/*.md.
+func LoadCatalog(cwd string, workspaceFlat bool, instructionRoot string) *Catalog {
 	byName := make(map[string]Definition)
 	for _, d := range builtinDefinitions() {
 		byName[d.AgentType] = d
 	}
 	var dir string
-	if workspaceFlat {
+	if workspaceFlat && strings.TrimSpace(instructionRoot) != "" {
+		dir = memory.JoinSessionWorkspaceWithInstruction(cwd, instructionRoot, workspaceFlat, "agents")
+	} else if workspaceFlat {
 		dir = filepath.Join(cwd, "agents")
 	} else {
 		dir = filepath.Join(cwd, ".oneclaw", "agents")

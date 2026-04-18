@@ -41,7 +41,7 @@ description: from project
 ---
 `), 0o644)
 
-	all := LoadAll(cwd, home, false)
+	all := LoadAll(cwd, home, false, "")
 	if len(all) != 1 {
 		t.Fatalf("len=%d", len(all))
 	}
@@ -77,16 +77,16 @@ func TestFormatIndexBudget(t *testing.T) {
 
 func TestRecordUse(t *testing.T) {
 	cwd := t.TempDir()
-	if err := RecordUse(cwd, "one", false); err != nil {
+	if err := RecordUse(cwd, "one", false, ""); err != nil {
 		t.Fatal(err)
 	}
-	if err := RecordUse(cwd, "two", false); err != nil {
+	if err := RecordUse(cwd, "two", false, ""); err != nil {
 		t.Fatal(err)
 	}
-	if err := RecordUse(cwd, "one", false); err != nil {
+	if err := RecordUse(cwd, "one", false, ""); err != nil {
 		t.Fatal(err)
 	}
-	rec, err := LoadRecent(RecentFilePath(cwd, false))
+	rec, err := LoadRecent(RecentFilePath(cwd, false, ""))
 	if err != nil {
 		t.Fatal(err)
 	}

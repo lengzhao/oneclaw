@@ -1,6 +1,6 @@
 # PicoClaw Channel 抽象与接口（技术分析 + 源码对照）
 
-> **目的**：支撑 [`todo.md`](todo.md) 第 7 项「通用 Channel 抽象」的技术调研；**不写实现代码**。  
+> **目的**：对标 PicoClaw 分层与接口的**调研笔记**（[`todo.md`](todo.md) #7 主干已勾选）；**不写实现代码**。  
 > **参考仓库**：社区常说的 *picoclaw* 对应开源实现 **[github.com/sipeed/picoclaw](https://github.com/sipeed/picoclaw)**（Go，MIT）。与 todo 中「openclaw/picoclaw」名称可能混用；本文以 **sipeed/picoclaw 当前 main** 为准。  
 > **对齐文档**：本仓库 [`inbound-routing-design.md`](inbound-routing-design.md)。  
 > **接口逐项签名**：见本文 **附录**（`pkg/channels`、`pkg/bus` 源码对照）。

@@ -97,7 +97,7 @@ func PromptInitIfTerminal(cfgPath string, stdin *os.File, stdout io.Writer) erro
 	}
 	curIsolateLabel := "关闭（多会话共享同一工作区）"
 	if curIsolate {
-		curIsolateLabel = "开启（每会话独立 sessions/<id>/.oneclaw）"
+		curIsolateLabel = "开启（每会话独立 sessions/<id>/）"
 	}
 	fmt.Fprintln(stdout)
 	fmt.Fprintf(stdout, "会话工作区隔离 sessions.isolate_workspace？当前: %s\n", curIsolateLabel)

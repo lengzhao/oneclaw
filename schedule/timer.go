@@ -9,11 +9,11 @@ import (
 // NextWakeDuration returns how long to sleep until the earliest enabled job for targetSource fires.
 // If ok is false, there is no next run (no matching jobs or all without NextRun).
 // If due immediately or overdue, d is 0 and ok is true.
-func NextWakeDuration(cwd, hostDataRoot string, workspaceFlat bool, targetSource string, now time.Time) (d time.Duration, ok bool) {
+func NextWakeDuration(cwd, hostDataRoot string, workspaceFlat bool, instructionRoot string, targetSource string, now time.Time) (d time.Duration, ok bool) {
 	if Disabled() {
 		return 0, false
 	}
-	path := JobsFilePath(cwd, hostDataRoot, workspaceFlat)
+	path := JobsFilePath(cwd, hostDataRoot, workspaceFlat, instructionRoot)
 	fileMu.Lock()
 	defer fileMu.Unlock()
 	f, err := Read(path)

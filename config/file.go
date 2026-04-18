@@ -131,14 +131,14 @@ type File struct {
 		RecentPath string `yaml:"recent_path"`
 	} `yaml:"skills"`
 
-	// Sessions: per-chat isolation (IM threads). SQLite stores session index + recall state; transcripts stay as files under .oneclaw/sessions/<id>/.
+	// Sessions: per-chat isolation (IM threads). SQLite stores session index + recall state; transcripts stay as files under sessions/<id>/.
 	Sessions struct {
 		DisableSQLite *bool  `yaml:"disable_sqlite"`
 		SQLitePath    string `yaml:"sqlite_path"`
 		// WorkerCount: fixed goroutine shards for cmd/oneclaw (hash session → worker). 0 = default 8.
 		WorkerCount int `yaml:"worker_count"`
-		// IsolateWorkspace: when true, Engine.CWD is <UserDataRoot>/sessions/<id>/.oneclaw (per-session file tools).
-		// When false (default), Engine.CWD is UserDataRoot (~/.oneclaw) and all IM sessions share one workspace; transcripts remain per-session under sessions/<id>/.oneclaw/.
+		// IsolateWorkspace: when true, InstructionRoot is <UserDataRoot>/sessions/<id>/ (per-session AGENT/MEMORY/workspace).
+		// When false (default), InstructionRoot is UserDataRoot; transcripts remain per-session under sessions/<id>/.
 		IsolateWorkspace *bool `yaml:"isolate_workspace"`
 	} `yaml:"sessions"`
 

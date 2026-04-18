@@ -18,7 +18,7 @@ func lockPath(path string) *sync.Mutex {
 	return v.(*sync.Mutex)
 }
 
-func appendJSONLRecord(cwd, auditSessionID, agentSegment, subdir string, when time.Time, rec any) error {
+func appendJSONLRecord(cwd, auditSessionID, agentSegment, subdir string, when time.Time, rec any, omitDotDir bool) error {
 	if cwd == "" {
 		cwd = "."
 	}
@@ -28,9 +28,17 @@ func appendJSONLRecord(cwd, auditSessionID, agentSegment, subdir string, when ti
 	var path string
 	if sid := strings.TrimSpace(auditSessionID); sid != "" {
 		safe := SanitizeAgentSegment(sid)
-		path = filepath.Join(cwd, memory.DotDir, "sessions", safe, "audit", agentSegment, subdir, y, mo, day+".jsonl")
+		if omitDotDir {
+			path = filepath.Join(cwd, "sessions", safe, "audit", agentSegment, subdir, y, mo, day+".jsonl")
+		} else {
+			path = filepath.Join(cwd, memory.DotDir, "sessions", safe, "audit", agentSegment, subdir, y, mo, day+".jsonl")
+		}
 	} else {
-		path = filepath.Join(cwd, memory.DotDir, "audit", agentSegment, subdir, y, mo, day+".jsonl")
+		if omitDotDir {
+			path = filepath.Join(cwd, "audit", agentSegment, subdir, y, mo, day+".jsonl")
+		} else {
+			path = filepath.Join(cwd, memory.DotDir, "audit", agentSegment, subdir, y, mo, day+".jsonl")
+		}
 	}
 	mu := lockPath(path)
 	mu.Lock()

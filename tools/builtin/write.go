@@ -59,7 +59,7 @@ func (WriteTool) Execute(ctx context.Context, input json.RawMessage, tctx *toolc
 	if home == "" {
 		home, _ = os.UserHomeDir()
 	}
-	lay := memory.LayoutForIMWorkspace(tctx.CWD, home, tctx.HostDataRoot, tctx.WorkspaceFlat)
+	lay := memory.LayoutForIMWorkspace(tctx.CWD, home, tctx.HostDataRoot, tctx.WorkspaceFlat, tctx.InstructionRoot)
 	memory.AppendMemoryAudit(lay, abs, "write_file", content)
 	tctx.SetCachedRead(abs, in.Content)
 	return "ok", nil

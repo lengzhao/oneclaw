@@ -121,8 +121,14 @@ func (e *Engine) slashPaths() string {
 	}
 	fmt.Fprintf(&b, "Entrypoint: %s\n", layout.EntrypointName)
 	fmt.Fprintf(&b, "HostUserData: %v\n", layout.HostUserData)
+	if layout.InstructionRoot != "" {
+		fmt.Fprintf(&b, "InstructionRoot: %s\n", layout.InstructionRoot)
+	}
 	fmt.Fprintf(&b, "DotOrDataRoot: %s\n", layout.DotOrDataRoot())
 	ep := filepath.Join(layout.Project, layout.EntrypointName)
+	if layout.InstructionRoot != "" {
+		ep = filepath.Join(layout.InstructionRoot, layout.EntrypointName)
+	}
 	fmt.Fprintf(&b, "项目记忆入口（若存在）: %s\n", ep)
 	return strings.TrimRight(b.String(), "\n")
 }

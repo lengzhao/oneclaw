@@ -215,8 +215,10 @@ func RunTurn(ctx context.Context, cfg Config, in bus.InboundMessage) (err error)
 			depth = cfg.ToolContext.SubagentDepth
 		}
 		wf := false
+		var instr string
 		if cfg.ToolContext != nil {
 			wf = cfg.ToolContext.WorkspaceFlat
+			instr = cfg.ToolContext.InstructionRoot
 		}
 		usageledger.MaybeRecord(usageledger.RecordParams{
 			CWD:              cwd,
@@ -230,6 +232,7 @@ func RunTurn(ctx context.Context, cfg Config, in bus.InboundMessage) (err error)
 			UsageJSON:        completion.Usage.RawJSON(),
 			Inbound:          inbound,
 			WorkspaceFlat:    wf,
+			InstructionRoot:  instr,
 		})
 
 		// Decide tool rounds from the message payload, not only finish_reason: some gateways

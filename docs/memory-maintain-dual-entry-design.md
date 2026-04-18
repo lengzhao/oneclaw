@@ -60,7 +60,7 @@
 | 信号质量 | 若对 slash 也追加 daily log 并触发近场维护，易把「固定帮助文案」等低价值文本写入维护输入 |
 | 与定时维护的关系 | **定时维护**（`RunScheduledMaintain`）仍可按既有规则读 daily log；slash 未写入的回合**不会**出现在 log 中，符合「旁路不沉淀为可维护信号」的语义 |
 
-若将来产品要求 slash 也参与观测或审计，应**单独**设计（例如只记 transcript、不触发 LLM 维护），而**不是**强行复用完整 `PostTurn` + `MaybePostTurnMaintain` 链。交叉说明见 [code-simplification-opportunities.md](code-simplification-opportunities.md) §2.2。
+若将来产品要求 slash 也参与观测或审计，应**单独**设计（例如只记 transcript、不触发 LLM 维护），而**不是**强行复用完整 `PostTurn` + `MaybePostTurnMaintain` 链。交叉说明见 [code-simplification-opportunities.md](code-simplification-opportunities.md) §1（本地 slash 旁路摘要）。
 
 ---
 

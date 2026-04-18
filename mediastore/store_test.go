@@ -16,7 +16,7 @@ func TestStoreBytesAndValidate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(rel, ".oneclaw/media/inbound/") {
+	if !strings.Contains(rel, "media/inbound/") {
 		t.Fatal(rel)
 	}
 	if ok, _ := regexp.MatchString(`inbound/\d{4}-\d{2}-\d{2}/`, rel); !ok {

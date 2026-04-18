@@ -16,7 +16,7 @@ import (
 
 // StartHostPollerIfEnabled runs the due-job poller and submits synthetic inbound messages (same role as legacy channel.schedule_poll).
 // userDataRoot is config.UserDataRoot() (e.g. ~/.oneclaw). When sessionIsolateWorkspace is false, jobs are read from
-// <userDataRoot>/scheduled_jobs.json. When true, each session workspace <userDataRoot>/sessions/<id>/.oneclaw/scheduled_jobs.json
+// <userDataRoot>/scheduled_jobs.json. When true, each session <userDataRoot>/sessions/<id>/scheduled_jobs.json
 // is polled (matches cron tool persistence under sessions.isolate_workspace).
 func StartHostPollerIfEnabled(ctx context.Context, userDataRoot string, sessionIsolateWorkspace bool, clientID string, submit func(context.Context, bus.InboundMessage) error) error {
 	if Disabled() {
@@ -34,7 +34,7 @@ func StartHostPollerIfEnabled(ctx context.Context, userDataRoot string, sessionI
 
 func deliverHostScheduledTurns(ctx context.Context, userDataRoot string, sessionIsolate bool, source string, submit func(context.Context, bus.InboundMessage) error) {
 	if !sessionIsolate {
-		deliveries, err := CollectDue(userDataRoot, userDataRoot, true, source, time.Now())
+		deliveries, err := CollectDue(userDataRoot, userDataRoot, true, "", source, time.Now())
 		if err != nil {
 			slog.Warn("schedule.collect_due", "err", err)
 			return
@@ -58,13 +58,14 @@ func deliverHostScheduledTurns(ctx context.Context, userDataRoot string, session
 	}
 	sort.Strings(names)
 	for _, name := range names {
-		sessionCWD := filepath.Join(userDataRoot, "sessions", name, memory.DotDir)
-		if st, err := os.Stat(sessionCWD); err != nil || !st.IsDir() {
+		sessionRoot := filepath.Join(userDataRoot, "sessions", name)
+		sessionWorkspace := filepath.Join(sessionRoot, memory.IMWorkspaceDirName)
+		if st, err := os.Stat(sessionRoot); err != nil || !st.IsDir() {
 			continue
 		}
-		deliveries, err := CollectDue(sessionCWD, "", true, source, time.Now())
+		deliveries, err := CollectDue(sessionWorkspace, "", true, sessionRoot, source, time.Now())
 		if err != nil {
-			slog.Warn("schedule.collect_due", "session_workspace", sessionCWD, "err", err)
+			slog.Warn("schedule.collect_due", "session_workspace", sessionWorkspace, "err", err)
 			continue
 		}
 		submitScheduleDeliveries(ctx, deliveries, source, submit)
@@ -94,7 +95,7 @@ func submitScheduleDeliveries(ctx context.Context, deliveries []TurnDelivery, so
 
 func nextWakeHost(userDataRoot string, sessionIsolate bool, targetSource string, now time.Time) (d time.Duration, ok bool) {
 	if !sessionIsolate {
-		return NextWakeDuration(userDataRoot, userDataRoot, true, targetSource, now)
+		return NextWakeDuration(userDataRoot, userDataRoot, true, "", targetSource, now)
 	}
 	dir := filepath.Join(userDataRoot, "sessions")
 	entries, err := os.ReadDir(dir)
@@ -107,11 +108,12 @@ func nextWakeHost(userDataRoot string, sessionIsolate bool, targetSource string,
 		if !e.IsDir() || strings.HasPrefix(e.Name(), ".") {
 			continue
 		}
-		sessionCWD := filepath.Join(userDataRoot, "sessions", e.Name(), memory.DotDir)
-		if st, err := os.Stat(sessionCWD); err != nil || !st.IsDir() {
+		sessionRoot := filepath.Join(userDataRoot, "sessions", e.Name())
+		sessionWorkspace := filepath.Join(sessionRoot, memory.IMWorkspaceDirName)
+		if st, err := os.Stat(sessionRoot); err != nil || !st.IsDir() {
 			continue
 		}
-		di, oi := NextWakeDuration(sessionCWD, "", true, targetSource, now)
+		di, oi := NextWakeDuration(sessionWorkspace, "", true, sessionRoot, targetSource, now)
 		if !oi {
 			continue
 		}

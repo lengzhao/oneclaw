@@ -1,4 +1,4 @@
-// Package mediastore writes inbound attachment bytes under <cwd>/.oneclaw/media/inbound/<YYYY-MM-DD>/
+// Package mediastore writes inbound attachment bytes under <cwd>/media/inbound/<YYYY-MM-DD>/
 // (UTC date) so the model can read them via read_file, and old days can be deleted as a whole directory.
 package mediastore
 
@@ -11,13 +11,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lengzhao/oneclaw/memory"
 	"github.com/lengzhao/oneclaw/tools/pathutil"
 )
 
 // InboundDir returns the absolute root for inbound media (all date buckets live under it).
 func InboundDir(cwd string) string {
-	return filepath.Join(cwd, memory.DotDir, "media", "inbound")
+	return filepath.Join(cwd, "media", "inbound")
 }
 
 // inboundDayDir returns the absolute directory for today's UTC date bucket, creating it if needed.
@@ -30,7 +29,7 @@ func inboundDayDir(cwd string) (string, error) {
 	return dir, nil
 }
 
-// StoreBytes writes body to a new file under .oneclaw/media/inbound/<UTC-date>/ and returns a path relative to cwd
+// StoreBytes writes body to a new file under media/inbound/<UTC-date>/ and returns a path relative to cwd
 // (slash-separated). logicalName is used for a safe suffix; maxBytes caps stored size.
 func StoreBytes(cwd, logicalName string, body []byte, maxBytes int) (relToCwd string, err error) {
 	if cwd == "" {
@@ -61,7 +60,7 @@ func StoreBytes(cwd, logicalName string, body []byte, maxBytes int) (relToCwd st
 	return filepath.ToSlash(rel), nil
 }
 
-// ValidateRelPath ensures rel resolves under cwd and under .oneclaw/media/inbound (including date subfolders).
+// ValidateRelPath ensures rel resolves under cwd and under media/inbound (including date subfolders).
 func ValidateRelPath(cwd, rel string) error {
 	if strings.TrimSpace(rel) == "" {
 		return fmt.Errorf("empty path")

@@ -259,8 +259,7 @@ func (r *Resolved) SessionTranscriptPaths(sessionSegment string) (transcript, wo
 		return "", ""
 	}
 	dir := r.SessionTranscriptDir(sessionSegment)
-	dot := filepath.Join(dir, memory.DotDir)
-	return filepath.Join(dot, "transcript.json"), filepath.Join(dot, "working_transcript.json")
+	return filepath.Join(dir, "transcript.json"), filepath.Join(dir, "working_transcript.json")
 }
 
 // NotifyAuditSinkPaths returns which notify audit JSONL sinks should register.

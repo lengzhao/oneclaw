@@ -28,10 +28,9 @@ func Path(cwd string) string {
 
 // JobsFilePath returns the absolute path to scheduled_jobs.json.
 //   - When hostDataRoot is set and projectCWD is empty: <hostDataRoot>/scheduled_jobs.json (host poller compat).
-//   - When hostDataRoot is set and projectCWD equals hostDataRoot (shared IM workspace): same flat file under user root.
-//   - Otherwise: memory.JoinSessionWorkspace(projectCWD, workspaceFlat, scheduled_jobs.json) — per-session when isolate_workspace
-//     places Engine.CWD under sessions/<id>/.oneclaw while HostDataRoot stays ~/.oneclaw.
-func JobsFilePath(projectCWD, hostDataRoot string, workspaceFlat bool) string {
+//   - When hostDataRoot is set and projectCWD equals hostDataRoot or <hostDataRoot>/workspace (shared IM): same flat file under user root.
+//   - Otherwise: memory.JoinSessionWorkspaceWithInstruction(projectCWD, instructionRoot, …) — per-session runtime under <instructionRoot>/.
+func JobsFilePath(projectCWD, hostDataRoot string, workspaceFlat bool, instructionRoot string) string {
 	ur := strings.TrimSpace(hostDataRoot)
 	pc := strings.TrimSpace(projectCWD)
 	if ur != "" && pc == "" {
@@ -40,11 +39,12 @@ func JobsFilePath(projectCWD, hostDataRoot string, workspaceFlat bool) string {
 	p := filepath.Clean(pc)
 	if ur != "" {
 		u := filepath.Clean(ur)
-		if p == u {
+		ws := filepath.Join(u, memory.IMWorkspaceDirName)
+		if p == u || p == ws {
 			return filepath.Join(u, fileName)
 		}
 	}
-	return memory.JoinSessionWorkspace(p, workspaceFlat, fileName)
+	return memory.JoinSessionWorkspaceWithInstruction(p, instructionRoot, workspaceFlat, fileName)
 }
 
 // Disabled reports features.disable_scheduled_tasks from config.
@@ -292,7 +292,7 @@ type AddInput struct {
 }
 
 // Add appends a job after validation. See JobsFilePath for path rules; workspaceFlat must match Engine.WorkspaceFlat.
-func Add(cwd, hostDataRoot string, workspaceFlat bool, in AddInput) (string, error) {
+func Add(cwd, hostDataRoot string, workspaceFlat bool, instructionRoot string, in AddInput) (string, error) {
 	if Disabled() {
 		return "", fmt.Errorf("scheduled tasks are disabled (features.disable_scheduled_tasks in config)")
 	}
@@ -308,7 +308,7 @@ func Add(cwd, hostDataRoot string, workspaceFlat bool, in AddInput) (string, err
 	if ts == "" {
 		ts = "cli"
 	}
-	path := JobsFilePath(cwd, hostDataRoot, workspaceFlat)
+	path := JobsFilePath(cwd, hostDataRoot, workspaceFlat, instructionRoot)
 	fileMu.Lock()
 	f, err := Read(path)
 	if err != nil {
@@ -387,7 +387,7 @@ func compactDisabledJobs(f *File) int {
 }
 
 // Remove deletes a job by id (same path rules as Add).
-func Remove(cwd, hostDataRoot string, workspaceFlat bool, jobID string) (string, error) {
+func Remove(cwd, hostDataRoot string, workspaceFlat bool, instructionRoot string, jobID string) (string, error) {
 	if Disabled() {
 		return "", fmt.Errorf("scheduled tasks are disabled (features.disable_scheduled_tasks in config)")
 	}
@@ -395,7 +395,7 @@ func Remove(cwd, hostDataRoot string, workspaceFlat bool, jobID string) (string,
 	if id == "" {
 		return "", fmt.Errorf("job_id is required")
 	}
-	path := JobsFilePath(cwd, hostDataRoot, workspaceFlat)
+	path := JobsFilePath(cwd, hostDataRoot, workspaceFlat, instructionRoot)
 	fileMu.Lock()
 	f, err := Read(path)
 	if err != nil {
@@ -430,11 +430,11 @@ func Remove(cwd, hostDataRoot string, workspaceFlat bool, jobID string) (string,
 }
 
 // ListText returns a human-readable list for the tool.
-func ListText(cwd, hostDataRoot string, workspaceFlat bool) (string, error) {
+func ListText(cwd, hostDataRoot string, workspaceFlat bool, instructionRoot string) (string, error) {
 	if Disabled() {
 		return "scheduled tasks are disabled", nil
 	}
-	path := JobsFilePath(cwd, hostDataRoot, workspaceFlat)
+	path := JobsFilePath(cwd, hostDataRoot, workspaceFlat, instructionRoot)
 	fileMu.Lock()
 	defer fileMu.Unlock()
 	f, err := Read(path)
@@ -526,11 +526,11 @@ type TurnDelivery struct {
 
 // CollectDue finds jobs for targetSource due at or before `now`, updates their next_run / last_run in the file, and returns deliveries.
 // Must be called without holding fileMu; this function locks internally.
-func CollectDue(cwd, hostDataRoot string, workspaceFlat bool, targetSource string, now time.Time) ([]TurnDelivery, error) {
+func CollectDue(cwd, hostDataRoot string, workspaceFlat bool, instructionRoot string, targetSource string, now time.Time) ([]TurnDelivery, error) {
 	if Disabled() {
 		return nil, nil
 	}
-	path := JobsFilePath(cwd, hostDataRoot, workspaceFlat)
+	path := JobsFilePath(cwd, hostDataRoot, workspaceFlat, instructionRoot)
 	fileMu.Lock()
 	defer fileMu.Unlock()
 	f, err := Read(path)

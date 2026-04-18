@@ -28,6 +28,8 @@
 
 日志建议使用 **`log/slog`**。Go 项目目录约定按团队习惯即可（本方案不强制使用 `internal` 包）。
 
+与 Claude Code **产品能力层面的异同**（优化点、缺失与后置项）见专文 [`claude-code-vs-oneclaw.md`](claude-code-vs-oneclaw.md)。
+
 ---
 
 ## 3. Memory 子系统（对齐 [`claude-code-memory-system.md`](claude-code-memory-system.md)）
@@ -103,24 +105,124 @@ flowchart LR
 | 阶段 | 内容 |
 |------|------|
 | **A** | Transcript、主 query 循环、一种模型后端；最小工具集（读/写/搜索/shell，带沙箱与策略） |
-| **B** | Memory 全链路：scope、`MEMORY.md` 截断、include、注入与 recall；extract + dream 入口 |
+| **B** | Memory 全链路：scope、`MEMORY.md` 截断、**不实现 `@include`**、注入与 recall；extract + dream 入口 |
 | **C** | 子 Agent 与隔离、sidechain transcript、权限收缩；fork 与完整子 Agent 分流 |
 | **D** | 维护作业调度、变更审计；可选向量 recall |
 
-更细的任务拆解与验收标准见 [`go-runtime-development-plan.md`](go-runtime-development-plan.md)。
+下列 **§8–§9** 为与里程碑对应的包布局建议、分阶段任务表与验收口径（原独立文档 `go-runtime-development-plan.md` 已并入本文）。
 
 ---
 
-## 7. 用另一个 Git 仓库管理实现（推荐）
+## 7. 工程约定
 
-- **新建独立仓库**存放 Go 实现；**本仓库**的 `docs/` 继续作为设计参考与 prompt/流程说明来源。
-- **默认**：在新仓库 `README` 中写明参考本仓库 URL 与分支，不强制 submodule。
-- **需要文档与 commit 强绑定时**：在新仓库使用 `git submodule` 挂载参考文档目录，并在 README 说明更新方式。
-- **避免**：在同一仓库内混放「研究笔记」与「产品代码」导致 CI 与协作边界模糊。
+- **日志**：`log/slog`；包布局不强制 `internal`（团队约定）。
+- **新功能**：先读 `docs/` 下对应设计再改代码。
+- **设计真源**：本目录 `claude-code-*.md` 与 `prompts/`；**不依赖**仓库内 `claude-code-2026-03-31` 子目录。若对照原 TypeScript 实现，请自行保留或克隆参考仓库；下表「TS 参考路径」相对原 Claude Code `src/`，仅作语义映射。
 
 ---
 
-## 8. 延伸阅读（本目录）
+## 8. 建议包布局
+
+| 职责 | 建议包 | 原 TS 语义参考（路径相对原 Claude Code `src/`） |
+|------|--------|--------------------------------------------------|
+| 会话与入口 | `session` | `QueryEngine.ts`、`utils/processUserInput/processUserInput.ts` |
+| 主循环 | `loop` | `query.ts` |
+| 工具运行时 | `tools` | `Tool.ts`、`services/tools/toolOrchestration.ts`、`services/tools/toolExecution.ts` |
+| 消息模型 | `message` / `types` | `types/message.js`、`utils/messages.ts` |
+| Memory | `memory` + 注入 `toolctx` | `memdir/memdir.ts`、`utils/attachments.ts`、`utils/memoryFileDetection.ts` |
+| 子 Agent | `subagent` | `tools/AgentTool/runAgent.ts`、`utils/forkedAgent.ts`、`utils/swarm/inProcessRunner.ts` |
+| 系统前缀 | `context` | `utils/queryContext.ts`、`context.ts`、`constants/prompts.ts` |
+
+**本仓库现状**：上述职责已落在 `session`、`loop`、`tools`、`memory`、`subagent` 等包中，与上表大体一致。
+
+---
+
+## 9. 阶段任务与验收
+
+### 9.1 阶段 A：最小闭环
+
+**目标**：Transcript + 主 query 循环 + 一种模型后端 + 最小工具集（读/写/grep/可选 shell），权限与保守并发。
+
+| 序号 | 任务 | 要点 |
+|------|------|------|
+| A1 | 统一消息模型 | user / assistant / tool_use / tool_result / attachment；compact boundary 可先占位 |
+| A2 | 会话编排 | 每轮输入 → 追加 transcript → 进入 query 循环；跨轮状态（messages、usage、abort） |
+| A3 | query 循环 | 模型 → tool_use → 执行 → tool_result 回灌 → 直至无 tool 或达上限/预算 |
+| A4 | 模型后端 | 一种供应商 + 流式 + tool 块解析 |
+| A5 | 工具注册与执行 | schema、按名查找、权限钩子；只读工具可批量并行、写串行 |
+| A6 | 最小工具 | Read / Write 或 StrReplace / Grep、Bash（cwd/超时/策略） |
+| A7 | `ToolUseContext` | abort、只读缓存、权限上下文；为 B/C 预留 nested memory 等字段 |
+| A8 | 测试与 CLI | 消息往返单测；简单多轮对话入口 |
+
+**验收**：同 session 多轮 + 多轮工具调用；Abort 可停；transcript 可序列化/持久化。
+
+### 9.2 阶段 B：Memory 全链路
+
+**目标**：发现、注入、recall、在线写入；extract / dream 入口。设计对照 [`claude-code-memory-system.md`](claude-code-memory-system.md)。
+
+| 序号 | 任务 | 要点 |
+|------|------|------|
+| B1 | 存储与路径 | 各 scope；`MEMORY.md` 索引；topic；daily log append |
+| B2 | `MEMORY.md` 截断 | 行数 + 字节双上限、截断说明 |
+| B3 | 发现层 | 向上查找 `AGENT.md`、`.oneclaw/rules`、`memory` 根 |
+| B4 | `@include` | **不实现**（仅磁盘正文） |
+| B5 | 注入与 recall | system 前缀；recall → attachment；字节上限与路径去重 |
+| B6 | 在线更新 | 工具写 topic / `MEMORY.md` / daily log |
+| B7 | extract / dream | 窄上下文子任务 + 触发策略；合并去重可先简化 |
+
+**验收**：切换目录/scope 发现正确；下一轮能注入更新后的 memory；recall 可控不爆 token。
+
+### 9.3 阶段 C：子 Agent 与隔离
+
+**目标**：独立 agentId、裁剪上下文、独立 transcript；fork 与完整子 Agent；权限收缩。对照 [`claude-code-subagent-system.md`](claude-code-subagent-system.md)、[`prompts/20-subagent.md`](prompts/20-subagent.md)、[`prompts/30-fork-agent.md`](prompts/30-fork-agent.md)。
+
+| 序号 | 任务 | 要点 |
+|------|------|------|
+| C1 | Agent 定义加载 | 目录或配置驱动 |
+| C2 | 嵌套调用 | 子 Agent 内独立 query；默认隔离 `ToolUseContext` |
+| C3 | Fork | 共享 system 前缀 + 裁剪 messages |
+| C4 | sidechain transcript | 与主线程分离，可选合并 |
+| C5 | 权限 | 子 Agent 侧默认更保守（如避免交互式授权） |
+
+**验收**：主 transcript 不被子任务撑爆；fork 与全量子 Agent 两条路径行为符合设计文。
+
+### 9.4 阶段 D：运维与可选向量
+
+| 序号 | 任务 | 要点 |
+|------|------|------|
+| D1 | 维护调度 | dream / extract 的定时或事件触发；slog 记录失败 |
+| D2 | 变更审计 | memory 写入可追溯（git 或 append-only log） |
+| D3 | 向量 recall（可选） | 插件化；文件仍为真源 |
+
+### 9.5 依赖顺序
+
+```mermaid
+flowchart TD
+  A[A 核心循环+工具] --> B[B Memory]
+  A --> C[C 子 Agent]
+  B --> D[D 调度与审计]
+  C --> D
+```
+
+---
+
+## 10. 风险与刻意后置
+
+- **MCP**：客户端主干已接入（见 [`todo.md`](todo.md) #30）；tool discovery、UI 级权限流、二进制结果与 mediastore 对齐等仍可后置。
+- 刻意不做或晚做：复杂 compact UI、全量遥测、多 LLM 协议全家桶（见 [`multi-llm-provider-design.md`](multi-llm-provider-design.md) 分阶段）。
+- 尽早做 token/字节预算，避免 Memory 阶段大改。
+- 并发策略：**只读并行、写串行**，与 [`claude-code-main-flow-analysis.md`](claude-code-main-flow-analysis.md) 中工具层语义一致。
+
+---
+
+## 11. 仓库与文档关系
+
+- **oneclaw** 本仓库已合并实现与 `docs/` 设计，日常以本目录为唯一设计真源。
+- 若另起仓库复用文档：在新仓库 README 中写明参考 URL；需要与 commit 强绑定可用 `git submodule` 挂载 `docs/`。
+
+---
+
+## 12. 延伸阅读（本目录）
 
 | 文档 | 说明 |
 |------|------|
@@ -136,4 +238,4 @@ flowchart LR
 
 ---
 
-*文档目的：便于在新仓库立项时携带一致的设计共识；细节以本 `docs/` 目录正文为准。*
+*立项与排期勾选见 [`todo.md`](todo.md)；运行时主路径见 [`runtime-flow.md`](runtime-flow.md)。*

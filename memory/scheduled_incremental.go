@@ -18,10 +18,15 @@ func scheduledMaintainStatePath(layout Layout) string {
 	return filepath.Join(layout.DotOrDataRoot(), scheduledMaintainStateFile)
 }
 
-// migrateScheduledMaintainState moves state from the legacy path layout.Project/.oneclaw/ to DotOrDataRoot().
+// migrateScheduledMaintainState moves state from legacy paths under layout.Project/.oneclaw/ or layout.Project/ to DotOrDataRoot().
 func migrateScheduledMaintainState(layout Layout) {
 	newPath := scheduledMaintainStatePath(layout)
-	oldPath := filepath.Join(layout.Project, DotDir, scheduledMaintainStateFile)
+	oldNested := filepath.Join(layout.Project, DotDir, scheduledMaintainStateFile)
+	oldFlat := filepath.Join(layout.Project, scheduledMaintainStateFile)
+	oldPath := oldNested
+	if _, err := os.Stat(oldPath); err != nil {
+		oldPath = oldFlat
+	}
 	if newPath == oldPath {
 		return
 	}

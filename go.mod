@@ -3,7 +3,7 @@ module github.com/lengzhao/oneclaw
 go 1.26.1
 
 require (
-	github.com/lengzhao/clawbridge v0.2.1
+	github.com/lengzhao/clawbridge v0.2.2
 	github.com/modelcontextprotocol/go-sdk v1.4.1
 	github.com/openai/openai-go v1.12.0
 	github.com/robfig/cron/v3 v3.0.1

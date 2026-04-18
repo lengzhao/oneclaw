@@ -98,7 +98,7 @@ func TestDisabled(t *testing.T) {
 	if _, err := Create(dir, false, false, []CreateInput{{Subject: "x"}}); err == nil {
 		t.Fatal("expected error when disabled")
 	}
-	_, lines, _ := PromptTaskLines(dir, false)
+	_, lines, _ := PromptTaskLines(dir, false, "")
 	if len(lines) > 0 {
 		t.Fatalf("prompt lines should be empty when disabled, got %q", lines)
 	}
@@ -110,7 +110,7 @@ func TestPromptTaskLinesNonEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, lines, _ := PromptTaskLines(dir, false)
+	_, lines, _ := PromptTaskLines(dir, false, "")
 	joined := strings.Join(lines, "\n")
 	if len(lines) == 0 || !strings.Contains(joined, "do thing") || !strings.Contains(joined, "in_progress") {
 		t.Fatalf("unexpected lines: %q", joined)

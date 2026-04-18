@@ -71,13 +71,12 @@
 - 委派 Agent 目录与编排约定：见仓库根目录 [orchestrator-business-agents.md](../orchestrator-business-agents.md)。
 - 模板文件：`prompts/templates/main_thread_system.tmpl`（`# Delegated agents (run_agent)` 段）。
 
-## 关键源码入口
+## 本仓库（oneclaw / Go）源码入口
 
-- 主线程 system prompt：`src/constants/prompts.ts`
-- user/system context 注入：`src/utils/api.ts`
-- 主线程入口：`src/QueryEngine.ts`
-- query 主循环：`src/query.ts`
-- 子 Agent prompt：`src/tools/AgentTool/runAgent.ts`
-- fork agent：`src/utils/forkedAgent.ts`
-- teammate addendum：`src/utils/swarm/teammatePromptAddendum.ts`
-- memory prompt：`src/memdir/memdir.ts`
+- 主线程 system 拼装：`context` 包与模板（如 `prompts/templates/main_thread_system.tmpl`）
+- 回合主循环：`loop/`
+- 会话入口：`session/engine.go`、`session/turn_prepare.go`
+- 子 Agent：`subagent/`
+- Memory 注入：`memory/`
+
+原 Claude Code TypeScript 路径仅作范式对照时查阅，**不作为本仓库实现索引**。

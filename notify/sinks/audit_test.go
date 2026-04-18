@@ -12,6 +12,27 @@ import (
 	"github.com/openai/openai-go"
 )
 
+func TestAuditSinksWriteJSONL_omitDotDir(t *testing.T) {
+	dir := t.TempDir()
+	o := Options{CWD: dir, AgentID: "test-agent", OmitDotDir: true}
+	llm := NewLLMAuditSink(o)
+	ev := notify.NewEvent(notify.EventModelStepEnd, "")
+	ev.SessionID = "s1"
+	ev.TurnID = "t1"
+	ev.Data = map[string]any{"step": 0}
+	if err := llm.Emit(context.Background(), ev); err != nil {
+		t.Fatal(err)
+	}
+	base := filepath.Join(dir, "audit", "test-agent", "llm")
+	matches, err := filepath.Glob(filepath.Join(base, "*", "*", "*.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(matches) != 1 {
+		t.Fatalf("glob: %v", matches)
+	}
+}
+
 func TestAuditSinksWriteJSONL(t *testing.T) {
 	dir := t.TempDir()
 	o := Options{CWD: dir, AgentID: "test-agent"}

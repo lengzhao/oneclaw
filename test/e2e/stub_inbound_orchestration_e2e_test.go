@@ -170,7 +170,7 @@ func TestE2E_114_InboundMetaAndAttachmentInHistory(t *testing.T) {
 	if strings.Contains(s, "<inbound-context>") {
 		t.Fatalf("inbound meta should not remain in collapsed Messages:\n%s", s)
 	}
-	if !strings.Contains(s, "f.txt") || !strings.Contains(s, "read_file") || !strings.Contains(s, ".oneclaw/media/inbound") {
+	if !strings.Contains(s, "f.txt") || !strings.Contains(s, "read_file") || !strings.Contains(s, "media/inbound") {
 		t.Fatalf("expected stored path + read_file hint, got:\n%s", s)
 	}
 	if strings.Contains(s, "PAYLOAD_INLINE_MUST_NOT_APPEAR") {
@@ -197,12 +197,12 @@ func TestE2E_115_EmptyTextWithAttachmentAccepted(t *testing.T) {
 	if strings.Contains(s, "hello") {
 		t.Fatalf("file contents must not appear inline in user messages:\n%s", s)
 	}
-	if !strings.Contains(s, ".oneclaw/media/inbound") {
+	if !strings.Contains(s, "media/inbound") {
 		t.Fatalf("expected media path in:\n%s", s)
 	}
 	var found string
 	for _, line := range strings.Split(s, "\n") {
-		if strings.Contains(line, ".oneclaw/media/inbound") {
+		if strings.Contains(line, "media/inbound") {
 			found = strings.TrimSpace(line)
 			break
 		}

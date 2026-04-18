@@ -23,7 +23,7 @@ go run ./cmd/oneclaw
 # 可选：go run ./cmd/oneclaw -config ./my-layer.yaml  # 相对路径相对于 ~/.oneclaw/
 ```
 
-`cmd/oneclaw` 支持 **`-config`**（额外 YAML 层，相对路径相对于 **`~/.oneclaw/`**，见 [`docs/config.md`](docs/config.md)）、**`-init`**（初始化 **`$HOME/.oneclaw`**）、**`-maintain-once`**（单次远场维护后退出）、**`-export-session`** 等。转写仍默认在 **`~/.oneclaw/sessions/<id>/.oneclaw/`**；**文件工具工作目录**（`Engine.CWD`）由 **`sessions.isolate_workspace`** 控制：默认 **false** 时为共享 **`~/.oneclaw`**，**true** 时为 **`~/.oneclaw/sessions/<id>/.oneclaw`**。**每轮 `SubmitUser` 成功结束后**会写转写。关闭落盘：`features.disable_transcript`。
+`cmd/oneclaw` 支持 **`-config`**（额外 YAML 层，相对路径相对于 **`~/.oneclaw/`**，见 [`docs/config.md`](docs/config.md)）、**`-init`**（初始化 **`$HOME/.oneclaw`**）、**`-maintain-once`**（单次远场维护后退出）、**`-export-session`** 等。转写默认在 **`~/.oneclaw/sessions/<id>/transcript.json`**（与 `working_transcript.json` 同级）；**文件工具工作目录**（`Engine.CWD`）由 **`sessions.isolate_workspace`** 控制：默认 **false** 时为 **`~/.oneclaw/workspace`**，**true** 时为 **`~/.oneclaw/sessions/<id>/workspace`**。**每轮 `SubmitUser` 成功结束后**会写转写。关闭落盘：`features.disable_transcript`。
 
 常用 REPL 命令：`/exit` 退出。对话落盘依赖配置中的 transcript 路径及每轮成功结束后的自动保存（见上段）；另存副本请用外部工具复制该文件。
 
@@ -168,8 +168,8 @@ go run ./cmd/oneclaw -init
 
 1. [`docs/README.md`](docs/README.md) — 文档索引  
 2. [`docs/config.md`](docs/config.md) — 统一 YAML 配置与 `PushRuntime`  
-3. [`docs/agent-runtime-golang-plan.md`](docs/agent-runtime-golang-plan.md) — 目标与边界  
-4. [`docs/go-runtime-development-plan.md`](docs/go-runtime-development-plan.md) — 分阶段任务  
+3. [`docs/agent-runtime-golang-plan.md`](docs/agent-runtime-golang-plan.md) — 目标、包布局、阶段 A–D 任务与验收  
+4. [`docs/claude-code-vs-oneclaw.md`](docs/claude-code-vs-oneclaw.md) — 与 Claude Code 异同（优化与缺口）  
 5. [`docs/claude-code-memory-system.md`](docs/claude-code-memory-system.md) / [`docs/claude-code-subagent-system.md`](docs/claude-code-subagent-system.md)  
 6. [`docs/inbound-routing-design.md`](docs/inbound-routing-design.md) / [`docs/outbound-events-design.md`](docs/outbound-events-design.md)  
 7. [`docs/prompts/README.md`](docs/prompts/README.md)  

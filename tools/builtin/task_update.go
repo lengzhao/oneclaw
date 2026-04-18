@@ -110,5 +110,5 @@ func (TaskUpdateTool) Execute(ctx context.Context, input json.RawMessage, tctx *
 		s := strings.TrimSpace(in.CompletionEvidence)
 		patch.CompletionEvidence = &s
 	}
-	return tasks.Update(tctx.CWD, tctx.WorkspaceFlat, in.TaskID, patch)
+	return tasks.UpdateWithInstruction(tctx.CWD, tctx.InstructionRoot, tctx.WorkspaceFlat, in.TaskID, patch)
 }

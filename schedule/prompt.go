@@ -11,11 +11,11 @@ const maxSystemJobs = 32
 const maxSystemBytes = 8000
 
 // PromptLines returns file path and one markdown line per enabled job (for system prompt).
-func PromptLines(cwd, hostDataRoot string, workspaceFlat bool) (filePath string, lines []string, omitted int) {
+func PromptLines(cwd, hostDataRoot string, workspaceFlat bool, instructionRoot string) (filePath string, lines []string, omitted int) {
 	if Disabled() {
 		return "", nil, 0
 	}
-	path := JobsFilePath(cwd, hostDataRoot, workspaceFlat)
+	path := JobsFilePath(cwd, hostDataRoot, workspaceFlat, instructionRoot)
 	f, err := Read(path)
 	if err != nil || len(f.Jobs) == 0 {
 		return "", nil, 0
@@ -49,8 +49,8 @@ func PromptLines(cwd, hostDataRoot string, workspaceFlat bool) (filePath string,
 }
 
 // SystemBlock returns a markdown section for the model (empty if disabled or no jobs).
-func SystemBlock(cwd, hostDataRoot string, workspaceFlat bool) string {
-	path, lines, omitted := PromptLines(cwd, hostDataRoot, workspaceFlat)
+func SystemBlock(cwd, hostDataRoot string, workspaceFlat bool, instructionRoot string) string {
+	path, lines, omitted := PromptLines(cwd, hostDataRoot, workspaceFlat, instructionRoot)
 	if len(lines) == 0 && path == "" {
 		return ""
 	}

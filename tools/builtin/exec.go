@@ -165,7 +165,7 @@ func execExecuteForegroundWaitOrDetach(ctx context.Context, in execInput, tctx *
 		base = ctx
 	}
 
-	_, runLogPath, err := execSessionDir(tctx.CWD, tctx.SessionID, tctx.WorkspaceFlat)
+	_, runLogPath, err := execSessionDir(tctx.CWD, tctx.SessionID, tctx.WorkspaceFlat, tctx.InstructionRoot)
 	if err != nil {
 		return "", err
 	}
@@ -272,11 +272,11 @@ func shellSingleQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'"'"'`) + "'"
 }
 
-// execSessionDir creates exec_log/<unix_ts>/ under the session workspace (see memory.JoinSessionWorkspace).
-func execSessionDir(cwd, sessionID string, workspaceFlat bool) (dir string, runLogPath string, err error) {
+// execSessionDir creates exec_log/<unix_ts>/ under the session runtime dir (see memory.JoinSessionWorkspaceWithInstruction).
+func execSessionDir(cwd, sessionID string, workspaceFlat bool, instructionRoot string) (dir string, runLogPath string, err error) {
 	_ = sessionID
 	ts := fmt.Sprintf("%d", time.Now().Unix())
-	dir = memory.JoinSessionWorkspace(cwd, workspaceFlat, "exec_log", ts)
+	dir = memory.JoinSessionWorkspaceWithInstruction(cwd, instructionRoot, workspaceFlat, "exec_log", ts)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", "", fmt.Errorf("exec: mkdir exec_log dir: %w", err)
 	}
@@ -285,7 +285,7 @@ func execSessionDir(cwd, sessionID string, workspaceFlat bool) (dir string, runL
 }
 
 func execExecuteBackground(ctx context.Context, in execInput, tctx *toolctx.Context) (string, error) {
-	_, runLogPath, err := execSessionDir(tctx.CWD, tctx.SessionID, tctx.WorkspaceFlat)
+	_, runLogPath, err := execSessionDir(tctx.CWD, tctx.SessionID, tctx.WorkspaceFlat, tctx.InstructionRoot)
 	if err != nil {
 		return "", err
 	}

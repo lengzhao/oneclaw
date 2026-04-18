@@ -7,5 +7,5 @@ func (e *Engine) MemoryLayout(home string) memory.Layout {
 	if e == nil {
 		return memory.Layout{}
 	}
-	return memory.LayoutForIMWorkspace(e.CWD, home, e.UserDataRoot, e.WorkspaceFlat)
+	return memory.LayoutForIMWorkspace(e.CWD, home, e.UserDataRoot, e.WorkspaceFlat, e.InstructionRoot)
 }

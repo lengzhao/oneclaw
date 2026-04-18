@@ -86,10 +86,10 @@
 |------|------|
 | **session_key** | 来自 clawbridge `bus.InboundMessage` 的线程/话题键（`session.InboundSessionKey`）；决定「哪一条会话」 |
 | **Engine.SessionID** | 由 `ClientID`（`SessionHandle.Source`）+ `session_key` **稳定派生**的十六进制 id（`session.StableSessionID`），用于 sqlite、分文件等 |
-| **Engine.CWD（IM）** | 由 **`sessions.isolate_workspace`** 控制（默认 **false**）：**false** 时 CWD = `UserDataRoot`（多会话共享 `~/.oneclaw` 下 tasks/memory/exec 等）；**true** 时 CWD = `<UserDataRoot>/sessions/<SessionID>/.oneclaw`（每会话独立工作区） |
-| **转写文件（IM）** | 始终 `<UserDataRoot>/sessions/<SessionID>/.oneclaw/transcript.json` 与 `working_transcript.json`（与 YAML `paths.transcript` 无关） |
+| **Engine.CWD（IM）** | 由 **`sessions.isolate_workspace`** 控制（默认 **false**）：**false** 时 CWD = `<UserDataRoot>/workspace`（多会话共享同一 `workspace/`）；**true** 时 CWD = `<UserDataRoot>/sessions/<SessionID>/workspace`（每会话独立 `workspace/`）。用户数据根目录树内**不再**出现嵌套的 `.oneclaw` 子目录名（见 [`user-root-workspace-layout.md`](user-root-workspace-layout.md)） |
+| **转写文件（IM）** | 始终 `<UserDataRoot>/sessions/<SessionID>/transcript.json` 与 `working_transcript.json`（与 YAML `paths.transcript` 无关） |
 | **SQLite（IM）** | 默认 `<UserDataRoot>/sessions.sqlite`（可用 `sessions.sqlite_path` 覆盖，相对路径相对 `UserDataRoot`） |
-| **审计 JSONL（IM）** | `<Engine.CWD>/audit/<agent>/…`（扁平工作区下 CWD 已是 `.oneclaw` 目录，故为 `…/audit` 而非 `…/.oneclaw/audit`） |
+| **审计 JSONL（IM）** | IM 下锚在 **InstructionRoot**（未隔离时为 `UserDataRoot`，隔离时为 `sessions/<SessionID>/`）：`<InstructionRoot>/audit/<agent>/…` |
 | **定时任务文件（IM）** | `<UserDataRoot>/scheduled_jobs.json`（与项目树下 `.oneclaw/scheduled_jobs.json` 二选一：工具通过 `HostDataRoot` 写用户根） |
 | **dialog_history** | 维护布局见 `memory.IMHostMaintainLayout`：主机级 episodic 在 `<UserDataRoot>/memory/…` 下按日与会话分文件（实现细节以代码为准） |
 
@@ -99,7 +99,7 @@
 
 ### LLM 用量（`usage/` 目录）
 
-每次成功的 chat completion（含工具多步）在 `ToolContext.CWD` 非空且返回非零 token 时落盘。路径为 **`<Engine.CWD>/usage/`**（IM 主进程下 CWD 为扁平 `UserDataRoot` 或 `sessions/<id>/.oneclaw`，不再多嵌一层 `.oneclaw`）。
+每次成功的 chat completion（含工具多步）在 `ToolContext.CWD` 非空且返回非零 token 时落盘。路径为 **`<InstructionRoot>/usage/`**（IM 主进程在存在 `InstructionRoot` 时写入该目录；与 `Engine.CWD` 的 `workspace/` 分离）。
 
 | YAML（`usage.*`） | 说明 |
 |-------------------|------|

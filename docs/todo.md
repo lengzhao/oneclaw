@@ -1,6 +1,6 @@
 # Go Agent Runtime — 任务清单
 
-勾选表示完成。详细说明与验收口径见 [`go-runtime-development-plan.md`](go-runtime-development-plan.md)、[`agent-runtime-golang-plan.md`](agent-runtime-golang-plan.md)。
+勾选表示完成。详细说明与验收口径见 [`agent-runtime-golang-plan.md`](agent-runtime-golang-plan.md)（含阶段 A–D 任务表）。
 
 **「可自我学习 / 进化」在本项目中的含义**（见 `agent-runtime-golang-plan.md`）：**文件型记忆平面持续更新** + **规则/策略可写回磁盘** + **维护型子任务整理**，而非训练模型权重。下列完成度按此目标评估。
 
@@ -14,7 +14,7 @@
 |--------|-----|------|
 | **P2** | ~~入口编排加厚~~（已做主干） | slash 本地命令、`Inbound` 元块、附件、`statichttp`/`InboundTurn` 透传；IM 侧可再迭代 |
 | **P2** | D3 向量 recall | 插件接口，文件仍为真源 |
-| **P2** | 预算精度（可选） | usage / tokenizer 类估算，多模型下裁剪更一致 |
+| **P2（续作）** | **预算 / tokenizer 更精细** | UTF-8 与 YAML 段上限已接（backlog **#15** `[x]`）；多模型下 tokenizer 级用量估算与裁剪一致性仍可加强 |
 | **P2** | 协作模型（teammate / swarm） | mailbox、长期成员等；按需排期 |
 | **后置** | **多 LLM / 多协议**（设计已定） | 见 [`multi-llm-provider-design.md`](multi-llm-provider-design.md）；统一 backlog **#28**（分 Phase 0–3） |
 | **后置** | **MCP 工具**（连接外部 MCP Server） | [x] backlog **#30**（`mcpclient`）；discovery 等见续作 |
@@ -26,7 +26,7 @@
 | **P2 工程** | ~~**Emitter `context` 策略统一**~~（已落地） | `loop` defer 与 `submitLocalSlashTurn` 注释对齐（**#22**） |
 | **P3 文档** | **Routing / 渠道文档补全** | `DefaultRegistry` 进程单例语义；`SinkRegistry` vs `SinkFactory`；单 `Engine`+多 source vs `SessionResolver`（见 **#23–#25**） |
 | **P3 文档** | **子 agent 工具可见性说明** | 最终工具表 = catalog ∩ 过滤 − meta（见 **#26**） |
-| **后置/可选** | **`context.Value` 窄接口** | 可选 `OutboundSender`，与全局 Engine 方案二选一（见 [`code-simplification-opportunities.md`](code-simplification-opportunities.md) §8、**#27**） |
+| **后置/可选** | **`context.Value` 窄接口** | 可选 `OutboundSender`，与全局 Engine 方案二选一（见 [`code-simplification-opportunities.md`](code-simplification-opportunities.md) §4、**#27**） |
 
 **工程习惯**（非代码交付）：新功能开发前阅读对应设计文档（见 [`README.md`](README.md) 索引）——持续执行，不单列为「版本完成」项。
 
@@ -85,12 +85,12 @@
 
 23. `[ ]` **文档：`routing.DefaultRegistry`** — 进程级单例、测试与多实例注意（[`inbound-routing-design.md`](inbound-routing-design.md) 或 `config.md` 交叉一句）。
 24. `[ ]` **文档：`SinkRegistry` vs `SinkFactory`** — 默认主路径 vs 高级 per-turn 绑定（[`inbound-routing-design.md`](inbound-routing-design.md) 或 [`config.md`](config.md)）。
-25. `[ ]` **文档：单 `Engine` vs `SessionResolver`** — 何时多 source 共引擎、何时按 handle 拆引擎（[`code-simplification-opportunities.md`](code-simplification-opportunities.md) §5.2）。
+25. `[ ]` **文档：单 `Engine` vs `SessionResolver`** — 何时多 source 共引擎、何时按 handle 拆引擎（[`code-simplification-opportunities.md`](code-simplification-opportunities.md) §3）。
 26. `[ ]` **文档：子 agent 工具表** — catalog 过滤与 meta-tool 剥离的合成规则（[`claude-code-subagent-system.md`](claude-code-subagent-system.md) 或 `subagent` 包注释）。
 
 ### 后置
 
-27. `[ ]` **可选：`context.Value` 挂 `OutboundSender`** — 与 `toolctx.SessionHost.SendMessage` 二选一演进，非与全局 `Engine` 并行两套（见 [`code-simplification-opportunities.md`](code-simplification-opportunities.md) §8）。
+27. `[ ]` **可选：`context.Value` 挂 `OutboundSender`** — 与 `toolctx.SessionHost.SendMessage` 二选一演进，非与全局 `Engine` 并行两套（见 [`code-simplification-opportunities.md`](code-simplification-opportunities.md) §4）。
 
 28. `[ ]` **多 LLM / 多协议（LLM 类型可扩展）** — 设计文档 [`multi-llm-provider-design.md`](multi-llm-provider-design.md)；参考 picoclaw `pkg/providers`。宜在 config 形态敲定后接入，避免双重迁移。建议按阶段验收：
     - **Phase 0**：`model` 支持 `协议/模型ID` 写法，解析后仍走单一 OpenAI 兼容客户端（仅修正传入 API 的 model 字符串）。
@@ -172,33 +172,9 @@
 
 ---
 
-## 目标导向：自我进化闭环（与 backlog 对照）
+## 目标导向：自我进化闭环
 
-> 对应 `agent-runtime-golang-plan.md` 第 5 节示意：daily log →（dream）→ memory 平面 → 下一轮注入。  
-> **以下表格与「统一 backlog」逐项对齐**（避免与上文矛盾）。
-
-| 优先级 | 项 | 说明 |
-|--------|-----|------|
-| P0 | **统一 config 模块** | [x] backlog #1 |
-| P0 | **模型化维护管道** | [x] 回合后 + 定时 + 多段 log / topic / 去重（backlog #2） |
-| P0 | **语义 compact（最小可用）** | [x] backlog #3 |
-| P0 | **受控并行 tool 调用** | [x] backlog #4 |
-| P0 | **Glob / 列表工具** | [x] backlog #5 |
-| P0 | **全局上下文预算** | [x] backlog #6 |
-| P1 | **通用 Channel 抽象** | [x] backlog #7 |
-| P1 | **Skills（Claude Code 机制）** | [x] 主干 backlog #8；续作见「未完成任务一览」 |
-| P1 | **行为策略写回** | [x] backlog #9 |
-| P1 | **任务状态工具** | [x] backlog #10 |
-| P1 | **侧链合并（可选）** | [x] backlog #11 |
-| P1 | **Cron / Heartbeat** | [x] backlog #12（`cron` 工具 + `scheduled_jobs`；maintain 双入口 + 内嵌 loop） |
-| P2 | **入口编排加厚** | [x] backlog #13 |
-| P2 | **D3 向量 recall** | [ ] backlog #14 |
-| P2 | **预算精度（可选）** | [ ] backlog #15 |
-| P2 | **协作模型（teammate / swarm）** | [ ] backlog #16 |
-| P2/P3 | **工程简化（可选）** | [ ] backlog **#19–#27**（[`code-simplification-opportunities.md`](code-simplification-opportunities.md)） |
-| 后置 | **多 LLM / 多协议** | [ ] backlog #28、[`multi-llm-provider-design.md`](multi-llm-provider-design.md) |
-| 后置 | **MCP 工具** | [x] backlog **#30** |
-| 后置 | **compact 高级形态 / 全量遥测** | [ ] backlog #29 |
+闭环示意见 [`agent-runtime-golang-plan.md`](agent-runtime-golang-plan.md) 第 5 节（daily log → dream → memory 平面 → 下一轮注入）。**逐项状态以本文「统一 backlog」为准**，不再重复对照表。
 
 ---
 
@@ -246,7 +222,7 @@ flowchart TB
   C --> D
 ```
 
-建议：**先做 P0 中的统一 config**（开发与生产同一套），再并行推进维护管道与 compact/工具面；**Channel / Skills** 等 P1 可与当前 OpenAI 兼容栈并行；**多 LLM / 多协议**（[`multi-llm-provider-design.md`](multi-llm-provider-design.md)）见 backlog 后置（#28），避免过早双重迁移。D3 向量与 **MCP 工具（#30）** 按产品排期。阶段 D1/D2 已接，不阻塞上述排序。工程简化项见 backlog **#19–#27** 与 [`code-simplification-opportunities.md`](code-simplification-opportunities.md)。
+建议：**先做 P0 中的统一 config**（开发与生产同一套），再并行推进维护管道与 compact/工具面；**Channel / Skills** 等 P1 可与当前 OpenAI 兼容栈并行；**多 LLM / 多协议**（[`multi-llm-provider-design.md`](multi-llm-provider-design.md)）见 backlog 后置（#28），避免过早双重迁移。D3 向量与 **MCP 工具（#30）** 按产品排期。阶段 D1/D2 已接，不阻塞上述排序。工程简化代码路径 **#19–#22** 已勾选；剩余文档与可选演进见 **#23–#27** 及 [`code-simplification-opportunities.md`](code-simplification-opportunities.md)。
 
 ---
 

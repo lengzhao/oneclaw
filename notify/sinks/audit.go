@@ -40,7 +40,7 @@ func (s *LLMAuditSink) Emit(ctx context.Context, ev notify.Event) error {
 		"severity":         ev.Severity,
 		"data":             ev.Data,
 	}
-	return appendJSONLRecord(s.opts.CWD, s.opts.AuditSessionID, s.opts.Segment(), "llm", wallTimeFromEventTS(ev.TS), rec)
+	return appendJSONLRecord(s.opts.CWD, s.opts.AuditSessionID, s.opts.Segment(), "llm", wallTimeFromEventTS(ev.TS), rec, s.opts.OmitDotDir)
 }
 
 // OrchestrationAuditSink writes inbound, tools, subagent, and turn boundary events.
@@ -89,7 +89,7 @@ func (s *OrchestrationAuditSink) Emit(ctx context.Context, ev notify.Event) erro
 		"severity":         ev.Severity,
 		"data":             ev.Data,
 	}
-	return appendJSONLRecord(s.opts.CWD, s.opts.AuditSessionID, s.opts.Segment(), "orchestration", wallTimeFromEventTS(ev.TS), rec)
+	return appendJSONLRecord(s.opts.CWD, s.opts.AuditSessionID, s.opts.Segment(), "orchestration", wallTimeFromEventTS(ev.TS), rec, s.opts.OmitDotDir)
 }
 
 // VisibleAuditSink writes one jsonl line per turn_complete: only this turn's user-visible messages
@@ -183,5 +183,5 @@ func (s *VisibleAuditSink) Emit(ctx context.Context, ev notify.Event) error {
 			rec["local_slash"] = v
 		}
 	}
-	return appendJSONLRecord(s.opts.CWD, s.opts.AuditSessionID, s.opts.Segment(), "visible", wallTimeFromEventTS(ev.TS), rec)
+	return appendJSONLRecord(s.opts.CWD, s.opts.AuditSessionID, s.opts.Segment(), "visible", wallTimeFromEventTS(ev.TS), rec, s.opts.OmitDotDir)
 }

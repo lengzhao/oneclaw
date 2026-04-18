@@ -27,7 +27,7 @@ func BuildTurn(layout Layout, home, userText string, recall *RecallState, recall
 	writeDirList(&sys, layout)
 	sys.WriteString("### Memory layout\n\n")
 	sys.WriteString("- **Rules** (`MEMORY.md` at each memory root) are injected below in `<system-reminder>` with AGENT/rules — keep them short.\n")
-	sys.WriteString("- **Episodic** digests and notes are `.md` files in each memory directory (e.g. `.oneclaw/memory/YYYY-MM-DD.md` from maintenance); **recall** searches those files but **skips** root **`MEMORY.md`** (rules — already injected above). Hits are surfaced as short excerpts: file path, UTF-8 **byte offset from the start of the file on disk** (so you can read with file tools using that offset), and nearby context (not whole files).\n\n")
+	sys.WriteString("- **Episodic** digests and notes are `.md` files in each memory directory (e.g. `memory/YYYY-MM-DD.md` under the host/session root from maintenance); **recall** searches those files but **skips** root **`MEMORY.md`** (rules — already injected above). Hits are surfaced as short excerpts: file path, UTF-8 **byte offset from the start of the file on disk** (so you can read with file tools using that offset), and nearby context (not whole files).\n\n")
 
 	var ctx strings.Builder
 	ctx.WriteString("Codebase and user instructions are shown below. Follow them; they override defaults.\n\n")
@@ -47,13 +47,22 @@ func BuildTurn(layout Layout, home, userText string, recall *RecallState, recall
 			body := LoadMarkdownBody(chunk.Path)
 			ctx.WriteString(fmt.Sprintf("### %s:%s\n\n%s\n\n", chunk.Kind, chunk.Path, body))
 		}
+	} else if layout.InstructionRoot != "" {
+		for _, chunk := range DiscoverFlatDotRootInstructions(layout.InstructionRoot) {
+			body := LoadMarkdownBody(chunk.Path)
+			ctx.WriteString(fmt.Sprintf("### %s:%s\n\n%s\n\n", chunk.Kind, chunk.Path, body))
+		}
 	} else if filepath.Clean(layout.CWD) != filepath.Clean(layout.MemoryBase) {
 		for _, chunk := range DiscoverFlatDotRootInstructions(layout.CWD) {
 			body := LoadMarkdownBody(chunk.Path)
 			ctx.WriteString(fmt.Sprintf("### %s:%s\n\n%s\n\n", chunk.Kind, chunk.Path, body))
 		}
 	}
-	appendMemoryRulesEntrypoint(&ctx, "project:memory", filepath.Join(layout.Project, entrypointName))
+	projRules := filepath.Join(layout.Project, entrypointName)
+	if layout.InstructionRoot != "" {
+		projRules = filepath.Join(layout.InstructionRoot, entrypointName)
+	}
+	appendMemoryRulesEntrypoint(&ctx, "project:memory", projRules)
 	appendMemoryRulesEntrypoint(&ctx, "team (user):memory", filepath.Join(layout.TeamUser, entrypointName))
 	appendMemoryRulesEntrypoint(&ctx, "team (project):memory", filepath.Join(layout.TeamProject, entrypointName))
 	if !AutoMemoryDisabled() {

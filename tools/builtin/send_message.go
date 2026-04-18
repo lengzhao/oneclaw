@@ -84,7 +84,7 @@ func (SendMessageTool) Parameters() openai.FunctionParameters {
 		"properties": map[string]any{
 			"name": map[string]any{"type": "string", "description": "Display name"},
 			"mime": map[string]any{"type": "string", "description": "MIME type (default text/plain)"},
-			"path": map[string]any{"type": "string", "description": "Project-relative path after persistence, usually under .oneclaw/media/inbound/"},
+			"path": map[string]any{"type": "string", "description": "Project-relative path after persistence, usually under media/inbound/"},
 			"text": map[string]any{"type": "string", "description": "Inline body; host may persist to media store"},
 		},
 	}

@@ -73,7 +73,8 @@ func validatedSkillStem(ruleName string) (string, error) {
 	return name, nil
 }
 
-func resolveBehaviorPolicyPath(cwd string, workspaceFlat bool, target, ruleName string) (string, error) {
+func resolveBehaviorPolicyPath(cwd string, workspaceFlat bool, instructionRoot, target, ruleName string) (string, error) {
+	ir := strings.TrimSpace(instructionRoot)
 	switch target {
 	case "rule":
 		name := strings.TrimSpace(ruleName)
@@ -94,17 +95,31 @@ func resolveBehaviorPolicyPath(cwd string, workspaceFlat bool, target, ruleName 
 		if !strings.HasSuffix(strings.ToLower(name), ".md") {
 			name += ".md"
 		}
-		dir := memory.JoinSessionWorkspace(cwd, workspaceFlat, "rules")
+		var dir string
+		if ir != "" {
+			dir = filepath.Join(filepath.Clean(ir), "rules")
+		} else {
+			dir = memory.JoinSessionWorkspace(cwd, workspaceFlat, "rules")
+		}
 		return filepath.Join(dir, name), nil
 	case "skill":
 		stem, err := validatedSkillStem(ruleName)
 		if err != nil {
 			return "", fmt.Errorf("skill: %w", err)
 		}
+		if ir != "" {
+			return filepath.Join(filepath.Clean(ir), "skills", stem, skillEntryFile), nil
+		}
 		return memory.JoinSessionWorkspace(cwd, workspaceFlat, "skills", stem, skillEntryFile), nil
 	case "agent_md":
+		if ir != "" {
+			return filepath.Join(filepath.Clean(ir), memory.AgentInstructionsFile), nil
+		}
 		return memory.JoinSessionWorkspace(cwd, workspaceFlat, memory.AgentInstructionsFile), nil
 	case "memory":
+		if ir != "" {
+			return filepath.Join(filepath.Clean(ir), "MEMORY.md"), nil
+		}
 		return memory.JoinSessionWorkspace(cwd, workspaceFlat, "memory", "MEMORY.md"), nil
 	default:
 		return "", fmt.Errorf("unknown target %q", target)
@@ -141,11 +156,11 @@ func (WriteBehaviorPolicyTool) Execute(_ context.Context, input json.RawMessage,
 	if home == "" {
 		home, _ = os.UserHomeDir()
 	}
-	abs, err := resolveBehaviorPolicyPath(tctx.CWD, tctx.WorkspaceFlat, target, in.RuleName)
+	abs, err := resolveBehaviorPolicyPath(tctx.CWD, tctx.WorkspaceFlat, tctx.InstructionRoot, target, in.RuleName)
 	if err != nil {
 		return "", err
 	}
-	lay := memory.LayoutForIMWorkspace(tctx.CWD, home, tctx.HostDataRoot, tctx.WorkspaceFlat)
+	lay := memory.LayoutForIMWorkspace(tctx.CWD, home, tctx.HostDataRoot, tctx.WorkspaceFlat, tctx.InstructionRoot)
 	if err := validatePolicyPath(lay, abs, target); err != nil {
 		return "", err
 	}
@@ -184,6 +199,9 @@ func validatePolicyPath(lay memory.Layout, abs, target string) error {
 		}
 	case "memory":
 		want := filepath.Clean(filepath.Join(lay.Project, lay.EntrypointName))
+		if lay.InstructionRoot != "" {
+			want = filepath.Clean(filepath.Join(lay.InstructionRoot, lay.EntrypointName))
+		}
 		if abs != want {
 			return fmt.Errorf("internal error: memory entrypoint path mismatch")
 		}

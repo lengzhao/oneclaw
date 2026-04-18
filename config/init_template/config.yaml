@@ -53,9 +53,9 @@ paths:
 
 # -----------------------------------------------------------------------------
 # 多会话（IM 线程隔离）；主进程 cmd/oneclaw 使用 SessionResolver：每个 channel + session_key 独立 Engine。
-# 转写文件：<UserDataRoot>/sessions/<stable_id>/.oneclaw/transcript.json 与 working_transcript.json（与下方 paths.transcript 覆盖关系见 docs/config.md）。
+# 转写文件：<UserDataRoot>/sessions/<stable_id>/transcript.json 与 working_transcript.json（与下方 paths.transcript 覆盖关系见 docs/config.md）。
 # SQLite：会话元数据 + memory recall 去重状态；路径相对 UserDataRoot。
-# isolate_workspace：true 时每个会话的 Engine.CWD 为 sessions/<id>/.oneclaw（文件工具互不干扰）；false（默认）时 CWD 为 UserDataRoot，多会话共享同一工作区。
+# isolate_workspace：true 时每个会话 Engine.CWD 为 sessions/<id>/workspace；false（默认）时 CWD 为 <UserDataRoot>/workspace，多会话共享同一 workspace。
 # -----------------------------------------------------------------------------
 sessions:
   # true：不打开 SQLite，仅文件（测试或极简环境）
@@ -64,7 +64,7 @@ sessions:
   sqlite_path: ""
   # cmd/oneclaw 固定 worker 数（按 session 哈希分片）；0 或未设置则运行时默认 8；不会随会话数无限增加 goroutine
   worker_count: 0
-  # false：共享 ~/.oneclaw 为工作目录；true：每会话 ~/.oneclaw/sessions/<id>/.oneclaw
+  # false：共享 <UserDataRoot>/workspace；true：每会话 <UserDataRoot>/sessions/<id>/workspace
   isolate_workspace: false
 
 # -----------------------------------------------------------------------------
@@ -120,7 +120,7 @@ clawbridge:
 # -----------------------------------------------------------------------------
 # MCP 工具（连接外部 MCP Server；需显式 enabled: true）
 # 实现：github.com/modelcontextprotocol/go-sdk；传输 stdio / sse / http 与 picoclaw 对齐。
-# 工具名注册为 mcp_<server>_<tool>；超长结果可落盘会话目录下 .oneclaw/artifacts/mcp/（见实现）
+# 工具名注册为 mcp_<server>_<tool>；超长结果可落盘 workspace 或 InstructionRoot 下 artifacts/mcp/（见实现）
 # -----------------------------------------------------------------------------
 # mcp:
 #   enabled: true
@@ -149,7 +149,7 @@ features:
   disable_auto_maintenance: false
   disable_memory_audit: false
   disable_context_budget: false
-  # 通知审计 JSONL：无 SessionID 时 <UserDataRoot>/audit/<agent>/...；有 SessionID 时 sessions/<id>/.oneclaw/audit/<agent>/...
+  # 通知审计 JSONL：锚在 InstructionRoot（无嵌套 .oneclaw）：<InstructionRoot>/audit/<agent>/...
   disable_audit_sinks: false
   disable_audit_llm: false
   disable_audit_orchestration: false

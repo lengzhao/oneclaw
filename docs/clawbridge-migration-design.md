@@ -1,6 +1,8 @@
 # oneclaw → clawbridge 统一 I/O 设计（非流式、多次响应）
 
-本文描述用 [`github.com/lengzhao/clawbridge`](https://github.com/lengzhao/clawbridge) **替代**本仓库内 **`channel/*` 与 `routing/*`** 的架构约定。与历史文档 [inbound-routing-design.md](inbound-routing-design.md)、[outbound-events-design.md](outbound-events-design.md) 的关系见 §7。
+> **状态**：**提案，未在主线落地。** 当前实现与契约仍以 [inbound-routing-design.md](inbound-routing-design.md)、[outbound-events-design.md](outbound-events-design.md) 及代码 `routing/*`、`channel/*` 为准。本文供未来迁移或对照 clawbridge API 时使用。
+
+本文描述用 [`github.com/lengzhao/clawbridge`](https://github.com/lengzhao/clawbridge) **替代**本仓库内 **`channel/*` 与 `routing/*`** 的架构约定。与上述现行文档的关系见 §7。
 
 ---
 

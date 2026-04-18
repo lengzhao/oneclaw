@@ -60,12 +60,12 @@ func (e *Engine) buildTurnSystem(memOK bool, bundle memory.TurnBundle, bg budget
 	if memOK {
 		d.MemoryPromptBlock = strings.TrimSpace(bundle.SystemSuffix)
 	}
-	p, lines, omit := tasks.PromptTaskLines(e.CWD, e.WorkspaceFlat)
+	p, lines, omit := tasks.PromptTaskLines(e.CWD, e.WorkspaceFlat, e.InstructionRoot)
 	d.TasksFilePath = p
 	d.TaskLines = lines
 	d.TasksOmitted = omit
 	if herr == nil {
-		d.SkillLines = skills.PromptSkillLines(e.CWD, home, bg.SkillIndexMaxBytes(), e.WorkspaceFlat)
+		d.SkillLines = skills.PromptSkillLines(e.CWD, home, bg.SkillIndexMaxBytes(), e.WorkspaceFlat, e.InstructionRoot)
 	}
 	if cat != nil {
 		d.AgentCatalogLines = cat.PromptCatalogLines(bg.SkillIndexMaxBytes())
@@ -80,7 +80,7 @@ func (e *Engine) buildTurnSystem(memOK bool, bundle memory.TurnBundle, bg budget
 		return fallbackMainThreadSystem(d)
 	}
 	out = strings.TrimRight(out, "\n")
-	if sb := schedule.SystemBlock(e.CWD, e.UserDataRoot, e.WorkspaceFlat); sb != "" {
+	if sb := schedule.SystemBlock(e.CWD, e.UserDataRoot, e.WorkspaceFlat, e.InstructionRoot); sb != "" {
 		out += sb + "\n"
 	}
 	return out + "\n"
@@ -127,7 +127,7 @@ func fallbackMainThreadSystem(d MainThreadSystemData) string {
 		b.WriteString("\n")
 	}
 	out := strings.TrimRight(b.String(), "\n")
-	if sb := schedule.SystemBlock(d.CWD, "", false); sb != "" {
+	if sb := schedule.SystemBlock(d.CWD, "", false, ""); sb != "" {
 		out += sb + "\n"
 	}
 	return out + "\n"

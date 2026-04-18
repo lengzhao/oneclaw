@@ -38,6 +38,7 @@ func (e *Engine) prepareSharedTurn(ctx context.Context, in bus.InboundMessage, a
 	p.tctx.SessionID = e.SessionID
 	p.tctx.HostDataRoot = e.UserDataRoot
 	p.tctx.WorkspaceFlat = e.WorkspaceFlat
+	p.tctx.InstructionRoot = e.InstructionRoot
 	p.tctx.AgentID = e.EffectiveRootAgentID()
 	if wireSendMessage {
 		p.tctx.SendMessage = e.SendMessage
@@ -68,7 +69,7 @@ func (e *Engine) prepareSharedTurn(ctx context.Context, in bus.InboundMessage, a
 			return e.PublishOutbound(ctx, msg)
 		}
 	}
-	cat := subagent.LoadCatalog(e.CWD, e.WorkspaceFlat)
+	cat := subagent.LoadCatalog(e.CWD, e.WorkspaceFlat, e.InstructionRoot)
 	p.catalog = cat
 	p.system = e.buildTurnSystem(p.memOK, p.bundle, p.bg, home, herr, cat)
 	p.tctx.Subagent = &subRunner{

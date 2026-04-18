@@ -174,8 +174,8 @@ flowchart TB
 ## 9. 与仓库其它文档的关系
 
 - **配置合并与运行时推送**：[`config.md`](config.md)  
-- **阶段任务与验收**：[`todo.md`](todo.md)、[`go-runtime-development-plan.md`](go-runtime-development-plan.md)  
-- **Claude Code 范式对照**：[`agent-runtime-golang-plan.md`](agent-runtime-golang-plan.md)  
+- **阶段任务与验收**：[`todo.md`](todo.md)、[`agent-runtime-golang-plan.md`](agent-runtime-golang-plan.md) §9  
+- **范式与边界总览**：[`agent-runtime-golang-plan.md`](agent-runtime-golang-plan.md)  
 - **Prompt 拼装**：[`prompts/README.md`](prompts/README.md)  
 
 README 中的简化图仍可作一页纸总览；**以本文 + 上述设计文档为准**做实现级对照时更贴近当前代码路径。

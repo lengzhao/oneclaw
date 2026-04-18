@@ -76,15 +76,19 @@ func TestSessionDotLayout_ProjectAndFlat(t *testing.T) {
 func TestLayoutForIMWorkspace(t *testing.T) {
 	home := "/Users/x"
 	ur := filepath.Join(home, ".oneclaw")
-	if lay := LayoutForIMWorkspace(ur, home, ur, true); !lay.HostUserData {
+	ws := filepath.Join(ur, IMWorkspaceDirName)
+	if lay := LayoutForIMWorkspace(ws, home, ur, true, ur); !lay.HostUserData {
 		t.Fatal("shared root should be IM host layout")
 	}
+	if lay := LayoutForIMWorkspace(ws, home, ur, true, ur); lay.InstructionRoot != ur {
+		t.Fatalf("InstructionRoot = %q want %q", lay.InstructionRoot, ur)
+	}
 	dot := filepath.Join(ur, "sessions", "s1", ".oneclaw")
-	if lay := LayoutForIMWorkspace(dot, home, ur, true); lay.Project != filepath.Join(dot, "memory") {
+	if lay := LayoutForIMWorkspace(dot, home, ur, true, ""); lay.Project != filepath.Join(dot, "memory") {
 		t.Fatalf("session dot layout: %+v", lay)
 	}
 	tmp := t.TempDir()
-	if lay := LayoutForIMWorkspace(tmp, home, "", false); lay.HostUserData {
+	if lay := LayoutForIMWorkspace(tmp, home, "", false, ""); lay.HostUserData {
 		t.Fatal("repo layout should not set HostUserData")
 	}
 }

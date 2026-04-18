@@ -39,9 +39,12 @@ type Options struct {
 	AgentID string
 	// AgentSegment, if non-empty after trim, is sanitized and overrides AgentID for the path.
 	AgentSegment string
-	// AuditSessionID when non-empty: JSONL under <cwd>/.oneclaw/sessions/<id>/audit/<agent_segment>/...
-	// instead of <cwd>/.oneclaw/audit/<agent_segment>/... (IM / multi-session hosts).
+	// AuditSessionID when non-empty: JSONL under <cwd>/sessions/<id>/audit/<agent_segment>/...
+	// instead of <cwd>/audit/<agent_segment>/... (IM / multi-session hosts).
 	AuditSessionID string
+	// OmitDotDir when true: paths under <CWD>/audit/... or <CWD>/sessions/.../audit/... without
+	// a nested ".oneclaw" segment (IM host layout under ~/.oneclaw).
+	OmitDotDir bool
 }
 
 // Segment returns the agent subdirectory name (under global audit or under sessions/<id>/audit).
