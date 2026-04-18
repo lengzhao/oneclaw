@@ -1,15 +1,25 @@
 package memory
 
 import (
+	"bytes"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
+	"text/template"
 	"time"
 	"unicode/utf8"
 
 	"github.com/lengzhao/oneclaw/prompts"
 	"github.com/lengzhao/oneclaw/rtopts"
+)
+
+// Optional user-authored maintenance system prompts (same directory as AGENT.md / MEMORY.md: [Layout.DotOrDataRoot]).
+// Content is rendered with [text/template] and [MaintainPromptData] (e.g. {{.CWD}}, {{.MemoryPath}}, {{.Today}}).
+// Copy built-in wording from prompts/templates/maintenance_system_*.tmpl in this repo as a starting point.
+const (
+	MaintainScheduledSystemFile = "MAINTAIN_SCHEDULED.md"
+	MaintainPostTurnSystemFile  = "MAINTAIN_POST_TURN.md"
 )
 
 // MaintainPromptData fills maintenance system templates for memory distillation.
@@ -42,6 +52,9 @@ func maintenanceSystemPromptForPathway(p maintainPathway, layout Layout, episode
 		WorkingTranscriptPath: filepath.Clean(filepath.Join(root, "working_transcript.json")),
 		TranscriptPath:        filepath.Clean(filepath.Join(root, "transcript.json")),
 	}
+	if custom, ok := userMaintenanceSystemPrompt(root, p, d); ok {
+		return custom
+	}
 	name := prompts.NameMaintenanceSystemScheduled
 	if p == pathwayPostTurn {
 		name = prompts.NameMaintenanceSystemPostTurn
@@ -52,6 +65,50 @@ func maintenanceSystemPromptForPathway(p maintainPathway, layout Layout, episode
 		return fallbackMaintenanceSystemPrompt(layout, episodePath, rulesPath, today, runTS, p == pathwayPostTurn)
 	}
 	return s
+}
+
+// userMaintenanceSystemPrompt loads MAINTAIN_SCHEDULED.md / MAINTAIN_POST_TURN.md under root when present.
+func userMaintenanceSystemPrompt(root string, p maintainPathway, d MaintainPromptData) (string, bool) {
+	var fname string
+	switch p {
+	case pathwayPostTurn:
+		fname = MaintainPostTurnSystemFile
+	case pathwayScheduled:
+		fname = MaintainScheduledSystemFile
+	default:
+		return "", false
+	}
+	path := filepath.Join(root, fname)
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return "", false
+	}
+	raw := strings.TrimSpace(string(b))
+	if raw == "" {
+		return "", false
+	}
+	out, err := renderMaintainUserSystemTemplate(raw, d)
+	if err != nil {
+		slog.Warn("memory.maintain.user_system_template", "path", path, "err", err)
+		return "", false
+	}
+	out = strings.TrimSpace(out)
+	if out == "" {
+		return "", false
+	}
+	return out, true
+}
+
+func renderMaintainUserSystemTemplate(content string, d MaintainPromptData) (string, error) {
+	t, err := template.New("maintain_user").Parse(content)
+	if err != nil {
+		return "", err
+	}
+	var buf bytes.Buffer
+	if err := t.Execute(&buf, d); err != nil {
+		return "", err
+	}
+	return buf.String(), nil
 }
 
 func fallbackMaintenanceSystemPrompt(layout Layout, episodePath, rulesPath, today, runTS string, postTurn bool) string {

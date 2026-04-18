@@ -75,7 +75,8 @@
 
 - **数据抓取范围**：**`distillConfig`**（post-turn vs scheduled）。
 - **回合后近场**：**`PostTurnInput`** → **Current turn snapshot**（含 **tools** 与 **repeated_in_this_turn**；`maintain.post_turn.user_snapshot_bytes` / `assistant_snapshot_bytes` 经 `rtopts` 截断）；外加 **规则 `MEMORY.md` 前缀**；**不**拼接 daily log / topic。
-- **System 模板**：**`prompts.NameMaintenanceSystemPostTurn`** / **`NameMaintenanceSystemScheduled`**。
+- **System 模板**：**`prompts.NameMaintenanceSystemPostTurn`** / **`NameMaintenanceSystemScheduled`**（嵌入 `prompts/templates/*.tmpl`）。
+- **用户覆盖（可选，与 AGENT.md 同级心智）**：若在 **`Layout.DotOrDataRoot()`**（IM 下与 `AGENT.md` 同目录，如 `~/.oneclaw/` 或 `sessions/<id>/`）放置 **`MAINTAIN_POST_TURN.md`** 或 **`MAINTAIN_SCHEDULED.md`**，则维护 **system** 提示 **整段替换**为文件内容经 **`text/template`** 渲染的结果；可用字段与内置模板相同，见 **`memory.MaintainPromptData`**（例如 `{{.CWD}}`、`{{.MemoryPath}}`、`{{.RulesMemoryPath}}`、`{{.Today}}`、`{{.RunTS}}`，定时路径另有 `{{.DialogHistoryPath}}`、`{{.WorkingTranscriptPath}}`、`{{.TranscriptPath}}`）。文件缺失、仅空白、或模板解析/执行失败时 **回退**到内置嵌入模板。**`oneclaw -init`** 会将默认两份模板复制到 **`~/.oneclaw/`**（来自 `config/init_template/`，与 `prompts/templates/maintenance_system_*.tmpl` 一致；目标已存在则 **不覆盖**）。定制时可从本仓库 **`prompts/templates/maintenance_system_*.tmpl`** 复制再改。
 - **门控条件**：当日 episodic 文件中若已有 `## Auto-maintained (YYYY-MM-DD)`，**不跳过**维护运行；模型输出与当日块 **合并**（去重、保留旧条 + 新条），写回时 **替换**该日 span，避免重复标题段。
 - **待续**：定时路径 **transcript** 窄读、**工具**白名单。
 
@@ -94,6 +95,7 @@
 | `maintain.post_turn.*` | 经 `PushRuntime` 写入 `rtopts`（见 `docs/config.md`） |
 | `maintain.interval`（YAML 非空） | 启用 **`maintainloop`**；未写 YAML 则不启进程内 loop |
 | `maintain.model` / `scheduled_model` | **PostTurn** vs **Scheduled** 模型链 |
+| `MAINTAIN_*.md`（数据根下） | 可选覆盖维护 **system** 提示，见 §3.2 |
 
 ---
 

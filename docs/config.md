@@ -114,6 +114,7 @@
 
 - **回合后**（`MaybePostTurnMaintain`）：`maintain.post_turn.*`（如 `min_log_bytes`、`memory_preview_bytes`、`timeout_seconds`、`max_tokens` 等）。
 - **定时 / 远场**（`RunScheduledMaintain`、`oneclaw -maintain-once`）：`maintain.model` / `maintain.scheduled_model`、`maintain.max_tokens`、`maintain.log_days`、`maintain.min_log_bytes`、`maintain.max_log_bytes`、`maintain.scheduled_timeout_seconds`、`maintain.scheduled_max_steps`、`maintain.incremental_overlap`、`maintain.incremental_max_span` 等。
+- **可选文件**（非 YAML）：在 **`Layout.DotOrDataRoot()`**（与 `AGENT.md` 同目录）放置 **`MAINTAIN_POST_TURN.md`** / **`MAINTAIN_SCHEDULED.md`** 可 **整段覆盖** 对应维护 **system** 提示（Go `text/template` + `MaintainPromptData` 字段）；见 [memory-maintain-dual-entry-design.md](memory-maintain-dual-entry-design.md) §3.2。
 - **`opts.Interval > 0`**（`maintainloop`、`cmd/maintain -interval`）：daily log **增量**模式（行内时间戳 + `UserDataRoot()` 下 `scheduled_maintain_state.json` 等，见实现）。
 - **`Interval == 0` 或 `-once`**：按日历天 `log_days` 窗口做体量探测；远场为多步、只读工具，需 `opts.ToolRegistry`（如 `builtin.ScheduledMaintainReadRegistry()`）。
 

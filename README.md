@@ -14,7 +14,7 @@ go build -o oneclaw ./cmd/oneclaw
 # 可选：独立维护进程仍可用 go build -o maintain ./cmd/maintain
 ```
 
-执行 **`go run ./cmd/oneclaw -init`** 会在 **`$HOME/.oneclaw/`** 生成或更新 **`config.yaml`**（无则写入完整内置模板；已有则只补上模板里缺失的键、不覆盖你的配置）并创建记忆目录；再按需编辑密钥与渠道。
+执行 **`go run ./cmd/oneclaw -init`** 会在 **`$HOME/.oneclaw/`** 生成或更新 **`config.yaml`**（无则写入完整内置模板；已有则只补上模板里缺失的键、不覆盖你的配置），并复制 **`AGENT.md`**、**`memory/MEMORY.md`**、**`MAINTAIN_SCHEDULED.md`** / **`MAINTAIN_POST_TURN.md`**（维护 system 提示模板，与内置一致；已存在则不覆盖）等，再创建记忆目录；再按需编辑密钥与渠道。
 
 配置 OpenAI 兼容 API 后启动常驻服务：在 **`~/.oneclaw/config.yaml`** 与可选 **`-config`** 额外层中填写 `openai.api_key`、`openai.base_url` 等；合并与 `PushRuntime` 见 **[`docs/config.md`](docs/config.md)**。可选用 `github.com/lengzhao/conf` 加载 `.env` 供**其他**依赖使用，**oneclaw 运行时配置以 YAML 为准**。
 
