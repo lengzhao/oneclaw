@@ -12,11 +12,12 @@ import (
 func TestEngineSendMessage(t *testing.T) {
 	cwd := t.TempDir()
 	var published []*bus.OutboundMessage
-	eng := NewEngine(cwd, tools.NewRegistry())
-	eng.PublishOutbound = func(_ context.Context, msg *bus.OutboundMessage) error {
+	cleanup := testStartNoopBridge(t, []string{"ch1"}, func(msg *bus.OutboundMessage) {
 		published = append(published, msg)
-		return nil
-	}
+	})
+	defer cleanup()
+
+	eng := NewEngine(cwd, tools.NewRegistry())
 
 	err := eng.SendMessage(context.Background(), bus.InboundMessage{
 		ClientID:   "ch1",
@@ -30,6 +31,7 @@ func TestEngineSendMessage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	waitForOutboundDispatch(t, func() bool { return len(published) >= 1 })
 	if len(published) != 1 {
 		t.Fatalf("want 1 outbound, got %d", len(published))
 	}
@@ -45,11 +47,12 @@ func TestEngineSendMessage(t *testing.T) {
 func TestEngineSendMessage_recipientUserIDFromMetadata(t *testing.T) {
 	cwd := t.TempDir()
 	var published []*bus.OutboundMessage
-	eng := NewEngine(cwd, tools.NewRegistry())
-	eng.PublishOutbound = func(_ context.Context, msg *bus.OutboundMessage) error {
+	cleanup := testStartNoopBridge(t, []string{"ch1"}, func(msg *bus.OutboundMessage) {
 		published = append(published, msg)
-		return nil
-	}
+	})
+	defer cleanup()
+
+	eng := NewEngine(cwd, tools.NewRegistry())
 	in := bus.InboundMessage{
 		ClientID:  "ch1",
 		SessionID: "S1",
@@ -62,6 +65,7 @@ func TestEngineSendMessage_recipientUserIDFromMetadata(t *testing.T) {
 	if err := eng.SendMessage(context.Background(), in); err != nil {
 		t.Fatal(err)
 	}
+	waitForOutboundDispatch(t, func() bool { return len(published) >= 1 })
 	if len(published) != 1 {
 		t.Fatalf("got %d", len(published))
 	}
@@ -71,8 +75,9 @@ func TestEngineSendMessage_recipientUserIDFromMetadata(t *testing.T) {
 }
 
 func TestEngineSendMessageRequiresClientID(t *testing.T) {
+	cleanup := testStartNoopBridge(t, []string{"x"}, nil)
+	defer cleanup()
 	eng := NewEngine(t.TempDir(), tools.NewRegistry())
-	eng.PublishOutbound = func(context.Context, *bus.OutboundMessage) error { return nil }
 	err := eng.SendMessage(context.Background(), bus.InboundMessage{Content: "x", SessionID: "C1"})
 	if err == nil || !strings.Contains(err.Error(), "ClientID") {
 		t.Fatalf("expected ClientID error, got %v", err)
@@ -80,8 +85,9 @@ func TestEngineSendMessageRequiresClientID(t *testing.T) {
 }
 
 func TestEngineSendMessageNoChat(t *testing.T) {
+	cleanup := testStartNoopBridge(t, []string{"x"}, nil)
+	defer cleanup()
 	eng := NewEngine(t.TempDir(), tools.NewRegistry())
-	eng.PublishOutbound = func(context.Context, *bus.OutboundMessage) error { return nil }
 	err := eng.SendMessage(context.Background(), bus.InboundMessage{ClientID: "x", Content: "hi"})
 	if err == nil || !strings.Contains(err.Error(), "SessionID") {
 		t.Fatalf("expected SessionID error, got %v", err)

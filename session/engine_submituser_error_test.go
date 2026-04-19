@@ -23,16 +23,17 @@ func TestSubmitUser_publishesOutboundOnFailure(t *testing.T) {
 	rtopts.Set(&s)
 
 	var published []*bus.OutboundMessage
+	cleanup := testStartNoopBridge(t, []string{"cli"}, func(msg *bus.OutboundMessage) {
+		published = append(published, msg)
+	})
+	defer cleanup()
+
 	eng := NewEngine(t.TempDir(), tools.NewRegistry())
 	eng.MaxSteps = 4
 	eng.Client = openai.NewClient(
 		option.WithAPIKey("sk-test-stub"),
 		option.WithBaseURL(stub.BaseURL()),
 	)
-	eng.PublishOutbound = func(_ context.Context, msg *bus.OutboundMessage) error {
-		published = append(published, msg)
-		return nil
-	}
 
 	in := bus.InboundMessage{
 		ClientID:  "cli",
@@ -45,6 +46,7 @@ func TestSubmitUser_publishesOutboundOnFailure(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error (empty stub response queue)")
 	}
+	waitForOutboundDispatch(t, func() bool { return len(published) >= 1 })
 	if len(published) != 1 {
 		t.Fatalf("want 1 error outbound, got %d (err=%v)", len(published), err)
 	}
@@ -70,16 +72,13 @@ func TestSubmitUser_errorOutboundSkippedWithoutAddressing(t *testing.T) {
 	rtopts.Set(&s)
 
 	var published []*bus.OutboundMessage
+	// No clawbridge default bridge: PublishOutbound returns ErrNotInitialized; user-visible error line is skipped.
 	eng := NewEngine(t.TempDir(), tools.NewRegistry())
 	eng.MaxSteps = 4
 	eng.Client = openai.NewClient(
 		option.WithAPIKey("sk-test-stub"),
 		option.WithBaseURL(stub.BaseURL()),
 	)
-	eng.PublishOutbound = func(_ context.Context, msg *bus.OutboundMessage) error {
-		published = append(published, msg)
-		return nil
-	}
 
 	err := eng.SubmitUser(context.Background(), bus.InboundMessage{Content: "hi"})
 	if err == nil {

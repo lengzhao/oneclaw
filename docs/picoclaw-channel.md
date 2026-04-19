@@ -139,7 +139,7 @@ flowchart TB
 | 维度 | oneclaw（实现） | PicoClaw |
 |------|-----------------|----------|
 | 入站统一形状 | **`github.com/lengzhao/clawbridge/bus.InboundMessage`**（`ClientID`、`Content`、`Peer`、`MediaPaths` 等） | 同左：PicoClaw `pkg/bus` 与 clawbridge 对齐的入站模型 |
-| 出站统一形状 | **`bus.OutboundMessage`** 经 **`session.Engine.PublishOutbound`**；**`notify`** 审计等为并行路径 | `OutboundMessage` + `Channel.Send` / `SendMedia` |
+| 出站统一形状 | **`bus.OutboundMessage`** 经 **`clawbridge.PublishOutbound`**（默认 **`Bridge`**）；**`notify`** 审计等为并行路径 | `OutboundMessage` + `Channel.Send` / `SendMedia` |
 | 按会话 / 来源路由 | **clawbridge** `Bridge` + **driver**；**`WorkerPool`** 按 `SessionHandle` 分片 | 出站消息带 **Channel** 字段，**Manager** dispatch |
 | 渠道可插拔 | **clawbridge** 配置 **clients** + driver；**`cmd/oneclaw`** 组装桥与 **Host** | **完整**：`Start`/`Stop`、工厂、内嵌 SDK、可选 Webhook HTTP |
 | 横切能力 | 可选 **`ctx` 透传**、**`SinkRegistry`/`SinkFactory`** 见 [inbound-routing-design.md](inbound-routing-design.md) §3–§4 | Manager：限流、重试、占位/打字等 |

@@ -30,7 +30,7 @@
 
 ## 3. `WorkerPool` 与出站（§5.2 保留）
 
-**`cmd/oneclaw/main.go`** 使用 **`session.WorkerPool`**：固定 worker 数、按 `SessionHandle` 哈希分片、每任务 **`MainEngineFactory` 新建 `Engine` 后丢弃**，持久化依赖落盘。出站由 **`Engine.PublishOutbound`** 等注入（如 `clawbridge.PublishOutbound`）。详见 [config.md](config.md)、[inbound-routing-design.md](inbound-routing-design.md) §4、§8。
+**`cmd/oneclaw/main.go`** 使用 **`session.WorkerPool`**：固定 worker 数、按 `SessionHandle` 哈希分片、每任务 **`MainEngineFactory` 新建 `Engine` 后丢弃**，持久化依赖落盘。出站由 **`clawbridge.SetDefault`** 后的包级 **`PublishOutbound` / `UpdateStatus`** 承担（`Engine` 不再持有出站回调字段）。详见 [config.md](config.md)、[inbound-routing-design.md](inbound-routing-design.md) §4、§8。
 
 ---
 

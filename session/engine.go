@@ -13,6 +13,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/lengzhao/clawbridge"
 	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/clawbridge/client"
 	"github.com/lengzhao/oneclaw/loop"
@@ -68,10 +69,6 @@ type Engine struct {
 	// Notify is a fan-out list (notify.Multi) of lifecycle sinks; default empty no-op.
 	// Register handlers with RegisterNotify(sink) or assign notify.Multi{…} directly.
 	Notify notify.Multi
-	// PublishOutbound sends assistant / proactive messages to IM drivers via clawbridge. If nil, outbound is skipped.
-	PublishOutbound func(ctx context.Context, msg *bus.OutboundMessage) error
-	// UpdateInboundStatus updates the triggering message row (processing / completed / failed) when the driver supports it.
-	UpdateInboundStatus func(ctx context.Context, req *bus.UpdateStatusRequest) error
 	// TranscriptPath is where SaveTranscript writes after each successful loop.RunTurn (before PostTurn; post-turn maintain runs asynchronously). Empty disables auto-save.
 	TranscriptPath string
 	// WorkingTranscriptPath persists Messages (already user-visible in memory after each turn).
@@ -325,9 +322,6 @@ func (e *Engine) SendMessage(ctx context.Context, in bus.InboundMessage) error {
 	if body == "" && len(atts) == 0 {
 		return fmt.Errorf("session: SendMessage: empty text and attachments")
 	}
-	if e.PublishOutbound == nil {
-		return fmt.Errorf("session: PublishOutbound not configured")
-	}
 	parts := mediaPartsFromAttachments(atts)
 	msg := assistantOutboundWithMedia(&inCopy, body, parts)
 	if msg == nil {
@@ -344,7 +338,7 @@ func (e *Engine) SendMessage(ctx context.Context, in bus.InboundMessage) error {
 		"to_session_id", msg.To.SessionID,
 		"to_kind", msg.To.Kind,
 	)
-	return e.PublishOutbound(ctx, msg)
+	return clawbridge.PublishOutbound(ctx, msg)
 }
 
 func (e *Engine) submitLocalSlashTurn(ctx context.Context, in bus.InboundMessage, atts []Attachment, reply string, turnID, corrID string) error {
@@ -385,10 +379,8 @@ func (e *Engine) submitLocalSlashTurn(ctx context.Context, in bus.InboundMessage
 	visibleCountBefore := len(loop.ToUserVisibleMessages(e.Transcript))
 	// Local slash replies are user-visible only via PublishOutbound (when configured with ClientID+SessionID).
 	// Do not append to Messages / Transcript / dialog history so they never appear in later turns or on-disk transcripts.
-	if prep.outboundText != nil {
-		if err := prep.outboundText(ctx, reply); err != nil {
-			slog.Warn("session.local_slash.outbound", "err", err)
-		}
+	if err := prep.outboundText(ctx, reply); err != nil {
+		slog.Warn("session.local_slash.outbound", "err", err)
 	}
 	if e.hasNotify() {
 		ev := notify.NewEvent(notify.EventTurnComplete, "")
@@ -417,9 +409,10 @@ func (e *Engine) persistRecall() {
 }
 
 // publishOutboundSubmitUserError sends a user-visible assistant line with the failure reason when
-// PublishOutbound is configured and the inbound message has channel addressing (same rules as normal replies).
+// the inbound message has channel addressing (same rules as normal replies). Best-effort: no bridge
+// or PublishOutbound failure is ignored except for logging unexpected errors.
 func (e *Engine) publishOutboundSubmitUserError(ctx context.Context, in *bus.InboundMessage, err error) {
-	if e == nil || err == nil || e.PublishOutbound == nil || in == nil {
+	if e == nil || err == nil || in == nil {
 		return
 	}
 	text := fmt.Sprintf("处理失败：%v", err)
@@ -428,20 +421,20 @@ func (e *Engine) publishOutboundSubmitUserError(ctx context.Context, in *bus.Inb
 		slog.Debug("session.submit_user_error_outbound_skip", "reason", "no_client_or_session")
 		return
 	}
-	if pubErr := e.PublishOutbound(ctx, msg); pubErr != nil {
+	if pubErr := clawbridge.PublishOutbound(ctx, msg); pubErr != nil && !errors.Is(pubErr, clawbridge.ErrNotInitialized) {
 		slog.Warn("session.submit_user_error_outbound", "err", pubErr)
 	}
 }
 
 func (e *Engine) applyInboundMessageStatus(ctx context.Context, in bus.InboundMessage, state string) {
-	if e.UpdateInboundStatus == nil {
-		return
-	}
 	req := InboundUpdateStatusRequest(&in, state)
 	if req == nil {
 		return
 	}
-	if err := e.UpdateInboundStatus(ctx, req); err != nil && !errors.Is(err, client.ErrCapabilityUnsupported) {
+	if err := clawbridge.UpdateStatus(ctx, req); err != nil {
+		if errors.Is(err, client.ErrCapabilityUnsupported) || errors.Is(err, clawbridge.ErrNotInitialized) {
+			return
+		}
 		slog.Warn("session.inbound_status", "state", state, "err", err)
 	}
 }

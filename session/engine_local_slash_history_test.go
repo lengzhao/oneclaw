@@ -38,12 +38,12 @@ func TestSubmitUser_localSlashDoesNotPersistTranscript(t *testing.T) {
 	eng.TranscriptPath = tp
 	eng.WorkingTranscriptPath = wp
 	var out string
-	eng.PublishOutbound = func(_ context.Context, msg *bus.OutboundMessage) error {
+	cleanup := testStartNoopBridge(t, []string{"cli"}, func(msg *bus.OutboundMessage) {
 		if msg != nil {
 			out = msg.Text
 		}
-		return nil
-	}
+	})
+	defer cleanup()
 
 	in := bus.InboundMessage{
 		ClientID:  "cli",
@@ -57,6 +57,7 @@ func TestSubmitUser_localSlashDoesNotPersistTranscript(t *testing.T) {
 	if len(eng.Messages) != 0 || len(eng.Transcript) != 0 {
 		t.Fatalf("expected empty messages/transcript, got messages=%d transcript=%d", len(eng.Messages), len(eng.Transcript))
 	}
+	waitForOutboundDispatch(t, func() bool { return strings.Contains(out, "/model") })
 	if !strings.Contains(out, "/model") {
 		t.Fatalf("expected help in outbound, got %q", out)
 	}

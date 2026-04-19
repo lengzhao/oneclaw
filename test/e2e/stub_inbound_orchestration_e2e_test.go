@@ -20,14 +20,14 @@ import (
 func TestE2E_113_SlashHelpSkipsModel(t *testing.T) {
 	stub := openaistub.New(t)
 	e2eEnvMinimal(t, stub)
-	e := newStubEngine(t, stub, t.TempDir())
 	var out string
-	e.PublishOutbound = func(_ context.Context, msg *bus.OutboundMessage) error {
+	cleanup := e2eStartNoopBridge(t, []string{"cli"}, func(msg *bus.OutboundMessage) {
 		if msg != nil {
 			out = msg.Text
 		}
-		return nil
-	}
+	})
+	defer cleanup()
+	e := newStubEngine(t, stub, t.TempDir())
 	in := bus.InboundMessage{Content: "/help", ClientID: "cli", SessionID: "t113", Peer: bus.Peer{Kind: "channel"}}
 	err := e.SubmitUser(context.Background(), in)
 	if err != nil {
@@ -39,6 +39,7 @@ func TestE2E_113_SlashHelpSkipsModel(t *testing.T) {
 	if len(e.Messages) != 0 {
 		t.Fatalf("expected local slash not in engine Messages, got %d", len(e.Messages))
 	}
+	e2eWaitOutboundDispatch(t, func() bool { return strings.Contains(out, "/model") })
 	if !strings.Contains(out, "/model") {
 		t.Fatalf("expected help body in outbound, got %q", out)
 	}
@@ -48,14 +49,14 @@ func TestE2E_113_SlashHelpSkipsModel(t *testing.T) {
 func TestE2E_116_SlashStatusSkipsModel(t *testing.T) {
 	stub := openaistub.New(t)
 	e2eEnvMinimal(t, stub)
-	e := newStubEngine(t, stub, t.TempDir())
 	var out string
-	e.PublishOutbound = func(_ context.Context, msg *bus.OutboundMessage) error {
+	cleanup := e2eStartNoopBridge(t, []string{"cli"}, func(msg *bus.OutboundMessage) {
 		if msg != nil {
 			out = msg.Text
 		}
-		return nil
-	}
+	})
+	defer cleanup()
+	e := newStubEngine(t, stub, t.TempDir())
 	in := bus.InboundMessage{Content: "/status", ClientID: "cli", SessionID: "t116", Peer: bus.Peer{Kind: "channel"}}
 	err := e.SubmitUser(context.Background(), in)
 	if err != nil {
@@ -67,6 +68,7 @@ func TestE2E_116_SlashStatusSkipsModel(t *testing.T) {
 	if len(e.Messages) != 0 {
 		t.Fatalf("expected local slash not in engine Messages, got %d", len(e.Messages))
 	}
+	e2eWaitOutboundDispatch(t, func() bool { return strings.Contains(out, "工作区会话 ID") })
 	if !strings.Contains(out, "工作区会话 ID") {
 		t.Fatalf("expected status body in outbound, got %q", out)
 	}
@@ -76,14 +78,14 @@ func TestE2E_116_SlashStatusSkipsModel(t *testing.T) {
 func TestE2E_117_SlashStopSkipsModel(t *testing.T) {
 	stub := openaistub.New(t)
 	e2eEnvMinimal(t, stub)
-	e := newStubEngine(t, stub, t.TempDir())
 	var out string
-	e.PublishOutbound = func(_ context.Context, msg *bus.OutboundMessage) error {
+	cleanup := e2eStartNoopBridge(t, []string{"cli"}, func(msg *bus.OutboundMessage) {
 		if msg != nil {
 			out = msg.Text
 		}
-		return nil
-	}
+	})
+	defer cleanup()
+	e := newStubEngine(t, stub, t.TempDir())
 	in := bus.InboundMessage{Content: "/stop", ClientID: "cli", SessionID: "t117", Peer: bus.Peer{Kind: "channel"}}
 	err := e.SubmitUser(context.Background(), in)
 	if err != nil {
@@ -95,6 +97,7 @@ func TestE2E_117_SlashStopSkipsModel(t *testing.T) {
 	if len(e.Messages) != 0 {
 		t.Fatalf("expected local slash not in engine Messages, got %d", len(e.Messages))
 	}
+	e2eWaitOutboundDispatch(t, func() bool { return strings.Contains(out, "/stop") })
 	if !strings.Contains(out, "/stop") {
 		t.Fatalf("expected stop reply in outbound, got %q", out)
 	}
@@ -105,14 +108,14 @@ func TestE2E_118_SlashResetSkipsModelAndClearsHistory(t *testing.T) {
 	stub := openaistub.New(t)
 	stub.Enqueue(openaistub.CompletionStop("", "UNIQUE_FIRST_ASSISTANT_REPLY"))
 	e2eEnvMinimal(t, stub)
-	e := newStubEngine(t, stub, t.TempDir())
 	var lastOutbound string
-	e.PublishOutbound = func(_ context.Context, msg *bus.OutboundMessage) error {
+	cleanup := e2eStartNoopBridge(t, []string{"cli"}, func(msg *bus.OutboundMessage) {
 		if msg != nil && strings.TrimSpace(msg.Text) != "" {
 			lastOutbound = msg.Text
 		}
-		return nil
-	}
+	})
+	defer cleanup()
+	e := newStubEngine(t, stub, t.TempDir())
 	thread := bus.InboundMessage{ClientID: "cli", SessionID: "t118", Peer: bus.Peer{ID: "p1", Kind: "channel"}}
 	if err := e.SubmitUser(context.Background(), bus.InboundMessage{Content: "hello", ClientID: thread.ClientID, SessionID: thread.SessionID, Peer: thread.Peer}); err != nil {
 		t.Fatal(err)
@@ -120,6 +123,7 @@ func TestE2E_118_SlashResetSkipsModelAndClearsHistory(t *testing.T) {
 	if err := e.SubmitUser(context.Background(), bus.InboundMessage{Content: "/reset", ClientID: thread.ClientID, SessionID: thread.SessionID, Peer: thread.Peer}); err != nil {
 		t.Fatal(err)
 	}
+	e2eWaitOutboundDispatch(t, func() bool { return strings.Contains(lastOutbound, "已清空") })
 	if n := len(stub.ChatRequestBodies()); n != 1 {
 		t.Fatalf("expected one chat/completions call (first turn only), got %d", n)
 	}

@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/lengzhao/clawbridge"
 	"github.com/lengzhao/oneclaw/config"
 	"github.com/lengzhao/oneclaw/memory"
 	"github.com/lengzhao/oneclaw/toolctx"
@@ -75,9 +74,8 @@ func MainEngineFactory(deps MainEngineFactoryDeps) func(SessionHandle) (*Engine,
 		if deps.MCPSystemNote != "" {
 			eng.MCPSystemNote = deps.MCPSystemNote
 		}
-		// Requires cmd/oneclaw to call clawbridge.SetDefault after New; see clawbridge.PublishOutbound / UpdateStatus.
-		eng.PublishOutbound = clawbridge.PublishOutbound
-		eng.UpdateInboundStatus = clawbridge.UpdateStatus
+		// Outbound uses package-level clawbridge.PublishOutbound / clawbridge.UpdateStatus; requires
+		// cmd/oneclaw to call clawbridge.SetDefault(bridge) after New.
 		eng.RegisterAuditSinks(deps.LLMAudit, deps.OrchAudit, deps.VisAudit)
 		if np := deps.NewRecallPersister; np != nil {
 			eng.RecallPersister = np(h)

@@ -31,7 +31,7 @@
 | 用途 | 类型 / 入口 |
 |------|-------------|
 | 入站 | **`bus.InboundMessage`** |
-| 出站 | **`bus.OutboundMessage`**，经 **`Engine.PublishOutbound`** |
+| 出站 | **`bus.OutboundMessage`**，经 **`clawbridge.PublishOutbound`**（**`SetDefault`** 后） |
 | 桥接 | **`clawbridge.Bridge`**，`Start` / `Stop` |
 | 工具上下文合并 | **`toolctx.Context.ApplyTurnInboundToToolContext`**、`mergeTurnInbound` |
 

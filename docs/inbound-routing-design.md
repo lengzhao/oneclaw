@@ -7,7 +7,7 @@
 ## 1. 目标与主路径
 
 - **入站**：各渠道（clawbridge driver、`statichttp` 等）将用户侧输入统一为 **`github.com/lengzhao/clawbridge/bus.InboundMessage`**，经 **`cmd/oneclaw`** 进入 **`session.WorkerPool.SubmitUser` → `session.Engine.SubmitUser` → `loop.RunTurn`**。
-- **出站**：助手可见文本等由 **`session.Engine`** 上注入的 **`PublishOutbound`**（如 **`clawbridge.PublishOutbound`**）、**`UpdateInboundStatus`**（见 `session/engine_factory.go`）等到 **clawbridge 总线**；与 **`tools.Registry`** 正交。
+- **出站**：助手可见文本等由 **`session`** 直接调用 **`clawbridge.PublishOutbound`** / **`clawbridge.UpdateStatus`**（未 **`SetDefault`** 时 `ErrNotInitialized` 在合适路径上静默或向上返回）；与 **`tools.Registry`** 正交。
 - **ToolContext**：每轮在 `loop.RunTurn` 开头合并入站元数据到 **`toolctx.SessionHost.TurnInbound`**，供工具与策略使用（§2.1）。
 
 ---
@@ -51,9 +51,9 @@
 
 ## 4. 出站（当前实现）
 
-- **`session.Engine.PublishOutbound`**：`func(ctx context.Context, msg *bus.OutboundMessage) error`，由 **`MainEngineFactory`** 设为 **`clawbridge.PublishOutbound`**（或测试桩）。
-- **`loop.Config.OutboundText`**：在 `prepareSharedTurn` 中绑定为：将助手文本封装为 **`bus.OutboundMessage`** 再调用 **`PublishOutbound`**（见 `session/turn_prepare.go`）。
-- **`session.Engine.UpdateInboundStatus`**：入站状态更新（如已读），同样来自 clawbridge 包级函数。
+- **包级 API**：**`clawbridge.PublishOutbound`**、**`clawbridge.UpdateStatus`**；依赖 **`clawbridge.SetDefault(bridge)`** 后桥可用（**`MainEngineFactory`** 不再向 `Engine` 注入出站字段）。
+- **`loop.Config.OutboundText`**：在 `prepareSharedTurn` 中绑定为：将助手文本封装为 **`bus.OutboundMessage`** 再 **`clawbridge.PublishOutbound`**；**`ErrNotInitialized`** 在闭包内吞掉，避免无桥时污染模型步日志（见 `session/turn_prepare.go`）。
+- **入站状态**：**`clawbridge.UpdateStatus`**（如已读），能力不支持时由 **`session`** 忽略约定错误。
 
 以下为**可选演进**（代码中未作为单一主路径实现）：按 `ClientID` 等键维护 **`SinkRegistry` / `SinkFactory`**，在构造 `OutboundMessage` 前做一层解析；与 §3 的 `context` 透传可二选一或组合。
 
@@ -69,7 +69,7 @@
 ## 6. 与出站文档的关系
 
 - **事件与载荷**：观测、审计 JSONL 等见 [outbound-events-design.md](outbound-events-design.md)、[notify-sinks-audit-design.md](notify-sinks-audit-design.md)。
-- **主路径**：助手回复以 **`bus.OutboundMessage`** 经 **`PublishOutbound`** 发出，与 `Record`/`seq` 类 JSON 观测草案可并存（见出站文档）。
+- **主路径**：助手回复以 **`bus.OutboundMessage`** 经 **`Outbound.PublishOutbound`** 发出，与 `Record`/`seq` 类 JSON 观测草案可并存（见出站文档）。
 
 ---
 

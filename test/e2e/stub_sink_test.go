@@ -20,19 +20,25 @@ func TestE2E_70_PublishOutboundAssistantText(t *testing.T) {
 
 	var mu sync.Mutex
 	var texts []string
-	e := newStubEngine(t, stub, t.TempDir())
-	e.PublishOutbound = func(_ context.Context, msg *bus.OutboundMessage) error {
+	cleanup := e2eStartNoopBridge(t, []string{"cli"}, func(msg *bus.OutboundMessage) {
 		mu.Lock()
 		defer mu.Unlock()
 		if msg != nil && strings.TrimSpace(msg.Text) != "" {
 			texts = append(texts, msg.Text)
 		}
-		return nil
-	}
+	})
+	defer cleanup()
+	e := newStubEngine(t, stub, t.TempDir())
 
 	if err := e.SubmitUser(context.Background(), bus.InboundMessage{ClientID: "cli", SessionID: "C1", Content: "hello sink"}); err != nil {
 		t.Fatal(err)
 	}
+
+	e2eWaitOutboundDispatch(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(texts) >= 1
+	})
 
 	mu.Lock()
 	defer mu.Unlock()

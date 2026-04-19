@@ -2,9 +2,11 @@ package session
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"os"
 
+	"github.com/lengzhao/clawbridge"
 	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/oneclaw/budget"
 	"github.com/lengzhao/oneclaw/memory"
@@ -14,7 +16,7 @@ import (
 )
 
 // sharedTurnPrep is the common substrate for SubmitUser and submitLocalSlashTurn:
-// tool context, memory bundle, system prompt string, subagent runner, and optional outbound hook.
+// tool context, memory bundle, system prompt string, subagent runner, and OutboundText (always set; see prepareSharedTurn).
 type sharedTurnPrep struct {
 	tctx         *toolctx.Context
 	bg           budget.Global
@@ -59,15 +61,17 @@ func (e *Engine) prepareSharedTurn(ctx context.Context, in bus.InboundMessage, a
 	} else if herr != nil {
 		slog.Warn("session.user_home", "err", herr)
 	}
-	if e.PublishOutbound != nil {
-		snap := in
-		p.outboundText = func(ctx context.Context, text string) error {
-			msg := assistantTextOutbound(&snap, text)
-			if msg == nil {
-				return nil
-			}
-			return e.PublishOutbound(ctx, msg)
+	snap := in
+	p.outboundText = func(ctx context.Context, text string) error {
+		msg := assistantTextOutbound(&snap, text)
+		if msg == nil {
+			return nil
 		}
+		err := clawbridge.PublishOutbound(ctx, msg)
+		if errors.Is(err, clawbridge.ErrNotInitialized) {
+			return nil
+		}
+		return err
 	}
 	cat := subagent.LoadCatalog(e.CWD, e.WorkspaceFlat, e.InstructionRoot)
 	p.catalog = cat
