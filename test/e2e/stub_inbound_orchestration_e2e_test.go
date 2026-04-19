@@ -21,13 +21,14 @@ func TestE2E_113_SlashHelpSkipsModel(t *testing.T) {
 	stub := openaistub.New(t)
 	e2eEnvMinimal(t, stub)
 	var out string
-	cleanup := e2eStartNoopBridge(t, []string{"cli"}, func(msg *bus.OutboundMessage) {
+	br, cleanup := e2eStartNoopBridge(t, []string{"cli"}, func(msg *bus.OutboundMessage) {
 		if msg != nil {
 			out = msg.Text
 		}
 	})
 	defer cleanup()
 	e := newStubEngine(t, stub, t.TempDir())
+	e.Bridge = br
 	in := bus.InboundMessage{Content: "/help", ClientID: "cli", SessionID: "t113", Peer: bus.Peer{Kind: "channel"}}
 	err := e.SubmitUser(context.Background(), in)
 	if err != nil {
@@ -50,13 +51,14 @@ func TestE2E_116_SlashStatusSkipsModel(t *testing.T) {
 	stub := openaistub.New(t)
 	e2eEnvMinimal(t, stub)
 	var out string
-	cleanup := e2eStartNoopBridge(t, []string{"cli"}, func(msg *bus.OutboundMessage) {
+	br, cleanup := e2eStartNoopBridge(t, []string{"cli"}, func(msg *bus.OutboundMessage) {
 		if msg != nil {
 			out = msg.Text
 		}
 	})
 	defer cleanup()
 	e := newStubEngine(t, stub, t.TempDir())
+	e.Bridge = br
 	in := bus.InboundMessage{Content: "/status", ClientID: "cli", SessionID: "t116", Peer: bus.Peer{Kind: "channel"}}
 	err := e.SubmitUser(context.Background(), in)
 	if err != nil {
@@ -79,13 +81,14 @@ func TestE2E_117_SlashStopSkipsModel(t *testing.T) {
 	stub := openaistub.New(t)
 	e2eEnvMinimal(t, stub)
 	var out string
-	cleanup := e2eStartNoopBridge(t, []string{"cli"}, func(msg *bus.OutboundMessage) {
+	br, cleanup := e2eStartNoopBridge(t, []string{"cli"}, func(msg *bus.OutboundMessage) {
 		if msg != nil {
 			out = msg.Text
 		}
 	})
 	defer cleanup()
 	e := newStubEngine(t, stub, t.TempDir())
+	e.Bridge = br
 	in := bus.InboundMessage{Content: "/stop", ClientID: "cli", SessionID: "t117", Peer: bus.Peer{Kind: "channel"}}
 	err := e.SubmitUser(context.Background(), in)
 	if err != nil {
@@ -109,13 +112,14 @@ func TestE2E_118_SlashResetSkipsModelAndClearsHistory(t *testing.T) {
 	stub.Enqueue(openaistub.CompletionStop("", "UNIQUE_FIRST_ASSISTANT_REPLY"))
 	e2eEnvMinimal(t, stub)
 	var lastOutbound string
-	cleanup := e2eStartNoopBridge(t, []string{"cli"}, func(msg *bus.OutboundMessage) {
+	br, cleanup := e2eStartNoopBridge(t, []string{"cli"}, func(msg *bus.OutboundMessage) {
 		if msg != nil && strings.TrimSpace(msg.Text) != "" {
 			lastOutbound = msg.Text
 		}
 	})
 	defer cleanup()
 	e := newStubEngine(t, stub, t.TempDir())
+	e.Bridge = br
 	thread := bus.InboundMessage{ClientID: "cli", SessionID: "t118", Peer: bus.Peer{ID: "p1", Kind: "channel"}}
 	if err := e.SubmitUser(context.Background(), bus.InboundMessage{Content: "hello", ClientID: thread.ClientID, SessionID: thread.SessionID, Peer: thread.Peer}); err != nil {
 		t.Fatal(err)

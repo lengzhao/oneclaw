@@ -67,7 +67,7 @@ func (e *Engine) prepareSharedTurn(ctx context.Context, in bus.InboundMessage, a
 		if msg == nil {
 			return nil
 		}
-		err := clawbridge.PublishOutbound(ctx, msg)
+		err := e.publishOutbound(ctx, msg)
 		if errors.Is(err, clawbridge.ErrNotInitialized) {
 			return nil
 		}

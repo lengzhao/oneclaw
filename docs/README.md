@@ -26,11 +26,11 @@
 | [`outbound-events-design.md`](outbound-events-design.md) | 出站 `Record` / `Sink`、CLI/HTTP 行为 |
 | [`notification-hooks-design.md`](notification-hooks-design.md) | 通知 Hook 与 outbound 分工、`NotifySink` |
 | [`notify-sinks-audit-design.md`](notify-sinks-audit-design.md) | 审计类 JSONL Sink 与 Transcript 关系 |
-| [`inbound-routing-design.md`](inbound-routing-design.md) | `Inbound` 字段、`SinkRegistry`、渠道注册 |
+| [`inbound-routing-design.md`](inbound-routing-design.md) | 入站字段、ToolContext 合并、`PublishOutbound` / `WorkerPool`（当前实现）；未实现项见 [`todo.md`](todo.md) **#27** § |
 | [`embedded-maintain-scheduler-design.md`](embedded-maintain-scheduler-design.md) | 进程内 `maintainloop` 与 `RunScheduledMaintain` |
 | [`memory-maintain-dual-entry-design.md`](memory-maintain-dual-entry-design.md) | 回合后维护 vs 定时维护双入口 |
 | [`memory-recall-sqlite-design.md`](memory-recall-sqlite-design.md) | **Memory 片段索引与召回**：本地 SQLite **FTS-only**；语义扩展规划为外部 RAG；与 `SelectRecall` 迁移 |
-| [`code-simplification-opportunities.md`](code-simplification-opportunities.md) | 已落实项摘要 + 剩余文档化/可选演进（`DefaultRegistry`、`OutboundSender` 等） |
+| [`code-simplification-opportunities.md`](code-simplification-opportunities.md) | **已落实**边界与主路径摘要；可选出站 / `context` 演进见 [`todo.md`](todo.md) **#27** |
 | [`architecture-modularity-simplification.md`](architecture-modularity-simplification.md) | **模块化路线**：优先抽象/简化、`Engine` 收窄、I/O 与 memory 概念分层；拆仓库后置 |
 | [`orchestrator-business-agents.md`](orchestrator-business-agents.md) | 主编排、`.oneclaw/agents`、`run_agent` 约定 |
 

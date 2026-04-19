@@ -11,10 +11,10 @@ import (
 	_ "github.com/lengzhao/clawbridge/drivers"
 )
 
-// testStartNoopBridge installs the process-default clawbridge with noop drivers for clientIDs.
+// testStartNoopBridge starts a noop-driver bridge for clientIDs and returns it for assigning to [Engine.Bridge].
 // Optional captureMsg is invoked from OutboundSendNotify after each outbound send (for assertions).
 // Call cleanup in defer; do not use t.Parallel in tests that rely on this helper.
-func testStartNoopBridge(t *testing.T, clientIDs []string, captureMsg func(*bus.OutboundMessage)) (cleanup func()) {
+func testStartNoopBridge(t *testing.T, clientIDs []string, captureMsg func(*bus.OutboundMessage)) (bridge *clawbridge.Bridge, cleanup func()) {
 	t.Helper()
 	cfgs := make([]clawbridge.ClientConfig, len(clientIDs))
 	for i, id := range clientIDs {
@@ -36,13 +36,11 @@ func testStartNoopBridge(t *testing.T, clientIDs []string, captureMsg func(*bus.
 	if err := b.Start(ctx); err != nil {
 		t.Fatal(err)
 	}
-	clawbridge.SetDefault(b)
-	return func() {
+	return b, func() {
 		cancel()
 		stopCtx, c := context.WithTimeout(context.Background(), 2*time.Second)
 		defer c()
 		_ = b.Stop(stopCtx)
-		clawbridge.SetDefault(nil)
 	}
 }
 

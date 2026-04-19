@@ -1,6 +1,6 @@
-# 代码简化与边界（oneclaw）
+# 代码边界与已落实项（oneclaw）
 
-对架构的只读审视：**已落实项**仅作摘要，避免与 [`todo.md`](todo.md) backlog **#19–#22** 重复维护。**仍待文档化或可选演进**见 §2–§4；实施前结合 [inbound-routing-design.md](inbound-routing-design.md)、[outbound-events-design.md](outbound-events-design.md) 与代码再定优先级。
+只读摘要：**以当前实现为准**。未实现的设计草案与可选演进见 [`todo.md`](todo.md)（**#27** 与 §「出站与 context 可选演进（未实现）」），避免与实现真源重复维护。
 
 ---
 
@@ -19,35 +19,19 @@
 
 ---
 
-## 2. 仍建议补充的文档（对应 todo #23–#26）
+## 2. 当前实现边界（与代码对齐）
 
-- **工具 `DefaultRegistry` vs 出站**：见 [inbound-routing-design.md](inbound-routing-design.md) §5（工具侧 **`tools/builtin.DefaultRegistry()`**，与 **`PublishOutbound`** 正交）。
-- **`SinkRegistry` vs `SinkFactory`**：见 [inbound-routing-design.md](inbound-routing-design.md) §4（可选演进）。
-- **`WorkerPool` vs 直接 `NewEngine`**：`cmd/oneclaw` 用 WorkerPool 分片、**每任务新建 `Engine`**；单测 / e2e 常直接 **`session.NewEngine`**。见 [config.md](config.md)「会话与多通道」、[inbound-routing-design.md](inbound-routing-design.md) §8。
-- **子 agent 工具表**：**`run_agent`** = `FilterRegistry` ∩ 父表 + 去 meta；**`fork_context`** = 父表去 meta（见 [inbound-routing-design.md](inbound-routing-design.md) §9、`subagent/registry.go`）。
-
----
-
-## 3. `WorkerPool` 与出站（§5.2 保留）
-
-**`cmd/oneclaw/main.go`** 使用 **`session.WorkerPool`**：固定 worker 数、按 `SessionHandle` 哈希分片、每任务 **`MainEngineFactory` 新建 `Engine` 后丢弃**，持久化依赖落盘。出站由 **`clawbridge.SetDefault`** 后的包级 **`PublishOutbound` / `UpdateStatus`** 承担（`Engine` 不再持有出站回调字段）。详见 [config.md](config.md)、[inbound-routing-design.md](inbound-routing-design.md) §4、§8。
+- **工具 vs 出站**：`tools/builtin.DefaultRegistry()` 注入主会话工具；助手文本与状态经 **`Engine.publishOutbound`** / **`Engine.updateInboundStatus`**（**`*clawbridge.Bridge`**），与工具注册表**正交**。详见 [inbound-routing-design.md](inbound-routing-design.md) §4、§5。
+- **`WorkerPool` 与 `Engine`**：`cmd/oneclaw` 使用 **`session.WorkerPool`**，按 `SessionHandle` 分片，**每任务** `MainEngineFactory` **新建 `Engine`，`SubmitUser` 结束后丢弃**；**`MainEngineFactoryDeps.Bridge`** 注入 **`clawbridge.New`** 的实例（出站唯一来源）。单测 / e2e 对 **`session.NewEngine`** 设置 **`eng.Bridge`**（noop 桥）。详见 [inbound-routing-design.md](inbound-routing-design.md) §8、[config.md](config.md)「会话与多通道」。
+- **子 agent 工具表**：**`run_agent`** ≈ catalog ∩ 父表 − 元工具；**`fork_context`** ≈ 父表 − 元工具（深度规则见实现）。详见 [inbound-routing-design.md](inbound-routing-design.md) §9、`subagent/registry.go`。
 
 ---
 
-## 4. 可选：`OutboundSender` 与全局 `Engine`（todo #27）
-
-- `Engine.SendMessage` 依赖 CWD、`SinkRegistry`/`SinkFactory`、`SessionID`，不宜做成无状态包级接口。
-- 较稳妥：**收窄接口 + 已完成的 `toolctx` 分组**，或 **`context` 挂载窄 `OutboundSender`**，与 `toolctx.SessionHost.SendMessage` 二选一演进，避免与「全局 `Engine` 单例」并行两套。
-
-详见 [inbound-routing-design.md](inbound-routing-design.md) §3。
-
----
-
-## 5. 包边界（保持现状）
+## 3. 包边界（保持现状）
 
 - `memory` 不 import `tools/builtin`；由 `builtin.ScheduledMaintainReadRegistry()` 等做依赖倒置，避免随意打通造成循环。
 - `tools/registry.go` 与 `loop` 批处理策略已集中，改动优先级低。
 
 ---
 
-*剩余勾选以 [`todo.md`](todo.md) **#23–#27** 为准。*
+*Backlog 与架构对照以 [`todo.md`](todo.md) 为准（含 **#19–#22** 工程简化、**#23–#26** 文档索引、**#27** 可选演进）。*

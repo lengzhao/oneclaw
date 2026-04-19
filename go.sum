@@ -42,8 +42,8 @@ github.com/klauspost/cpuid/v2 v2.2.9 h1:66ze0taIn2H33fBvCkXuv9BmCwDfafmiIVpKV9kK
 github.com/klauspost/cpuid/v2 v2.2.9/go.mod h1:rqkxqrZ1EhYM9G+hXH7YdowN5R5RGN6NK4QwQ3WMXF8=
 github.com/larksuite/oapi-sdk-go/v3 v3.5.3 h1:xvf8Dv29kBXC5/DNDCLhHkAFW8l/0LlQJimO5Zn+JUk=
 github.com/larksuite/oapi-sdk-go/v3 v3.5.3/go.mod h1:ZEplY+kwuIrj/nqw5uSCINNATcH3KdxSN7y+UxYY5fI=
-github.com/lengzhao/clawbridge v0.2.2 h1:6opBBKHLzRQ6UgwIrItcG0NiWeqK0MOwp9gFJSd+hlc=
-github.com/lengzhao/clawbridge v0.2.2/go.mod h1:lMt5thhm/97BZWMMJ3gnV9aUu/GvJOvLwXjHX/Nishg=
+github.com/lengzhao/clawbridge v0.3.1 h1:G19Sy55Jz0Ie0HPriUPrIB7mQmyFuUdYDN4vXa+vNZ4=
+github.com/lengzhao/clawbridge v0.3.1/go.mod h1:lMt5thhm/97BZWMMJ3gnV9aUu/GvJOvLwXjHX/Nishg=
 github.com/mattn/go-isatty v0.0.20 h1:xfD0iDuEKnDkl03q4limB+vH+GxLEtL/jb4xVJSWWEY=
 github.com/mattn/go-isatty v0.0.20/go.mod h1:W+V8PltTTMOvKvAeJH7IuucS94S2C6jfK/D7dTCTo3Y=
 github.com/mdp/qrterminal/v3 v3.2.1 h1:6+yQjiiOsSuXT5n9/m60E54vdgFsw0zhADHhHLrFet4=

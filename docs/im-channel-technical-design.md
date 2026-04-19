@@ -74,7 +74,7 @@ session/                         # Engine、SubmitUser、turn 编排、WorkerPoo
 
 | 概念 | 职责 | 与 oneclaw 关系 |
 |------|------|----------------|
-| **clawbridge `Bridge`** | 生命周期、`Start`/`Stop`、挂载 drivers | `cmd/oneclaw` 中 `clawbridge.New` + `SetDefault` |
+| **clawbridge `Bridge`** | 生命周期、`Start`/`Stop`、挂载 drivers | `cmd/oneclaw` 中 `clawbridge.New`，注入 **`session.Engine.Bridge`** |
 | **driver** | 平台 SDK → **`bus.InboundMessage`**；出站消费总线 | 在 **clawbridge** 模块中实现 |
 | **按来源出站解析（可选）** | 注册表或工厂封装 **`OutboundMessage`** | 演进选项，见 [`inbound-routing-design.md`](inbound-routing-design.md) §4 |
 

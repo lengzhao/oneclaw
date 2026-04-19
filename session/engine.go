@@ -87,6 +87,8 @@ type Engine struct {
 	DisableMultimodalImage bool
 	// DisableMultimodalAudio when true, wav/mp3 attachments use read_file hints only (no input_audio parts).
 	DisableMultimodalAudio bool
+	// Bridge is the IM bus for outbound publish and inbound message status. When nil, outbound/status calls return [clawbridge.ErrNotInitialized]. [cmd/oneclaw] / [MainEngineFactoryDeps] set this from [clawbridge.New]; tests set it from a noop bridge.
+	Bridge *clawbridge.Bridge
 }
 
 // NewEngine builds an engine with sensible defaults.
@@ -297,11 +299,7 @@ func (e *Engine) SubmitUser(ctx context.Context, in bus.InboundMessage) (err err
 			AssistantVisible: loop.LastAssistantDisplay(e.Messages),
 			Tools:            append([]loop.ToolTraceEntry(nil), tools...),
 		}
-		memory.PostTurn(layout, pti)
-		// Post-turn LLM maintain is best-effort and can be slow; do not block channels waiting on HTTP Done.
-		go func(in memory.PostTurnInput) {
-			memory.MaybePostTurnMaintain(context.Background(), layout, &e.Client, e.Model, e.MaxTokens, &in)
-		}(pti)
+		e.runPostTurnAndScheduleMaintain(layout, pti)
 	}
 	e.persistRecall()
 	return nil
@@ -338,7 +336,7 @@ func (e *Engine) SendMessage(ctx context.Context, in bus.InboundMessage) error {
 		"to_session_id", msg.To.SessionID,
 		"to_kind", msg.To.Kind,
 	)
-	return clawbridge.PublishOutbound(ctx, msg)
+	return e.publishOutbound(ctx, msg)
 }
 
 func (e *Engine) submitLocalSlashTurn(ctx context.Context, in bus.InboundMessage, atts []Attachment, reply string, turnID, corrID string) error {
@@ -408,6 +406,14 @@ func (e *Engine) persistRecall() {
 	}
 }
 
+// runPostTurnAndScheduleMaintain runs memory.PostTurn and starts MaybePostTurnMaintain asynchronously (best-effort; does not block the channel).
+func (e *Engine) runPostTurnAndScheduleMaintain(layout memory.Layout, pti memory.PostTurnInput) {
+	memory.PostTurn(layout, pti)
+	go func(in memory.PostTurnInput) {
+		memory.MaybePostTurnMaintain(context.Background(), layout, &e.Client, e.Model, e.MaxTokens, &in)
+	}(pti)
+}
+
 // publishOutboundSubmitUserError sends a user-visible assistant line with the failure reason when
 // the inbound message has channel addressing (same rules as normal replies). Best-effort: no bridge
 // or PublishOutbound failure is ignored except for logging unexpected errors.
@@ -421,17 +427,20 @@ func (e *Engine) publishOutboundSubmitUserError(ctx context.Context, in *bus.Inb
 		slog.Debug("session.submit_user_error_outbound_skip", "reason", "no_client_or_session")
 		return
 	}
-	if pubErr := clawbridge.PublishOutbound(ctx, msg); pubErr != nil && !errors.Is(pubErr, clawbridge.ErrNotInitialized) {
+	if pubErr := e.publishOutbound(ctx, msg); pubErr != nil && !errors.Is(pubErr, clawbridge.ErrNotInitialized) {
 		slog.Warn("session.submit_user_error_outbound", "err", pubErr)
 	}
 }
 
 func (e *Engine) applyInboundMessageStatus(ctx context.Context, in bus.InboundMessage, state string) {
-	req := InboundUpdateStatusRequest(&in, state)
-	if req == nil {
+	state = strings.TrimSpace(state)
+	if state == "" {
 		return
 	}
-	if err := clawbridge.UpdateStatus(ctx, req); err != nil {
+	if strings.TrimSpace(in.MessageID) == "" || strings.TrimSpace(in.ClientID) == "" || strings.TrimSpace(in.SessionID) == "" {
+		return
+	}
+	if err := e.updateInboundStatus(ctx, &in, clawbridge.UpdateStatusState(state), nil); err != nil {
 		if errors.Is(err, client.ErrCapabilityUnsupported) || errors.Is(err, clawbridge.ErrNotInitialized) {
 			return
 		}

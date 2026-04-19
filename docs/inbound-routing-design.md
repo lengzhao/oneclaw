@@ -7,7 +7,7 @@
 ## 1. 目标与主路径
 
 - **入站**：各渠道（clawbridge driver、`statichttp` 等）将用户侧输入统一为 **`github.com/lengzhao/clawbridge/bus.InboundMessage`**，经 **`cmd/oneclaw`** 进入 **`session.WorkerPool.SubmitUser` → `session.Engine.SubmitUser` → `loop.RunTurn`**。
-- **出站**：助手可见文本等由 **`session`** 直接调用 **`clawbridge.PublishOutbound`** / **`clawbridge.UpdateStatus`**（未 **`SetDefault`** 时 `ErrNotInitialized` 在合适路径上静默或向上返回）；与 **`tools.Registry`** 正交。
+- **出站**：助手可见文本等由 **`session.Engine`** 经 **`Engine.publishOutbound`** / **`Engine.updateInboundStatus`**（**`Engine.Bridge`** 的 **`Bus().PublishOutbound`** 与 **`Bridge.UpdateStatus`**；**`Bridge` 为 nil 时** `ErrNotInitialized` 在合适路径上静默或向上返回）；与 **`tools.Registry`** 正交。
 - **ToolContext**：每轮在 `loop.RunTurn` 开头合并入站元数据到 **`toolctx.SessionHost.TurnInbound`**，供工具与策略使用（§2.1）。
 
 ---
@@ -35,27 +35,17 @@
 
 ---
 
-## 3. `context` 透传（未实现）
+## 3. 未实现项（设计草案）
 
-若将来 **`Sink` 或工具**需要从 `context` 读取本轮入站元数据、又不想扩展函数签名，可在 **`loop.RunTurn`** 开头写入一次 `context.Value`（非导出 key），或在本轮构造时闭包进 `PublishOutbound` 所用参数。约束见下表。
-
-### 3.1 放什么、不放什么
-
-| 适合放入 `ctx` | 不适合 |
-|----------------|--------|
-| 不可变的本次请求元数据（来源、用户 id、correlation、trace id） | 大段正文重复存储 |
-| 供工具使用的**句柄 key**（lookup key） | 密钥明文、长期 token 本体 |
-| 取消 / 超时 | 仍用 `ctx` 的 `Deadline` / `Done` | 把 `Engine` 或整条消息历史塞进 `Value` |
+以下能力**尚未在代码中作为主路径实现**，设计草案与取舍见 [`todo.md`](todo.md) §「出站与 context 可选演进（未实现）」（与 backlog **#27** 对照）：`context` 透传入站元数据；`SinkRegistry` / `SinkFactory` 按渠道解析出站；`OutboundSender` 与 `Engine.SendMessage` 收窄等。
 
 ---
 
 ## 4. 出站（当前实现）
 
-- **包级 API**：**`clawbridge.PublishOutbound`**、**`clawbridge.UpdateStatus`**；依赖 **`clawbridge.SetDefault(bridge)`** 后桥可用（**`MainEngineFactory`** 不再向 `Engine` 注入出站字段）。
-- **`loop.Config.OutboundText`**：在 `prepareSharedTurn` 中绑定为：将助手文本封装为 **`bus.OutboundMessage`** 再 **`clawbridge.PublishOutbound`**；**`ErrNotInitialized`** 在闭包内吞掉，避免无桥时污染模型步日志（见 `session/turn_prepare.go`）。
-- **入站状态**：**`clawbridge.UpdateStatus`**（如已读），能力不支持时由 **`session`** 忽略约定错误。
-
-以下为**可选演进**（代码中未作为单一主路径实现）：按 `ClientID` 等键维护 **`SinkRegistry` / `SinkFactory`**，在构造 `OutboundMessage` 前做一层解析；与 §3 的 `context` 透传可二选一或组合。
+- **`Engine.Bridge`**：**`MainEngineFactoryDeps.Bridge`** 注入 **`cmd/oneclaw`** 中 **`clawbridge.New`** 得到的 **`*clawbridge.Bridge`**（唯一出站/状态来源；**不再**依赖进程级 **`SetDefault`**）。出站与入站消息状态经 **`Engine.publishOutbound`** / **`Engine.updateInboundStatus`**，底层为 **`Bridge.Bus().PublishOutbound`** 与 **`Bridge.UpdateStatus`**。
+- **`loop.Config.OutboundText`**：在 `prepareSharedTurn` 中绑定为：将助手文本封装为 **`bus.OutboundMessage`** 再 **`Engine.publishOutbound`**；**`ErrNotInitialized`** 在闭包内吞掉，避免无桥时污染模型步日志（见 `session/turn_prepare.go`）。
+- **入站状态**：**`Bridge.UpdateStatus(ctx, &in, state, metadata)`**（**`UpdateStatusState`**，见 clawbridge v0.3+），由 **`Engine.updateInboundStatus`** 调用；**`UpdateStatusRequest`** 仍由 **`Bridge.UpdateStatusRequest`** 用于非入站同源路由；能力不支持时由 **`session`** 忽略约定错误。
 
 ---
 

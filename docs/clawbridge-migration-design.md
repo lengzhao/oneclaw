@@ -1,6 +1,6 @@
 # clawbridge 与 oneclaw I/O 契约
 
-[`github.com/lengzhao/clawbridge`](https://github.com/lengzhao/clawbridge) 提供进程内 **MessageBus**、**IM driver**、**`bus.InboundMessage` / `bus.OutboundMessage`**。**`cmd/oneclaw`** 通过 **`clawbridge.New`**、**`PublishOutbound`**、**`UpdateInboundStatus`** 与 **`session.Engine`** 对接。
+[`github.com/lengzhao/clawbridge`](https://github.com/lengzhao/clawbridge) 提供进程内 **MessageBus**、**IM driver**、**`bus.InboundMessage` / `bus.OutboundMessage`**。**`cmd/oneclaw`** 通过 **`clawbridge.New`** 将 **`Bridge`** 注入 **`session.MainEngineFactoryDeps`**，由 **`Engine.publishOutbound`** / **`Engine.updateInboundStatus`** 与总线对接。
 
 **配套文档**：[inbound-routing-design.md](inbound-routing-design.md)（入站合并、`WorkerPool`）、[outbound-events-design.md](outbound-events-design.md)（出站与可选 JSON 观测草案）、[runtime-flow.md](runtime-flow.md)（主路径）。
 
@@ -31,7 +31,7 @@
 | 用途 | 类型 / 入口 |
 |------|-------------|
 | 入站 | **`bus.InboundMessage`** |
-| 出站 | **`bus.OutboundMessage`**，经 **`clawbridge.PublishOutbound`**（**`SetDefault`** 后） |
+| 出站 | **`bus.OutboundMessage`**，经 **`Engine.Bridge.Bus().PublishOutbound`**（**`MainEngineFactoryDeps.Bridge`**） |
 | 桥接 | **`clawbridge.Bridge`**，`Start` / `Stop` |
 | 工具上下文合并 | **`toolctx.Context.ApplyTurnInboundToToolContext`**、`mergeTurnInbound` |
 

@@ -12,12 +12,13 @@ import (
 func TestEngineSendMessage(t *testing.T) {
 	cwd := t.TempDir()
 	var published []*bus.OutboundMessage
-	cleanup := testStartNoopBridge(t, []string{"ch1"}, func(msg *bus.OutboundMessage) {
+	br, cleanup := testStartNoopBridge(t, []string{"ch1"}, func(msg *bus.OutboundMessage) {
 		published = append(published, msg)
 	})
 	defer cleanup()
 
 	eng := NewEngine(cwd, tools.NewRegistry())
+	eng.Bridge = br
 
 	err := eng.SendMessage(context.Background(), bus.InboundMessage{
 		ClientID:   "ch1",
@@ -47,12 +48,13 @@ func TestEngineSendMessage(t *testing.T) {
 func TestEngineSendMessage_recipientUserIDFromMetadata(t *testing.T) {
 	cwd := t.TempDir()
 	var published []*bus.OutboundMessage
-	cleanup := testStartNoopBridge(t, []string{"ch1"}, func(msg *bus.OutboundMessage) {
+	br, cleanup := testStartNoopBridge(t, []string{"ch1"}, func(msg *bus.OutboundMessage) {
 		published = append(published, msg)
 	})
 	defer cleanup()
 
 	eng := NewEngine(cwd, tools.NewRegistry())
+	eng.Bridge = br
 	in := bus.InboundMessage{
 		ClientID:  "ch1",
 		SessionID: "S1",
@@ -75,9 +77,10 @@ func TestEngineSendMessage_recipientUserIDFromMetadata(t *testing.T) {
 }
 
 func TestEngineSendMessageRequiresClientID(t *testing.T) {
-	cleanup := testStartNoopBridge(t, []string{"x"}, nil)
+	br, cleanup := testStartNoopBridge(t, []string{"x"}, nil)
 	defer cleanup()
 	eng := NewEngine(t.TempDir(), tools.NewRegistry())
+	eng.Bridge = br
 	err := eng.SendMessage(context.Background(), bus.InboundMessage{Content: "x", SessionID: "C1"})
 	if err == nil || !strings.Contains(err.Error(), "ClientID") {
 		t.Fatalf("expected ClientID error, got %v", err)
@@ -85,9 +88,10 @@ func TestEngineSendMessageRequiresClientID(t *testing.T) {
 }
 
 func TestEngineSendMessageNoChat(t *testing.T) {
-	cleanup := testStartNoopBridge(t, []string{"x"}, nil)
+	br, cleanup := testStartNoopBridge(t, []string{"x"}, nil)
 	defer cleanup()
 	eng := NewEngine(t.TempDir(), tools.NewRegistry())
+	eng.Bridge = br
 	err := eng.SendMessage(context.Background(), bus.InboundMessage{ClientID: "x", Content: "hi"})
 	if err == nil || !strings.Contains(err.Error(), "SessionID") {
 		t.Fatalf("expected SessionID error, got %v", err)

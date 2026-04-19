@@ -1,16 +1,14 @@
 package session
 
 import (
-	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
 
+	"github.com/lengzhao/clawbridge"
 	"github.com/lengzhao/oneclaw/config"
 	"github.com/lengzhao/oneclaw/memory"
-	"github.com/lengzhao/oneclaw/toolctx"
 	"github.com/lengzhao/oneclaw/tools"
 	"github.com/openai/openai-go"
 )
@@ -28,6 +26,8 @@ type MainEngineFactoryDeps struct {
 	VisAudit      bool
 	// NewRecallPersister, if non-nil, provides recall persistence for the given handle (e.g. sessdb bridge).
 	NewRecallPersister func(SessionHandle) RecallPersister
+	// Bridge is the clawbridge instance for outbound and inbound status; required for IM runs ([cmd/oneclaw] always sets it).
+	Bridge *clawbridge.Bridge
 }
 
 // MainEngineFactory returns a factory suitable for NewWorkerPool.
@@ -55,12 +55,7 @@ func MainEngineFactory(deps MainEngineFactoryDeps) func(SessionHandle) (*Engine,
 		eng.InstructionRoot = instructionRoot
 		eng.WorkspaceFlat = true
 		eng.Client = deps.Client
-		eng.CanUseTool = func(_ context.Context, name string, input json.RawMessage, tctx *toolctx.Context) (bool, string) {
-			if deny, reason := denySendMessageOnSyntheticScheduleTurn(tctx, name, input); deny {
-				return false, reason
-			}
-			return true, ""
-		}
+		eng.CanUseTool = DefaultCanUseToolWithScheduleGate()
 		eng.Model = deps.Model
 		eng.MaxSteps = deps.Resolved.MainAgentMaxSteps()
 		eng.MaxTokens = deps.Resolved.MainAgentMaxCompletionTokens()
@@ -74,8 +69,8 @@ func MainEngineFactory(deps MainEngineFactoryDeps) func(SessionHandle) (*Engine,
 		if deps.MCPSystemNote != "" {
 			eng.MCPSystemNote = deps.MCPSystemNote
 		}
-		// Outbound uses package-level clawbridge.PublishOutbound / clawbridge.UpdateStatus; requires
-		// cmd/oneclaw to call clawbridge.SetDefault(bridge) after New.
+		eng.Bridge = deps.Bridge
+		// Outbound / inbound status: [Engine.publishOutbound] and [Engine.updateInboundStatus] use [Engine.Bridge] only.
 		eng.RegisterAuditSinks(deps.LLMAudit, deps.OrchAudit, deps.VisAudit)
 		if np := deps.NewRecallPersister; np != nil {
 			eng.RecallPersister = np(h)

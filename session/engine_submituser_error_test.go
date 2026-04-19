@@ -23,12 +23,13 @@ func TestSubmitUser_publishesOutboundOnFailure(t *testing.T) {
 	rtopts.Set(&s)
 
 	var published []*bus.OutboundMessage
-	cleanup := testStartNoopBridge(t, []string{"cli"}, func(msg *bus.OutboundMessage) {
+	br, cleanup := testStartNoopBridge(t, []string{"cli"}, func(msg *bus.OutboundMessage) {
 		published = append(published, msg)
 	})
 	defer cleanup()
 
 	eng := NewEngine(t.TempDir(), tools.NewRegistry())
+	eng.Bridge = br
 	eng.MaxSteps = 4
 	eng.Client = openai.NewClient(
 		option.WithAPIKey("sk-test-stub"),

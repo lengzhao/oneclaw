@@ -8,7 +8,7 @@
 | **P1** | **接口稳定后再考虑拆模块** | 将成熟边界以 **Go interface + 少量适配** 固化，必要时再抽到子模块或独立 repo |
 | **后置** | **独立 repo** | 仅在 API 与发布节奏有明确外部消费者时再拆（见 §6） |
 
-本文与 [`runtime-flow.md`](runtime-flow.md)（主路径）、[`code-simplification-opportunities.md`](code-simplification-opportunities.md)（已落实与待演进）互补；**不替代**各主题设计真源（入站/出站、memory、notify 等）。**Backlog 编号与各条目的对照表**见 [`todo.md`](todo.md) **§「架构模块化：backlog 对照」**（单一真源）。
+本文与 [`runtime-flow.md`](runtime-flow.md)（主路径）、[`code-simplification-opportunities.md`](code-simplification-opportunities.md)（**已落实**边界摘要）互补；**未实现**出站 / `context` 演进见 [`todo.md`](todo.md) **§「出站与 context 可选演进（未实现）」** 与 **#27**。**不替代**各主题设计真源（入站/出站、memory、notify 等）。**Backlog 编号与各条目的对照表**见 [`todo.md`](todo.md) **§「架构模块化：backlog 对照」**（单一真源）。
 
 ---
 
@@ -56,7 +56,7 @@ flowchart TB
 
 ### 3.1 收窄 `session.Engine` 职责
 
-**现状风险**：编排、transcript、notify、memory 布局、schedule 门控、出站等交织在同一执行路径，演进成本高（参见 [`code-simplification-opportunities.md`](code-simplification-opportunities.md) §4、`OutboundSender` 讨论）。
+**现状风险**：编排、transcript、notify、memory 布局、schedule 门控、出站等交织在同一执行路径，演进成本高（可选收窄方向见 [`todo.md`](todo.md) **#27** 与 **§「出站与 context 可选演进（未实现）」**）。
 
 **建议**（渐进，不要求一次重构）：
 
@@ -69,7 +69,7 @@ flowchart TB
 
 **简化**：
 
-- 合并/澄清 **路由注册表** 的使用方式：**工具侧** **`tools/builtin.DefaultRegistry()`**（与出站正交）、**出站**可选 **`SinkRegistry` / `SinkFactory`** 演进，见 [`inbound-routing-design.md`](inbound-routing-design.md) §4–§5、[`code-simplification-opportunities.md`](code-simplification-opportunities.md) §2–§3。
+- **工具侧** **`tools/builtin.DefaultRegistry()`** 与 **`clawbridge.PublishOutbound` / `UpdateStatus`** 出站正交，见 [`inbound-routing-design.md`](inbound-routing-design.md) §4–§5、[`code-simplification-opportunities.md`](code-simplification-opportunities.md) §2。**出站**进一步抽象（如 `SinkRegistry` / `SinkFactory`）为未实现草案，见 [`todo.md`](todo.md) **#27** §。
 
 ### 3.3 Memory：读模型 vs 写模型（概念分层）
 
@@ -91,9 +91,9 @@ flowchart TB
 | 主题 | 参考 |
 |------|------|
 | `SubmitUser` / 本地 slash 共享 `prepareSharedTurn` | [`code-simplification-opportunities.md`](code-simplification-opportunities.md) §1 |
-| `WorkerPool` vs 单测直接 `NewEngine` | 同文 §3、[`config.md`](config.md)「会话与多通道」、[inbound-routing-design.md](inbound-routing-design.md) §8 |
+| `WorkerPool` vs 单测直接 `NewEngine` | 同文 §2、[inbound-routing-design.md](inbound-routing-design.md) §8、[`config.md`](config.md)「会话与多通道」 |
 | 子 agent 工具表合成规则 | 同文 §2、[inbound-routing-design.md](inbound-routing-design.md) §9、`go doc subagent` |
-| 出站 Emitter 与 `context` | 同文 §1、§4 |
+| 出站 Emitter 与 `context`（已落实） | 同文 §1；可选演进见 [`todo.md`](todo.md) **#27** § |
 
 ---
 
@@ -128,7 +128,7 @@ flowchart TB
 | [`agent-runtime-golang-plan.md`](agent-runtime-golang-plan.md) | 总览包职责与阶段 |
 | [`runtime-flow.md`](runtime-flow.md) | 进程与 `SubmitUser` 主路径 |
 | [`todo.md`](todo.md) | 统一 backlog；**「架构模块化：backlog 对照」** 节含 #19–#27 与本文 §3 的映射表 |
-| [`code-simplification-opportunities.md`](code-simplification-opportunities.md) | 具体简化点与 todo 交叉 |
+| [`code-simplification-opportunities.md`](code-simplification-opportunities.md) | **已落实**边界摘要；可选演进见 [`todo.md`](todo.md) **#27** |
 | [`inbound-routing-design.md`](inbound-routing-design.md)、[`outbound-events-design.md`](outbound-events-design.md) | I/O 抽象 |
 | [`notification-hooks-design.md`](notification-hooks-design.md) | 可观测边界 |
 

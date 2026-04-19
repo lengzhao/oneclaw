@@ -57,7 +57,7 @@ flowchart TB
   eng --> loop
   loop --> eng
   eng --> mem
-  eng -->|PublishOutbound| bus
+  eng -->|publishOutbound| bus
 ```
 
 - **WorkerPool**：按 `hash(session_key) % N` 分片，**同一会话固定落在同一 worker**，每轮任务 **新建 Engine**（`factory`），执行完 `SubmitUser` 后丢弃，避免无界 Engine 映射。
@@ -153,10 +153,10 @@ flowchart TB
 
 ## 7. 出站消息
 
-- **模型回合内**的可见回复通过 `loop` 内配置的 **`OutboundText`**（及 clawbridge 适配）写入 bus。
-- **不经模型**的主动推送由工具 **`send_message`** 或 **`Engine.SendMessage`** 调用 **`PublishOutbound`**，最终 **`bridge.Bus().PublishOutbound`** 分发到对应渠道。
+- **模型回合内**的可见回复通过 `loop` 内配置的 **`OutboundText`**（`Engine.publishOutbound` → **`Bridge.Bus().PublishOutbound`**）写入 bus。
+- **不经模型**的主动推送由工具 **`send_message`** 或 **`Engine.SendMessage`** 经 **`Engine.publishOutbound`**，最终 **`bridge.Bus().PublishOutbound`** 分发到对应渠道。
 
-`main` 中在创建 `EngineFactory` 时使用闭包延迟绑定 `publishOutbound`，以便在 `clawbridge.New` 之后挂上真实 `Publish`。
+`cmd/oneclaw` 在构造 **`MainEngineFactoryDeps`** 时注入 **`clawbridge.New`** 的 **`Bridge`** 指针（见 `session/bridge.go`）。
 
 ---
 

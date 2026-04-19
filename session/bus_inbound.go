@@ -65,23 +65,3 @@ func assistantOutboundWithMedia(turn *bus.InboundMessage, text string, parts []b
 	msg.Parts = append([]bus.MediaPart(nil), parts...)
 	return msg
 }
-
-// InboundUpdateStatusRequest builds a clawbridge per-message status update for the
-// triggering inbound, or nil when MessageID / addressing is missing (driver cannot target the row).
-func InboundUpdateStatusRequest(in *bus.InboundMessage, state string) *bus.UpdateStatusRequest {
-	if in == nil || strings.TrimSpace(state) == "" {
-		return nil
-	}
-	if strings.TrimSpace(in.MessageID) == "" {
-		return nil
-	}
-	if strings.TrimSpace(in.ClientID) == "" || strings.TrimSpace(in.SessionID) == "" {
-		return nil
-	}
-	return &bus.UpdateStatusRequest{
-		ClientID:  strings.TrimSpace(in.ClientID),
-		To:        bus.Recipient{SessionID: strings.TrimSpace(in.SessionID), Kind: in.Peer.Kind},
-		MessageID: strings.TrimSpace(in.MessageID),
-		State:     state,
-	}
-}

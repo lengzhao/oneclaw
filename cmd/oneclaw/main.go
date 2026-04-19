@@ -189,6 +189,23 @@ func main() {
 		defer func() { _ = mcpMgr.Close() }()
 	}
 
+	cbCfg, err := cfg.ClawbridgeConfigForRun()
+	if err != nil {
+		slog.Error("clawbridge.config", "err", err)
+		os.Exit(1)
+	}
+	if len(cbCfg.Clients) == 0 {
+		slog.Error("no IM clients in config",
+			"hint", "add clawbridge.clients (driver feishu, slack, noop, webchat, …) under clawbridge: in config; see https://github.com/lengzhao/clawbridge/blob/main/config.example.yaml",
+			"data_root", cfg.UserDataRoot(),
+		)
+		os.Exit(1)
+	}
+	bridge, err := clawbridge.New(cbCfg)
+	if err != nil {
+		slog.Error("clawbridge.new", "err", err)
+		os.Exit(1)
+	}
 	deps := session.MainEngineFactoryDeps{
 		Resolved:      cfg,
 		Registry:      sharedReg,
@@ -198,6 +215,7 @@ func main() {
 		LLMAudit:      llmAudit,
 		OrchAudit:     orchAudit,
 		VisAudit:      visAudit,
+		Bridge:        bridge,
 	}
 	if sessStore != nil {
 		deps.NewRecallPersister = func(h session.SessionHandle) session.RecallPersister {
@@ -229,26 +247,6 @@ func main() {
 		MainModel:         mainModel,
 		MaxMaintainTokens: 8192,
 	})
-
-	cbCfg, err := cfg.ClawbridgeConfigForRun()
-	if err != nil {
-		slog.Error("clawbridge.config", "err", err)
-		os.Exit(1)
-	}
-	if len(cbCfg.Clients) == 0 {
-		slog.Error("no IM clients in config",
-			"hint", "add clawbridge.clients (driver feishu, slack, noop, webchat, …) under clawbridge: in config; see https://github.com/lengzhao/clawbridge/blob/main/config.example.yaml",
-			"data_root", cfg.UserDataRoot(),
-		)
-		os.Exit(1)
-	}
-
-	bridge, err := clawbridge.New(cbCfg)
-	if err != nil {
-		slog.Error("clawbridge.new", "err", err)
-		os.Exit(1)
-	}
-	clawbridge.SetDefault(bridge)
 
 	if err := bridge.Start(rootCtx); err != nil {
 		slog.Error("clawbridge.start", "err", err)

@@ -22,7 +22,7 @@
 | **P3 文档** | Routing / 渠道 / Engine | **#23–#25** `[x]`（见 [`inbound-routing-design.md`](inbound-routing-design.md) §5–§8、`config.md`「会话与多通道」） |
 | **P3 文档** | 子 agent 工具表说明 | **#26** `[x]`（[`inbound-routing-design.md`](inbound-routing-design.md) §9） |
 | **P3 文档** | 架构抽象路线 | [`architecture-modularity-simplification.md`](architecture-modularity-simplification.md) §1–§6；与 backlog 对照见 **本文 §「架构模块化：backlog 对照」** |
-| **后置/可选** | `OutboundSender` / `context.Value` | **#27**，见 [`code-simplification-opportunities.md`](code-simplification-opportunities.md) §4 |
+| **后置/可选** | 出站与 `context` 演进（未实现） | **#27**，见 **下文 §「出站与 context 可选演进（未实现）」** |
 
 **习惯**：新功能前查阅 [`README.md`](README.md) 索引中的设计文档（持续执行，不单列版本项）。
 
@@ -78,16 +78,40 @@
 ### 文档与小修（P3）
 
 23. `[x]` **文档：工具 `DefaultRegistry` 与出站**
-24. `[x]` **文档：`SinkRegistry` vs `SinkFactory`**
+24. `[x]` **文档：出站主路径与可选演进分流**（可选实现草案见 **#27** §）
 25. `[x]` **文档：`WorkerPool` / `Engine` 会话模型**
 26. `[x]` **文档：子 agent 工具表**
 
 ### 后置
 
-27. `[ ]` **可选：`OutboundSender` / `context.Value`** — 见 [`code-simplification-opportunities.md`](code-simplification-opportunities.md) §4。
+27. `[ ]` **可选：出站与 `context` 演进** — 草案见 **下文 §「出站与 context 可选演进（未实现）」**（`OutboundSender`、`context.Value`、`SinkRegistry`/`SinkFactory` 等）。
 28. `[ ]` **多 LLM / 多协议** — [`multi-llm-provider-design.md`](multi-llm-provider-design.md)（Phase 0–3）。
 29. `[ ]` **compact 高级**、**全量遥测**
 30. `[x]` **MCP 工具（客户端主干）** — `mcpclient` + YAML；前缀 `mcp_*`；续作：discovery、UI 权限、mediastore 对齐、进程内 MCP Server 等。
+
+---
+
+## 出站与 context 可选演进（未实现）
+
+**当前实现真源**以 [`inbound-routing-design.md`](inbound-routing-design.md) §4「出站（当前实现）」为准。以下为**尚未落地**的设计草案，与 **backlog #27** 对照；实施前再定优先级。
+
+### `context` 透传入站元数据
+
+若将来 **Sink** 或工具需要从 `context` 读取本轮入站元数据、又不想扩展函数签名，可在 **`loop.RunTurn`** 开头写入一次 `context.Value`（非导出 key），或在本轮构造时闭包进 `PublishOutbound` 所用参数。
+
+| 适合放入 `ctx` | 不适合 |
+|----------------|--------|
+| 不可变的本次请求元数据（来源、用户 id、correlation、trace id） | 大段正文重复存储 |
+| 供工具使用的**句柄 key**（lookup key） | 密钥明文、长期 token 本体 |
+| 取消 / 超时（仍用 `ctx` 的 `Deadline` / `Done`） | 把 `Engine` 或整条消息历史塞进 `Value` |
+
+### `SinkRegistry` / `SinkFactory`
+
+按 `ClientID` 等键维护**注册表或工厂**，在构造 `bus.OutboundMessage` 前做一层出站解析；与上一节 `context` 透传可二选一或组合。**代码中未作为单一主路径实现。**
+
+### `OutboundSender` 与 `Engine.SendMessage`
+
+编排层 **`Engine.SendMessage`** 依赖 CWD、`SessionID` 等，不宜做成无状态包级接口。较稳妥：**收窄接口 + 已有 `toolctx` 分组**，或 **`context` 挂载窄 `OutboundSender`**，与 `toolctx.SessionHost.SendMessage` 二选一演进，避免与「全局 `Engine` 单例」并行两套。
 
 ---
 
@@ -109,7 +133,7 @@
 | # | 内容 | 对应 `architecture-modularity-simplification` |
 |---|------|--------------------------------------------------|
 | **#23** | 工具 `builtin.DefaultRegistry` vs 出站 | §3.2、[inbound-routing-design.md](inbound-routing-design.md) §5 |
-| **#24** | `SinkRegistry` vs `SinkFactory` | §3.2、[inbound-routing-design.md](inbound-routing-design.md) §4 |
+| **#24** | 出站主路径与可选演进分流（文档） | §3.2、[inbound-routing-design.md](inbound-routing-design.md) §3–§4；可选草案 **#27** § |
 | **#25** | `WorkerPool` + 每任务 `Engine` vs 单测直接 `NewEngine` | §3.1、§4、[inbound-routing-design.md](inbound-routing-design.md) §8 |
 | **#26** | 子 agent 工具表（catalog ∩ 过滤 − meta） | §4、[inbound-routing-design.md](inbound-routing-design.md) §9 |
 
@@ -117,7 +141,7 @@
 
 | # | 内容 | 对应 |
 |---|------|------|
-| **#27** | `OutboundSender` / `context.Value` 与 `toolctx.SessionHost.SendMessage` 二选一 | 架构 §3.1；[`code-simplification-opportunities.md`](code-simplification-opportunities.md) §4 |
+| **#27** | 出站与 `context` 演进（见 **上文 §「出站与 context 可选演进（未实现）」**） | 架构 §3.1、[inbound-routing-design.md](inbound-routing-design.md) §3 |
 
 ### 架构 §3 建议项（尚无独立 backlog 编号）
 
@@ -189,15 +213,15 @@ Go 模块、`log/slog`、目录不用 `internal`（团队约定）、全局 `bud
 
 ## 依赖与演进说明（当前）
 
-P0/P1 主干与阶段 A–C 已落地；**进行中**主要为 P3 文档（**#23–#26**）、可选 **#27**、产品与后置项（**#14、#16、#28、#29** 等）。工程简化 **#19–#22** 已完成；**与架构主题的逐项对照**见 **上文「架构模块化：backlog 对照」**。
+P0/P1 主干与阶段 A–C 已落地；**进行中**主要为可选 **#27**（出站 / `context` 草案）、产品与后置项（**#14、#16、#28、#29** 等）。P3 文档 **#23–#26** 已勾选；工程简化 **#19–#22** 已完成；**与架构主题的逐项对照**见 **上文「架构模块化：backlog 对照」**。
 
 分层与抽象原则见 [`architecture-modularity-simplification.md`](architecture-modularity-simplification.md)；代码级简化见 [`code-simplification-opportunities.md`](code-simplification-opportunities.md)。
 
 ```mermaid
 flowchart LR
   DONE[主干: config / loop / memory / channel / skills]
-  DOC[P3 文档 #23-26]
-  OPT[可选 #27]
+  DOC[P3 文档 #23-26 已完成]
+  OPT[可选 #27 出站/context 草案]
   POST[后置: LLM #28 / D3 #14 / 协作 #16]
   DONE --> DOC
   DONE --> OPT

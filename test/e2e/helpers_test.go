@@ -164,7 +164,7 @@ func e2eEnvWithMemory(t *testing.T, stub *openaistub.Server) {
 	rtopts.Set(&s)
 }
 
-// e2eStartNoopBridge installs the process-default clawbridge with noop drivers for clientIDs.
+// e2eStartNoopBridge starts a noop-driver bridge for clientIDs; assign the returned pointer to [session.Engine.Bridge].
 // Optional captureMsg is invoked from OutboundSendNotify after each outbound send (for assertions).
 // Call cleanup in defer; do not use t.Parallel in tests that rely on this helper.
 // e2eWaitOutboundDispatch waits until PublishOutbound has been delivered through the
@@ -181,7 +181,7 @@ func e2eWaitOutboundDispatch(t *testing.T, ok func() bool) {
 	t.Fatal("timeout waiting for outbound dispatch / notify")
 }
 
-func e2eStartNoopBridge(t *testing.T, clientIDs []string, captureMsg func(*bus.OutboundMessage)) (cleanup func()) {
+func e2eStartNoopBridge(t *testing.T, clientIDs []string, captureMsg func(*bus.OutboundMessage)) (bridge *clawbridge.Bridge, cleanup func()) {
 	t.Helper()
 	cfgs := make([]clawbridge.ClientConfig, len(clientIDs))
 	for i, id := range clientIDs {
@@ -203,12 +203,10 @@ func e2eStartNoopBridge(t *testing.T, clientIDs []string, captureMsg func(*bus.O
 	if err := b.Start(ctx); err != nil {
 		t.Fatal(err)
 	}
-	clawbridge.SetDefault(b)
-	return func() {
+	return b, func() {
 		cancel()
 		stopCtx, c := context.WithTimeout(context.Background(), 2*time.Second)
 		defer c()
 		_ = b.Stop(stopCtx)
-		clawbridge.SetDefault(nil)
 	}
 }
