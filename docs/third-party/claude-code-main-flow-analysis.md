@@ -1243,22 +1243,22 @@ flowchart LR
 
 如果你想把“主流程”继续往 prompt 组装层看，建议直接配合这些文档一起读：
 
-- `docs/claude-code-callstack-and-parameter-flow.md`
+- `claude-code-callstack-and-parameter-flow.md`
   看按具体源码函数展开的调用栈，以及核心参数对象如何在主线程、工具运行时、子 Agent 之间流转。
 
-- `docs/prompts/00-request-envelope.md`
+- `../prompts/00-request-envelope.md`
   看一次完整模型请求到底由哪些层组成。
 
-- `docs/prompts/10-main-thread.md`
+- `../prompts/10-main-thread.md`
   看主线程 prompt 的 `system`、`messages`、`tools` 是怎么拼的。
 
-- `docs/prompts/20-subagent.md`
+- `../prompts/20-subagent.md`
   看主流程进入子 Agent 后，prompt 结构如何变化。
 
-- `docs/claude-code-memory-system.md`
+- `claude-code-memory-system.md`
   看记忆系统如何作为长期上下文接入主流程。
 
-- `docs/claude-code-subagent-system.md`
+- `claude-code-subagent-system.md`
   看任务分解和多 Agent 运行时本身。
 
 ---
@@ -1267,7 +1267,7 @@ flowchart LR
 
 这一部分已经单独拆成文档：
 
-- `docs/claude-code-callstack-and-parameter-flow.md`
+- `claude-code-callstack-and-parameter-flow.md`
 
 如果你想看：
 

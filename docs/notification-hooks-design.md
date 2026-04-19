@@ -309,5 +309,5 @@ notify:
 
 1. **`agent_id` 与 `agent_type` 是否合并**：若子 Agent 仅按类型区分，可令二者相等；若需配置改名不影响集成，应在 Agent 定义中增加稳定 **`id`**，与展示用 `type`/`name` 分离。
 2. **`turn_id` 是否在多进程 / 多副本部署中要求全局唯一**：若仅单进程，UUID 足够；若需跨服务关联，是否引入上游 `trace_id` 透传字段。
-3. **是否与 `outbound-events-design` 的 `Record` 合并**：短期可 **转换适配**（Hook → Record），长期是否统一为一种 envelope 需产品取舍；若合并，顶层需同步携带 `agent_id`。
+3. **是否与 `outbound-events-design` §2 的 JSON 观测载荷合并**：短期可 **转换适配**（Hook → 行 JSON），长期是否统一为一种 envelope 需产品取舍；若合并，顶层需同步携带 `agent_id`。
 4. **流式模型**：若未来每 step 内再拆 delta，是否新增 `assistant_delta` 事件或仍只依赖 outbound。

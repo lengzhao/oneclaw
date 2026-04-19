@@ -81,7 +81,7 @@
 
 ### 会话与多通道（`cmd/oneclaw`）
 
-主进程 **`oneclaw`（非 `-init` / `-maintain-once`）** 使用 **`session.SessionResolver`**：按 **入站 `ClientID` + `InboundSessionKey`（优先 `SessionID`，否则 `Peer.ID`）** 懒创建 **`session.Engine`**，**同一 handle 内串行**处理回合，避免多线程共用一个 `Engine` 的 data race。
+主进程 **`oneclaw`（非 `-init` / `-maintain-once`）** 使用 **`session.WorkerPool`**：入站由 **`session.SessionHandle{Source: ClientID, SessionKey: InboundSessionKey(m)}`** 标识（`SessionKey` 优先 `SessionID`，否则 `Peer.ID` 等，见 `session` 包）。按 **handle 哈希**落到固定 worker，**同一 handle 内串行**处理回合；**每条消息**经 **`MainEngineFactory` 新建 `session.Engine`**，回合结束后丢弃，避免多 goroutine 共用一个 `Engine` 的 data race 与无界内存增长。详见 [`inbound-routing-design.md`](inbound-routing-design.md) §8。
 
 | 概念 | 说明 |
 |------|------|

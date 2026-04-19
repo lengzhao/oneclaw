@@ -169,8 +169,8 @@ go run ./cmd/oneclaw -init
 1. [`docs/README.md`](docs/README.md) — 文档索引  
 2. [`docs/config.md`](docs/config.md) — 统一 YAML 配置与 `PushRuntime`  
 3. [`docs/agent-runtime-golang-plan.md`](docs/agent-runtime-golang-plan.md) — 目标、包布局、阶段 A–D 任务与验收  
-4. [`docs/claude-code-vs-oneclaw.md`](docs/claude-code-vs-oneclaw.md) — 与 Claude Code 异同（优化与缺口）  
-5. [`docs/claude-code-memory-system.md`](docs/claude-code-memory-system.md) / [`docs/claude-code-subagent-system.md`](docs/claude-code-subagent-system.md)  
+4. [`docs/third-party/claude-code-vs-oneclaw.md`](docs/third-party/claude-code-vs-oneclaw.md) — 与 Claude Code 异同（优化与缺口）  
+5. [`docs/third-party/claude-code-memory-system.md`](docs/third-party/claude-code-memory-system.md) / [`docs/third-party/claude-code-subagent-system.md`](docs/third-party/claude-code-subagent-system.md)  
 6. [`docs/inbound-routing-design.md`](docs/inbound-routing-design.md) / [`docs/outbound-events-design.md`](docs/outbound-events-design.md)  
 7. [`docs/prompts/README.md`](docs/prompts/README.md)  
 

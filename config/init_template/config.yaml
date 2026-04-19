@@ -52,7 +52,7 @@ paths:
   working_transcript_max_messages: 0
 
 # -----------------------------------------------------------------------------
-# 多会话（IM 线程隔离）；主进程 cmd/oneclaw 使用 SessionResolver：每个 channel + session_key 独立 Engine。
+# 多会话（IM 线程隔离）；主进程 cmd/oneclaw 使用 WorkerPool：按 session 分片串行，每轮新建 Engine（见 docs/config.md）。
 # 转写文件：<UserDataRoot>/sessions/<stable_id>/transcript.json 与 working_transcript.json（与下方 paths.transcript 覆盖关系见 docs/config.md）。
 # SQLite：会话元数据 + memory recall 去重状态；路径相对 UserDataRoot。
 # isolate_workspace：true 时每个会话 Engine.CWD 为 sessions/<id>/workspace；false（默认）时 CWD 为 <UserDataRoot>/workspace，多会话共享同一 workspace。

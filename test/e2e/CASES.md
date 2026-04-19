@@ -203,7 +203,7 @@
 
 ### E2E-70
 
-- **说明**：若需测 `routing.Emitter`，在 `loop.Config` 挂 sink + `SubmitUser`；或单独子测试调用 CLI（较重）。
+- **说明**：若需测出站路径，在 `loop.Config` 挂 **`OutboundText`**（或经 **`Engine.PublishOutbound`** 的集成路径）+ `SubmitUser`；或单独子测试调用 CLI（较重）。
 
 ---
 

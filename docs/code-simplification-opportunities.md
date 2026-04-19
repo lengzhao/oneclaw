@@ -11,7 +11,7 @@
 | `SubmitUser` / `submitLocalSlashTurn` 共享准备 | `session/turn_prepare.go`：`prepareSharedTurn` |
 | 本地 slash 与维护 | 旁路，不跑 `PostTurn` / 维护（[memory-maintain-dual-entry-design.md](memory-maintain-dual-entry-design.md) §2.4） |
 | `subagent` 前置去重 | `validateNestedHost` / `validateNestedParent` / `stripMetaForNested`（`subagent/run.go`） |
-| `toolctx` | `SessionHost` 嵌入 + `ApplyTurnInboundToToolContext`（内联 `MergeNonEmptyRouting`） |
+| `toolctx` | `SessionHost` 嵌入 + `ApplyTurnInboundToToolContext`（`mergeTurnInbound`，见 `toolctx/context.go`） |
 | `channel.DrainTextReply` | `statichttp` 等出站聚合 |
 | `PostTurnInput` | `SubmitUser` 尾部单次构建，供 `PostTurn` 与 `MaybePostTurnMaintain` 共用 |
 | Emitter `context` | `Text` 用回合 ctx；`Done` 用 `context.Background()`（见 `engine.go` / `loop/runner.go` 注释） |
@@ -21,16 +21,16 @@
 
 ## 2. 仍建议补充的文档（对应 todo #23–#26）
 
-- **`routing.DefaultRegistry`**：进程级单例；测试与多实例时注意隐式全局（[inbound-routing-design.md](inbound-routing-design.md)）。
-- **`SinkRegistry` vs `SinkFactory`**：默认主路径 vs 高级 per-turn 绑定（`config.md` 或 inbound 文交叉一句）。
-- **单 `Engine` vs `SessionResolver` vs `WorkerPool`**：`cmd/oneclaw` 用 WorkerPool 分片、每任务新建 `Engine`；`SessionResolver` 用于测试等懒复用场景（[config.md](config.md)「会话与多通道」、下文 §3）。
-- **子 agent 工具表**：**最终工具集 = catalog ∩ 过滤 − meta**（[claude-code-subagent-system.md](claude-code-subagent-system.md) 或 `subagent` 包注释）。
+- **工具 `DefaultRegistry` vs 出站**：见 [inbound-routing-design.md](inbound-routing-design.md) §5（工具侧 **`tools/builtin.DefaultRegistry()`**，与 **`PublishOutbound`** 正交）。
+- **`SinkRegistry` vs `SinkFactory`**：见 [inbound-routing-design.md](inbound-routing-design.md) §4（可选演进）。
+- **`WorkerPool` vs 直接 `NewEngine`**：`cmd/oneclaw` 用 WorkerPool 分片、**每任务新建 `Engine`**；单测 / e2e 常直接 **`session.NewEngine`**。见 [config.md](config.md)「会话与多通道」、[inbound-routing-design.md](inbound-routing-design.md) §8。
+- **子 agent 工具表**：**`run_agent`** = `FilterRegistry` ∩ 父表 + 去 meta；**`fork_context`** = 父表去 meta（见 [inbound-routing-design.md](inbound-routing-design.md) §9、`subagent/registry.go`）。
 
 ---
 
-## 3. `SessionResolver` 与出站（§5.2 保留）
+## 3. `WorkerPool` 与出站（§5.2 保留）
 
-`session/resolver.go` 按 `SessionHandle` 懒创建并**复用** `Engine`（测试等）。**`cmd/oneclaw/main.go`** 使用 **`session.WorkerPool`**：固定 worker 数、按 session 哈希分片、每任务 **新建 `Engine` 后丢弃**，持久化依赖落盘。详见 [config.md](config.md)。
+**`cmd/oneclaw/main.go`** 使用 **`session.WorkerPool`**：固定 worker 数、按 `SessionHandle` 哈希分片、每任务 **`MainEngineFactory` 新建 `Engine` 后丢弃**，持久化依赖落盘。出站由 **`Engine.PublishOutbound`** 等注入（如 `clawbridge.PublishOutbound`）。详见 [config.md](config.md)、[inbound-routing-design.md](inbound-routing-design.md) §4、§8。
 
 ---
 

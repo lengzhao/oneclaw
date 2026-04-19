@@ -1,18 +1,28 @@
-# 出站事件与 Sink（简化版）
+# 出站与事件
 
-目标：调用方**原路**收到结果——同步时一条连接里按顺序读；异步时同一 **job** 上继续读同一类事件，不引入过多类型与字段。
+本文描述 **当前实现** 中的助手出站路径，以及可选的 **JSON 观测载荷** 草案（供 HTTP/CLI 等接入时参考，**不是** `loop` 内核强制协议）。
 
 ---
 
-## 1. 思路：少字段、少类型
+## 1. 当前实现（主路径）
 
-- **Envelope 只保留排序与分类**：`seq` + `kind` + `data`（对象）。需要时再在 `data` 里加字段，而不是堆在顶层。
-- **第一版（MVP）三种 `kind` 就够**：
-  - **`text`** — 助手给用户看的字（整段或流式多条的片段，由实现约定是否合并）。
-  - **`tool`** — 工具开始/结束合并成一种：`{ "name", "phase": "start"|"end", "ok"?: bool }`。
-  - **`done`** — 本轮结束：`{ "ok": bool, "error"?: string }`。
+- **类型**：出站消息为 **`github.com/lengzhao/clawbridge/bus.OutboundMessage`**（由 driver 发到 IM 等平台）。
+- **注入**：**`session.Engine.PublishOutbound`**，在 **`MainEngineFactory`** 中设为 **`clawbridge.PublishOutbound`**（见 `session/engine_factory.go`）。
+- **与 `loop` 的衔接**：**`loop.Config.OutboundText`** 在 **`session.prepareSharedTurn`** 中实现为：将助手可见文本封装为 **`OutboundMessage`** 再调用 **`PublishOutbound`**（见 `session/turn_prepare.go`）。
+- **入站状态**：**`session.Engine.UpdateInboundStatus`**（如已读），同样来自 clawbridge 侧注入。
+- **审计 / 通知**：**`notify`** 包内 **`notify.Sink`** 的 **`Emit`** 用于 LLM / 编排 / 可见消息等 **JSONL 审计**（见 [notify-sinks-audit-design.md](notify-sinks-audit-design.md)），与上文的 **`PublishOutbound`** 并行，**不是**同一套 `Record{seq,kind}` 协议。
 
-异步、多任务：**同一结构**，只是多一个可选字段 `job_id`（有则表示属于某任务；无则默认当前会话同步轮次）。
+---
+
+## 2. 思路：少字段、少类型（可选观测层）
+
+若某接入方式需要 **NDJSON / SSE** 或统一日志行，可采用下面 **三种 `kind`** 的载荷（实现可自行选择是否落地；**内核**仍以 **`OutboundMessage` + `PublishOutbound`** 为准）：
+
+- **`text`** — 助手给用户看的字（整段或流式多条的片段，由实现约定是否合并）。
+- **`tool`** — 工具开始/结束合并成一种：`{ "name", "phase": "start"|"end", "ok"?: bool }`。
+- **`done`** — 本轮结束：`{ "ok": bool, "error"?: string }`。
+
+异步、多任务：**同一结构**，可选顶层字段 **`job_id`**。
 
 ```json
 { "seq": 1, "kind": "text", "data": { "content": "你好！" } }
@@ -22,81 +32,50 @@
 { "seq": 5, "kind": "done", "data": { "ok": true } }
 ```
 
-可选顶层字段（需要再加，不放进 MVP 也行）：
+可选顶层字段：
 
 | 字段 | 说明 |
 |------|------|
 | `session_id` | 多会话时区分 |
-| `job_id` | 异步任务时带上，事件与任务对齐 |
+| `job_id` | 异步任务时带上 |
 | `ts` | 时间戳，调试/审计用 |
 
-**`seq`**：同一「逻辑流」内单调递增即可（同会话同步轮次，或同 `job_id`）。
+**`seq`**：同一逻辑流内单调递增（同会话同步轮次，或同 `job_id`）。
 
 ---
 
-## 2. Sink（实现约定）
+## 3. CLI / HTTP（接入提示）
 
-```text
-Emit(ctx, Record) error   // Record = seq + kind + data + 可选 job_id/session_id
-```
-
-- 默认提供 **`NoopSink`**（不写任何地方）。
-- CLI / HTTP 各做一个 **适配器**：把 `Record` 打成「人读」或「JSON 行」。
-
-不要求一上来就线程安全复杂队列：**可先单 goroutine 调 `RunTurn`，在 loop 里同步 `Emit`**；以后有并发再串行化。
+- **进程日志**：**`log/slog`** 输出到 stderr；具体格式由 [`config.md`](config.md) 的 `log.*` 与 CLI 标志控制。
+- **一条长连接**：若需要 **SSE** 或 **NDJSON**，可在 **`statichttp`** 或独立 handler 中订阅与 `RunTurn` 同进程的事件源（需自行与 `OutboundText` / notify 等对接）；**仓库未**强制提供与 §2 逐行对应的内置 HTTP 端点。
+- **只要结果、不要流**：可阻塞到本轮结束，聚合最终助手文本再响应。
 
 ---
 
-## 3. CLI（怎么算友好）
-
-- **stdout**：只打 **`text`** 的 `content`（和现在「最后助手回复」一致；若流式则连续打印片段）。
-- **stderr**：继续 **slog**；**默认**每条 **`Record`** 再打一行 JSON（与下面 HTTP NDJSON 同形）；终端由 **`channel/cli`** 读 **`IO.OutboundChan`** 渲染（与旧 `Sink` 行为等价；未写 JSONL 时以 `(turn done)` 提示），则不再写 JSONL，成功结束时用一行 `(turn done)` 代替。
-- **`done`**：`ok=false` 时 stderr 仍会打错误文案（可与 JSONL 并存）。
-
----
-
-## 4. HTTP（怎么算友好）
-
-- **一条长连接**：**SSE** 或 **NDJSON**，每行一个上面的 JSON（与 CLI 默认 stderr JSONL 同形）。
-- **只要结果、不要流**：单独接口 **阻塞到 `done`**，响应体 `{ "text": "拼好的正文", "ok": true }`。
-- **异步**：`202` 返回 `job_id` + 订阅 URL；订阅里仍是 **`text` / `tool` / `done`**，与同步同一套，只是带 `job_id`。
-
----
-
-## 5. 以后再加什么（别一开始就写进协议）
+## 4. 以后可加什么
 
 | 需求 | 做法 |
 |------|------|
 | token 用量 | `done.data` 里加 `usage` |
 | 流式 vs 整段 | 约定多条 `text` 即 delta；或加 `data.final: true` |
 | 子 Agent / 多轨 | `data.lane` 或顶层 `run_id` |
-| 与 OpenAI 对齐的 tool_call_id | `tool.data.id` |
 
 ---
 
-## 6. 流程（同步一轮，含工具）
+## 5. 流程示意（同步一轮，含工具）
 
 ```mermaid
 sequenceDiagram
-  participant C as 调用方
-  participant K as Sink
+  participant C as 调用方 / driver
+  participant PO as PublishOutbound
   participant L as RunTurn
-  L->>K: text（若有）
-  L->>K: tool start / end
-  L->>K: text（若有）
-  L->>K: done
-  K->>C: 原路写出
+  L->>PO: OutboundMessage（助手文本等）
+  PO->>C: clawbridge 总线 → 平台
 ```
 
 ---
 
-## 7. 和之前「复杂版」的关系
+## 6. 相关文档
 
-旧版里 `turn_started`、多种 `job_*`、`assistant_delta` 与 `assistant_message` 分开等，**能力更全**。若你更认同本页的 **三种 `kind`**，实现时以本页为准；需要观测性时再往 `data` 里加字段，而不是再拆一批事件名。
-
----
-
-*实现状态（仓库内）：`routing` 核心；**`channel.StartAll`** 为每个 **`Spec`** 建 **`OutboundChan` + `chanSink`**（当 **`Source` 非空**）并注册到 **`routing.DefaultRegistry`**；助手事件经 **`Emitter → chanSink → OutboundChan`** 到 **`Connector`**（如 **`channel/cli`** 读 chan 打终端）。`cmd/oneclaw` 传入 **`Bootstrap{Engine, Config}`**。*
-
-*入站统一封装、`context` 透传、按来源注册表选 `Sink`：见 [inbound-routing-design.md](inbound-routing-design.md)。*
-
+- 入站、`WorkerPool`、工具注册表：[inbound-routing-design.md](inbound-routing-design.md)
+- 审计 JSONL：[notify-sinks-audit-design.md](notify-sinks-audit-design.md)

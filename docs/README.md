@@ -1,6 +1,6 @@
 # 文档索引（oneclaw）
 
-实现与扩展 **Go Agent / Memory 运行时** 时，以本目录为设计真源。内容已从原 `claude-code-2026-03-31/docs` 归档至此；**删除该子项目不影响本目录**。
+实现与扩展 **Go Agent / Memory 运行时** 时，以本目录**根下** Markdown 为设计真源。**[`third-party/`](third-party/README.md)** 存放 **Claude Code 对照长文**、官方 Hooks 调研、OMC 等第三方整理，**非** oneclaw 实现规格。内容已从原 `claude-code-2026-03-31/docs` 归档至此；**删除该子项目不影响本目录**。
 
 ---
 
@@ -9,8 +9,8 @@
 | 文档 | 说明 |
 |------|------|
 | [`agent-runtime-golang-plan.md`](agent-runtime-golang-plan.md) | **立项总览**：目标与边界、与 Claude Code 语义对应、Memory/Agent 要点、闭环示意、**包布局 + 阶段 A–D 任务与验收**、风险与后置 |
-| [`claude-code-vs-oneclaw.md`](claude-code-vs-oneclaw.md) | **与 Claude Code 异同**：对齐点、oneclaw 优化与运维差异、缺失/后置能力一览 |
-| [`todo.md`](todo.md) | 可勾选 backlog（P0–后置）与阶段 A–D 历史勾选 |
+| [`third-party/claude-code-vs-oneclaw.md`](third-party/claude-code-vs-oneclaw.md) | **与 Claude Code 异同**：对齐点、oneclaw 优化与运维差异、缺失/后置能力一览 |
+| [`todo.md`](todo.md) | **统一 backlog**（#1–#30）与未完成项；阶段 A–D 归档为摘要 |
 | [`runtime-flow.md`](runtime-flow.md) | **运行时主路径**：`main`、WorkerPool、`SubmitUser`、`loop.RunTurn`、维护双入口、出站与扩展装配 |
 | [`config.md`](config.md) | 统一 YAML：合并顺序、`PushRuntime` / `rtopts`、密钥与功能开关 |
 
@@ -31,15 +31,16 @@
 | [`memory-maintain-dual-entry-design.md`](memory-maintain-dual-entry-design.md) | 回合后维护 vs 定时维护双入口 |
 | [`memory-recall-sqlite-design.md`](memory-recall-sqlite-design.md) | **Memory 片段索引与召回**：本地 SQLite **FTS-only**；语义扩展规划为外部 RAG；与 `SelectRecall` 迁移 |
 | [`code-simplification-opportunities.md`](code-simplification-opportunities.md) | 已落实项摘要 + 剩余文档化/可选演进（`DefaultRegistry`、`OutboundSender` 等） |
+| [`architecture-modularity-simplification.md`](architecture-modularity-simplification.md) | **模块化路线**：优先抽象/简化、`Engine` 收窄、I/O 与 memory 概念分层；拆仓库后置 |
 | [`orchestrator-business-agents.md`](orchestrator-business-agents.md) | 主编排、`.oneclaw/agents`、`run_agent` 约定 |
 
 ### 渠道与 I/O
 
 | 文档 | 说明 |
 |------|------|
-| [`im-channel-technical-design.md`](im-channel-technical-design.md) | 多 IM 接入原则与架构（对应当前 `routing` + `channel`） |
+| [`im-channel-technical-design.md`](im-channel-technical-design.md) | 多 IM 接入原则与架构（**clawbridge + `WorkerPool`**） |
 | [`picoclaw-channel.md`](picoclaw-channel.md) | 对标 [sipeed/picoclaw](https://github.com/sipeed/picoclaw) 的调研笔记（接口与分层对照） |
-| [`clawbridge-migration-design.md`](clawbridge-migration-design.md) | **提案 / 未实施**：用 clawbridge 统一 I/O；**当前真源仍以** `inbound-routing-design`、**`outbound-events-design`** 与代码为准 |
+| [`clawbridge-migration-design.md`](clawbridge-migration-design.md) | **clawbridge I/O 契约**（字段、`PublishOutbound`、配置）；与 `inbound-routing-design` 配套 |
 
 ---
 
@@ -51,11 +52,9 @@
 
 ---
 
-## 设计参考（Claude Code 对照文）
+## Claude Code 与第三方对照（归档）
 
-用于理解范式，非本仓库实现规格。可按需阅读：
-
-[`claude-code-main-flow-analysis.md`](claude-code-main-flow-analysis.md)、[`claude-code-memory-system.md`](claude-code-memory-system.md)、[`claude-code-subagent-system.md`](claude-code-subagent-system.md)、[`claude-code-skills-mechanism.md`](claude-code-skills-mechanism.md)、[`claude-code-callstack-and-parameter-flow.md`](claude-code-callstack-and-parameter-flow.md)、[`claude-code-core-tools.md`](claude-code-core-tools.md)、[`claude-code-agenttool-deep-dive.md`](claude-code-agenttool-deep-dive.md)
+范式与能力对照、**非** oneclaw 实现规格。全文索引与条目说明见 **[`third-party/README.md`](third-party/README.md)**（含 `claude-code-*.md` 主流程/记忆/子 Agent/Skills/工具等，以及 Hooks 官方调研、oh-my-claudecode 等）。
 
 ---
 

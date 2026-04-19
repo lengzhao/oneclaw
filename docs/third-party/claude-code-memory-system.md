@@ -357,7 +357,7 @@ Claude Code 的 memory 进入模型，不是一条路径，而是三条。
 
 **让 memory 成为当前问题的补充证据，而不是永远常驻的负担。**
 
-oneclaw Go 运行时中对应 `memory.SelectRecall`：从各 memory 根递归收集 `.md`，按用户消息分词命中计分后拼成 attachment；**中文 query** 采用 **Han 重叠 bigram + 去重 + term 上限**（与英文拉丁 token 规则并存），详见 [`agent-runtime-golang-plan.md`](agent-runtime-golang-plan.md) 第 3.1 节。
+oneclaw Go 运行时中对应 `memory.SelectRecall`：从各 memory 根递归收集 `.md`，按用户消息分词命中计分后拼成 attachment；**中文 query** 采用 **Han 重叠 bigram + 去重 + term 上限**（与英文拉丁 token 规则并存），详见 [`agent-runtime-golang-plan.md`](../agent-runtime-golang-plan.md) 第 3.1 节。
 
 ---
 

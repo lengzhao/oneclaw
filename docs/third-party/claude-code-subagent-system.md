@@ -1050,16 +1050,16 @@ plugin agent 不是完全等价于用户自己写的 `.claude/agents/*.md`。
 
 如果你已经理解了运行时模型，下一步最适合配合看的就是 prompt 侧文档：
 
-- `docs/prompts/20-subagent.md`
+- `../prompts/20-subagent.md`
   看普通子 Agent 的角色 prompt、上下文裁剪和消息窗口。
 
-- `docs/prompts/30-fork-agent.md`
+- `../prompts/30-fork-agent.md`
   看 fork agent 为什么强调 cache-safe 前缀复用。
 
-- `docs/prompts/40-teammate.md`
+- `../prompts/40-teammate.md`
   看 teammate / swarm 的协作 addendum 和 team lead 消息结构。
 
-- `docs/prompts/00-request-envelope.md`
+- `../prompts/00-request-envelope.md`
   看这些 Agent prompt 最终都落在统一请求结构的哪个位置。
 
 ---

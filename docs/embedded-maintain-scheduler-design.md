@@ -8,7 +8,7 @@
 
 ### 1.1 行为
 
-- **主进程**：`cmd/oneclaw` 在 `StartAll` 之前调用 **`maintainloop.Start`**；若 **`EmbeddedScheduledMaintainInterval() > 0`** 且未禁用后台定时，则 **立即** 跑一次 **`RunScheduledMaintain`**（带 **`ScheduledMaintainOpts{Interval}`** → **增量 daily log**），再按间隔重复。
+- **主进程**：`cmd/oneclaw` 在 **clawbridge 桥启动（`clawbridge.New` / `bridge.Start`）之前**调用 **`maintainloop.Start`**；若 **`EmbeddedScheduledMaintainInterval() > 0`** 且未禁用后台定时，则 **立即** 跑一次 **`RunScheduledMaintain`**（带 **`ScheduledMaintainOpts{Interval}`** → **增量 daily log**），再按间隔重复。
 - **启用条件**：合并 YAML 中 **`maintain.interval` 必须非空**（未写则不启动进程内 loop，避免默认误启；**`cmd/maintain`** 可用其自己的默认间隔做循环）。
 - **`oneclaw -maintain-once`**：单次 **`RunScheduledMaintain`**（`Interval==0`）→ **按天 `LOG_DAYS`** 窗口，适合 crontab。**`cmd/maintain`**：interval 循环（传 **Interval** → 增量 log）；**`-once`** 同上按天窗口。若 **`features.disable_scheduled_maintenance`** 为真则**不进入**间隔循环（**单次远场仍执行**）。
 

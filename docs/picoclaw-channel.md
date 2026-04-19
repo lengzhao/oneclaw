@@ -136,16 +136,16 @@ flowchart TB
 
 ## 8. 与 oneclaw [`inbound-routing-design.md`](inbound-routing-design.md) 的对照
 
-| 维度 | oneclaw（当前设计与实现方向） | PicoClaw |
-|------|-------------------------------|----------|
-| 入站统一形状 | `routing.Inbound`（`Source`、`Text`、用户/租户/会话键等） | `bus.InboundMessage`（字段更多：Peer、MessageID、SenderInfo、Media…） |
-| 出站统一形状 | `Record` 流 + `Sink.Emit` | `OutboundMessage` / `OutboundMediaMessage` + `Channel.Send` / `SendMedia` |
-| 按来源绑定出站 | `SinkRegistry.SinkFor(in.Source)`，每轮一个 `Emitter` | 出站消息带 `Channel`，Manager dispatch 到对应实现 |
-| 渠道可插拔 | `MapRegistry` 注册 `Sink`；**尚无**完整 Channel 生命周期包 | **完整**：`Start`/`Stop`、工厂、**内嵌 SDK**、按需共享 HTTP、Worker |
-| 横切能力 | 设计文档提到可选 `ctx` 透传 `Inbound`、`SinkFactory` | Manager 内聚：限流、重试、切分、占位/打字、流式 hook |
-| 配置 | 分散在各入口 | 集中 `config.Channels*` + Manager 内启用判断 |
+| 维度 | oneclaw（实现） | PicoClaw |
+|------|-----------------|----------|
+| 入站统一形状 | **`github.com/lengzhao/clawbridge/bus.InboundMessage`**（`ClientID`、`Content`、`Peer`、`MediaPaths` 等） | 同左：PicoClaw `pkg/bus` 与 clawbridge 对齐的入站模型 |
+| 出站统一形状 | **`bus.OutboundMessage`** 经 **`session.Engine.PublishOutbound`**；**`notify`** 审计等为并行路径 | `OutboundMessage` + `Channel.Send` / `SendMedia` |
+| 按会话 / 来源路由 | **clawbridge** `Bridge` + **driver**；**`WorkerPool`** 按 `SessionHandle` 分片 | 出站消息带 **Channel** 字段，**Manager** dispatch |
+| 渠道可插拔 | **clawbridge** 配置 **clients** + driver；**`cmd/oneclaw`** 组装桥与 **Host** | **完整**：`Start`/`Stop`、工厂、内嵌 SDK、可选 Webhook HTTP |
+| 横切能力 | 可选 **`ctx` 透传**、**`SinkRegistry`/`SinkFactory`** 见 [inbound-routing-design.md](inbound-routing-design.md) §3–§4 | Manager：限流、重试、占位/打字等 |
+| 配置 | oneclaw **YAML** → **clawbridge** `config`（见 `config.Resolved`） | `config.Channels*` + Manager |
 
-**结论**：PicoClaw 的「Channel」≈ **入站适配器（SDK 内嵌为主）+ 出站发送器 + 可选 Webhook HTTP + 生命周期**，比 oneclaw 现阶段的 **`Sink` + `Inbound`** 更厚一层；oneclaw 若演进「通用 Channel」，需要明确：**哪些保留在轻量 `Sink`/`Inbound`，哪些升级为带 `Start`/`Stop` 的模块**（见下一节）。
+**结论**：PicoClaw 的「Channel」≈ **入站适配 + 出站发送 + 可选 HTTP + 生命周期**；oneclaw 将 **I/O 边界**放在 **clawbridge**，**会话编排**放在 **`session.Engine`** + **`WorkerPool`**。若产品需要 PicoClaw 级 Manager 能力，应在 **clawbridge driver 侧**或 **独立宿主层**扩展，避免与 **`loop`** 混层。
 
 ---
 
@@ -160,7 +160,7 @@ flowchart TB
 
 **需慎选或简化的部分**
 
-1. **MessageBus 双通道**：oneclaw 已有 `Record` 事件流；是否再引入独立 `chan` 总线，还是延续 `Emitter`→`Sink`，应一次架构决策，避免两套并行。  
+1. **观测与总线**：oneclaw 主路径为 **clawbridge MessageBus** + **`PublishOutbound`**；可选 JSON 观测载荷见 [outbound-events-design.md](outbound-events-design.md) §2，避免与 **`notify` 审计**混成第二套强制协议。  
 2. **Manager 体量**：PicoClaw 的占位/打字/TTL janitor 与产品强相关；oneclaw 可按需渐进，先 **生命周期 + 注册 + 出站**，再补 UX。  
 3. **身份模型**：`identity` 包与 allowlist 规则较重，可只在多租户/多用户场景引入。  
 4. **与 `SinkFactory.NewSink(ctx, in)` 的关系**：设计文档已写工厂闭包 `in`；PicoClaw 更偏「渠道实例 + Manager 状态表」，合并时需统一「有状态出站」的归属（Factory vs Channel 实例字段）。

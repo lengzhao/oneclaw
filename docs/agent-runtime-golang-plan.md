@@ -12,7 +12,7 @@
 - **行为策略可演进**（将验证有效的规则写入 `CLAUDE.md`、rules、Agent 专用 memory；或通过维护型子 Agent 改写这些文件）。
 - **运行时能力可扩展**（新工具、新 Agent 定义、MCP），由编排层加载。
 
-若引入**语义检索（向量库）**，建议仅作为 **recall 的可选插件**，**文件仍为真源**。详见 [`claude-code-memory-system.md`](claude-code-memory-system.md)。
+若引入**语义检索（向量库）**，建议仅作为 **recall 的可选插件**，**文件仍为真源**。详见 [`third-party/claude-code-memory-system.md`](third-party/claude-code-memory-system.md)。
 
 ---
 
@@ -28,11 +28,11 @@
 
 日志建议使用 **`log/slog`**。Go 项目目录约定按团队习惯即可（本方案不强制使用 `internal` 包）。
 
-与 Claude Code **产品能力层面的异同**（优化点、缺失与后置项）见专文 [`claude-code-vs-oneclaw.md`](claude-code-vs-oneclaw.md)。
+与 Claude Code **产品能力层面的异同**（优化点、缺失与后置项）见专文 [`third-party/claude-code-vs-oneclaw.md`](third-party/claude-code-vs-oneclaw.md)。
 
 ---
 
-## 3. Memory 子系统（对齐 [`claude-code-memory-system.md`](claude-code-memory-system.md)）
+## 3. Memory 子系统（对齐 [`third-party/claude-code-memory-system.md`](third-party/claude-code-memory-system.md)）
 
 1. **存储层**：`MEMORY.md` 为短索引；topic 承载正文；按 user / project / local / agent / team 分作用域；daily log 按日 append。
 2. **发现层**：工作目录向上查找 `AGENT.md`、`.oneclaw/rules/*.md`、memory 根；**不实现** `@include`，文件以磁盘正文为准。
@@ -60,7 +60,7 @@
 
 ---
 
-## 4. Agent 子系统（对齐 [`claude-code-main-flow-analysis.md`](claude-code-main-flow-analysis.md)）
+## 4. Agent 子系统（对齐 [`third-party/claude-code-main-flow-analysis.md`](third-party/claude-code-main-flow-analysis.md)）
 
 - 统一 **消息模型**（user / assistant / tool_use / tool_result / attachment / compact boundary）。
 - **`ToolUseContext`（Go struct）**：工具集、Abort、只读缓存、权限、nested memory 追踪等；子 Agent **默认隔离、按需共享**。
@@ -119,7 +119,7 @@ flowchart LR
 
 - **日志**：`log/slog`；包布局不强制 `internal`（团队约定）。
 - **新功能**：先读 `docs/` 下对应设计再改代码。
-- **设计真源**：本目录 `claude-code-*.md` 与 `prompts/`；**不依赖**仓库内 `claude-code-2026-03-31` 子目录。若对照原 TypeScript 实现，请自行保留或克隆参考仓库；下表「TS 参考路径」相对原 Claude Code `src/`，仅作语义映射。
+- **设计真源**：本目录根下设计与 `prompts/`；**Claude Code 范式对照长文**见 [`third-party/`](third-party/README.md)。**不依赖**仓库内 `claude-code-2026-03-31` 子目录。若对照原 TypeScript 实现，请自行保留或克隆参考仓库；下表「TS 参考路径」相对原 Claude Code `src/`，仅作语义映射。
 
 ---
 
@@ -160,7 +160,7 @@ flowchart LR
 
 ### 9.2 阶段 B：Memory 全链路
 
-**目标**：发现、注入、recall、在线写入；extract / dream 入口。设计对照 [`claude-code-memory-system.md`](claude-code-memory-system.md)。
+**目标**：发现、注入、recall、在线写入；extract / dream 入口。设计对照 [`third-party/claude-code-memory-system.md`](third-party/claude-code-memory-system.md)。
 
 | 序号 | 任务 | 要点 |
 |------|------|------|
@@ -176,7 +176,7 @@ flowchart LR
 
 ### 9.3 阶段 C：子 Agent 与隔离
 
-**目标**：独立 agentId、裁剪上下文、独立 transcript；fork 与完整子 Agent；权限收缩。对照 [`claude-code-subagent-system.md`](claude-code-subagent-system.md)、[`prompts/20-subagent.md`](prompts/20-subagent.md)、[`prompts/30-fork-agent.md`](prompts/30-fork-agent.md)。
+**目标**：独立 agentId、裁剪上下文、独立 transcript；fork 与完整子 Agent；权限收缩。对照 [`third-party/claude-code-subagent-system.md`](third-party/claude-code-subagent-system.md)、[`prompts/20-subagent.md`](prompts/20-subagent.md)、[`prompts/30-fork-agent.md`](prompts/30-fork-agent.md)。
 
 | 序号 | 任务 | 要点 |
 |------|------|------|
@@ -213,7 +213,7 @@ flowchart TD
 - **MCP**：客户端主干已接入（见 [`todo.md`](todo.md) #30）；tool discovery、UI 级权限流、二进制结果与 mediastore 对齐等仍可后置。
 - 刻意不做或晚做：复杂 compact UI、全量遥测、多 LLM 协议全家桶（见 [`multi-llm-provider-design.md`](multi-llm-provider-design.md) 分阶段）。
 - 尽早做 token/字节预算，避免 Memory 阶段大改。
-- 并发策略：**只读并行、写串行**，与 [`claude-code-main-flow-analysis.md`](claude-code-main-flow-analysis.md) 中工具层语义一致。
+- 并发策略：**只读并行、写串行**，与 [`third-party/claude-code-main-flow-analysis.md`](third-party/claude-code-main-flow-analysis.md) 中工具层语义一致。
 
 ---
 
@@ -228,12 +228,12 @@ flowchart TD
 
 | 文档 | 说明 |
 |------|------|
-| [`claude-code-main-flow-analysis.md`](claude-code-main-flow-analysis.md) | 主流程与分层 |
-| [`claude-code-memory-system.md`](claude-code-memory-system.md) | 记忆系统 |
-| [`claude-code-subagent-system.md`](claude-code-subagent-system.md) | 子 Agent |
-| [`claude-code-callstack-and-parameter-flow.md`](claude-code-callstack-and-parameter-flow.md) | 调用栈与参数流 |
-| [`claude-code-core-tools.md`](claude-code-core-tools.md) | 核心工具 |
-| [`claude-code-agenttool-deep-dive.md`](claude-code-agenttool-deep-dive.md) | Agent 工具深入 |
+| [`third-party/claude-code-main-flow-analysis.md`](third-party/claude-code-main-flow-analysis.md) | 主流程与分层 |
+| [`third-party/claude-code-memory-system.md`](third-party/claude-code-memory-system.md) | 记忆系统 |
+| [`third-party/claude-code-subagent-system.md`](third-party/claude-code-subagent-system.md) | 子 Agent |
+| [`third-party/claude-code-callstack-and-parameter-flow.md`](third-party/claude-code-callstack-and-parameter-flow.md) | 调用栈与参数流 |
+| [`third-party/claude-code-core-tools.md`](third-party/claude-code-core-tools.md) | 核心工具 |
+| [`third-party/claude-code-agenttool-deep-dive.md`](third-party/claude-code-agenttool-deep-dive.md) | Agent 工具深入 |
 | [`prompts/00-request-envelope.md`](prompts/00-request-envelope.md) | 请求信封 |
 | [`prompts/10-main-thread.md`](prompts/10-main-thread.md) | 主线程 prompt |
 | [`prompts/50-memory.md`](prompts/50-memory.md) | Memory prompt |

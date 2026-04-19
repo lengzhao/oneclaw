@@ -2,7 +2,7 @@
 
 本文约定：**回合后自动维护**与**定时自动维护**不仅在**开关**上分离，在**代码上也为两个独立入口**，便于各自演进 prompt、可见历史、预算与审计语义，而**不**再通过单一函数 + `Scheduled bool` 分支堆砌逻辑。
 
-**状态**：双入口 + **分路径 system 模板**（`maintenance_system_post_turn` / `maintenance_system_scheduled`）+ **审计 `post_turn_maintain` / `scheduled_maintain`** + **回合后 `PostTurnInput` 快照** + **`maintain.post_turn` YAML → `PushRuntime`/`rtopts`** + **`features.disable_scheduled_maintenance`** + **`maintainloop`**（见 [embedded-maintain-scheduler-design.md](embedded-maintain-scheduler-design.md)）。远场维护通过 **`ScheduledMaintainOpts.ToolRegistry`** 注入只读工具（`cmd/maintain` / `maintainloop` 默认 `builtin.ScheduledMaintainReadRegistry`，避免 `memory` 包 import `builtin` 成环）。**待续**：定时路径可选 transcript 窄读。与 Claude Code 范式对照见 [claude-code-memory-system.md](claude-code-memory-system.md) §13 / §15。
+**状态**：双入口 + **分路径 system 模板**（`maintenance_system_post_turn` / `maintenance_system_scheduled`）+ **审计 `post_turn_maintain` / `scheduled_maintain`** + **回合后 `PostTurnInput` 快照** + **`maintain.post_turn` YAML → `PushRuntime`/`rtopts`** + **`features.disable_scheduled_maintenance`** + **`maintainloop`**（见 [embedded-maintain-scheduler-design.md](embedded-maintain-scheduler-design.md)）。远场维护通过 **`ScheduledMaintainOpts.ToolRegistry`** 注入只读工具（`cmd/maintain` / `maintainloop` 默认 `builtin.ScheduledMaintainReadRegistry`，避免 `memory` 包 import `builtin` 成环）。**待续**：定时路径可选 transcript 窄读。与 Claude Code 范式对照见 [third-party/claude-code-memory-system.md](third-party/claude-code-memory-system.md) §13 / §15。
 
 ---
 
