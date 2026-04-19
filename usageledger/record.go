@@ -15,9 +15,6 @@ import (
 	"github.com/lengzhao/oneclaw/rtopts"
 )
 
-// dotDir matches memory.DotDir; kept local to avoid an import cycle (memory → loop → usageledger).
-const dotDir = ".oneclaw"
-
 var recordMu sync.Mutex
 
 func disabled() bool {
@@ -32,10 +29,8 @@ func usageRoot(cwd string, workspaceFlat bool, instructionRoot string) string {
 	if strings.TrimSpace(instructionRoot) != "" {
 		return filepath.Join(filepath.Clean(instructionRoot), "usage")
 	}
-	if workspaceFlat {
-		return filepath.Join(cwd, "usage")
-	}
-	return filepath.Join(cwd, dotDir, "usage")
+	_ = workspaceFlat
+	return filepath.Join(cwd, "usage")
 }
 
 func hashUserFileName(userKey string) string {
@@ -86,13 +81,13 @@ type RecordParams struct {
 	// UsageJSON is completion.Usage.RawJSON() from the provider (source of truth for tokens).
 	UsageJSON string
 	Inbound   bus.InboundMessage
-	// WorkspaceFlat matches toolctx.Context.WorkspaceFlat (flat vs .oneclaw/ under cwd).
+	// WorkspaceFlat matches toolctx.Context.WorkspaceFlat (flat session runtime vs repo cwd layout).
 	WorkspaceFlat bool
 	// InstructionRoot matches toolctx when IM workspace split is enabled (usage under <root>/usage).
 	InstructionRoot string
 }
 
-// MaybeRecord appends an interaction line and updates daily + per-user rollups under <cwd>/.oneclaw/usage/.
+// MaybeRecord appends an interaction line and updates daily + per-user rollups under the resolved session usage root.
 func MaybeRecord(p RecordParams) {
 	if disabled() || strings.TrimSpace(p.CWD) == "" {
 		return

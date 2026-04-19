@@ -12,6 +12,41 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// mergeStringAnyMaps merges src into dst (dst may be nil; recursive for nested maps). Other value types overwrite.
+func mergeStringAnyMaps(dst map[string]any, src map[string]any) map[string]any {
+	if len(src) == 0 {
+		return dst
+	}
+	if dst == nil {
+		dst = make(map[string]any)
+	}
+	for k, v := range src {
+		srcMap, ok := v.(map[string]any)
+		if !ok {
+			dst[k] = v
+			continue
+		}
+		if dstMap, ok := dst[k].(map[string]any); ok {
+			mergeStringAnyMaps(dstMap, srcMap)
+		} else {
+			dst[k] = cloneStringAnyMap(srcMap)
+		}
+	}
+	return dst
+}
+
+func cloneStringAnyMap(m map[string]any) map[string]any {
+	out := make(map[string]any, len(m))
+	for k, v := range m {
+		if vm, ok := v.(map[string]any); ok {
+			out[k] = cloneStringAnyMap(vm)
+		} else {
+			out[k] = v
+		}
+	}
+	return out
+}
+
 // UserRelPath is the config file under the user's home directory (~/.oneclaw/config.yaml).
 const UserRelPath = ".oneclaw/config.yaml"
 
@@ -25,6 +60,9 @@ type File struct {
 		MaxSteps int `yaml:"max_steps"`
 		// MaxTokens is max_completion_tokens per model step (main thread / IM sessions). 0 = use Resolved default.
 		MaxTokens int64 `yaml:"max_tokens"`
+		// CompletionExtra: optional map merged into each Chat Completions request (JSON shape matches openai.ChatCompletionNewParams).
+		// Runtime always overwrites model, messages, max_completion_tokens, stream_options, and tool fields when applicable. See docs/config.md.
+		CompletionExtra map[string]any `yaml:"completion_extra"`
 	} `yaml:"agent"`
 
 	Chat struct {
@@ -197,6 +235,9 @@ func mergeFile(dst *File, src File) {
 	}
 	if src.Agent.MaxTokens != 0 {
 		dst.Agent.MaxTokens = src.Agent.MaxTokens
+	}
+	if len(src.Agent.CompletionExtra) > 0 {
+		dst.Agent.CompletionExtra = mergeStringAnyMaps(dst.Agent.CompletionExtra, src.Agent.CompletionExtra)
 	}
 	if src.Chat.Transport != "" {
 		dst.Chat.Transport = src.Chat.Transport

@@ -7,10 +7,10 @@ import (
 	"hash/fnv"
 	"log/slog"
 	"os"
-	"path/filepath"
 	"strings"
 	"unicode/utf8"
 
+	"github.com/lengzhao/oneclaw/memory"
 	"github.com/lengzhao/oneclaw/toolctx"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/openai/openai-go"
@@ -18,7 +18,7 @@ import (
 
 const defaultMaxInlineRunes = 16 * 1024
 
-// maxMCPArtifactFileBytes caps bytes written to .oneclaw/artifacts/mcp/*.txt (DOM dumps, etc.).
+// maxMCPArtifactFileBytes caps bytes written to the session runtime artifacts/mcp/*.txt files (DOM dumps, etc.).
 const maxMCPArtifactFileBytes = 256 * 1024
 
 const mcpArtifactTruncNote = "\n\n[truncated: MCP artifact file byte cap]\n"
@@ -259,7 +259,7 @@ func (t *Tool) formatResult(content []mcp.Content, tctx *toolctx.Context) (strin
 		}
 		return out, nil
 	}
-	dir := filepath.Join(cwd, ".oneclaw", "artifacts", "mcp")
+	dir := memory.JoinSessionWorkspaceWithInstruction(cwd, tctx.InstructionRoot, tctx.WorkspaceFlat, "artifacts", "mcp")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", fmt.Errorf("mcp artifact dir: %w", err)
 	}

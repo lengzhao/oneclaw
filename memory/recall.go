@@ -302,7 +302,6 @@ func clipUTF8Hi(body string, hi int) int {
 func listMemoryMarkdownFiles(layout Layout) []string {
 	dirs := []string{
 		layout.User, layout.Project,
-		layout.TeamUser, layout.TeamProject,
 	}
 	if !AutoMemoryDisabled() {
 		dirs = append(dirs, layout.Auto)

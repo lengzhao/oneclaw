@@ -44,9 +44,18 @@ func TestEnsureDirs_CreatesWriteRoots(t *testing.T) {
 func TestProjectMemoryDir(t *testing.T) {
 	cwd := "/tmp/proj"
 	got := ProjectMemoryDir(cwd)
-	want := filepath.Join(cwd, DotDir, "memory")
+	want := filepath.Join(cwd, "memory")
 	if got != want {
 		t.Fatalf("ProjectMemoryDir = %q; want %q", got, want)
+	}
+}
+
+func TestAgentMemoryDir_ProjectScope(t *testing.T) {
+	cwd := "/tmp/proj"
+	got := AgentMemoryDir(cwd, "/tmp/home/.oneclaw", "demo-agent", AgentScopeProject)
+	want := filepath.Join(cwd, "agent-memory", "demo-agent")
+	if got != want {
+		t.Fatalf("AgentMemoryDir(project) = %q; want %q", got, want)
 	}
 }
 
@@ -106,6 +115,13 @@ func TestLayoutForIMWorkspace(t *testing.T) {
 	tmp := t.TempDir()
 	if lay := LayoutForIMWorkspace(tmp, home, "", false, ""); lay.HostUserData {
 		t.Fatal("repo layout should not set HostUserData")
+	} else {
+		if lay.Project != filepath.Join(tmp, "memory") {
+			t.Fatalf("repo layout project = %q want %q", lay.Project, filepath.Join(tmp, "memory"))
+		}
+		if lay.DotOrDataRoot() != filepath.Clean(tmp) {
+			t.Fatalf("repo layout DotOrDataRoot = %q want %q", lay.DotOrDataRoot(), filepath.Clean(tmp))
+		}
 	}
 }
 

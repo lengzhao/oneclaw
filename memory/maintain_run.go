@@ -106,7 +106,7 @@ type ScheduledMaintainOpts struct {
 }
 
 // RunScheduledMaintain runs the scheduled / far-field distill: a **multi-step agent** with read tools
-// (read_file, grep, glob, list_dir) plus scoped **write_behavior_policy** when needed, then emits markdown merged into **.oneclaw/memory/YYYY-MM-DD.md** (rules stay in MEMORY.md).
+// (read_file, grep, glob, list_dir) plus scoped **write_behavior_policy** when needed, then emits markdown merged into the resolved episodic digest (rules stay in MEMORY.md).
 // Use from oneclaw -maintain-once, cmd/maintain, embedded interval workers, or jobs. Does not consult disable_auto_maintenance.
 // Pass opts.Interval when the caller runs on a fixed period (incremental time-window hints + state file).
 // Serialized with RunPostTurnMaintain via maintainPipelineMu.
@@ -218,7 +218,7 @@ func runDistill(ctx context.Context, layout Layout, client *openai.Client, p dis
 		}
 		scopeHint := "This is a **post-turn / near-field** pass: **only** the **Current turn snapshot** below plus the **project MEMORY.md rules excerpt** (for dedupe against standing rules). " +
 			"Facts, cautions, tool usage, **repeated tool calls** (reasons only if visible in this turn). " +
-			"If tools repeat or the user **corrects** procedure, include a **skill candidate** bullet (title + one line) for **scheduled** maintain to promote to `.oneclaw/skills/.../SKILL.md`. " +
+			"If tools repeat or the user **corrects** procedure, include a **skill candidate** bullet (title + one line) for **scheduled** maintain to promote to `skills/.../SKILL.md`. " +
 			"Episodic output is written to the daily digest file (see system prompt), not into MEMORY.md. " +
 			"No daily logs or project topics are included. "
 		turnBlock := "Current turn snapshot (current session only):\n```\n" + postTurnSnap + "\n```\n\n"

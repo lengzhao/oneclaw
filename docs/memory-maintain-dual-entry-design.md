@@ -43,7 +43,7 @@
 | **调用方** | 主进程内嵌 interval 循环、`cmd/maintain`、未来独立 job |
 | **开关** | **`features.disable_scheduled_maintenance`**（后台：进程内 loop + `cmd/maintain` 间隔；**不**挡 **`maintain -once`**） |
 | **输入视野（当前实现）** | **interval 定时**：daily log **增量**（行时间戳 + `scheduled_maintain_state.json` 高水位；首次 lookback = interval）。**`-once` 或 `Interval==0`**：按 `maintain.log_days`（经 `rtopts`）做日历天 **log 体量探测**；正文由 Agent 经 **`opts.ToolRegistry` 只读工具**（如 `read_file` / `grep` / `glob` / `list_dir`）自读，user prompt 给绝对路径与任务说明。`ToolRegistry==nil` 则跳过远场。字节门控见 `docs/config.md` |
-| **输出（当前实现）** | 同上，合并写入 **`<project>/memory/YYYY-MM-DD.md`**；审计 **`scheduled_maintain`**；**scheduled** system 模板；user prompt 强调 consolidation / supersede |
+| **输出（当前实现）** | 同上，合并写入 **`<project>/memory/YYYY-MM-DD.md`**；审计 **`scheduled_maintain`**；**scheduled** system 模板；user prompt 强调 consolidation / supersede。远场 Agent 经 **`write_behavior_policy`** 还可写入 **`agent_memory`**（参数：`agent_type=<name>`、可选 `scope=public|local`；相对路径默认 `MEMORY.md`。省略 `scope` 时仅在布局可推断时自动选择），与主对话 Write 根一致 |
 
 ### 2.3 与「写 daily log」的关系
 

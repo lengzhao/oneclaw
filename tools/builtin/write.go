@@ -23,7 +23,7 @@ type WriteTool struct{}
 func (WriteTool) Name() string          { return "write_file" }
 func (WriteTool) ConcurrencySafe() bool { return false }
 func (WriteTool) Description() string {
-	return "Write text content to a path under the working directory or under ~/.oneclaw and <cwd>/.oneclaw memory roots. Overwrites if the file exists. Creates parent directories."
+	return "Write text content to a path under the working directory or under allowed memory roots (including ~/.oneclaw for user memory). Overwrites if the file exists. Creates parent directories."
 }
 
 func (WriteTool) Parameters() openai.FunctionParameters {

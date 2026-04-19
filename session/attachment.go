@@ -6,7 +6,7 @@ import (
 	"unicode/utf8"
 )
 
-// Attachment is inbound payload: project-relative Path under .oneclaw/media/inbound/… after persistence,
+// Attachment is inbound payload: project-relative Path under media/inbound/… after persistence,
 // or inline Text before the engine persists it.
 type Attachment struct {
 	Name string

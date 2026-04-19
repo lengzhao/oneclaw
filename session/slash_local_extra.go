@@ -113,8 +113,6 @@ func (e *Engine) slashPaths() string {
 	fmt.Fprintf(&b, "User: %s\n", layout.User)
 	fmt.Fprintf(&b, "Project: %s\n", layout.Project)
 	fmt.Fprintf(&b, "Auto: %s\n", layout.Auto)
-	fmt.Fprintf(&b, "TeamUser: %s\n", layout.TeamUser)
-	fmt.Fprintf(&b, "TeamProject: %s\n", layout.TeamProject)
 	b.WriteString("AgentDefault:\n")
 	for _, p := range layout.AgentDefault {
 		fmt.Fprintf(&b, "  %s\n", p)

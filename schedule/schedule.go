@@ -1,5 +1,5 @@
 // Package schedule persists user/agent-defined timed jobs (simplified vs picoclaw: no shell commands).
-// Jobs live in <cwd>/.oneclaw/scheduled_jobs.json; a background poller injects due messages as user turns.
+// Jobs live under the resolved session runtime root; a background poller injects due messages as user turns.
 package schedule
 
 import (
@@ -21,9 +21,9 @@ import (
 
 const fileName = "scheduled_jobs.json"
 
-// Path returns the absolute path to <cwd>/.oneclaw/scheduled_jobs.json (non-flat / repo-style cwd).
+// Path returns the repo-style path for scheduled_jobs.json.
 func Path(cwd string) string {
-	return filepath.Join(cwd, memory.DotDir, fileName)
+	return filepath.Join(cwd, fileName)
 }
 
 // JobsFilePath returns the absolute path to scheduled_jobs.json.

@@ -7,8 +7,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/lengzhao/oneclaw/memory"
 )
 
 var pathLocks sync.Map // path string -> *sync.Mutex
@@ -22,23 +20,16 @@ func appendJSONLRecord(cwd, auditSessionID, agentSegment, subdir string, when ti
 	if cwd == "" {
 		cwd = "."
 	}
+	_ = omitDotDir
 	y := when.UTC().Format("2006")
 	mo := when.UTC().Format("01")
 	day := when.UTC().Format("2006-01-02")
 	var path string
 	if sid := strings.TrimSpace(auditSessionID); sid != "" {
 		safe := SanitizeAgentSegment(sid)
-		if omitDotDir {
-			path = filepath.Join(cwd, "sessions", safe, "audit", agentSegment, subdir, y, mo, day+".jsonl")
-		} else {
-			path = filepath.Join(cwd, memory.DotDir, "sessions", safe, "audit", agentSegment, subdir, y, mo, day+".jsonl")
-		}
+		path = filepath.Join(cwd, "sessions", safe, "audit", agentSegment, subdir, y, mo, day+".jsonl")
 	} else {
-		if omitDotDir {
-			path = filepath.Join(cwd, "audit", agentSegment, subdir, y, mo, day+".jsonl")
-		} else {
-			path = filepath.Join(cwd, memory.DotDir, "audit", agentSegment, subdir, y, mo, day+".jsonl")
-		}
+		path = filepath.Join(cwd, "audit", agentSegment, subdir, y, mo, day+".jsonl")
 	}
 	mu := lockPath(path)
 	mu.Lock()

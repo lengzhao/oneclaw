@@ -31,7 +31,7 @@ You are a demo.
 
 func TestLoadCatalog_userOverridesBuiltin(t *testing.T) {
 	cwd := t.TempDir()
-	agents := filepath.Join(cwd, ".oneclaw", "agents")
+	agents := filepath.Join(cwd, "agents")
 	if err := os.MkdirAll(agents, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -52,6 +52,34 @@ Custom explore body.
 		t.Fatal("missing explore")
 	}
 	if d.SystemPrompt != "Custom explore body." {
+		t.Fatalf("system: %q", d.SystemPrompt)
+	}
+}
+
+func TestLoadCatalog_flatInstructionRoot(t *testing.T) {
+	cwd := filepath.Join(t.TempDir(), "workspace")
+	instructionRoot := t.TempDir()
+	agents := filepath.Join(instructionRoot, "agents")
+	if err := os.MkdirAll(agents, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	custom := []byte(`---
+agent_type: explore
+description: overridden from instruction root
+tools:
+  - read_file
+---
+Flat root body.
+`)
+	if err := os.WriteFile(filepath.Join(agents, "explore.md"), custom, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cat := LoadCatalog(cwd, true, instructionRoot)
+	d, ok := cat.Get("explore")
+	if !ok {
+		t.Fatal("missing explore")
+	}
+	if d.SystemPrompt != "Flat root body." {
 		t.Fatalf("system: %q", d.SystemPrompt)
 	}
 }

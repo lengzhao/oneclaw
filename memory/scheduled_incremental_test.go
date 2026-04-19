@@ -23,7 +23,7 @@ func TestParseDailyLogLineTime(t *testing.T) {
 func TestScheduledMaintainStatePathAndMigrate(t *testing.T) {
 	cwd := t.TempDir()
 	home := t.TempDir()
-	legacyDir := filepath.Join(cwd, DotDir, "memory", DotDir)
+	legacyDir := filepath.Join(cwd, "memory", DotDir)
 	if err := os.MkdirAll(legacyDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -34,7 +34,7 @@ func TestScheduledMaintainStatePathAndMigrate(t *testing.T) {
 	}
 
 	lay := DefaultLayout(cwd, home)
-	if got := scheduledMaintainStatePath(lay); got != filepath.Join(cwd, DotDir, scheduledMaintainStateFile) {
+	if got := scheduledMaintainStatePath(lay); got != filepath.Join(cwd, scheduledMaintainStateFile) {
 		t.Fatalf("scheduledMaintainStatePath = %q", got)
 	}
 

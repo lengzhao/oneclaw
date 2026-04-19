@@ -1,8 +1,12 @@
 package subagent
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/lengzhao/oneclaw/toolctx"
 	"github.com/openai/openai-go"
 )
 
@@ -109,5 +113,34 @@ func TestTrimInheritedParentMessages_tailCapThenSanitize(t *testing.T) {
 		if m.OfAssistant != nil && len(m.OfAssistant.ToolCalls) > 0 {
 			t.Fatal("tail must not contain unresolved assistant tool_calls")
 		}
+	}
+}
+
+func TestWriteSidechain_flatInstructionRoot(t *testing.T) {
+	cwd := filepath.Join(t.TempDir(), "workspace")
+	instructionRoot := t.TempDir()
+	parent := toolctx.New(cwd, nil)
+	parent.WorkspaceFlat = true
+	parent.InstructionRoot = instructionRoot
+	msgs := []openai.ChatCompletionMessageParamUnion{
+		openai.UserMessage("hi"),
+		openai.AssistantMessage("hello"),
+	}
+
+	path, err := writeSidechain(parent, "agent1", "run_agent", msgs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if path == "" {
+		t.Fatal("expected sidechain path")
+	}
+	if !strings.Contains(path, filepath.Join(instructionRoot, "sidechain")) {
+		t.Fatalf("path = %q, want under %q", path, filepath.Join(instructionRoot, "sidechain"))
+	}
+	if strings.Contains(path, filepath.Join(cwd, ".oneclaw")) {
+		t.Fatalf("path should not use nested .oneclaw under cwd: %q", path)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("stat %q: %v", path, err)
 	}
 }

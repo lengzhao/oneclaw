@@ -46,6 +46,8 @@ type Config struct {
 	Budget budget.Global
 	// ChatTransport overrides default transport when non-empty (e.g. from config).
 	ChatTransport string
+	// ChatCompletionExtraJSON: optional JSON merged into Chat Completions params before runtime sets model, messages, max_completion_tokens, stream_options, tools.
+	ChatCompletionExtraJSON []byte
 	// ToolTrace, when non-nil, records slim per-tool rows for this RunTurn only (not sent to the model).
 	ToolTrace *ToolTraceSink
 	// OnToolLogged, when non-nil, called synchronously after each tool completes (e.g. append-only JSONL).
@@ -54,7 +56,7 @@ type Config struct {
 	// assistant-visible reply (after any tool rounds). User turn is recorded before the model loop
 	// by the caller (Claude Code–style: recordTranscript before query). Not called on error or abort.
 	SlimTranscript func(assistantText string)
-	// SessionID is optional; when set with CWD on ToolContext, usage is written under .oneclaw/usage/.
+	// SessionID is optional; when set with CWD on ToolContext, usage is written under the session runtime usage directory.
 	SessionID string
 	// Lifecycle optional hooks (model steps, tool execute start). Nil fields are skipped.
 	Lifecycle *LifecycleCallbacks
@@ -125,12 +127,16 @@ func RunTurn(ctx context.Context, cfg Config, in bus.InboundMessage) (err error)
 
 		reqMsgs := buildRequestMessages(cfg.System, *msgs)
 		ApplyOutboundAssistantExtensionFields(reqMsgs)
-		params := openai.ChatCompletionNewParams{
-			Model:               cfg.Model,
-			Messages:            reqMsgs,
-			MaxCompletionTokens: openai.Int(cfg.MaxTokens),
-			StreamOptions:       openai.ChatCompletionStreamOptionsParam{IncludeUsage: openai.Bool(true)},
+		params := openai.ChatCompletionNewParams{}
+		if len(cfg.ChatCompletionExtraJSON) > 0 {
+			if err := json.Unmarshal(cfg.ChatCompletionExtraJSON, &params); err != nil {
+				slog.Warn("loop.completion_extra.unmarshal_failed", "err", err)
+			}
 		}
+		params.Model = cfg.Model
+		params.Messages = reqMsgs
+		params.MaxCompletionTokens = openai.Int(cfg.MaxTokens)
+		params.StreamOptions = openai.ChatCompletionStreamOptionsParam{IncludeUsage: openai.Bool(true)}
 		if offerTools {
 			params.Tools = cfg.Registry.OpenAITools()
 			// Let the model batch tool calls; executor partitions by Registry.ConcurrencySafe (read parallel, write serial).
@@ -144,6 +150,7 @@ func RunTurn(ctx context.Context, cfg Config, in bus.InboundMessage) (err error)
 			"tools", len(params.Tools),
 			"tools_offered", offerTools,
 			"max_completion_tokens", cfg.MaxTokens,
+			"completion_extra_len", len(cfg.ChatCompletionExtraJSON),
 		)
 		if cfg.Lifecycle != nil && cfg.Lifecycle.OnModelStepStart != nil {
 			cfg.Lifecycle.OnModelStepStart(ctx, step, len(params.Tools), reqMsgs)

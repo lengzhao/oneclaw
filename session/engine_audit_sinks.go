@@ -6,7 +6,7 @@ import (
 	"github.com/openai/openai-go"
 )
 
-// RegisterAuditSinks registers JSONL audit sinks under <InstructionRoot>/audit/<agent_segment>/... (no nested ".oneclaw").
+// RegisterAuditSinks registers JSONL audit sinks under <InstructionRoot>/audit/<agent_segment>/... .
 // Engine.CWD is the per-session workspace (~/.oneclaw/sessions/<id>/); AuditSessionID is left empty so paths do not nest another sessions/<id>.
 // Pass true per path to enable that sink; all false is a no-op.
 // Agent segment is derived from Engine.RootAgentID (see sinks.SanitizeAgentSegment).

@@ -53,11 +53,11 @@ func TestRenderUnknownTemplate(t *testing.T) {
 func TestRenderMaintenanceData(t *testing.T) {
 	d := maintenancePromptData{
 		CWD: "/p", Today: "2026-01-01",
-		MemoryPath: "/p/.oneclaw/memory/2026-01-01.md", RulesMemoryPath: "/p/.oneclaw/memory/MEMORY.md",
+		MemoryPath: "/p/memory/2026-01-01.md", RulesMemoryPath: "/p/memory/MEMORY.md",
 		RunTS:                 "2026-01-01T00:00:00Z",
-		DialogHistoryPath:     "/p/.oneclaw/memory/2026-01-01/dialog_history.json",
-		WorkingTranscriptPath: "/p/.oneclaw/working_transcript.json",
-		TranscriptPath:        "/p/.oneclaw/transcript.json",
+		DialogHistoryPath:     "/p/memory/2026-01-01/dialog_history.json",
+		WorkingTranscriptPath: "/p/working_transcript.json",
+		TranscriptPath:        "/p/transcript.json",
 	}
 	got, err := Render(NameMaintenanceSystemPostTurn, d)
 	if err != nil {
@@ -78,5 +78,8 @@ func TestRenderMaintenanceData(t *testing.T) {
 	}
 	if !strings.Contains(got2, "SKILL.md") || !strings.Contains(got2, "write_behavior_policy") {
 		t.Fatalf("scheduled template missing skills guidance: %q", got2)
+	}
+	if !strings.Contains(got2, "agent_memory") || !strings.Contains(got2, "agent_type") {
+		t.Fatalf("scheduled template missing agent memory targets: %q", got2)
 	}
 }

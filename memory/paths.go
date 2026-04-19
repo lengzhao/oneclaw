@@ -12,7 +12,7 @@ import (
 	"github.com/lengzhao/oneclaw/rtopts"
 )
 
-// DotDir is the per-project configuration directory for oneclaw.
+// DotDir is the default user data root directory name under HOME.
 const DotDir = ".oneclaw"
 
 // AgentInstructionsFile is the repo/user instructions entry filename.
@@ -97,9 +97,9 @@ func UserMemoryDir(memoryBase string) string {
 	return filepath.Join(memoryBase, "memory")
 }
 
-// ProjectMemoryDir returns <cwd>/.oneclaw/memory.
+// ProjectMemoryDir returns <cwd>/memory.
 func ProjectMemoryDir(cwd string) string {
-	return filepath.Join(cwd, DotDir, "memory")
+	return filepath.Join(cwd, "memory")
 }
 
 // AgentMemoryDir returns the on-disk directory for an agent type and scope.
@@ -109,20 +109,10 @@ func AgentMemoryDir(cwd, memoryBase, agentType string, scope AgentScope) string 
 	case AgentScopeUser:
 		return filepath.Join(memoryBase, "agent-memory", dir)
 	case AgentScopeProject:
-		return filepath.Join(cwd, DotDir, "agent-memory", dir)
+		return filepath.Join(cwd, "agent-memory", dir)
 	default:
-		return filepath.Join(cwd, DotDir, "agent-memory", dir)
+		return filepath.Join(cwd, "agent-memory", dir)
 	}
-}
-
-// TeamMemoryDirUser is team-shared memory under the global config base.
-func TeamMemoryDirUser(memoryBase string) string {
-	return filepath.Join(memoryBase, "team-memory")
-}
-
-// TeamMemoryDirProject is team memory checked in under the repo.
-func TeamMemoryDirProject(cwd string) string {
-	return filepath.Join(cwd, DotDir, "team-memory")
 }
 
 // DailyLogPath returns <autoMemoryDir>/logs/YYYY/MM/YYYY-MM-DD.md for the given date (date "2006-01-02").
@@ -138,7 +128,7 @@ func DailyLogPath(autoMemoryDir, date string) string {
 	return filepath.Join(autoMemoryDir, "logs", y, m, name)
 }
 
-// DialogHistoryPath returns <cwd>/.oneclaw/memory/YYYY-MM-DD/dialog_history.json (calendar date, local).
+// DialogHistoryPath returns <project-memory>/YYYY-MM-DD/dialog_history.json (calendar date, local).
 // Prefer DialogHistoryPathForSession when a stable session id is available so concurrent chats do not share one file.
 func (l Layout) DialogHistoryPath(date string) string {
 	date = strings.TrimSpace(date)
@@ -176,19 +166,18 @@ type Layout struct {
 	User           string
 	Project        string
 	Auto           string
-	TeamUser       string
-	TeamProject    string
 	AgentDefault   []string // user + project agent memory roots for "default"
 	EntrypointName string
 	// InstructionRoot is the IM directory containing AGENT.md and MEMORY.md (same dir). Empty for repo-style layouts.
 	InstructionRoot string
 	// HostUserData is true when CWD is the IM user data root (~/.oneclaw): config, AGENT.md, audit, and
-	// scheduled_maintain_state live directly under CWD, not under CWD/.oneclaw/.
+	// scheduled_maintain_state live directly under CWD.
 	HostUserData bool
 }
 
-// DotOrDataRoot returns the directory holding host-style dot files: for a repo cwd layout it is
-// <cwd>/.oneclaw; for IM host layout with InstructionRoot set it is InstructionRoot; otherwise legacy IM host used CWD.
+// DotOrDataRoot returns the directory holding host-style instruction/runtime files:
+// for repo cwd layout it is <cwd>; for IM host layout with InstructionRoot set it is InstructionRoot;
+// otherwise legacy IM host used CWD.
 func (l Layout) DotOrDataRoot() string {
 	if l.InstructionRoot != "" {
 		return filepath.Clean(l.InstructionRoot)
@@ -196,7 +185,7 @@ func (l Layout) DotOrDataRoot() string {
 	if l.HostUserData {
 		return filepath.Clean(l.CWD)
 	}
-	return filepath.Join(l.CWD, DotDir)
+	return filepath.Clean(l.CWD)
 }
 
 // EpisodeDailyPath returns the episodic digest markdown path for the given calendar day (YYYY-MM-DD prefix).
@@ -218,8 +207,6 @@ func DefaultLayout(cwd, home string) Layout {
 		User:           UserMemoryDir(mb),
 		Project:        ProjectMemoryDir(cwd),
 		Auto:           auto,
-		TeamUser:       TeamMemoryDirUser(mb),
-		TeamProject:    TeamMemoryDirProject(cwd),
 		AgentDefault:   agentDefaultPair(cwd, mb, "default"),
 		EntrypointName: entrypointName,
 	}
@@ -237,8 +224,6 @@ func SessionDotLayout(dotRoot, home string) Layout {
 		User:           UserMemoryDir(mb),
 		Project:        filepath.Join(dot, "memory"),
 		Auto:           AutoMemoryDir(dot, mb),
-		TeamUser:       TeamMemoryDirUser(mb),
-		TeamProject:    filepath.Join(dot, "team-memory"),
 		AgentDefault:   []string{filepath.Join(mb, "agent-memory", "default"), agentProj},
 		EntrypointName: entrypointName,
 		HostUserData:   true,
@@ -259,8 +244,6 @@ func IMSessionLayout(instructionRoot, home string) Layout {
 		User:            UserMemoryDir(mb),
 		Project:         projMem,
 		Auto:            AutoMemoryDir(ws, mb),
-		TeamUser:        TeamMemoryDirUser(mb),
-		TeamProject:     filepath.Join(ir, "team-memory"),
 		AgentDefault:    []string{filepath.Join(mb, "agent-memory", "default"), agentProj},
 		EntrypointName:  entrypointName,
 		HostUserData:    true,
@@ -268,7 +251,7 @@ func IMSessionLayout(instructionRoot, home string) Layout {
 }
 
 // LayoutForIMWorkspace selects memory layout for an Engine: repo-style DefaultLayout when WorkspaceFlat is false;
-// when true, IM shared root uses IMHostMaintainLayout, IMSessionLayout for isolated sessions, or SessionDotLayout (legacy .oneclaw session dir).
+// when true, IM shared root uses IMHostMaintainLayout, IMSessionLayout for isolated sessions, or SessionDotLayout (legacy session dir).
 func LayoutForIMWorkspace(cwd, home, userDataRoot string, workspaceFlat bool, instructionRoot string) Layout {
 	if !workspaceFlat {
 		return DefaultLayout(cwd, home)
@@ -315,8 +298,6 @@ func IMHostMaintainLayout(userDataRoot, home string) Layout {
 		User:            UserMemoryDir(mb),
 		Project:         projMem,
 		Auto:            AutoMemoryDir(ws, mb),
-		TeamUser:        TeamMemoryDirUser(mb),
-		TeamProject:     filepath.Join(ur, "team-memory"),
 		AgentDefault:    []string{filepath.Join(mb, "agent-memory", "default"), agentHost},
 		EntrypointName:  entrypointName,
 		HostUserData:    true,
@@ -357,7 +338,7 @@ func (l Layout) AuditWriteRoots() []string {
 }
 
 // IsBehaviorPolicyFile reports whether abs is one of the canonical AGENT.md locations
-// (project `.oneclaw/AGENT.md` or user memory base `~/.oneclaw/AGENT.md`).
+// (project `AGENT.md` or user memory base `~/.oneclaw/AGENT.md`).
 func (l Layout) IsBehaviorPolicyFile(abs string) bool {
 	abs = filepath.Clean(abs)
 	candidates := []string{
@@ -390,8 +371,6 @@ func (l Layout) WriteRoots() []string {
 		add(l.Auto)
 		add(filepath.Join(l.Auto, "logs"))
 	}
-	add(l.TeamUser)
-	add(l.TeamProject)
 	for _, a := range l.AgentDefault {
 		add(a)
 	}

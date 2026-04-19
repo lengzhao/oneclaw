@@ -79,7 +79,7 @@ func TestDialogHistoryPath(t *testing.T) {
 	cwd := filepath.Join("/tmp", "proj")
 	lay := DefaultLayout(cwd, "/home/x")
 	got := lay.DialogHistoryPath("2026-04-06")
-	want := filepath.Join(cwd, DotDir, "memory", "2026-04-06", "dialog_history.json")
+	want := filepath.Join(cwd, "memory", "2026-04-06", "dialog_history.json")
 	if got != want {
 		t.Fatalf("path\ngot  %q\nwant %q", got, want)
 	}
@@ -90,7 +90,7 @@ func TestDialogHistoryPathForSession(t *testing.T) {
 	cwd := filepath.Join("/tmp", "proj")
 	lay := DefaultLayout(cwd, "/home/x")
 	got := lay.DialogHistoryPathForSession("2026-04-06", "abc123")
-	want := filepath.Join(cwd, DotDir, "memory", "2026-04-06", "abc123", "dialog_history.json")
+	want := filepath.Join(cwd, "memory", "2026-04-06", "abc123", "dialog_history.json")
 	if got != want {
 		t.Fatalf("path\ngot  %q\nwant %q", got, want)
 	}

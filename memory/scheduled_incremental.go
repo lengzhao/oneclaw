@@ -13,12 +13,12 @@ import (
 
 const scheduledMaintainStateFile = "scheduled_maintain_state.json"
 
-// scheduledMaintainStatePath is under layout.DotOrDataRoot() (repo: <cwd>/.oneclaw; IM host: user data root).
+// scheduledMaintainStatePath is under layout.DotOrDataRoot() (repo: <cwd>; IM host: user data root).
 func scheduledMaintainStatePath(layout Layout) string {
 	return filepath.Join(layout.DotOrDataRoot(), scheduledMaintainStateFile)
 }
 
-// migrateScheduledMaintainState moves state from legacy paths under layout.Project/.oneclaw/ or layout.Project/ to DotOrDataRoot().
+// migrateScheduledMaintainState moves state from legacy nested or flat project memory paths to DotOrDataRoot().
 func migrateScheduledMaintainState(layout Layout) {
 	newPath := scheduledMaintainStatePath(layout)
 	oldNested := filepath.Join(layout.Project, DotDir, scheduledMaintainStateFile)

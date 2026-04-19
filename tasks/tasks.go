@@ -18,7 +18,7 @@ import (
 
 const fileName = "tasks.json"
 
-// PathForWorkspace returns tasks.json under cwd; when workspaceFlat is true, CWD is already the logical .oneclaw directory.
+// PathForWorkspace returns tasks.json under the resolved session/runtime root.
 func PathForWorkspace(cwd string, workspaceFlat bool) string {
 	return PathForWorkspaceWithInstruction(cwd, "", workspaceFlat)
 }

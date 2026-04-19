@@ -13,8 +13,8 @@ func TestMaintenanceSystemPromptData(t *testing.T) {
 	d := MaintainPromptData{
 		CWD:             "/proj/repo",
 		Today:           "2026-04-05",
-		MemoryPath:      "/proj/repo/.oneclaw/memory/2026-04-05.md",
-		RulesMemoryPath: "/proj/repo/.oneclaw/memory/MEMORY.md",
+		MemoryPath:      "/proj/repo/memory/2026-04-05.md",
+		RulesMemoryPath: "/proj/repo/memory/MEMORY.md",
 		RunTS:           "2026-04-05T12:00:00Z",
 	}
 	got, err := prompts.Render(prompts.NameMaintenanceSystemPostTurn, d)

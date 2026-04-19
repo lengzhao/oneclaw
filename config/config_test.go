@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"testing"
@@ -413,6 +414,54 @@ func TestPushRuntime_MemoryRecallSQLitePath(t *testing.T) {
 	r.PushRuntime()
 	if got := rtopts.Current().MemoryRecallSQLitePath; got != "memory/custom-recall.sqlite" {
 		t.Fatalf("MemoryRecallSQLitePath = %q, want %q", got, "memory/custom-recall.sqlite")
+	}
+}
+
+func TestPushRuntime_CompletionExtraJSON(t *testing.T) {
+	t.Cleanup(func() { rtopts.Set(nil) })
+	f := File{}
+	f.Agent.CompletionExtra = map[string]any{
+		"temperature": 0.5,
+		"web_search_options": map[string]any{
+			"search_context_size": "low",
+		},
+	}
+	r := &Resolved{merged: f}
+	r.PushRuntime()
+	got := rtopts.Current().ChatCompletionExtraJSON
+	if len(got) == 0 {
+		t.Fatal("expected ChatCompletionExtraJSON")
+	}
+	if !bytes.Contains(got, []byte(`"temperature"`)) || !bytes.Contains(got, []byte(`"web_search_options"`)) {
+		t.Fatalf("unexpected json: %s", got)
+	}
+}
+
+func TestMergeFile_completionExtraRecursive(t *testing.T) {
+	var dst File
+	dst.Agent.CompletionExtra = map[string]any{
+		"temperature": 0.1,
+		"web_search_options": map[string]any{
+			"search_context_size": "medium",
+		},
+	}
+	src := File{}
+	src.Agent.CompletionExtra = map[string]any{
+		"web_search_options": map[string]any{
+			"user_location": map[string]any{
+				"approximate": map[string]any{"country": "US"},
+			},
+		},
+	}
+	mergeFile(&dst, src)
+	wso := dst.Agent.CompletionExtra["web_search_options"].(map[string]any)
+	if wso["search_context_size"] != "medium" {
+		t.Fatalf("search_context_size: %#v", wso["search_context_size"])
+	}
+	ul := wso["user_location"].(map[string]any)
+	app := ul["approximate"].(map[string]any)
+	if app["country"] != "US" {
+		t.Fatalf("country: %#v", app["country"])
 	}
 }
 

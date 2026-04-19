@@ -30,7 +30,7 @@ func (TaskCreateTool) Name() string          { return "task_create" }
 func (TaskCreateTool) ConcurrencySafe() bool { return false }
 
 func (TaskCreateTool) Description() string {
-	return "Create or replace the persisted task list for this project (<cwd>/.oneclaw/tasks.json). Use for complex multi-step work so progress survives long sessions and restarts. Prefer replace false to append; use replace true to reset the whole list. Each task needs a clear subject; set status to pending (default), in_progress, completed, or cancelled."
+	return "Create or replace the persisted task list for this session runtime (`tasks.json` under the active workspace root). Use for complex multi-step work so progress survives long sessions and restarts. Prefer replace false to append; use replace true to reset the whole list. Each task needs a clear subject; set status to pending (default), in_progress, completed, or cancelled."
 }
 
 func (TaskCreateTool) Parameters() openai.FunctionParameters {

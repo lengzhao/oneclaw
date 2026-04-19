@@ -24,7 +24,7 @@ func TestAppendMemoryAudit_WritesLine(t *testing.T) {
 	content := []byte("hello audit\n")
 	AppendMemoryAudit(lay, memFile, "write_file", content)
 
-	auditPath := filepath.Join(cwd, DotDir, "audit", "memory-write.jsonl")
+	auditPath := filepath.Join(cwd, "audit", "memory-write.jsonl")
 	raw, err := os.ReadFile(auditPath)
 	if err != nil {
 		t.Fatal(err)
@@ -53,7 +53,7 @@ func TestAppendMemoryAudit_SkipsGlobalProjectsStore(t *testing.T) {
 	autoFile := filepath.Join(lay.Auto, "logs", "2099", "01", "2099-01-01.md")
 	_ = os.MkdirAll(filepath.Dir(autoFile), 0o755)
 	AppendMemoryAudit(lay, autoFile, "daily_log_line", []byte("x"))
-	auditPath := filepath.Join(cwd, DotDir, "audit", "memory-write.jsonl")
+	auditPath := filepath.Join(cwd, "audit", "memory-write.jsonl")
 	if _, err := os.Stat(auditPath); err == nil {
 		t.Fatal("expected no audit file for paths under memory_base/projects")
 	}
@@ -68,7 +68,7 @@ func TestAppendMemoryAudit_SkipsOutsideRoots(t *testing.T) {
 	out := filepath.Join(cwd, "outside.txt")
 	lay := DefaultLayout(cwd, t.TempDir())
 	AppendMemoryAudit(lay, out, "write_file", []byte("x"))
-	auditPath := filepath.Join(cwd, DotDir, "audit", "memory-write.jsonl")
+	auditPath := filepath.Join(cwd, "audit", "memory-write.jsonl")
 	if _, err := os.Stat(auditPath); err == nil {
 		t.Fatal("expected no audit file")
 	}
@@ -85,7 +85,7 @@ func TestAppendMemoryAudit_Disabled(t *testing.T) {
 	memFile := filepath.Join(lay.Project, "t.md")
 	_ = os.MkdirAll(filepath.Dir(memFile), 0o755)
 	AppendMemoryAudit(lay, memFile, "x", []byte("y"))
-	auditPath := filepath.Join(cwd, DotDir, "audit", "memory-write.jsonl")
+	auditPath := filepath.Join(cwd, "audit", "memory-write.jsonl")
 	if _, err := os.Stat(auditPath); err == nil {
 		t.Fatal("expected no audit file when disabled")
 	}
@@ -100,12 +100,12 @@ func TestAppendMemoryAudit_ProjectRulesFile(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	lay := DefaultLayout(cwd, home)
-	rulesDir := filepath.Join(cwd, DotDir, "rules")
+	rulesDir := filepath.Join(cwd, "rules")
 	_ = os.MkdirAll(rulesDir, 0o755)
 	ruleFile := filepath.Join(rulesDir, "editing.md")
 	content := []byte("# rule\n")
 	AppendMemoryAudit(lay, ruleFile, "write_behavior_policy", content)
-	raw, err := os.ReadFile(filepath.Join(cwd, DotDir, "audit", "memory-write.jsonl"))
+	raw, err := os.ReadFile(filepath.Join(cwd, "audit", "memory-write.jsonl"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,7 +142,7 @@ func TestAppendMaintenanceSection_Audits(t *testing.T) {
 	if err := appendMaintenanceSection(lay, memPath, section, AuditSourcePostTurnMaintain); err != nil {
 		t.Fatal(err)
 	}
-	raw, err := os.ReadFile(filepath.Join(cwd, DotDir, "audit", "memory-write.jsonl"))
+	raw, err := os.ReadFile(filepath.Join(cwd, "audit", "memory-write.jsonl"))
 	if err != nil {
 		t.Fatal(err)
 	}

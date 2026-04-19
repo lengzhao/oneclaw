@@ -249,8 +249,8 @@ func TestExecTool_Execute_backgroundReturnsQuickly(t *testing.T) {
 	if !strings.Contains(out, "background: true") || !strings.Contains(out, "pid:") {
 		t.Fatalf("expected background marker and pid line, got %q", out)
 	}
-	if !strings.Contains(out, "run_log:") || !strings.Contains(out, ".oneclaw/exec_log/") {
-		t.Fatalf("expected run_log under .oneclaw/exec_log, got %q", out)
+	if !strings.Contains(out, "run_log:") || !strings.Contains(out, "/exec_log/") {
+		t.Fatalf("expected run_log under exec_log, got %q", out)
 	}
 	if !strings.Contains(out, "exec_log") {
 		t.Fatalf("expected exec_log in path, got %q", out)
@@ -301,8 +301,8 @@ func TestExecTool_Execute_waitTimeoutReturnsDetachInfo(t *testing.T) {
 	if !strings.Contains(out, "timed_out: true") || !strings.Contains(out, "pid:") {
 		t.Fatalf("expected timed_out and pid, got %q", out)
 	}
-	if !strings.Contains(out, "run_log:") || !strings.Contains(out, ".oneclaw/exec_log/") {
-		t.Fatalf("expected run_log under .oneclaw/exec_log, got %q", out)
+	if !strings.Contains(out, "run_log:") || !strings.Contains(out, "/exec_log/") {
+		t.Fatalf("expected run_log under exec_log, got %q", out)
 	}
 	if !strings.Contains(out, "session_id: wait-timeout-sess") {
 		t.Fatalf("expected session_id line, got %q", out)

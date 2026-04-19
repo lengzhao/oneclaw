@@ -19,6 +19,7 @@ import (
 	"github.com/lengzhao/oneclaw/loop"
 	"github.com/lengzhao/oneclaw/memory"
 	"github.com/lengzhao/oneclaw/notify"
+	"github.com/lengzhao/oneclaw/rtopts"
 	"github.com/lengzhao/oneclaw/tools"
 	"github.com/openai/openai-go"
 )
@@ -54,7 +55,7 @@ type Engine struct {
 	Registry   *tools.Registry
 	CWD        string
 	// WorkspaceFlat: when true, session runtime files (tasks.json, memory/, agents/, exec_log/, …) live directly under
-	// <InstructionRoot>/ (no nested ".oneclaw"); CWD is <InstructionRoot>/workspace. When false, legacy layout uses CWD/.oneclaw/.
+	// <InstructionRoot>/ ; CWD is <InstructionRoot>/workspace. When false, legacy layout uses CWD/.
 	WorkspaceFlat bool
 	// UserDataRoot is the IM host directory (~/.oneclaw): shared config parent; cron/schedule jobs file; empty in tests or non-IM engines.
 	UserDataRoot string
@@ -194,6 +195,7 @@ func (e *Engine) SubmitUser(ctx context.Context, in bus.InboundMessage) (err err
 
 	userLine := ModelUserLine(text, len(atts) > 0)
 	attChunks := InboundUserChunksForAttachments(e.CWD, atts, !e.DisableMultimodalImage, !e.DisableMultimodalAudio)
+	extraJSON := rtopts.Current().ChatCompletionExtraJSON
 	cfg := loop.Config{
 		Client:                  &e.Client,
 		Model:                   e.Model,
@@ -213,6 +215,7 @@ func (e *Engine) SubmitUser(ctx context.Context, in bus.InboundMessage) (err err
 		UserLine:                userLine,
 		Budget:                  bg,
 		ChatTransport:           e.ChatTransport,
+		ChatCompletionExtraJSON: extraJSON,
 		ToolTrace:               traceSink,
 		OnToolLogged:            onToolLogged,
 		SlimTranscript: func(assistantText string) {

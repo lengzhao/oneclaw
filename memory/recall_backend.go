@@ -495,10 +495,6 @@ func recallScope(layout Layout, path string) string {
 		return "user"
 	case PathUnderRoot(path, layout.Project):
 		return "project"
-	case PathUnderRoot(path, layout.TeamUser):
-		return "team_user"
-	case PathUnderRoot(path, layout.TeamProject):
-		return "team_project"
 	case PathUnderRoot(path, layout.Auto):
 		return "auto"
 	default:

@@ -7,7 +7,7 @@ import (
 const defaultAgentSegment = "_default"
 const maxAgentSegmentLen = 64
 
-// SanitizeAgentSegment returns a single path segment safe for .oneclaw/audit/<segment>/...
+// SanitizeAgentSegment returns a single path segment safe for audit/<segment>/...
 func SanitizeAgentSegment(agentID string) string {
 	s := strings.TrimSpace(agentID)
 	if s == "" {
@@ -42,8 +42,7 @@ type Options struct {
 	// AuditSessionID when non-empty: JSONL under <cwd>/sessions/<id>/audit/<agent_segment>/...
 	// instead of <cwd>/audit/<agent_segment>/... (IM / multi-session hosts).
 	AuditSessionID string
-	// OmitDotDir when true: paths under <CWD>/audit/... or <CWD>/sessions/.../audit/... without
-	// a nested ".oneclaw" segment (IM host layout under ~/.oneclaw).
+	// OmitDotDir is kept for backward compatibility with older callers; runtime audit paths are now flat.
 	OmitDotDir bool
 }
 

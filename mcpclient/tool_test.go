@@ -3,10 +3,13 @@ package mcpclient
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"unicode/utf8"
 
+	"github.com/lengzhao/oneclaw/toolctx"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -49,5 +52,36 @@ func TestTool_Execute_text(t *testing.T) {
 	}
 	if out != "hello" {
 		t.Fatalf("got %q", out)
+	}
+}
+
+func TestTool_Execute_largeTextWritesArtifactUnderInstructionRootWhenFlat(t *testing.T) {
+	cwd := filepath.Join(t.TempDir(), "workspace")
+	instructionRoot := t.TempDir()
+	long := strings.Repeat("x", defaultMaxInlineRunes+10)
+	c := stubCaller{
+		out: &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: long}},
+		},
+	}
+	mt := &mcp.Tool{Name: "t1"}
+	tool := NewTool(c, "srv", mt, 0)
+	tctx := toolctx.New(cwd, context.Background())
+	tctx.WorkspaceFlat = true
+	tctx.InstructionRoot = instructionRoot
+
+	out, err := tool.Execute(context.Background(), json.RawMessage(`{}`), tctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantDir := filepath.Join(instructionRoot, "artifacts", "mcp")
+	if !strings.Contains(out, wantDir) {
+		t.Fatalf("output = %q, want artifact path under %q", out, wantDir)
+	}
+	if matches, err := filepath.Glob(filepath.Join(wantDir, "*.txt")); err != nil || len(matches) != 1 {
+		t.Fatalf("artifact glob under %q: matches=%v err=%v", wantDir, matches, err)
+	}
+	if _, err := os.Stat(wantDir); err != nil {
+		t.Fatalf("stat %q: %v", wantDir, err)
 	}
 }

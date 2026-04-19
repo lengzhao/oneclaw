@@ -83,7 +83,7 @@ func TestAuditSinksWriteJSONL(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	base := filepath.Join(dir, ".oneclaw", "audit", "test-agent")
+	base := filepath.Join(dir, "audit", "test-agent")
 	for _, sub := range []string{"llm", "orchestration", "visible"} {
 		matches, err := filepath.Glob(filepath.Join(base, sub, "*", "*", "*.jsonl"))
 		if err != nil {
@@ -138,7 +138,7 @@ func TestAuditSinksWriteJSONL_perSessionDir(t *testing.T) {
 	if err := llm.Emit(context.Background(), ev); err != nil {
 		t.Fatal(err)
 	}
-	base := filepath.Join(dir, ".oneclaw", "sessions", "deadbeefcafe", "audit", "AGENT", "llm")
+	base := filepath.Join(dir, "sessions", "deadbeefcafe", "audit", "AGENT", "llm")
 	matches, err := filepath.Glob(filepath.Join(base, "*", "*", "*.jsonl"))
 	if err != nil {
 		t.Fatal(err)

@@ -63,8 +63,6 @@ func BuildTurn(layout Layout, home, userText string, recall *RecallState, recall
 		projRules = filepath.Join(layout.InstructionRoot, entrypointName)
 	}
 	appendMemoryRulesEntrypoint(&ctx, "project:memory", projRules)
-	appendMemoryRulesEntrypoint(&ctx, "team (user):memory", filepath.Join(layout.TeamUser, entrypointName))
-	appendMemoryRulesEntrypoint(&ctx, "team (project):memory", filepath.Join(layout.TeamProject, entrypointName))
 	if !AutoMemoryDisabled() {
 		appendMemoryRulesEntrypoint(&ctx, "auto:memory", filepath.Join(layout.Auto, entrypointName))
 	}
@@ -109,8 +107,6 @@ func writeDirList(sb *strings.Builder, layout Layout) {
 	if !AutoMemoryDisabled() {
 		fmt.Fprintf(sb, "- **auto** — `%s`\n", layout.Auto)
 	}
-	fmt.Fprintf(sb, "- **team (user)** — `%s`\n", layout.TeamUser)
-	fmt.Fprintf(sb, "- **team (project)** — `%s`\n", layout.TeamProject)
 	for i, root := range layout.AgentDefault {
 		fmt.Fprintf(sb, "- **agent memory (%d)** — `%s`\n", i, root)
 	}

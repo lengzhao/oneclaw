@@ -2,7 +2,7 @@ package session
 
 import "github.com/lengzhao/oneclaw/memory"
 
-// MemoryLayout returns file-memory paths for this engine (shared IM root vs per-session .oneclaw vs repo layout).
+// MemoryLayout returns file-memory paths for this engine (shared IM root vs per-session root vs repo layout).
 func (e *Engine) MemoryLayout(home string) memory.Layout {
 	if e == nil {
 		return memory.Layout{}

@@ -27,7 +27,7 @@ type cronToolInput struct {
 	JobID    string          `json:"job_id"`
 }
 
-// CronTool manages persisted scheduled user prompts (see <cwd>/.oneclaw/scheduled_jobs.json).
+// CronTool manages persisted scheduled user prompts in the resolved session/runtime schedule file.
 // Name is `cron` so it is easy to recognize; simplified vs picoclaw: no shell commands—fires by injecting a user message on the matching channel instance.
 type CronTool struct{}
 

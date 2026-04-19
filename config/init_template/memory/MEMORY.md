@@ -1,6 +1,6 @@
 # 项目记忆规则（MEMORY.md）
 
-本文件位于 `<cwd>/.oneclaw/memory/MEMORY.md`，与按日期的 **episodic** 日摘要（如 `YYYY-MM-DD.md`）是两类不同用途。
+本文件位于已初始化数据根下的 `memory/MEMORY.md`，与按日期的 **episodic** 日摘要（如 `YYYY-MM-DD.md`）是两类不同用途。
 
 ## 应写在这里（长期规则 / standing rules）
 
@@ -10,5 +10,5 @@
 
 ## 不要写在这里
 
-- **单次会话的流水**、临时结论、具体 bug 的长篇复现：应落在 **episodic** 文件（`.oneclaw/memory/YYYY-MM-DD.md`）；自动维护会把要点合并进当日 `## Auto-maintained` 段，而不是写回本文件。
+- **单次会话的流水**、临时结论、具体 bug 的长篇复现：应落在 **episodic** 文件（`memory/YYYY-MM-DD.md`）；自动维护会把要点合并进当日 `## Auto-maintained` 段，而不是写回本文件。
 - 密钥、token、个人隐私信息。

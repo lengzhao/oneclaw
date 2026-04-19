@@ -10,6 +10,13 @@ import (
 func buildScheduledToolUserPrompt(layout Layout, rulesMemPath, episodePath string, p distillConfig, statePath, digestHeader, dateStr string, sameDayDigest bool) string {
 	autoAbs := filepath.Clean(layout.Auto)
 	projMemAbs := filepath.Clean(layout.Project)
+	var agentUserBase, agentLocalBase string
+	if len(layout.AgentDefault) > 0 {
+		agentUserBase = filepath.Clean(filepath.Dir(layout.AgentDefault[0]))
+	}
+	if len(layout.AgentDefault) > 1 {
+		agentLocalBase = filepath.Clean(filepath.Dir(layout.AgentDefault[1]))
+	}
 	todayLog := filepath.Clean(DailyLogPath(layout.Auto, dateStr))
 
 	var timeHint string
@@ -51,14 +58,16 @@ func buildScheduledToolUserPrompt(layout Layout, rulesMemPath, episodePath strin
 		"%s%s"+
 			"You are in **scheduled / far-field** memory maintenance. Use **read_file**, **grep**, **glob**, and **list_dir** "+
 			"to inspect project memory and **auto daily logs**. Your **final assistant message** is merged into the **episodic digest** file for today (path below). **`MEMORY.md` holds project rules only** (loaded every turn like AGENT); put **durable episodic facts** in the digest, not in MEMORY.md.\n\n"+
-			"**Allowed tools:** `read_file`, `grep`, `glob`, `list_dir`, and **`write_behavior_policy`** only when durable **instructions** need updating — "+
-			"**`<cwd>/.oneclaw/AGENT.md`**, **`<cwd>/.oneclaw/rules/*.md`**, **`<cwd>/.oneclaw/skills/<name>/SKILL.md`**, **`MEMORY.md`** rules (target `memory`; full-file replace of rules only). "+
+			"**Allowed tools:** `read_file`, `grep`, `glob`, `list_dir`, and **`write_behavior_policy`** when durable **instructions** or **agent memory** need updating — "+
+			"the **session `AGENT.md`**, **session `rules/*.md`**, **session `skills/<name>/SKILL.md`**, project **`MEMORY.md`** (target `memory`; full-file replace of rules only), and **`agent_memory`** with **`agent_type=<name>`** plus optional **`scope=public|local`** (base paths below; omit `scope` only when the layout makes it unambiguous, or in isolated sessions where omission defaults to `local`; optional `rule_name` = relative path under that agent root, default `MEMORY.md`). "+
 			"Do **not** call `write_file`, exec, run_agent, fork_context, cron, task_*, invoke_skill, or any other tool.\n\n"+
 			"**Paths (absolute):**\n"+
 			"- Auto memory root (daily logs live under `logs/YYYY/MM/YYYY-MM-DD.md`): `%s`\n"+
 			"- Today's daily log file: `%s`\n"+
 			"- Project **rules** (`MEMORY.md`): `%s`\n"+
 			"- Today's **episodic digest** (your output is merged here): `%s`\n"+
+			"- **Agent memory — public base** (`agent_memory` + `agent_type=<name>` + optional `scope=public`): `%s`\n"+
+			"- **Agent memory — local base** (`agent_memory` + `agent_type=<name>` + optional `scope=local`): `%s`\n"+
 			"- Project topic markdown files (*.md except MEMORY.md): directory `%s`\n"+
 			"- Project agent instructions (read if present; do **not** invent content you did not read): `%s`\n"+
 			"- Session dialog JSON for calendar day **%s** (slim user/assistant turns): `%s`\n"+
@@ -67,8 +76,8 @@ func buildScheduledToolUserPrompt(layout Layout, rulesMemPath, episodePath strin
 			"%s"+
 			"**Task:** Read what you need via tools. Merge duplicates and capture durable **episodic** facts into the digest file. "+
 			"**Language:** write digest bullets in the **same language as user lines** in the logs/transcripts you rely on (not English by default when the user writes elsewhere). "+
-			"When you see **repeated tool patterns** or **user corrections** that define reusable procedure, **try** **`write_behavior_policy`** to add or update **`.oneclaw/skills/<name>/SKILL.md`** (playbook), not only a digest bullet — digest stays for one-off facts. "+
-			"For **standing rules** (how the agent should behave), prefer **`.oneclaw/AGENT.md`**, **rules**, **skills**, or **`MEMORY.md`** via `write_behavior_policy` — keep MEMORY.md compact. "+
+			"When you see **repeated tool patterns** or **user corrections** that define reusable procedure, **try** **`write_behavior_policy`** to add or update a session **`skills/<name>/SKILL.md`** playbook, not only a digest bullet — digest stays for one-off facts. "+
+			"For **standing rules** (how the agent should behave), prefer the session **`AGENT.md`**, **rules**, **skills**, or project **`MEMORY.md`** via `write_behavior_policy`; for **agent-specific** standing notes, use **`agent_memory`** with the right **`agent_type`** and, when needed, explicit **`scope`** — keep each file compact. "+
 			"Be **terse**: one short sentence per bullet; **do not** paste long paths unless the path itself is the fact; **do not** claim a file exists unless you read it successfully.\n\n"+
 			"**Final assistant message (markdown only):** first line must be **exactly**:\n%s\n\n"+
 			"Then **3–8** bullet lines of **new** or **updated** durable **episodic** facts (or explicit notes that obsolete prior digest bullets). "+
@@ -80,6 +89,8 @@ func buildScheduledToolUserPrompt(layout Layout, rulesMemPath, episodePath strin
 		todayLog,
 		filepath.Clean(rulesMemPath),
 		filepath.Clean(episodePath),
+		agentUserBase,
+		agentLocalBase,
 		projMemAbs,
 		filepath.Clean(agentDot),
 		dateStr,

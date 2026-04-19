@@ -5,7 +5,7 @@ package config
 type MCPFile struct {
 	// Enabled, when set in a merged layer, turns MCP on. Nil after merge means disabled.
 	Enabled *bool `yaml:"enabled"`
-	// MaxInlineTextRunes caps MCP text returned inline; larger bodies are written under .oneclaw/artifacts/mcp/.
+	// MaxInlineTextRunes caps MCP text returned inline; larger bodies are written under the session runtime artifacts/mcp directory.
 	MaxInlineTextRunes int `yaml:"max_inline_text_runes"`
 	Servers            map[string]MCPServerFile `yaml:"servers"`
 }

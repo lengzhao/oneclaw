@@ -6,8 +6,6 @@ import (
 	"regexp"
 	"strings"
 	"testing"
-
-	"github.com/lengzhao/oneclaw/memory"
 )
 
 func TestStoreBytesAndValidate(t *testing.T) {
@@ -34,7 +32,7 @@ func TestStoreBytesAndValidate(t *testing.T) {
 
 func TestValidateRelPath_rejectsEscape(t *testing.T) {
 	cwd := t.TempDir()
-	_ = os.MkdirAll(filepath.Join(cwd, memory.DotDir, "media", "inbound"), 0o755)
+	_ = os.MkdirAll(filepath.Join(cwd, "media", "inbound"), 0o755)
 	if err := ValidateRelPath(cwd, "../outside"); err == nil {
 		t.Fatal("expected error")
 	}

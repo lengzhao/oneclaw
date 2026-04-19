@@ -247,7 +247,7 @@ func shouldMarkRecallDirtyPath(layout Layout, path string) bool {
 	if !strings.EqualFold(filepath.Ext(clean), ".md") {
 		return false
 	}
-	roots := []string{layout.User, layout.Project, layout.TeamUser, layout.TeamProject}
+	roots := []string{layout.User, layout.Project}
 	if !AutoMemoryDisabled() {
 		roots = append(roots, layout.Auto)
 	}

@@ -34,8 +34,8 @@ func DiscoverUserRules(home string) []InstructionChunk {
 	return walkRulesMD(dir, KindUser)
 }
 
-// DiscoverFlatDotRootInstructions loads AGENT.md and rules/*.md directly under root (no extra .oneclaw segment).
-// Used for HostUserData session overlays (e.g. per-session .oneclaw directory).
+// DiscoverFlatDotRootInstructions loads AGENT.md and rules/*.md directly under root.
+// Used for HostUserData session overlays.
 func DiscoverFlatDotRootInstructions(root string) []InstructionChunk {
 	root = filepath.Clean(root)
 	if root == "" || root == "." {
@@ -53,8 +53,8 @@ func DiscoverProjectInstructions(cwd string) []InstructionChunk {
 	var out []InstructionChunk
 	for i := len(chain) - 1; i >= 0; i-- {
 		dir := chain[i]
-		out = append(out, loadInstructionPath(filepath.Join(dir, DotDir, AgentInstructionsFile), KindProject)...)
-		out = append(out, walkRulesMD(filepath.Join(dir, DotDir, "rules"), KindProject)...)
+		out = append(out, loadInstructionPath(filepath.Join(dir, AgentInstructionsFile), KindProject)...)
+		out = append(out, walkRulesMD(filepath.Join(dir, "rules"), KindProject)...)
 	}
 	return out
 }

@@ -24,6 +24,16 @@ model: gpt-4o
 agent:
   max_steps: 100
   max_tokens: 32768
+  # 可选：与 Chat Completions JSON 请求体对齐的额外字段（temperature、web_search_options、reasoning_effort 等）。
+  # 运行时仍会覆盖 model / messages / max_completion_tokens / stream_options / tools。
+  # completion_extra:
+  #   temperature: 0.7
+  #   web_search_options:
+  #     search_context_size: medium
+  #     user_location:
+  #       approximate:
+  #         country: "US"
+  #         city: "Seattle"
 
 chat:
   # auto：流式失败则回退非流式；仅支持非流式的网关请用 non_stream
@@ -36,7 +46,7 @@ log:
   level: info
   format: text
   # 可选：除 stderr 外追加落盘（UTF-8）；相对路径相对 UserDataRoot（默认 ~/.oneclaw）
-  # file: ".oneclaw/oneclaw.log"
+  # file: "oneclaw.log"
 
 # -----------------------------------------------------------------------------
 # 路径（留空则使用各包默认，见 docs/config.md）

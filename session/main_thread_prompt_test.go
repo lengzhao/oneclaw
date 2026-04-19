@@ -12,7 +12,7 @@ func TestMainThreadSystemRender(t *testing.T) {
 		CWD:                   "/tmp/proj",
 		Platform:              "darwin",
 		Shell:                 "/bin/zsh",
-		TasksFilePath:         "/tmp/proj/.oneclaw/tasks.json",
+		TasksFilePath:         "/tmp/proj/tasks.json",
 		TaskLines:             []string{"- **[in_progress]** `ts_x` — item"},
 		TasksOmitted:          0,
 		MemoryPromptBlock:     "## File-based memory\n\nstub",

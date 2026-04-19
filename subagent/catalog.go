@@ -16,7 +16,7 @@ const maxAgentListingDescRunes = 120
 // RunAgentToolDescriptionBase is the static OpenAI tool description for run_agent (agent list lives in the main system prompt).
 const RunAgentToolDescriptionBase = `Run a named sub-agent with its own short-lived context and tool surface. ` +
 	`Built-in types: general-purpose, explore. ` +
-	`Add markdown definitions under .oneclaw/agents/*.md (YAML frontmatter: agent_type, description, tools, max_turns, optional model). ` +
+	`Add markdown definitions under the session agent catalog directory (YAML frontmatter: agent_type, description, tools, max_turns, optional model). ` +
 	`Set inherit_context true to prepend a trimmed copy of the parent message list (still no mutation of the main transcript).`
 
 // Catalog maps agent_type -> definition (user files override builtins with same name).
@@ -24,21 +24,13 @@ type Catalog struct {
 	byName map[string]Definition
 }
 
-// LoadCatalog loads agent markdown: when workspaceFlat and instructionRoot are set, uses <instructionRoot>/agents/*.md;
-// when workspaceFlat without instructionRoot, <cwd>/agents/*.md; otherwise <cwd>/.oneclaw/agents/*.md.
+// LoadCatalog loads agent markdown from the session runtime root.
 func LoadCatalog(cwd string, workspaceFlat bool, instructionRoot string) *Catalog {
 	byName := make(map[string]Definition)
 	for _, d := range builtinDefinitions() {
 		byName[d.AgentType] = d
 	}
-	var dir string
-	if workspaceFlat && strings.TrimSpace(instructionRoot) != "" {
-		dir = memory.JoinSessionWorkspaceWithInstruction(cwd, instructionRoot, workspaceFlat, "agents")
-	} else if workspaceFlat {
-		dir = filepath.Join(cwd, "agents")
-	} else {
-		dir = filepath.Join(cwd, ".oneclaw", "agents")
-	}
+	dir := memory.JoinSessionWorkspaceWithInstruction(cwd, instructionRoot, workspaceFlat, "agents")
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		if !os.IsNotExist(err) {

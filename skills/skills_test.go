@@ -29,7 +29,7 @@ func TestLoadAllProjectOverridesUser(t *testing.T) {
 	home := t.TempDir()
 	cwd := t.TempDir()
 	userSkills := filepath.Join(home, memory.DotDir, "skills")
-	projSkills := filepath.Join(cwd, memory.DotDir, "skills")
+	projSkills := filepath.Join(cwd, "skills")
 	_ = os.MkdirAll(filepath.Join(userSkills, "demo"), 0o755)
 	_ = os.MkdirAll(filepath.Join(projSkills, "demo"), 0o755)
 	_ = os.WriteFile(filepath.Join(userSkills, "demo", skillFileName), []byte(`---

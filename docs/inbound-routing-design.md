@@ -66,7 +66,7 @@
 ## 7. 实现细节（入口编排）
 
 - **`session.Engine`** 在记忆块之后注入 **`<inbound-context>`**（**不含** `correlation_id`）；附件为独立 user 消息；**仅附件无正文**时用占位句；内置斜杠 **`/help` / `/model` / `/session`** 由引擎本地应答（**不调用模型**）。
-- **`statichttp` POST `/api/chat`**：`application/json` 与 **`multipart/form-data`** 均可。multipart 字段 **`text`**、**`locale`**、**`files`**（或 **`file`**，可重复）；单文件原始上限 **4MB**，整表上限 **32MB**；上传文件写入 **`<cwd>/.oneclaw/media/inbound/<UTC-YYYY-MM-DD>/`**；落盘后的相对路径进入 user 消息与 `MediaPaths`；模型侧只给 **`read_file` 路径说明**，不内联文件字节。JSON 内联 `attachments[].text` 由 `session` 在同目录落盘后再走同一套路径提示。
+- **`statichttp` POST `/api/chat`**：`application/json` 与 **`multipart/form-data`** 均可。multipart 字段 **`text`**、**`locale`**、**`files`**（或 **`file`**，可重复）；单文件原始上限 **4MB**，整表上限 **32MB**；上传文件写入 **`<cwd>/media/inbound/<UTC-YYYY-MM-DD>/`**；落盘后的相对路径进入 user 消息与 `MediaPaths`；模型侧只给 **`read_file` 路径说明**，不内联文件字节。JSON 内联 `attachments[].text` 由 `session` 在同目录落盘后再走同一套路径提示。
 - **clawbridge 入站**：与上述编排共用 **`SubmitUser` → `RunTurn`** 链。
 
 ---

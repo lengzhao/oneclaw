@@ -10,7 +10,7 @@ import (
 // maxPersistAttachmentBytes matches statichttp upload cap (raw bytes before rune normalization on legacy text-only paths).
 const maxPersistAttachmentBytes = 4 << 20
 
-// ValidateInboundMediaPaths rejects attachment Path values that are not under .oneclaw/media/inbound (any date subfolder).
+// ValidateInboundMediaPaths rejects attachment Path values that are not under media/inbound (any date subfolder).
 func ValidateInboundMediaPaths(cwd string, atts []Attachment) error {
 	for _, a := range atts {
 		if p := strings.TrimSpace(a.Path); p != "" {

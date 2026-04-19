@@ -76,6 +76,9 @@ type Snapshot struct {
 	MaintenanceModel          string
 	MaintenanceScheduledModel string
 	MaintenanceMaxTokens      int64
+
+	// ChatCompletionExtraJSON: optional JSON fragment merged into each Chat Completions request before runtime fields (model, messages, tools, …).
+	ChatCompletionExtraJSON []byte
 }
 
 var cur atomic.Pointer[Snapshot]

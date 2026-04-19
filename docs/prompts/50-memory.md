@@ -159,7 +159,7 @@ You have a persistent, file-based memory system at `{{AGENT_MEMORY_DIR}}`.
 |------|------|
 | memory policy / how to save | `system` |
 | agent memory policy | `system` |
-| team memory policy | `system` |
+| team memory policy（Claude Code；**oneclaw 不提供**独立 `team-memory` 根） | `system` |
 | `MEMORY.md` 索引内容 | 通常在 `system` memory block 内 |
 | CLAUDE.md / rules 文件内容 | `messages` 开头的 meta user message |
 | relevant memories | `messages` 中的 attachment |

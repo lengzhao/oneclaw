@@ -59,7 +59,7 @@ func mergeSkillsFromRoot(byName map[string]Skill, root string) {
 	}
 }
 
-// LoadAll returns skills from ~/.oneclaw/skills then project skills (under InstructionRoot/skills when set).
+// LoadAll returns skills from the user skill catalog, then the active session/project skill catalog.
 // Invalid YAML frontmatter skips that file (best-effort).
 func LoadAll(cwd, home string, workspaceFlat bool, instructionRoot string) []Skill {
 	byName := make(map[string]Skill)

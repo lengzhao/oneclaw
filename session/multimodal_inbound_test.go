@@ -72,11 +72,11 @@ func TestInboundUserChunksForAttachments_textStillHint(t *testing.T) {
 
 func TestInboundUserChunksForAttachments_wavByExt(t *testing.T) {
 	cwd := t.TempDir()
-	day := filepath.Join(cwd, ".oneclaw", "media", "inbound", "2099-01-01")
+	day := filepath.Join(cwd, "media", "inbound", "2099-01-01")
 	if err := os.MkdirAll(day, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	rel := ".oneclaw/media/inbound/2099-01-01/beep.wav"
+	rel := "media/inbound/2099-01-01/beep.wav"
 	if err := os.WriteFile(filepath.Join(cwd, filepath.FromSlash(rel)), []byte("RIFF....WAVE"), 0o644); err != nil {
 		t.Fatal(err)
 	}

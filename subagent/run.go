@@ -13,6 +13,8 @@ import (
 
 	"github.com/lengzhao/oneclaw/budget"
 	"github.com/lengzhao/oneclaw/loop"
+	"github.com/lengzhao/oneclaw/memory"
+	"github.com/lengzhao/oneclaw/rtopts"
 	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/oneclaw/notify"
 	"github.com/lengzhao/oneclaw/toolctx"
@@ -162,6 +164,7 @@ func RunAgent(ctx context.Context, h *Host, parent *toolctx.Context, agentType, 
 	}
 
 	sys := buildSubagentSystem(h.CWD, def.SystemPrompt)
+	extraJSON := rtopts.Current().ChatCompletionExtraJSON
 	cfg := loop.Config{
 		Client:        h.Client,
 		Model:         effectiveModel(h, def),
@@ -176,15 +179,16 @@ func RunAgent(ctx context.Context, h *Host, parent *toolctx.Context, agentType, 
 		OutboundText:  nil,
 		MemoryAgentMd: "",
 		MemoryRecall:  "",
-		Budget:        h.HistoryBudget,
-		ChatTransport: h.ChatTransport,
-		Lifecycle:     lc,
+		Budget:                  h.HistoryBudget,
+		ChatTransport:           h.ChatTransport,
+		ChatCompletionExtraJSON: extraJSON,
+		Lifecycle:               lc,
 	}
 	if err = loop.RunTurn(ctx, cfg, bus.InboundMessage{Content: task}); err != nil {
 		return "", err
 	}
 	msgs = loop.ToUserVisibleMessages(msgs)
-	scPath, _ := writeSidechain(h.CWD, h.SessionID, childRunID, "run_agent", msgs)
+	scPath, _ := writeSidechain(child, childRunID, "run_agent", msgs)
 	reply = loop.LastAssistantDisplay(msgs)
 	applySidechainMerge(parent, "run_agent", childRunID, scPath, &reply)
 	return reply, nil
@@ -243,6 +247,7 @@ func RunFork(ctx context.Context, h *Host, parent *toolctx.Context, task string,
 		msgs = append(msgs, trimInheritedParentMessages(*h.ParentMessages, maxParentMessages)...)
 	}
 
+	extraJSON := rtopts.Current().ChatCompletionExtraJSON
 	cfg := loop.Config{
 		Client:        h.Client,
 		Model:         h.Model,
@@ -255,15 +260,16 @@ func RunFork(ctx context.Context, h *Host, parent *toolctx.Context, task string,
 		SessionID:     h.SessionID,
 		CanUseTool:    wrapConservative(h.CanUseTool),
 		OutboundText:  nil,
-		Budget:        h.HistoryBudget,
-		ChatTransport: h.ChatTransport,
-		Lifecycle:     lc,
+		Budget:                  h.HistoryBudget,
+		ChatTransport:           h.ChatTransport,
+		ChatCompletionExtraJSON: extraJSON,
+		Lifecycle:               lc,
 	}
 	if err = loop.RunTurn(ctx, cfg, bus.InboundMessage{Content: task}); err != nil {
 		return "", err
 	}
 	msgs = loop.ToUserVisibleMessages(msgs)
-	scPath, _ := writeSidechain(h.CWD, h.SessionID, childRunID, "fork_context", msgs)
+	scPath, _ := writeSidechain(child, childRunID, "fork_context", msgs)
 	reply = loop.LastAssistantDisplay(msgs)
 	applySidechainMerge(parent, "fork_context", childRunID, scPath, &reply)
 	return reply, nil
@@ -407,15 +413,15 @@ func newNestedTurnID() string {
 	return "nturn_" + hex.EncodeToString(b[:])
 }
 
-func writeSidechain(cwd, sessionID, agentID, kind string, msgs []openai.ChatCompletionMessageParamUnion) (string, error) {
-	if cwd == "" {
+func writeSidechain(tctx *toolctx.Context, agentID, kind string, msgs []openai.ChatCompletionMessageParamUnion) (string, error) {
+	if tctx == nil || strings.TrimSpace(tctx.CWD) == "" {
 		return "", nil
 	}
-	dir := filepath.Join(cwd, ".oneclaw", "sidechain")
+	dir := memory.JoinSessionWorkspaceWithInstruction(tctx.CWD, tctx.InstructionRoot, tctx.WorkspaceFlat, "sidechain")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}
-	name := fmt.Sprintf("%s_%s.jsonl", sanitizeID(sessionID), agentID)
+	name := fmt.Sprintf("%s_%s.jsonl", sanitizeID(tctx.SessionID), agentID)
 	path := filepath.Join(dir, name)
 	beforeN := len(msgs)
 	msgs = trimMessages(msgs, maxSidechainTranscriptMessages)
@@ -432,7 +438,7 @@ func writeSidechain(cwd, sessionID, agentID, kind string, msgs []openai.ChatComp
 		Kind       string          `json:"kind"`
 		Transcript json.RawMessage `json:"transcript"`
 	}{
-		SessionID:  sessionID,
+		SessionID:  tctx.SessionID,
 		AgentID:    agentID,
 		Kind:       kind,
 		Transcript: raw,

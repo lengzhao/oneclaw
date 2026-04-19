@@ -108,7 +108,7 @@ func (ExecTool) Description() string {
 		"Prefer: sudo -n, ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new, git with GIT_TERMINAL_PROMPT=0 (set automatically), npm --yes. " +
 		"Foreground: the tool waits up to 30 seconds; if the command finishes in time, full output is returned. If not, returns partial info (timed_out, pid, run_log) while the process may still run — you choose follow-up (e.g. read_file on run.log, or background: true). " +
 		"pid in that case is cmd.Process.Pid (the sh -c child). " +
-		"Run log path: <cwd>/.oneclaw/exec_log/<timestamp>/run.log (stdout+stderr only; cwd is the session workspace). Background: pid is the detached job ($!). Do not add a trailing & to command."
+		"Run log path: session runtime `exec_log/<timestamp>/run.log` (stdout+stderr only; cwd is the session workspace). Background: pid is the detached job ($!). Do not add a trailing & to command."
 }
 
 func (ExecTool) Parameters() openai.FunctionParameters {
@@ -123,7 +123,7 @@ func (ExecTool) Parameters() openai.FunctionParameters {
 		},
 		"background": map[string]any{
 			"type":        "boolean",
-			"description": "If true, run detached under <cwd>/.oneclaw/exec_log/<timestamp>/run.log; response includes pid and run_log path. Omit trailing & in command.",
+			"description": "If true, run detached under the session runtime `exec_log/<timestamp>/run.log`; response includes pid and run_log path. Omit trailing & in command.",
 		},
 	}, []string{"command"})
 }

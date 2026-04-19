@@ -5,13 +5,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lengzhao/oneclaw/memory"
 	"github.com/lengzhao/oneclaw/rtopts"
 )
 
 func TestPathForWorkspace(t *testing.T) {
 	cwd := "/proj/repo"
-	want := filepath.Join(cwd, memory.DotDir, "tasks.json")
+	want := filepath.Join(cwd, "tasks.json")
 	if got := PathForWorkspace(cwd, false); got != want {
 		t.Fatalf("PathForWorkspace: got %q want %q", got, want)
 	}

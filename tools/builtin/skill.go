@@ -24,14 +24,14 @@ func (InvokeSkillTool) Name() string          { return "invoke_skill" }
 func (InvokeSkillTool) ConcurrencySafe() bool { return false }
 
 func (InvokeSkillTool) Description() string {
-	return `Load the full text of a skill from ~/.oneclaw/skills/<name>/SKILL.md or <cwd>/.oneclaw/skills/<name>/SKILL.md. Use when the user's task matches a skill listed in the system prompt. Pass the skill directory name (e.g. "pdf"), not a file path.`
+	return `Load the full text of a skill from the user or session skill catalog. Use when the user's task matches a skill listed in the system prompt. Pass the skill directory name (e.g. "pdf"), not a file path.`
 }
 
 func (InvokeSkillTool) Parameters() openai.FunctionParameters {
 	return objectSchema(map[string]any{
 		"skill": map[string]any{
 			"type":        "string",
-			"description": "Skill name (directory name under .oneclaw/skills), same as in the Skills list",
+			"description": "Skill name (directory name under the skill catalog), same as in the Skills list",
 		},
 	}, []string{"skill"})
 }
@@ -51,7 +51,7 @@ func (InvokeSkillTool) Execute(ctx context.Context, input json.RawMessage, tctx 
 	}
 	sk, ok := skills.Lookup(tctx.CWD, home, name, tctx.WorkspaceFlat, tctx.InstructionRoot)
 	if !ok {
-		return "", fmt.Errorf("unknown skill %q (expected a folder under .oneclaw/skills with SKILL.md)", name)
+		return "", fmt.Errorf("unknown skill %q (expected a skill directory with SKILL.md in the active skill catalog)", name)
 	}
 	body, err := sk.PromptBody()
 	if err != nil {

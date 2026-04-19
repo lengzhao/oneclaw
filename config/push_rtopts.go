@@ -1,6 +1,8 @@
 package config
 
 import (
+	"encoding/json"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -205,6 +207,16 @@ func (r *Resolved) PushRuntime() {
 	}
 	if m.MaxTokens > 0 {
 		s.MaintenanceMaxTokens = m.MaxTokens
+	}
+
+	s.ChatCompletionExtraJSON = nil
+	if len(f.Agent.CompletionExtra) > 0 {
+		b, err := json.Marshal(f.Agent.CompletionExtra)
+		if err != nil {
+			slog.Warn("config.completion_extra.marshal_failed", "err", err)
+		} else {
+			s.ChatCompletionExtraJSON = b
+		}
 	}
 
 	rtopts.Set(&s)
