@@ -153,7 +153,7 @@ func (e *Engine) SubmitUser(ctx context.Context, in bus.InboundMessage) (err err
 	preview := combinedInboundPreview(text, atts)
 	slog.Debug("session.submit", "cwd", e.CWD, "model", e.Model, "preview_chars", utf8.RuneCountInString(preview))
 
-	prep, err := e.prepareSharedTurn(ctx, in, atts, preview, true, turnID, corrID)
+	prep, err := e.prepareSharedTurn(ctx, in, preview, true, turnID, corrID)
 	if err != nil {
 		if e.hasNotify() {
 			ev := notify.NewEvent(notify.EventTurnError, "error")
@@ -346,7 +346,7 @@ func (e *Engine) submitLocalSlashTurn(ctx context.Context, in bus.InboundMessage
 	slog.Debug("session.submit_local_slash", "cwd", e.CWD)
 	text := strings.TrimSpace(in.Content)
 	preview := combinedInboundPreview(text, atts)
-	prep, err := e.prepareSharedTurn(ctx, in, atts, preview, false, turnID, corrID)
+	prep, err := e.prepareSharedTurn(ctx, in, preview, false, turnID, corrID)
 	if err != nil {
 		if e.hasNotify() {
 			ev := notify.NewEvent(notify.EventTurnError, "error")

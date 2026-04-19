@@ -32,7 +32,7 @@ type sharedTurnPrep struct {
 // prepareSharedTurn builds tctx, memory recall/agent blocks, optional OutboundText, buildTurnSystem, and subRunner.
 // wireSendMessage sets tctx.SendMessage when true (full model turns only).
 // parentTurnID and parentCorrelationID are used for subagent notify correlation (same values as the current user turn).
-func (e *Engine) prepareSharedTurn(ctx context.Context, in bus.InboundMessage, atts []Attachment, preview string, wireSendMessage bool, parentTurnID, parentCorrelationID string) (sharedTurnPrep, error) {
+func (e *Engine) prepareSharedTurn(ctx context.Context, in bus.InboundMessage, preview string, wireSendMessage bool, parentTurnID, parentCorrelationID string) (sharedTurnPrep, error) {
 	var p sharedTurnPrep
 	p.turnSnap = in
 	p.bg = rtopts.Current().Budget

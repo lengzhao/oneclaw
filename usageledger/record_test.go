@@ -46,7 +46,7 @@ func TestMaybeRecord_writesFiles(t *testing.T) {
 			Sender:  bus.SenderInfo{CanonicalID: "alice"},
 		},
 	})
-	root := filepath.Join(cwd, dotDir, "usage")
+	root := filepath.Join(cwd, "usage")
 	raw, err := os.ReadFile(filepath.Join(root, "interactions.jsonl"))
 	if err != nil {
 		t.Fatal(err)
@@ -89,7 +89,7 @@ func TestMaybeRecord_costFromUsageJSON(t *testing.T) {
 		UsageJSON:        `{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15,"cost_usd":0.001}`,
 		Inbound:          bus.InboundMessage{ClientID: "cli"},
 	})
-	raw, err := os.ReadFile(filepath.Join(cwd, dotDir, "usage", "interactions.jsonl"))
+	raw, err := os.ReadFile(filepath.Join(cwd, "usage", "interactions.jsonl"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +111,7 @@ func TestMaybeRecord_estimateCostEnv(t *testing.T) {
 		UsageJSON:        `{"prompt_tokens":1000000,"completion_tokens":0,"total_tokens":1000000}`,
 		Inbound:          bus.InboundMessage{ClientID: "cli"},
 	})
-	raw, err := os.ReadFile(filepath.Join(cwd, dotDir, "usage", "interactions.jsonl"))
+	raw, err := os.ReadFile(filepath.Join(cwd, "usage", "interactions.jsonl"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,7 +125,7 @@ func TestMaybeRecord_skipsWhenDisabled(t *testing.T) {
 	rtopts.Set(&rtopts.Snapshot{DisableUsageLedger: true})
 	cwd := t.TempDir()
 	MaybeRecord(RecordParams{CWD: cwd, Model: "gpt-4o", PromptTokens: 1, CompletionTokens: 1, Inbound: bus.InboundMessage{ClientID: "x"}})
-	if _, err := os.Stat(filepath.Join(cwd, dotDir, "usage")); err == nil {
+	if _, err := os.Stat(filepath.Join(cwd, "usage")); err == nil {
 		t.Fatal("expected no usage dir when disabled")
 	}
 }
