@@ -13,7 +13,7 @@ go mod tidy
 go build -o oneclaw ./cmd/oneclaw
 ```
 
-执行 **`go run ./cmd/oneclaw -init`** 会在 **`$HOME/.oneclaw/`** 生成或更新 **`config.yaml`**（无则写入完整内置模板；已有则只补上模板里缺失的键、不覆盖你的配置），并复制 **`AGENT.md`**、**`memory/MEMORY.md`**、**`MAINTAIN_SCHEDULED.md`** / **`MAINTAIN_POST_TURN.md`**（维护 system 提示模板，与内置一致；已存在则不覆盖）等，再创建记忆目录；再按需编辑密钥与渠道。
+执行 **`go run ./cmd/oneclaw -init`** 会在 **`$HOME/.oneclaw/`** 生成或更新 **`config.yaml`**（无则写入完整内置模板；已有则只补上模板里缺失的键、不覆盖你的配置），并复制 **`AGENT.md`**、**`memory/MEMORY.md`** 等（已存在则不覆盖），再创建记忆目录；再按需编辑密钥与渠道。
 
 配置 OpenAI 兼容 API 后启动常驻服务：在 **`~/.oneclaw/config.yaml`** 与可选 **`-config`** 额外层中填写 `openai.api_key`、`openai.base_url` 等；合并与 `PushRuntime` 见 **[`docs/config.md`](docs/config.md)**。可选用 `github.com/lengzhao/conf` 加载 `.env` 供**其他**依赖使用，**oneclaw 运行时配置以 YAML 为准**。
 
@@ -26,7 +26,7 @@ go run ./cmd/oneclaw
 
 常用 REPL 命令：`/exit` 退出。对话落盘依赖配置中的 transcript 路径及每轮成功结束后的自动保存（见上段）；另存副本请用外部工具复制该文件。
 
-**Episodic / 规则文件**：**`MEMORY.md`**（与 **`AGENT.md`** 同目录）作**规则**进 prompt；按日 episodic 与 **`dialog_history.json`** 由运行时写入 **`UserDataRoot`/ `sessions/<id>`** 下相应路径（见 **`workspace`** 包）。**历史** LLM 维护双入口（`MaybePostTurnMaintain`、`RunScheduledMaintain`、`maintainloop`、`-maintain-once` 等）见 [`docs/memory-maintain-dual-entry-design.md`](docs/memory-maintain-dual-entry-design.md)，**当前 `cmd/oneclaw` 主路径未接入**；以 [`docs/config.md`](docs/config.md) 与代码为准。
+**规则与落盘**：**`MEMORY.md`**（与 **`AGENT.md`** 同目录）等说明文件经每轮注入进上下文；**`dialog_history.json`** 等由运行时写入 **`UserDataRoot` / `sessions/<id>`** 下相应路径（见 **`workspace`** 包）。旧版 LLM 自动维护流水线已移除；以 [`docs/config.md`](docs/config.md) 与代码为准。
 
 ---
 
@@ -46,23 +46,21 @@ go run ./cmd/oneclaw
 
 ## 「自我学习 / 进化」在仓库里的含义
 
-1. **文件型记忆平面**持续更新：`MEMORY.md` 索引、topic、daily log（先追加、后整理）。
-2. **规则与策略**可持久化到 `.oneclaw/AGENT.md`、`.oneclaw/rules/*.md`、agent 专属 memory。
-3. **整理与演进**（可选/历史）：曾规划 **LLM 维护子任务** 整理日志与 memory，见 [`docs/memory-maintain-dual-entry-design.md`](docs/memory-maintain-dual-entry-design.md)；**当前主路径以转写 + `dialog_history` + 用户编辑规则文件为主**。
-4. **护栏**：全局 prompt 字节预算、工具权限收缩；**多路 JSONL 审计已从实现移除**（设计归档见 [`docs/notify-sinks-audit-design.md`](docs/notify-sinks-audit-design.md)）。
+1. **文件型说明与任务平面**持续更新：`MEMORY.md`、`tasks.json`、转写与 `dialog_history` 等。
+2. **规则与策略**可持久化到 `.oneclaw/AGENT.md`、`.oneclaw/rules/*.md`、agent 专属说明目录。
+3. **整理与演进**：由用户或模型通过 **`read_file` / Write 工具** 显式编辑文件；**无**进程内 LLM 自动维护流水线。
+4. **护栏**：全局 prompt 字节预算、工具权限收缩；**无**内置多路 JSONL 审计 sink。
 
-更细的实验与验收思路见 [`docs/self-evolution-plan.md`](docs/self-evolution-plan.md)。任务勾选与阶段验收见 [`docs/todo.md`](docs/todo.md)。
+更细的实验与验收思路见 [`docs/self-evolution-plan.md`](docs/self-evolution-plan.md)。阶段与主路径见 [`docs/runtime-flow.md`](docs/runtime-flow.md)、[`docs/README.md`](docs/README.md)。
 
 ---
 
 ## 实现进度（摘要）
 
-与 [`docs/todo.md`](docs/todo.md) 阶段对应：
-
 - **阶段 A**：主循环、工具、CLI、多轮 transcript — 已完成。
-- **阶段 B**：指令与 **`workspace` 布局**、转写、dialog 落盘、`instructions` / `skills` 注入 — 随代码演进；**回合后 / 定时 LLM 维护** 见历史设计文档，**主 CLI 未接**。
+- **阶段 B**：指令与 **`workspace` 布局**、转写、dialog 落盘、`instructions` / `skills` 注入。
 - **阶段 C**：子 Agent、`run_agent` / `fork_context`、侧链 transcript — 主干已完成；侧链结论合入主会话为可选后续。
-- **阶段 D**：定时任务（**`schedule` + `cron` 工具**）、notify 生命周期；**向量 recall** 等为可选后续（文件仍为真源）。
+- **阶段 D**：定时任务（**`schedule` + `cron` 工具**）、notify 生命周期；**向量检索** 等为可选后续（文件仍为真源）。
 
 ---
 
@@ -97,30 +95,19 @@ docs/            设计与 prompt 参考
 
 ## 架构流程
 
-更完整的进程分支、WorkerPool、维护与定时任务说明见 **[`docs/runtime-flow.md`](docs/runtime-flow.md)**。
+更完整的进程分支、WorkerPool、定时任务说明见 **[`docs/runtime-flow.md`](docs/runtime-flow.md)**。
 
 **单轮执行（简化）**
 
 ```mermaid
 flowchart TB
   U[用户输入] --> S[session 编排]
-  S --> M[发现并注入 memory / rules]
+  S --> M[instructions + 规则注入]
   M --> L[loop.RunTurn]
   L --> T{模型输出}
   T -->|tool_use| X[执行 tools]
   X --> L
   T -->|最终文本| O[回答 + 持久化 transcript / log]
-```
-
-**长期沉淀（概念）**
-
-```mermaid
-flowchart TB
-  A[执行任务] --> B[对话与外部信号]
-  B --> C[提取与维护]
-  C --> D[写 memory / rules]
-  D --> E[下一轮注入]
-  E --> A
 ```
 
 ---
@@ -161,7 +148,7 @@ go run ./cmd/oneclaw -init
 
 1. [`docs/README.md`](docs/README.md) — 文档索引  
 2. [`docs/config.md`](docs/config.md) — 统一 YAML 配置与 `PushRuntime`  
-3. [`docs/agent-runtime-golang-plan.md`](docs/agent-runtime-golang-plan.md) — 目标、包布局、阶段 A–D 任务与验收  
+3. [`docs/agent-runtime-golang-plan.md`](docs/agent-runtime-golang-plan.md) — 目标与当前包职责摘要  
 4. [`docs/third-party/claude-code-vs-oneclaw.md`](docs/third-party/claude-code-vs-oneclaw.md) — 与 Claude Code 异同（优化与缺口）  
 5. [`docs/third-party/claude-code-memory-system.md`](docs/third-party/claude-code-memory-system.md) / [`docs/third-party/claude-code-subagent-system.md`](docs/third-party/claude-code-subagent-system.md)  
 6. [`docs/inbound-routing-design.md`](docs/inbound-routing-design.md) / [`docs/outbound-events-design.md`](docs/outbound-events-design.md)  
@@ -172,18 +159,15 @@ go run ./cmd/oneclaw -init
 ## 适用场景
 
 - 本地 Coding Agent / Agent Runtime 原型与实验  
-- 文件化 memory、维护管道、审计与预算机制的验证  
+- 文件化说明、任务与预算机制的验证  
 - 子 Agent、fork、侧链执行模型的研究与扩展  
 
 ---
 
 ## 后续方向（摘自路线图）
 
-详见 [`docs/todo.md`](docs/todo.md) 中「目标导向：自我进化闭环」：
-
-- 多段 daily log 整理、topic 合并与强去重  
-- **行为策略写回**：`write_behavior_policy`（由定时远场维护等专用 tool registry 提供，非默认主会话工具）与 D2 审计扩展（见 `docs/config.md`）  
-- 可选：侧链摘要合入主会话、向量 recall 插件  
+- 侧链摘要合入主会话、出站抽象（见 [`docs/architecture-modularity-simplification.md`](docs/architecture-modularity-simplification.md)）  
+- 可选：向量检索插件（文件仍为真源）  
 
 ---
 

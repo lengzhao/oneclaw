@@ -150,15 +150,10 @@ flowchart LR
 
 ---
 
-## 9. memory 与 maintain
+## 9. 指令文件与 dialog 落盘
 
-- **DefaultLayout(SessionHome, home)**： episodic、dialog_history 等应落在 **SessionHome** 或 **UserRoot 下按 session_id 分片**（与现 `dialog_history` 按日期 + session 分文件策略兼容，只需把「项目 slug」从「项目 cwd」改为「session_id」或固定前缀）。
-- **maintainloop（定时维护）**：需定义维护对象：  
-  - **A**：按会话轮询 SessionHome（重）；  
-  - **B**：仅维护 UserRoot 下全局 memory + 最近活跃 session 列表（轻）；  
-  - **C**：维护推迟到「该 session 回合结束」的 PostTurn（现 `RunPostTurnMaintain`），定时任务只跑全局。  
-
-推荐首版 **B + C**，避免全盘扫描 `sessions/*`。
+- **DefaultLayout(SessionHome, home)**：`dialog_history`、转写等应落在 **SessionHome** 或 **UserRoot 下按 session_id 分片**（与现 `dialog_history` 按日期 + session 分文件策略兼容）。
+- **每轮注入**：`instructions.BuildTurn` 读取 `AGENT.md` / `MEMORY.md` 等，不依赖已移除的 recall 或 LLM 维护子系统。
 
 ---
 
@@ -194,7 +189,7 @@ flowchart LR
 1. **路径层**：`Resolved` / `MainEngineFactory`：派生 `SessionHome`，`Engine.CWD = SessionHome`；**transcript** 与 UserRoot 对齐。
 2. **exec / mediastore / tasks**：验证相对路径与日志路径无歧义。
 3. **prompt**：全局 AGENT/rules + 可选会话覆盖。
-4. **maintain / export / docs**：更新 [config.md](config.md)、[runtime-flow.md](runtime-flow.md) 中的「会话与多通道」一节，标明 IM 模式默认数据根。
+4. **export / docs**：更新 [config.md](config.md)、[runtime-flow.md](runtime-flow.md) 中的「会话与多通道」一节，标明 IM 模式默认数据根。
 
 ---
 
@@ -213,8 +208,7 @@ flowchart LR
 - `config.Resolved.UserDataRoot()`、`SessionTranscriptPaths` / 默认 media 等与用户数据根对齐。
 - `MainEngineFactory`：`Engine.CWD` 由 **`sessions.isolate_workspace`** 决定（默认 **false**：`CWD = <UserDataRoot>/workspace`；**true**：`CWD = <UserDataRoot>/sessions/<StableSessionID>/workspace`）。`Engine.UserDataRoot` 供 cron / system 提示；用户数据根树内**不**再嵌套名为 `.oneclaw` 的目录（tasks 等锚 **InstructionRoot**，见 `workspace.JoinSessionWorkspaceWithInstruction`）。
 - `toolctx.HostDataRoot`：`schedule.Add/List/Remove` 写入 `<UserDataRoot>/scheduled_jobs.json`；`StartHostPollerIfEnabled` 使用同一根目录。
-- **审计**：`RegisterAuditSinks` 与 JSONL 审计落盘 **已移除**（历史方案为 `<InstructionRoot>/audit/…`）。
 - exec：`run.log` 位于实现约定路径（如 `<InstructionRoot>/exec_log/<ts>/`），**不**经 `SessionHome/.oneclaw/`。
-- **定时 LLM 维护**（历史 `maintainloop` / `RunScheduledMaintain` 等）：**当前 `cmd/oneclaw` 主路径未接入**；布局与 episodic 仍以 **`workspace.LayoutForIMWorkspace`**（含 **`workspace.IMHostMaintainLayout`**）为准，见 `workspace/paths.go`。
+- **布局**：**`workspace.LayoutForIMWorkspace`**（含 **`workspace.IMHostMaintainLayout`**）为路径真源，见 `workspace/paths.go`。
 
 `config.Load` **仅**合并 `~/.oneclaw/config.yaml` 与可选 `-config`（相对路径相对 `~/.oneclaw/`），**不再**读取项目目录或进程 `cwd`。`-init` / `-export-session` 以 **`UserDataRoot()`**（默认 `~/.oneclaw`）为数据根。

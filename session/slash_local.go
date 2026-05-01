@@ -24,8 +24,6 @@ func (e *Engine) trySlashLocalTurn(in bus.InboundMessage) (reply string, ok bool
 		return e.slashStatus(in), true
 	case "paths", "memory-paths", "mempaths":
 		return e.slashPaths(), true
-	case "recall":
-		return e.slashRecall(args), true
 	case "reset":
 		return e.slashReset(args), true
 	case "stop":
@@ -48,10 +46,9 @@ func slashHelpText() string {
   /model — 显示当前模型名
   /session — driver client_id / bus.SessionID、路由 session_id、工作区 ID、CWD（简版）
   /session full — 同 /status，完整会话与运行参数
-  /status, /st — 会话 ID、CWD、模型、步数/Token、转录路径、消息条数、recall 统计等
+  /status, /st — 会话 ID、CWD、模型、步数/Token、转录路径、消息条数等
   /paths, /memory-paths — 当前记忆目录布局（Layout）与各根路径
-  /recall reset — 清空本会话 recall 去重状态并尝试持久化（见 /recall 说明）
-  /reset — 清空本会话聊天转录与模型上下文（内存与磁盘），并重置 recall；不删除 MEMORY.md 等记忆文件
+  /reset — 清空本会话聊天转录与模型上下文（内存与磁盘）；不删除 MEMORY.md 等说明文件
   /stop — 取消本会话当前正在执行的轮次（入站线程先中止再入队；不经过模型）
 
 其它以 / 开头的输入仍会交给模型处理。CLI 下仍可用 /exit 退出（由终端层处理，不进引擎）。

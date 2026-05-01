@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -63,7 +64,13 @@ type Engine struct {
 	RootAgentID string
 	// Notify is a fan-out list (notify.Multi) of lifecycle sinks; default empty no-op.
 	// Register handlers with RegisterNotify(sink) or assign notify.Multi{…} directly.
+	// Only user_input, turn_start, and turn_end are emitted; finer-grained steps go to sharded execution logs (see executionLogRel).
 	Notify notify.Multi
+	execMu sync.Mutex // execution log append
+	// executionLogTurnID / executionLogDay / executionLogRel are set per user turn for execution/<agent>/<day>/<turn>.jsonl.
+	executionLogTurnID string
+	executionLogDay    string
+	executionLogRel    string // path under UserDataRoot when known (for hooks); else logical suffix
 	// TranscriptPath is where SaveTranscript writes after each successful loop.RunTurn. Empty disables auto-save.
 	TranscriptPath string
 	// WorkingTranscriptPath persists Messages (already user-visible in memory after each turn).
@@ -129,14 +136,10 @@ func (e *Engine) SubmitUser(ctx context.Context, in bus.InboundMessage) (err err
 	}()
 
 	turnID := newTurnID()
+	e.bindExecutionLogShard(turnID)
 	corrID := strings.TrimSpace(in.MessageID)
 	turnT0 := time.Now()
-	if e.hasNotify() {
-		ev := notify.NewEvent(notify.EventInboundReceived, "")
-		e.applyNotifyCorrelation(&ev, turnID, corrID)
-		ev.Data = inboundNotifyData(in, text, atts)
-		notify.EmitSafe(e.Notify, ctx, ev)
-	}
+	e.emitUserInputHook(ctx, turnID, corrID, inboundNotifyData(in, text, atts))
 
 	if reply, ok := e.trySlashLocalTurn(in); ok {
 		return e.submitLocalSlashTurn(ctx, in, atts, reply, turnID, corrID)
@@ -147,15 +150,10 @@ func (e *Engine) SubmitUser(ctx context.Context, in bus.InboundMessage) (err err
 
 	prep, err := e.prepareSharedTurn(ctx, in, true, turnID, corrID)
 	if err != nil {
-		if e.hasNotify() {
-			ev := notify.NewEvent(notify.EventTurnError, "error")
-			e.applyNotifyCorrelation(&ev, turnID, corrID)
-			ev.Data = map[string]any{
-				"code":    "preparation",
-				"message": err.Error(),
-			}
-			notify.EmitSafe(e.Notify, ctx, ev)
-		}
+		e.emitTurnEndHook(ctx, turnID, corrID, false, map[string]any{
+			"code":    "preparation",
+			"message": err.Error(),
+		})
 		return err
 	}
 	slog.Info("session.turn_prepared",
@@ -170,17 +168,17 @@ func (e *Engine) SubmitUser(ctx context.Context, in bus.InboundMessage) (err err
 	system := prep.system
 
 	var traceSink *loop.ToolTraceSink
-	needToolTrace := e.hasNotify()
+	needToolTrace := e.wantsLifecycle()
 	if needToolTrace {
 		traceSink = &loop.ToolTraceSink{}
 	}
 	var onToolLogged func(loop.ToolTraceEntry)
-	if e.hasNotify() {
+	if needToolTrace {
 		onToolLogged = func(ent loop.ToolTraceEntry) {
-			ev := notify.NewEvent(notify.EventToolCallEnd, "")
-			e.applyNotifyCorrelation(&ev, turnID, corrID)
-			ev.Data = notify.ToolCallEndData(ent)
-			notify.EmitSafe(e.Notify, ctx, ev)
+			rec := toolCallEndRecord(ent)
+			rec["turn_id"] = turnID
+			rec["correlation_id"] = corrID
+			e.appendExecutionRecord(ctx, rec)
 		}
 	}
 
@@ -229,19 +227,14 @@ func (e *Engine) SubmitUser(ctx context.Context, in bus.InboundMessage) (err err
 		slog.Error("session.working_transcript_save_user", "err", err)
 	}
 
-	e.emitMemoryTurnContextNotify(ctx, turnID, corrID, memOK, bundle)
+	e.emitInstructionContextJournal(ctx, turnID, corrID, memOK, bundle)
 
-	if e.hasNotify() {
-		ev := notify.NewEvent(notify.EventAgentTurnStart, "")
-		e.applyNotifyCorrelation(&ev, turnID, corrID)
-		ev.Data = map[string]any{
-			"model":             e.Model,
-			"max_steps":         e.MaxSteps,
-			"cwd":               e.CWD,
-			"user_line_preview": notify.Preview(userLine, notify.DefaultPreviewRunes),
-		}
-		notify.EmitSafe(e.Notify, ctx, ev)
-	}
+	e.emitTurnStartHook(ctx, turnID, corrID, map[string]any{
+		"model":             e.Model,
+		"max_steps":         e.MaxSteps,
+		"cwd":               e.CWD,
+		"user_line_preview": notify.Preview(userLine, notify.DefaultPreviewRunes),
+	})
 
 	slog.Info("session.model_loop_start",
 		"since_inbound_ms", time.Since(turnT0).Milliseconds(),
@@ -250,34 +243,24 @@ func (e *Engine) SubmitUser(ctx context.Context, in bus.InboundMessage) (err err
 	)
 	err = loop.RunTurn(ctx, cfg, in)
 	if err != nil {
-		if e.hasNotify() {
-			ev := notify.NewEvent(notify.EventTurnError, "error")
-			e.applyNotifyCorrelation(&ev, turnID, corrID)
-			ev.Data = map[string]any{
-				"code":                   notify.TurnErrorCode(err),
-				"message":                err.Error(),
-				"truncated_by_max_steps": notify.TurnErrorCode(err) == "max_steps",
-			}
-			notify.EmitSafe(e.Notify, ctx, ev)
-		}
+		e.emitTurnEndHook(ctx, turnID, corrID, false, map[string]any{
+			"code":                   notify.TurnErrorCode(err),
+			"message":                err.Error(),
+			"truncated_by_max_steps": notify.TurnErrorCode(err) == "max_steps",
+		})
 		return err
 	}
 	e.Messages = loop.ToUserVisibleMessages(e.Messages)
-	if e.hasNotify() {
-		toolCount := 0
-		if traceSink != nil {
-			toolCount = len(traceSink.Snapshot())
-		}
-		ev := notify.NewEvent(notify.EventTurnComplete, "")
-		e.applyNotifyCorrelation(&ev, turnID, corrID)
-		ev.Data = map[string]any{
-			"tool_count":              toolCount,
-			"final_assistant_preview": notify.Preview(loop.LastAssistantDisplay(e.Messages), notify.DefaultPreviewRunes),
-			"truncated_by_max_steps":  false,
-			"messages":                loop.VisibleTranscriptAppendSince(e.Transcript, visibleCountBefore),
-		}
-		notify.EmitSafe(e.Notify, ctx, ev)
+	toolCount := 0
+	if traceSink != nil {
+		toolCount = len(traceSink.Snapshot())
 	}
+	e.emitTurnEndHook(ctx, turnID, corrID, true, map[string]any{
+		"tool_count":              toolCount,
+		"final_assistant_preview": notify.Preview(loop.LastAssistantDisplay(e.Messages), notify.DefaultPreviewRunes),
+		"truncated_by_max_steps":  false,
+		"messages":                loop.VisibleTranscriptAppendSince(e.Transcript, visibleCountBefore),
+	})
 	if err := e.SaveTranscript(); err != nil {
 		slog.Error("session.transcript_save", "err", err)
 	}
@@ -324,37 +307,28 @@ func (e *Engine) SendMessage(ctx context.Context, in bus.InboundMessage) error {
 
 func (e *Engine) submitLocalSlashTurn(ctx context.Context, in bus.InboundMessage, atts []Attachment, reply string, turnID, corrID string) error {
 	slog.Debug("session.submit_local_slash", "cwd", e.CWD)
+	e.bindExecutionLogShard(turnID)
 	text := strings.TrimSpace(in.Content)
 	prep, err := e.prepareSharedTurn(ctx, in, false, turnID, corrID)
 	if err != nil {
-		if e.hasNotify() {
-			ev := notify.NewEvent(notify.EventTurnError, "error")
-			e.applyNotifyCorrelation(&ev, turnID, corrID)
-			ev.Data = map[string]any{
-				"code":    "preparation",
-				"message": err.Error(),
-			}
-			notify.EmitSafe(e.Notify, ctx, ev)
-		}
+		e.emitTurnEndHook(ctx, turnID, corrID, false, map[string]any{
+			"code":    "preparation",
+			"message": err.Error(),
+		})
 		return err
 	}
 	bundle := prep.bundle
 	memOK := prep.memOK
 
-	e.emitMemoryTurnContextNotify(ctx, turnID, corrID, memOK, bundle)
+	e.emitInstructionContextJournal(ctx, turnID, corrID, memOK, bundle)
 
-	if e.hasNotify() {
-		ev := notify.NewEvent(notify.EventAgentTurnStart, "")
-		e.applyNotifyCorrelation(&ev, turnID, corrID)
-		ev.Data = map[string]any{
-			"local_slash":       true,
-			"model":             e.Model,
-			"max_steps":         e.MaxSteps,
-			"cwd":               e.CWD,
-			"user_line_preview": notify.Preview(combinedInboundPreview(text, atts), notify.DefaultPreviewRunes),
-		}
-		notify.EmitSafe(e.Notify, ctx, ev)
-	}
+	e.emitTurnStartHook(ctx, turnID, corrID, map[string]any{
+		"local_slash":       true,
+		"model":             e.Model,
+		"max_steps":         e.MaxSteps,
+		"cwd":               e.CWD,
+		"user_line_preview": notify.Preview(combinedInboundPreview(text, atts), notify.DefaultPreviewRunes),
+	})
 
 	visibleCountBefore := len(loop.ToUserVisibleMessages(e.Transcript))
 	// Local slash replies are user-visible only via PublishOutbound (when configured with ClientID+SessionID).
@@ -362,18 +336,13 @@ func (e *Engine) submitLocalSlashTurn(ctx context.Context, in bus.InboundMessage
 	if err := prep.outboundText(ctx, reply); err != nil {
 		slog.Warn("session.local_slash.outbound", "err", err)
 	}
-	if e.hasNotify() {
-		ev := notify.NewEvent(notify.EventTurnComplete, "")
-		e.applyNotifyCorrelation(&ev, turnID, corrID)
-		ev.Data = map[string]any{
-			"tool_count":              0,
-			"local_slash":             true,
-			"final_assistant_preview": notify.Preview(reply, notify.DefaultPreviewRunes),
-			"truncated_by_max_steps":  false,
-			"messages":                loop.VisibleTranscriptAppendSince(e.Transcript, visibleCountBefore),
-		}
-		notify.EmitSafe(e.Notify, ctx, ev)
-	}
+	e.emitTurnEndHook(ctx, turnID, corrID, true, map[string]any{
+		"tool_count":              0,
+		"local_slash":             true,
+		"final_assistant_preview": notify.Preview(reply, notify.DefaultPreviewRunes),
+		"truncated_by_max_steps":  false,
+		"messages":                loop.VisibleTranscriptAppendSince(e.Transcript, visibleCountBefore),
+	})
 	return nil
 }
 

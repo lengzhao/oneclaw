@@ -144,11 +144,3 @@ func (e *Engine) slashReset(args string) string {
 磁盘上的 MEMORY.md 等说明文件未删除。本地斜杠命令的确认文案不会写入会话转录。
 `)
 }
-
-func (e *Engine) slashRecall(args string) string {
-	_ = strings.ToLower(strings.TrimSpace(args))
-	return strings.TrimSpace(
-		"文件召回（recall）已移除。每轮仍会注入 AGENT.md / MEMORY.md / SOUL.md / TODO.md 与规则片段；" +
-			"需要时用 read_file 自行读取磁盘。",
-	)
-}

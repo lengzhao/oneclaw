@@ -127,14 +127,3 @@ func TestTrySlashLocalTurn_ResetRejectsArgs(t *testing.T) {
 		t.Fatalf("messages should not clear when args invalid: %d", len(e.Messages))
 	}
 }
-
-func TestTrySlashLocalTurn_RecallIsStub(t *testing.T) {
-	e := NewEngine(t.TempDir(), nil)
-	reply, ok := e.trySlashLocalTurn(bus.InboundMessage{Content: "/recall reset"})
-	if !ok {
-		t.Fatal("expected local slash")
-	}
-	if !strings.Contains(reply, "recall") {
-		t.Fatalf("reply: %q", reply)
-	}
-}

@@ -181,7 +181,7 @@ type Layout struct {
 	// InstructionRoot is the IM directory containing AGENT.md and MEMORY.md (same dir). Empty for repo-style layouts.
 	InstructionRoot string
 	// HostUserData is true when CWD is the IM user data root (~/.oneclaw): config, AGENT.md, and
-	// scheduled_maintain_state live directly under CWD.
+	// other host-level runtime files live directly under CWD.
 	HostUserData bool
 }
 
@@ -198,15 +198,6 @@ func (l Layout) DotOrDataRoot() string {
 		return ov
 	}
 	return filepath.Clean(l.CWD)
-}
-
-// EpisodeDailyPath returns the episodic digest markdown path for the given calendar day (YYYY-MM-DD prefix).
-func (l Layout) EpisodeDailyPath(dateYYYYMMDD string) string {
-	dateYYYYMMDD = strings.TrimSpace(dateYYYYMMDD)
-	if len(dateYYYYMMDD) >= 10 {
-		dateYYYYMMDD = dateYYYYMMDD[:10]
-	}
-	return filepath.Join(l.Project, dateYYYYMMDD+".md")
 }
 
 // DefaultLayout builds standard paths for cwd and home directory.

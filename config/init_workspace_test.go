@@ -47,16 +47,6 @@ func TestInitWorkspaceWritesConfigAndDirs(t *testing.T) {
 	if _, err := os.Stat(agentPath); err != nil {
 		t.Fatalf("AGENT.md from init template: %v", err)
 	}
-	for _, name := range []string{"MAINTAIN_SCHEDULED.md", "MAINTAIN_POST_TURN.md"} {
-		p := filepath.Join(home, workspace.DotDir, name)
-		raw, err := os.ReadFile(p)
-		if err != nil {
-			t.Fatalf("%s from init template: %v", name, err)
-		}
-		if !strings.Contains(string(raw), "silent memory indexer") {
-			t.Fatalf("%s: expected default maintain template content", name)
-		}
-	}
 }
 
 func TestInitWorkspaceMergesMissingKeys(t *testing.T) {

@@ -10,7 +10,7 @@ import (
 )
 
 // InitWorkspace creates <home>/.oneclaw when needed (first argument is the user home directory or parent of the dot dir). It copies `config/init_template/` into the directory
-// (config.yaml, AGENT.md, memory/MEMORY.md, MAINTAIN_SCHEDULED.md, MAINTAIN_POST_TURN.md, …) for any file that does not already exist (never overwrites user files). If `config.yaml` already existed
+// (config.yaml, AGENT.md, memory/MEMORY.md, …) for any file that does not already exist (never overwrites user files). If `config.yaml` already existed
 // before this copy, merges in any keys from the embedded template that the file lacks (recursive for maps);
 // existing user values are never overwritten. Arrays are kept as-is when the key exists. If the merge adds
 // keys, the file is rewritten (YAML comments may be lost).

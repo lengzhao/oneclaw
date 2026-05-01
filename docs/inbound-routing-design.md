@@ -37,7 +37,7 @@
 
 ## 3. 未实现项（设计草案）
 
-以下能力**尚未在代码中作为主路径实现**，设计草案与取舍见 [`todo.md`](todo.md) §「出站与 context 可选演进（未实现）」（与 backlog **#27** 对照）：`context` 透传入站元数据；`SinkRegistry` / `SinkFactory` 按渠道解析出站；`OutboundSender` 与 `Engine.SendMessage` 收窄等。
+以下能力**尚未在代码中作为主路径实现**（可选演进）：`context` 透传入站元数据；`SinkRegistry` / `SinkFactory` 按渠道解析出站；`OutboundSender` 与 `Engine.SendMessage` 收窄等。取舍见 [`architecture-modularity-simplification.md`](architecture-modularity-simplification.md)。
 
 ---
 
@@ -52,20 +52,19 @@
 ## 5. 注册表与工具（`tools.Registry`）
 
 - **`tools/builtin.DefaultRegistry()`**：主会话 **`Chat` 工具**（`read_file`、`run_agent` 等），由 **`cmd/oneclaw`** 注入 **`session.Engine`** / **`loop.Config`**；进程内通常**共用同一 `*tools.Registry` 实例**。
-- **`builtin.ScheduledMaintainReadRegistry()`** 等：维护/远场路径的只读或受限工具集，与 `memory` 包通过依赖倒置避免循环 import。
 
 ---
 
 ## 6. 与出站文档的关系
 
-- **事件与载荷**：观测与出站草案见 [outbound-events-design.md](outbound-events-design.md)；历史 JSONL 审计见 [notify-sinks-audit-design.md](notify-sinks-audit-design.md)（实现已移除）。
+- **事件与载荷**：观测与出站草案见 [outbound-events-design.md](outbound-events-design.md)。
 - **主路径**：助手回复以 **`bus.OutboundMessage`** 经 **`Outbound.PublishOutbound`** 发出，与 `Record`/`seq` 类 JSON 观测草案可并存（见出站文档）。
 
 ---
 
 ## 7. 实现细节（入口编排）
 
-- **`session.Engine`** 在记忆块之后注入 **`<inbound-context>`**（**不含** `correlation_id`）；附件为独立 user 消息；**仅附件无正文**时用占位句；内置斜杠 **`/help` / `/model` / `/session`** 由引擎本地应答（**不调用模型**）。
+- **`session.Engine`** 在记忆块之后注入 **`<inbound-context>`**（**不含** `correlation_id`）；附件为独立 user 消息；**仅附件无正文**时用占位句；内置斜杠 **`/help` / `/model` / `/session` / `/status` / `/paths` / `/reset` / `/stop`** 等由引擎本地应答（**不调用模型**）。
 - **`statichttp` POST `/api/chat`**：`application/json` 与 **`multipart/form-data`** 均可。multipart 字段 **`text`**、**`locale`**、**`files`**（或 **`file`**，可重复）；单文件原始上限 **4MB**，整表上限 **32MB**；上传文件写入 **`<cwd>/media/inbound/<UTC-YYYY-MM-DD>/`**；落盘后的相对路径进入 user 消息与 `MediaPaths`；模型侧只给 **`read_file` 路径说明**，不内联文件字节。JSON 内联 `attachments[].text` 由 `session` 在同目录落盘后再走同一套路径提示。
 - **clawbridge 入站**：与上述编排共用 **`SubmitUser` → `RunTurn`** 链。
 

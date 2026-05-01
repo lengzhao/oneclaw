@@ -33,7 +33,7 @@ func TestMultiEmit(t *testing.T) {
 		return nil
 	}}
 	m := Multi{s1, s2, s3}
-	err := m.Emit(context.Background(), NewEvent(EventTurnComplete, ""))
+	err := m.Emit(context.Background(), NewEvent(EventTurnEnd, ""))
 	if err == nil || err.Error() != "x" {
 		t.Fatalf("err=%v", err)
 	}
@@ -43,7 +43,7 @@ func TestMultiEmit(t *testing.T) {
 }
 
 func TestEmitSafeNil(t *testing.T) {
-	EmitSafe(nil, context.Background(), NewEvent(EventTurnComplete, ""))
+	EmitSafe(nil, context.Background(), NewEvent(EventTurnEnd, ""))
 }
 
 func TestMultiRegister(t *testing.T) {
@@ -56,7 +56,7 @@ func TestMultiRegister(t *testing.T) {
 	if len(m) != 1 {
 		t.Fatalf("len=%d", len(m))
 	}
-	_ = m.Emit(context.Background(), NewEvent(EventTurnComplete, ""))
+	_ = m.Emit(context.Background(), NewEvent(EventTurnEnd, ""))
 	if n != 1 {
 		t.Fatalf("calls=%d", n)
 	}
@@ -66,5 +66,5 @@ func TestEmitSafePanic(t *testing.T) {
 	s := testFuncSink{fn: func(ctx context.Context, ev Event) error {
 		panic("boom")
 	}}
-	EmitSafe(s, context.Background(), NewEvent(EventTurnComplete, ""))
+	EmitSafe(s, context.Background(), NewEvent(EventTurnEnd, ""))
 }

@@ -1,6 +1,6 @@
 # oneclaw 运行时流程（整理版）
 
-本文描述 **当前实现** 中从进程启动到单轮对话、转写与 dialog 落盘、定时任务与出站的**主路径**，便于对照代码阅读。细节配置见 [`config.md`](config.md)；入站/出站抽象见 [`inbound-routing-design.md`](inbound-routing-design.md)、[`outbound-events-design.md`](outbound-events-design.md)。历史 **LLM 维护双入口** 设计见 [`memory-maintain-dual-entry-design.md`](memory-maintain-dual-entry-design.md)（**主路径未接入**）。
+本文描述 **当前实现** 中从进程启动到单轮对话、转写与 dialog 落盘、定时任务与出站的**主路径**，便于对照代码阅读。细节配置见 [`config.md`](config.md)；入站/出站抽象见 [`inbound-routing-design.md`](inbound-routing-design.md)、[`outbound-events-design.md`](outbound-events-design.md)。
 
 ---
 
@@ -105,10 +105,9 @@ flowchart TB
 
 ---
 
-## 5. Episodic / dialog 与历史 LLM 维护
+## 5. 转写与 dialog 落盘
 
-- **当前主路径**：回合成功后写 **转写**（`sessions/<id>/transcript.json` 等）与 **`workspace` 包下的 `dialog_history.json`**（见 `workspace/dialog_history.go`）；**无** `memory` 包、**无** `MaybePostTurnMaintain` / `RunScheduledMaintain` / `maintainloop` / **`-maintain-once`** 接入 `cmd/oneclaw`。
-- **历史设计**（近场 / 远场 LLM 维护、`maintain.*` YAML）：见 [memory-maintain-dual-entry-design.md](memory-maintain-dual-entry-design.md)、[embedded-maintain-scheduler-design.md](embedded-maintain-scheduler-design.md)，**与当前仓库实现不一致处以代码为准**。
+- 回合成功后写 **转写**（`sessions/<id>/transcript.json` 等）与 **`workspace` 包下的 `dialog_history.json`**（见 `workspace/dialog_history.go`）。
 
 ---
 
@@ -142,15 +141,14 @@ flowchart TB
 | 能力 | 作用 |
 |------|------|
 | **MCP** | `mcpclient.RegisterIfEnabled` 向共享 Registry 注册工具，系统提示可选 `MCPSystemNote` |
-| **Notify 生命周期** | `notify` 事件：入站、回合起止、工具结束等（见 [`notification-hooks-design.md`](notification-hooks-design.md)）；**审计类 JSONL Sink 已移除**（[`notify-sinks-audit-design.md`](notify-sinks-audit-design.md) 为归档） |
+| **Notify 生命周期** | `notify` 事件：入站、回合起止、工具结束等（见 [`notification-hooks-design.md`](notification-hooks-design.md)） |
 
 ---
 
 ## 9. 与仓库其它文档的关系
 
 - **配置合并与运行时推送**：[`config.md`](config.md)  
-- **阶段任务与验收**：[`todo.md`](todo.md)、[`agent-runtime-golang-plan.md`](agent-runtime-golang-plan.md) §9  
-- **范式与边界总览**：[`agent-runtime-golang-plan.md`](agent-runtime-golang-plan.md)  
+- **范式与包职责摘要**：[`agent-runtime-golang-plan.md`](agent-runtime-golang-plan.md)  
 - **Prompt 拼装**：[`prompts/README.md`](prompts/README.md)  
 
 README 中的简化图仍可作一页纸总览；**以本文 + 上述设计文档为准**做实现级对照时更贴近当前代码路径。

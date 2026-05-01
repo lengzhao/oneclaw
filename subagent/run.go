@@ -44,8 +44,10 @@ type Host struct {
 	HistoryBudget budget.Global
 	// ChatTransport overrides default transport when non-empty.
 	ChatTransport string
-	// Notify and parent correlation for subagent_start/end and nested loop lifecycle (optional).
-	Notify              notify.Sink
+	// Notify and parent correlation for nested loop lifecycle (optional).
+	Notify notify.Sink
+	// AppendExec writes structured execution rows to the parent turn's execution shard (optional).
+	AppendExec func(context.Context, map[string]any)
 	ParentAgentID       string
 	ParentTurnID        string
 	ParentCorrelationID string
@@ -141,13 +143,12 @@ func RunAgent(ctx context.Context, h *Host, parent *toolctx.Context, agentType, 
 	nestedTurnID := newNestedTurnID()
 	slog.Info("subagent.run_agent", "agent_id", childRunID, "agent_type", def.AgentType, "depth", child.SubagentDepth, "inherit", inheritContext)
 
-	notifyStarted := false
-	if h.Notify != nil {
+	traceSubagent := h.Notify != nil || h.AppendExec != nil
+	if traceSubagent {
 		emitSubagentStart(h, ctx, "run_agent", def.AgentType, task, inheritContext, child.SubagentDepth, childRunID, nestedTurnID)
-		notifyStarted = true
 	}
 	defer func() {
-		if !notifyStarted {
+		if !traceSubagent {
 			return
 		}
 		emitSubagentEnd(h, ctx, "run_agent", def.AgentType, child.SubagentDepth, childRunID, nestedTurnID, reply, err)
@@ -229,13 +230,12 @@ func RunFork(ctx context.Context, h *Host, parent *toolctx.Context, task string,
 	nestedTurnID := newNestedTurnID()
 	slog.Info("subagent.fork", "agent_id", childRunID, "depth", child.SubagentDepth, "parent_tail", maxParentMessages)
 
-	notifyStarted := false
-	if h.Notify != nil {
+	traceSubagent := h.Notify != nil || h.AppendExec != nil
+	if traceSubagent {
 		emitSubagentStart(h, ctx, "fork_context", forkAgentID, task, false, child.SubagentDepth, childRunID, nestedTurnID)
-		notifyStarted = true
 	}
 	defer func() {
-		if !notifyStarted {
+		if !traceSubagent {
 			return
 		}
 		emitSubagentEnd(h, ctx, "fork_context", forkAgentID, child.SubagentDepth, childRunID, nestedTurnID, reply, err)

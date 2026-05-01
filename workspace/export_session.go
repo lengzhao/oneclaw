@@ -47,7 +47,6 @@ func ExportSessionSnapshot(dataRoot, outDir string) error {
 		"working_transcript.json",
 		"tasks.json",
 		"config.yaml",
-		"scheduled_maintain_state.json",
 		"scheduled_jobs.json",
 	}
 	for _, name := range files {

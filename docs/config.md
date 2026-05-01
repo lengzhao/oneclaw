@@ -101,7 +101,7 @@
 
 **路径**：`interactions.jsonl`、`daily/YYYY-MM-DD.json`、`users/<16-hex>.json`（详见实现与历史说明）。
 
-> **说明**：`maintain.*`、`memory.recall.*`、进程内 **`maintainloop`**、**`-maintain-once`** 等在 **`config.File` / `cmd/oneclaw` 当前实现中不存在**；历史设计仍保留于 [memory-maintain-dual-entry-design.md](memory-maintain-dual-entry-design.md)、[embedded-maintain-scheduler-design.md](embedded-maintain-scheduler-design.md)、[memory-recall-sqlite-design.md](memory-recall-sqlite-design.md) 等文档，**勿与现网 YAML 混用为真值**。
+> **说明**：`maintain.*`、`memory.recall.*`、进程内定时 LLM 维护、**`-maintain-once`** 等键在 **`config.File` / `cmd/oneclaw` 当前实现中不存在**，写入合并 YAML 也会被忽略。
 
 ## 示例
 

@@ -15,7 +15,7 @@ func TestPreview(t *testing.T) {
 }
 
 func TestNewEventJSON(t *testing.T) {
-	ev := NewEvent(EventInboundReceived, "")
+	ev := NewEvent(EventUserInput, "")
 	ev.SessionID = "s1"
 	ev.AgentID = "main"
 	ev.Data["x"] = 1
@@ -27,7 +27,7 @@ func TestNewEventJSON(t *testing.T) {
 	if err := json.Unmarshal(b, &m); err != nil {
 		t.Fatal(err)
 	}
-	if m["schema_version"].(float64) != 2 || m["event"] != EventInboundReceived {
+	if m["schema_version"].(float64) != 3 || m["event"] != EventUserInput {
 		t.Fatalf("%v", m)
 	}
 	ts, ok := m["ts"].(float64)

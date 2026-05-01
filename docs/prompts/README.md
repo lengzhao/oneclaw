@@ -30,9 +30,6 @@
 - `40-teammate.md`
   teammate / swarm 的协作 prompt 结构。
 
-- `50-memory.md`
-  memory 相关块的模板、示例和位置区分。
-
 ---
 
 ## 推荐阅读顺序
@@ -42,7 +39,6 @@
 3. `20-subagent.md`
 4. `30-fork-agent.md`
 5. `40-teammate.md`
-6. `50-memory.md`
 
 ---
 
@@ -73,10 +69,10 @@
 
 ## 本仓库（oneclaw / Go）源码入口
 
-- 主线程 system 拼装：`context` 包与模板（如 `prompts/templates/main_thread_system.tmpl`）
+- 主线程 system 拼装：`session` + `prompts/templates/main_thread_system.tmpl`
 - 回合主循环：`loop/`
 - 会话入口：`session/engine.go`、`session/turn_prepare.go`
 - 子 Agent：`subagent/`
-- Memory 注入：`memory/`
+- 每轮指令装配：`instructions/`（`BuildTurn`）
 
 原 Claude Code TypeScript 路径仅作范式对照时查阅，**不作为本仓库实现索引**。

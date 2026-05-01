@@ -134,7 +134,7 @@ func e2eWaitMinChatRequests(t *testing.T, stub *openaistub.Server, want int, dea
 	}
 }
 
-// e2eWaitForFile polls until path exists and is readable (post-turn maintain runs in a goroutine after the last stub chat body is recorded).
+// e2eWaitForFile polls until path exists and is readable.
 func e2eWaitForFile(t *testing.T, path string, deadline time.Duration) []byte {
 	t.Helper()
 	deadlineAt := time.Now().Add(deadline)

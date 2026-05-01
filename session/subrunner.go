@@ -50,11 +50,18 @@ func (r *subRunner) host(parent *toolctx.Context) *subagent.Host {
 		HistoryBudget:        r.bg,
 		ChatTransport:        r.eng.ChatTransport,
 	}
-	if len(r.eng.Notify) > 0 {
-		h.Notify = r.eng.Notify
+	if r.eng.execJournalWanted() {
+		h.AppendExec = r.eng.appendExecutionRecord
+	}
+	if len(r.eng.Notify) > 0 || r.eng.execJournalWanted() {
 		h.ParentAgentID = parentNotifyAgentID(parent)
 		h.ParentTurnID = r.parentTurnID
 		h.ParentCorrelationID = r.parentCorrelationID
+	}
+	if len(r.eng.Notify) > 0 {
+		h.Notify = r.eng.Notify
+	}
+	if r.eng.wantsLifecycle() {
 		h.OnNestedLifecycle = func(ctx context.Context, childTurnID, childRunID, nestedAgentID string, depth int) *loop.LifecycleCallbacks {
 			return r.eng.nestedLoopLifecycle(r.parentTurnID, r.parentCorrelationID, childTurnID, childRunID, nestedAgentID, strings.TrimSpace(h.ParentAgentID), depth)
 		}

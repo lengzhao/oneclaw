@@ -8,9 +8,8 @@
 
 | 文档 | 说明 |
 |------|------|
-| [`agent-runtime-golang-plan.md`](agent-runtime-golang-plan.md) | **立项总览**：目标与边界、与 Claude Code 语义对应、Memory/Agent 要点、闭环示意、**包布局 + 阶段 A–D 任务与验收**、风险与后置 |
+| [`agent-runtime-golang-plan.md`](agent-runtime-golang-plan.md) | **立项摘要**：目标与边界、当前包职责、延伸阅读（与实现对齐） |
 | [`third-party/claude-code-vs-oneclaw.md`](third-party/claude-code-vs-oneclaw.md) | **与 Claude Code 异同**：对齐点、oneclaw 优化与运维差异、缺失/后置能力一览 |
-| [`todo.md`](todo.md) | **统一 backlog**（#1–#30）与未完成项；阶段 A–D 归档为摘要 |
 | [`runtime-flow.md`](runtime-flow.md) | **运行时主路径**：`main`、WorkerPool、`SubmitUser`、`loop.RunTurn`、转写/dialog、定时任务、出站与扩展装配 |
 | [`config.md`](config.md) | 统一 YAML：合并顺序、`PushRuntime` / `rtopts`、密钥与功能开关 |
 
@@ -25,13 +24,8 @@
 | [`multi-llm-provider-design.md`](multi-llm-provider-design.md) | 多 LLM / 多协议：`llm.Provider` 与分阶段改造 |
 | [`outbound-events-design.md`](outbound-events-design.md) | 出站 `Record` / `Sink`、CLI/HTTP 行为 |
 | [`notification-hooks-design.md`](notification-hooks-design.md) | 通知 Hook 与 outbound 分工、`NotifySink` |
-| [`notify-sinks-audit-design.md`](notify-sinks-audit-design.md) | 审计类 JSONL Sink（**实现已移除**，文档归档） |
-| [`inbound-routing-design.md`](inbound-routing-design.md) | 入站字段、ToolContext 合并、`PublishOutbound` / `WorkerPool`（当前实现）；未实现项见 [`todo.md`](todo.md) **#27** § |
-| [`embedded-maintain-scheduler-design.md`](embedded-maintain-scheduler-design.md) | **历史**：进程内 `maintainloop` 与 `RunScheduledMaintain`（**当前 `cmd/oneclaw` 未接**） |
-| [`memory-maintain-dual-entry-design.md`](memory-maintain-dual-entry-design.md) | **历史**：回合后维护 vs 定时维护双入口（**当前主路径未接**） |
-| [`memory-recall-sqlite-design.md`](memory-recall-sqlite-design.md) | **历史 / 规划**：SQLite FTS 召回等（**当前 `config` 无 `memory.recall` 段**） |
-| [`code-simplification-opportunities.md`](code-simplification-opportunities.md) | **已落实**边界与主路径摘要；可选出站 / `context` 演进见 [`todo.md`](todo.md) **#27** |
-| [`architecture-modularity-simplification.md`](architecture-modularity-simplification.md) | **模块化路线**：优先抽象/简化、`Engine` 收窄、I/O 与 memory 概念分层；拆仓库后置 |
+| [`inbound-routing-design.md`](inbound-routing-design.md) | 入站字段、ToolContext 合并、`PublishOutbound` / `WorkerPool`（当前实现） |
+| [`architecture-modularity-simplification.md`](architecture-modularity-simplification.md) | **模块化路线**：优先抽象/简化、`Engine` 收窄、I/O 与指令文件概念分层；拆仓库后置 |
 | [`orchestrator-business-agents.md`](orchestrator-business-agents.md) | 主编排、`.oneclaw/agents`、`run_agent` 约定 |
 
 ### 渠道与 I/O
@@ -60,7 +54,7 @@
 
 ## Prompt 结构参考
 
-见 [`prompts/README.md`](prompts/README.md) 及各文件（`00-request-envelope`、`10-main-thread`、`50-memory` 等）。
+见 [`prompts/README.md`](prompts/README.md) 及各文件（`00-request-envelope`、`10-main-thread` 等）。
 
 ---
 

@@ -34,7 +34,7 @@ func (WriteBehaviorPolicyTool) Description() string {
 		"plus **agent memory** (`agent_memory` with `agent_type=<name>` and optional `scope=public|local`; writes under `agent-memory/<agent_type>`). " +
 		"Targets: `rule`, `skill`, `agent_md`, `memory`, `agent_memory`. " +
 		"`rule_name` is for `rule`/`skill` file or dir names; for `agent_memory` it is an optional **relative** path under that root (default `MEMORY.md`). " +
-		"Target `memory` replaces the **entire** project rules MEMORY.md; episodic facts belong in `<project>/YYYY-MM-DD.md` (maintenance merges there)."
+		"Target `memory` replaces the **entire** project rules MEMORY.md; dated working notes may live under `<project>/YYYY-MM-DD.md` if you create them."
 }
 
 func (WriteBehaviorPolicyTool) Parameters() openai.FunctionParameters {

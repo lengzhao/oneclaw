@@ -1,15 +1,8 @@
 package prompts
 
 import (
-	"strings"
 	"testing"
 )
-
-// maintenancePromptData mirrors memory.MaintainPromptData (avoid import cycle in this package test).
-type maintenancePromptData struct {
-	CWD, Today, MemoryPath, RulesMemoryPath, RunTS string
-	DialogHistoryPath, WorkingTranscriptPath, TranscriptPath string
-}
 
 func TestRenderCompactEnvelope(t *testing.T) {
 	const kind = "compact_boundary"
@@ -30,7 +23,9 @@ func TestRenderCompactEnvelope(t *testing.T) {
 }
 
 func TestRenderNilDataUsesEmptyStruct(t *testing.T) {
-	_, err := Render(NameMaintenanceSystemPostTurn, nil)
+	_, err := Render(NameMainThreadSystem, map[string]any{
+		"CWD": "/tmp", "Platform": "darwin", "Shell": "zsh", "TasksFilePath": "/tmp/tasks.json",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,36 +45,3 @@ func TestRenderUnknownTemplate(t *testing.T) {
 	}
 }
 
-func TestRenderMaintenanceData(t *testing.T) {
-	d := maintenancePromptData{
-		CWD: "/p", Today: "2026-01-01",
-		MemoryPath: "/p/memory/2026-01-01.md", RulesMemoryPath: "/p/memory/MEMORY.md",
-		RunTS:                 "2026-01-01T00:00:00Z",
-		DialogHistoryPath:     "/p/memory/2026-01-01/dialog_history.json",
-		WorkingTranscriptPath: "/p/working_transcript.json",
-		TranscriptPath:        "/p/transcript.json",
-	}
-	got, err := Render(NameMaintenanceSystemPostTurn, d)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(got, "/p") || !strings.Contains(got, "silent memory") || !strings.Contains(got, "post-turn") {
-		t.Fatalf("got %q", got)
-	}
-	got2, err := Render(NameMaintenanceSystemScheduled, d)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(got2, "scheduled") || !strings.Contains(got2, "far-field") {
-		t.Fatalf("scheduled template missing scope: %q", got2)
-	}
-	if !strings.Contains(got2, "dialog_history.json") {
-		t.Fatalf("scheduled template missing session paths: %q", got2)
-	}
-	if !strings.Contains(got2, "SKILL.md") || !strings.Contains(got2, "write_behavior_policy") {
-		t.Fatalf("scheduled template missing skills guidance: %q", got2)
-	}
-	if !strings.Contains(got2, "agent_memory") || !strings.Contains(got2, "agent_type") {
-		t.Fatalf("scheduled template missing agent memory targets: %q", got2)
-	}
-}

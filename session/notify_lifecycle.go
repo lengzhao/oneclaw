@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/lengzhao/oneclaw/loop"
-	"github.com/lengzhao/oneclaw/notify"
 	"github.com/openai/openai-go"
 )
 
@@ -32,9 +31,9 @@ func modelStepEndNotifyData(step int, end loop.ModelStepEndInfo) map[string]any 
 	}
 	if end.PromptTokens != 0 || end.CompletionTokens != 0 || end.TotalTokens != 0 {
 		m["usage"] = map[string]any{
-			"prompt_tokens":     end.PromptTokens,
-			"completion_tokens": end.CompletionTokens,
-			"total_tokens":      end.TotalTokens,
+			"prompt_tokens":       end.PromptTokens,
+			"completion_tokens":   end.CompletionTokens,
+			"total_tokens":        end.TotalTokens,
 		}
 	}
 	if end.Err != nil {
@@ -47,7 +46,7 @@ func modelStepEndNotifyData(step int, end loop.ModelStepEndInfo) map[string]any 
 }
 
 func (e *Engine) buildLoopLifecycle(turnID, corrID, rootAgentID string) *loop.LifecycleCallbacks {
-	if !e.hasNotify() {
+	if !e.wantsLifecycle() {
 		return nil
 	}
 	agentID := strings.TrimSpace(rootAgentID)
@@ -61,18 +60,22 @@ func (e *Engine) buildLoopLifecycle(turnID, corrID, rootAgentID string) *loop.Li
 				if err != nil {
 					slog.Warn("session.notify.turn_first_model_request_marshal", "err", err)
 				} else {
-					ev0 := notify.NewEvent(notify.EventTurnFirstModelRequest, "")
-					e.stampNotify(&ev0, turnID, turnID, corrID, agentID, "", "")
-					ev0.Data = map[string]any{
-						"message_count": len(reqMsgs),
-						"messages":    json.RawMessage(full),
+					rec := map[string]any{
+						"record":         "turn_first_model_request",
+						"turn_id":        turnID,
+						"correlation_id": corrID,
+						"agent_id":       agentID,
+						"message_count":  len(reqMsgs),
+						"messages":       json.RawMessage(full),
 					}
-					notify.EmitSafe(e.Notify, c, ev0)
+					e.appendExecutionRecord(c, rec)
 				}
 			}
-			ev := notify.NewEvent(notify.EventModelStepStart, "")
-			e.stampNotify(&ev, turnID, turnID, corrID, agentID, "", "")
 			startData := map[string]any{
+				"record":                 "model_step_start",
+				"turn_id":                turnID,
+				"correlation_id":         corrID,
+				"agent_id":               agentID,
 				"step":                   step,
 				"tool_definitions_count": toolN,
 			}
@@ -83,34 +86,33 @@ func (e *Engine) buildLoopLifecycle(turnID, corrID, rootAgentID string) *loop.Li
 					startData["last_message"] = json.RawMessage(lb)
 				}
 			}
-			ev.Data = startData
-			notify.EmitSafe(e.Notify, c, ev)
+			e.appendExecutionRecord(c, startData)
 		},
 		OnModelStepEnd: func(c context.Context, step int, end loop.ModelStepEndInfo) {
-			ev := notify.NewEvent(notify.EventModelStepEnd, "")
-			if !end.OK {
-				ev.Severity = "error"
-			}
-			e.stampNotify(&ev, turnID, turnID, corrID, agentID, "", "")
-			ev.Data = modelStepEndNotifyData(step, end)
-			notify.EmitSafe(e.Notify, c, ev)
+			rec := modelStepEndNotifyData(step, end)
+			rec["record"] = "model_step_end"
+			rec["turn_id"] = turnID
+			rec["correlation_id"] = corrID
+			rec["agent_id"] = agentID
+			e.appendExecutionRecord(c, rec)
 		},
 		OnToolStart: func(c context.Context, modelStep int, toolUseID, toolName, argsPreview string) {
-			ev := notify.NewEvent(notify.EventToolCallStart, "")
-			e.stampNotify(&ev, turnID, turnID, corrID, agentID, "", "")
-			ev.Data = map[string]any{
-				"model_step":   modelStep,
-				"tool_use_id":  toolUseID,
-				"name":         toolName,
-				"args_preview": argsPreview,
-			}
-			notify.EmitSafe(e.Notify, c, ev)
+			e.appendExecutionRecord(c, map[string]any{
+				"record":         "tool_call_start",
+				"turn_id":        turnID,
+				"correlation_id": corrID,
+				"agent_id":       agentID,
+				"model_step":     modelStep,
+				"tool_use_id":    toolUseID,
+				"name":           toolName,
+				"args_preview":   argsPreview,
+			})
 		},
 	}
 }
 
 func (e *Engine) nestedLoopLifecycle(parentTurnID, parentCorrID, childTurnID, childRunID, nestedAgentID, parentAgentID string, depth int) *loop.LifecycleCallbacks {
-	if !e.hasNotify() {
+	if !e.wantsLifecycle() {
 		return nil
 	}
 	pID := strings.TrimSpace(parentAgentID)
@@ -125,19 +127,28 @@ func (e *Engine) nestedLoopLifecycle(parentTurnID, parentCorrID, childTurnID, ch
 				if err != nil {
 					slog.Warn("session.notify.turn_first_model_request_marshal", "err", err, "subagent_depth", depth)
 				} else {
-					ev0 := notify.NewEvent(notify.EventTurnFirstModelRequest, "")
-					e.stampNotify(&ev0, childTurnID, childRunID, parentCorrID, subID, pID, parentTurnID)
-					ev0.Data = map[string]any{
+					e.appendExecutionRecord(c, map[string]any{
+						"record":           "turn_first_model_request",
+						"turn_id":          childTurnID,
+						"run_id":           childRunID,
+						"correlation_id":   parentCorrID,
+						"agent_id":         subID,
+						"parent_agent_id":  pID,
+						"parent_run_id":    parentTurnID,
 						"message_count":    len(reqMsgs),
-						"messages":       json.RawMessage(full),
-						"subagent_depth": depth,
-					}
-					notify.EmitSafe(e.Notify, c, ev0)
+						"messages":         json.RawMessage(full),
+						"subagent_depth":   depth,
+					})
 				}
 			}
-			ev := notify.NewEvent(notify.EventModelStepStart, "")
-			e.stampNotify(&ev, childTurnID, childRunID, parentCorrID, subID, pID, parentTurnID)
 			startData := map[string]any{
+				"record":                 "model_step_start",
+				"turn_id":                childTurnID,
+				"run_id":                 childRunID,
+				"correlation_id":         parentCorrID,
+				"agent_id":               subID,
+				"parent_agent_id":        pID,
+				"parent_run_id":          parentTurnID,
 				"step":                   step,
 				"tool_definitions_count": toolN,
 				"subagent_depth":         depth,
@@ -149,29 +160,35 @@ func (e *Engine) nestedLoopLifecycle(parentTurnID, parentCorrID, childTurnID, ch
 					startData["last_message"] = json.RawMessage(lb)
 				}
 			}
-			ev.Data = startData
-			notify.EmitSafe(e.Notify, c, ev)
+			e.appendExecutionRecord(c, startData)
 		},
 		OnModelStepEnd: func(c context.Context, step int, end loop.ModelStepEndInfo) {
-			ev := notify.NewEvent(notify.EventModelStepEnd, "")
-			if !end.OK {
-				ev.Severity = "error"
-			}
-			e.stampNotify(&ev, childTurnID, childRunID, parentCorrID, subID, pID, parentTurnID)
-			ev.Data = modelStepEndNotifyData(step, end)
-			notify.EmitSafe(e.Notify, c, ev)
+			rec := modelStepEndNotifyData(step, end)
+			rec["record"] = "model_step_end"
+			rec["turn_id"] = childTurnID
+			rec["run_id"] = childRunID
+			rec["correlation_id"] = parentCorrID
+			rec["agent_id"] = subID
+			rec["parent_agent_id"] = pID
+			rec["parent_run_id"] = parentTurnID
+			rec["subagent_depth"] = depth
+			e.appendExecutionRecord(c, rec)
 		},
 		OnToolStart: func(c context.Context, modelStep int, toolUseID, toolName, argsPreview string) {
-			ev := notify.NewEvent(notify.EventToolCallStart, "")
-			e.stampNotify(&ev, childTurnID, childRunID, parentCorrID, subID, pID, parentTurnID)
-			ev.Data = map[string]any{
-				"model_step":   modelStep,
-				"tool_use_id":  toolUseID,
-				"name":         toolName,
-				"args_preview": argsPreview,
-				"subagent_depth": depth,
-			}
-			notify.EmitSafe(e.Notify, c, ev)
+			e.appendExecutionRecord(c, map[string]any{
+				"record":           "tool_call_start",
+				"turn_id":          childTurnID,
+				"run_id":           childRunID,
+				"correlation_id":   parentCorrID,
+				"agent_id":         subID,
+				"parent_agent_id":  pID,
+				"parent_run_id":    parentTurnID,
+				"model_step":       modelStep,
+				"tool_use_id":      toolUseID,
+				"name":             toolName,
+				"args_preview":     argsPreview,
+				"subagent_depth":   depth,
+			})
 		},
 	}
 }

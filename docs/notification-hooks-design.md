@@ -1,5 +1,7 @@
 # 通知 Hook 技术设计（Agent 生命周期观测）
 
+**当前实现（精简）**：`notify.Sink` 仅收到三类事件 — `user_input`、`turn_start`、`turn_end`（见 `notify/event.go`）。模型步、工具起止、首包请求体、子 Agent 起止、指令装配块等写入会话运行时根下按轮分片的 **`execution/<agent_id>/<YYYY-MM-DD>/<turn_id>.jsonl`**（`session/exec_journal.go`，与 `tasks.json` 同锚规则；`turn_start` / `turn_end` / `user_input` 的 `data` 中带 `execution_log` 相对路径，便于 Hook 侧关联读档）。
+
 ## 1. 背景与目标
 
 ### 1.1 需求
@@ -77,7 +79,7 @@ flowchart TB
 |------|----------|------|
 | **Go：`NotifySink` / `LifecycleHook` 函数组** | 进程内插件、测试、桥接到 MQ | 与 `loop.Config` / `Engine` 字段注入一致；日志用 `slog` |
 | **HTTP Webhook** | 外部 SaaS、无代码集成 | 独立包或 `channel` 适配；需签名、超时、payload 大小上限 |
-| **文件 / JSONL** | 本地落盘 | **未内置**；用 **`notify.FuncSink`** 自行写 JSONL（历史多路审计 JSONL 已移除，见 [`notify-sinks-audit-design.md`](notify-sinks-audit-design.md)） |
+| **文件 / JSONL** | 本地落盘 | **未内置**；用 **`notify.FuncSink`** 自行写 JSONL |
 
 **MVP 已选**：进程内 **`notify.Sink`** + **`notify.Multi`**；Webhook / JSONL 文件 sink **未实现**，可自行用 `FuncSink` 写文件或调 HTTP。
 
