@@ -13,20 +13,20 @@ const SchemaVersion = 2
 const (
 	EventInboundReceived = "inbound_received"
 	EventAgentTurnStart  = "agent_turn_start"
-	// EventMemoryTurnContext is emitted after memory.BuildTurn / ApplyTurnBudget, before the model loop.
-	// data carries the recall and agent-md blocks actually injected into this turn (see docs).
+	// EventMemoryTurnContext is emitted after instruction bundle assembly / ApplyTurnBudget, before the model loop.
+	// data carries the agent-md block and memory system suffix actually injected into this turn (see docs).
 	EventMemoryTurnContext = "memory_turn_context"
-	EventModelStepStart  = "model_step_start"
-	EventModelStepEnd    = "model_step_end"
+	EventModelStepStart    = "model_step_start"
+	EventModelStepEnd      = "model_step_end"
 	// EventTurnFirstModelRequest marks the first model API call of the current user turn (step 0),
 	// carrying the full request messages JSON (system + history as sent to the API).
 	EventTurnFirstModelRequest = "turn_first_model_request"
-	EventToolCallStart   = "tool_call_start"
-	EventToolCallEnd     = "tool_call_end"
-	EventSubagentStart   = "subagent_start"
-	EventSubagentEnd     = "subagent_end"
-	EventTurnComplete    = "turn_complete"
-	EventTurnError       = "turn_error"
+	EventToolCallStart         = "tool_call_start"
+	EventToolCallEnd           = "tool_call_end"
+	EventSubagentStart         = "subagent_start"
+	EventSubagentEnd           = "subagent_end"
+	EventTurnComplete          = "turn_complete"
+	EventTurnError             = "turn_error"
 )
 
 // Default preview length for user-visible and tool summaries in payloads.
@@ -34,10 +34,10 @@ const DefaultPreviewRunes = 512
 
 // Event is one notify record: correlation on the envelope, type-specific fields in Data.
 type Event struct {
-	SchemaVersion int            `json:"schema_version"`
-	Event         string         `json:"event"`
+	SchemaVersion int    `json:"schema_version"`
+	Event         string `json:"event"`
 	// TS is Unix time in milliseconds (UTC).
-	TS int64 `json:"ts"`
+	TS            int64          `json:"ts"`
 	Severity      string         `json:"severity,omitempty"`
 	SessionID     string         `json:"session_id,omitempty"`
 	AgentID       string         `json:"agent_id,omitempty"`

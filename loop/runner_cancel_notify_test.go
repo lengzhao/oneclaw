@@ -18,11 +18,11 @@ func TestRunTurnCancelBeforeModelEmitsLifecycle(t *testing.T) {
 	var endInfo ModelStepEndInfo
 	msgs := []openai.ChatCompletionMessageParamUnion{}
 	cfg := Config{
-		Client:    &openai.Client{},
-		Model:     "gpt-4o-mini",
-		MaxSteps:  8,
-		Messages:  &msgs,
-		Registry:  tools.NewRegistry(),
+		Client:   &openai.Client{},
+		Model:    "gpt-4o-mini",
+		MaxSteps: 8,
+		Messages: &msgs,
+		Registry: tools.NewRegistry(),
 		Lifecycle: &LifecycleCallbacks{
 			OnModelStepStart: func(ctx context.Context, step, toolN int, reqMsgs []openai.ChatCompletionMessageParamUnion) {
 				starts++
@@ -37,6 +37,10 @@ func TestRunTurnCancelBeforeModelEmitsLifecycle(t *testing.T) {
 				endInfo = end
 			},
 		},
+	}
+	cfg.TurnMaxSteps = cfg.MaxSteps
+	if cfg.TurnMaxSteps < 1 {
+		cfg.TurnMaxSteps = 1
 	}
 	err := RunTurn(ctx, cfg, bus.InboundMessage{Content: "hi"})
 	if !errors.Is(err, context.Canceled) {

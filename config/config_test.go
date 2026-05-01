@@ -7,14 +7,14 @@ import (
 	"testing"
 
 	cbconfig "github.com/lengzhao/clawbridge/config"
-	"github.com/lengzhao/oneclaw/memory"
 	"github.com/lengzhao/oneclaw/rtopts"
+	"github.com/lengzhao/oneclaw/workspace"
 )
 
 func boolPtr(b bool) *bool { return &b }
 
 func userConfigDir(home string) string {
-	return filepath.Join(home, memory.DotDir)
+	return filepath.Join(home, workspace.DotDir)
 }
 
 func TestMainAgentMaxSteps(t *testing.T) {
@@ -289,7 +289,7 @@ func TestClawbridgeConfigForRun_defaultMediaRoot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := filepath.Join(home, memory.DotDir, "media")
+	want := filepath.Join(home, workspace.DotDir, "media")
 	if cb.Media.Root != want {
 		t.Fatalf("default media root: got %q want %q", cb.Media.Root, want)
 	}
@@ -307,42 +307,9 @@ func TestMergeMCP_laterDisables(t *testing.T) {
 	}
 }
 
-func TestNotifyAuditSinkPaths_defaults(t *testing.T) {
-	var r *Resolved
-	llm, orch, vis := r.NotifyAuditSinkPaths()
-	if !llm || !orch || !vis {
-		t.Fatalf("nil resolved: %v %v %v", llm, orch, vis)
-	}
-	empty := &Resolved{merged: File{}}
-	llm, orch, vis = empty.NotifyAuditSinkPaths()
-	if !llm || !orch || !vis {
-		t.Fatalf("empty file: %v %v %v", llm, orch, vis)
-	}
-}
-
-func TestNotifyAuditSinkPaths_masterOff(t *testing.T) {
-	f := File{}
-	f.Features.DisableAuditSinks = boolPtr(true)
-	r := &Resolved{merged: f}
-	llm, orch, vis := r.NotifyAuditSinkPaths()
-	if llm || orch || vis {
-		t.Fatalf("want all off, got %v %v %v", llm, orch, vis)
-	}
-}
-
-func TestNotifyAuditSinkPaths_perPath(t *testing.T) {
-	f := File{}
-	f.Features.DisableAuditLLM = boolPtr(true)
-	r := &Resolved{merged: f}
-	llm, orch, vis := r.NotifyAuditSinkPaths()
-	if llm || !orch || !vis {
-		t.Fatalf("got llm=%v orch=%v vis=%v", llm, orch, vis)
-	}
-}
-
 func TestSessionTranscriptPaths(t *testing.T) {
 	home := t.TempDir()
-	ur := filepath.Join(home, memory.DotDir)
+	ur := filepath.Join(home, workspace.DotDir)
 	f := File{}
 	r := &Resolved{merged: f, home: home}
 	tp, wp := r.SessionTranscriptPaths("abc123")
@@ -372,48 +339,16 @@ func TestSessionWorkerCount(t *testing.T) {
 	}
 }
 
-func TestSessionsSQLitePath(t *testing.T) {
-	home := t.TempDir()
-	ur := filepath.Join(home, memory.DotDir)
+func TestSessionTurnPolicyRaw(t *testing.T) {
+	r := &Resolved{merged: File{}}
+	if r.SessionTurnPolicyRaw() != "" {
+		t.Fatalf("unset: %q", r.SessionTurnPolicyRaw())
+	}
 	f := File{}
-	r := &Resolved{merged: f, home: home}
-	got := r.SessionsSQLitePath()
-	want := filepath.Join(ur, "sessions.sqlite")
-	if got != want {
-		t.Fatalf("got %q want %q", got, want)
-	}
-	f.Sessions.DisableSQLite = boolPtr(true)
-	r2 := &Resolved{merged: f, home: home}
-	if r2.SessionsSQLitePath() != "" {
-		t.Fatal("expected empty when disabled")
-	}
-	f = File{}
-	f.Sessions.SQLitePath = "custom.db"
-	r3 := &Resolved{merged: f, home: home}
-	if r3.SessionsSQLitePath() != filepath.Join(ur, "custom.db") {
-		t.Fatalf("relative: %q", r3.SessionsSQLitePath())
-	}
-}
-
-func TestPushRuntime_MemoryRecallBackend(t *testing.T) {
-	t.Cleanup(func() { rtopts.Set(nil) })
-	f := File{}
-	f.Memory.Recall.Backend = "sqlite"
-	r := &Resolved{merged: f}
-	r.PushRuntime()
-	if got := rtopts.Current().MemoryRecallBackend; got != "sqlite" {
-		t.Fatalf("MemoryRecallBackend = %q, want sqlite", got)
-	}
-}
-
-func TestPushRuntime_MemoryRecallSQLitePath(t *testing.T) {
-	t.Cleanup(func() { rtopts.Set(nil) })
-	f := File{}
-	f.Memory.Recall.SQLitePath = "memory/custom-recall.sqlite"
-	r := &Resolved{merged: f}
-	r.PushRuntime()
-	if got := rtopts.Current().MemoryRecallSQLitePath; got != "memory/custom-recall.sqlite" {
-		t.Fatalf("MemoryRecallSQLitePath = %q, want %q", got, "memory/custom-recall.sqlite")
+	f.Sessions.TurnPolicy = "  insert  "
+	r2 := &Resolved{merged: f}
+	if r2.SessionTurnPolicyRaw() != "insert" {
+		t.Fatalf("got %q", r2.SessionTurnPolicyRaw())
 	}
 }
 

@@ -10,12 +10,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lengzhao/oneclaw/loop"
-	"github.com/lengzhao/oneclaw/memory"
 	"github.com/lengzhao/clawbridge/bus"
+	"github.com/lengzhao/oneclaw/loop"
 	"github.com/lengzhao/oneclaw/test/openaistub"
 	"github.com/lengzhao/oneclaw/toolctx"
 	"github.com/lengzhao/oneclaw/tools/builtin"
+	"github.com/lengzhao/oneclaw/workspace"
 	"github.com/openai/openai-go"
 )
 
@@ -33,14 +33,15 @@ func TestE2E_40_WriteFileUnderCwdOnly(t *testing.T) {
 	client := openai.NewClient(stubOpenAIOptions(stub)...)
 	msgs := []openai.ChatCompletionMessageParamUnion{}
 	err := loop.RunTurn(context.Background(), loop.Config{
-		Client:      &client,
-		Model:       "gpt-4o",
-		System:      "test",
-		MaxTokens:   256,
-		MaxSteps:    8,
-		Messages:    &msgs,
-		Registry:    builtin.DefaultRegistry(),
-		ToolContext: toolctx.New(cwd, context.Background()),
+		Client:       &client,
+		Model:        "gpt-4o",
+		System:       "test",
+		MaxTokens:    256,
+		MaxSteps:     8,
+		Messages:     &msgs,
+		Registry:     builtin.DefaultRegistry(),
+		ToolContext:  toolctx.New(cwd, context.Background()),
+		TurnMaxSteps: 8,
 	}, bus.InboundMessage{Content: "write"})
 	if err != nil {
 		t.Fatal(err)
@@ -69,21 +70,22 @@ func TestE2E_41_WriteFileUnderUserMemoryRoot(t *testing.T) {
 	e2eEnvWithMemory(t, stub)
 	e2eIsolateUserMemory(t, home)
 
-	lay := memory.DefaultLayout(cwd, home)
+	lay := workspace.DefaultLayout(cwd, home)
 	tctx := toolctx.New(cwd, context.Background())
 	tctx.MemoryWriteRoots = lay.WriteRoots()
 
 	client := openai.NewClient(stubOpenAIOptions(stub)...)
 	msgs := []openai.ChatCompletionMessageParamUnion{}
 	err = loop.RunTurn(context.Background(), loop.Config{
-		Client:      &client,
-		Model:       "gpt-4o",
-		System:      "test",
-		MaxTokens:   256,
-		MaxSteps:    8,
-		Messages:    &msgs,
-		Registry:    builtin.DefaultRegistry(),
-		ToolContext: tctx,
+		Client:       &client,
+		Model:        "gpt-4o",
+		System:       "test",
+		MaxTokens:    256,
+		MaxSteps:     8,
+		Messages:     &msgs,
+		Registry:     builtin.DefaultRegistry(),
+		ToolContext:  tctx,
+		TurnMaxSteps: 8,
 	}, bus.InboundMessage{Content: "write to user memory"})
 	if err != nil {
 		t.Fatal(err)
@@ -109,21 +111,22 @@ func TestE2E_42_WriteFileRejectedOutsideRoots(t *testing.T) {
 	e2eEnvWithMemory(t, stub)
 	e2eIsolateUserMemory(t, home)
 
-	lay := memory.DefaultLayout(cwd, home)
+	lay := workspace.DefaultLayout(cwd, home)
 	tctx := toolctx.New(cwd, context.Background())
 	tctx.MemoryWriteRoots = lay.WriteRoots()
 
 	client := openai.NewClient(stubOpenAIOptions(stub)...)
 	msgs := []openai.ChatCompletionMessageParamUnion{}
 	err := loop.RunTurn(context.Background(), loop.Config{
-		Client:      &client,
-		Model:       "gpt-4o",
-		System:      "test",
-		MaxTokens:   256,
-		MaxSteps:    8,
-		Messages:    &msgs,
-		Registry:    builtin.DefaultRegistry(),
-		ToolContext: tctx,
+		Client:       &client,
+		Model:        "gpt-4o",
+		System:       "test",
+		MaxTokens:    256,
+		MaxSteps:     8,
+		Messages:     &msgs,
+		Registry:     builtin.DefaultRegistry(),
+		ToolContext:  tctx,
+		TurnMaxSteps: 8,
 	}, bus.InboundMessage{Content: "write"})
 	if err != nil {
 		t.Fatal(err)
@@ -148,7 +151,7 @@ func TestE2E_43_GrepUnderProjectMemoryRoot(t *testing.T) {
 	home := t.TempDir()
 	cwd := t.TempDir()
 	t.Setenv("HOME", home)
-	memDir := filepath.Join(cwd, memory.DotDir, "memory")
+	memDir := filepath.Join(cwd, workspace.DotDir, "memory")
 	if err := os.MkdirAll(memDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -157,7 +160,7 @@ func TestE2E_43_GrepUnderProjectMemoryRoot(t *testing.T) {
 	}
 
 	stub := openaistub.New(t)
-	gargs, _ := json.Marshal(map[string]string{"pattern": "GREP_UNIQUE_E2E_43", "path": filepath.Join(memory.DotDir, "memory")})
+	gargs, _ := json.Marshal(map[string]string{"pattern": "GREP_UNIQUE_E2E_43", "path": filepath.Join(workspace.DotDir, "memory")})
 	stub.Enqueue(openaistub.CompletionToolCalls("", []map[string]any{
 		openaistub.ToolCall("g", "grep", string(gargs)),
 	}))
@@ -165,21 +168,22 @@ func TestE2E_43_GrepUnderProjectMemoryRoot(t *testing.T) {
 	e2eEnvWithMemory(t, stub)
 	e2eIsolateUserMemory(t, home)
 
-	lay := memory.DefaultLayout(cwd, home)
+	lay := workspace.DefaultLayout(cwd, home)
 	tctx := toolctx.New(cwd, context.Background())
 	tctx.MemoryWriteRoots = lay.WriteRoots()
 
 	client := openai.NewClient(stubOpenAIOptions(stub)...)
 	msgs := []openai.ChatCompletionMessageParamUnion{}
 	err := loop.RunTurn(context.Background(), loop.Config{
-		Client:      &client,
-		Model:       "gpt-4o",
-		System:      "test",
-		MaxTokens:   256,
-		MaxSteps:    8,
-		Messages:    &msgs,
-		Registry:    builtin.DefaultRegistry(),
-		ToolContext: tctx,
+		Client:       &client,
+		Model:        "gpt-4o",
+		System:       "test",
+		MaxTokens:    256,
+		MaxSteps:     8,
+		Messages:     &msgs,
+		Registry:     builtin.DefaultRegistry(),
+		ToolContext:  tctx,
+		TurnMaxSteps: 8,
 	}, bus.InboundMessage{Content: "search"})
 	if err != nil {
 		t.Fatal(err)

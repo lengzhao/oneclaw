@@ -129,7 +129,7 @@ sequenceDiagram
 职责要点：
 
 1. 输入：**`bus.InboundMessage`** → 构造 **`session.SessionHandle`**。
-2. **按 handle 哈希**选择 worker；队列内 **新建 `Engine`（`MainEngineFactory`）→ `SubmitUser` → 丢弃**，持久化以 sqlite / 转写文件为准，**不做**长驻「每会话一个 Engine 指针 map」。
+2. **按 handle 哈希**选择 worker；队列内 **新建 `Engine`（`MainEngineFactory`）→ `SubmitUser` → 丢弃**，持久化以转写文件为准，**不做**长驻「每会话一个 Engine 指针 map」。
 3. **`CancelInflightTurn`** 等与 **`/stop` 类** slash 协同，取消进行中的回合。
 
 **6.3 与单 CLI 模式兼容**

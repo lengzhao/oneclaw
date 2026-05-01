@@ -1,18 +1,18 @@
 # oneclaw 运行时流程（整理版）
 
-本文描述 **当前实现** 中从进程启动到单轮对话、记忆维护、定时任务与出站的**主路径**，便于对照代码阅读。细节配置见 [`config.md`](config.md)；维护双入口见 [`memory-maintain-dual-entry-design.md`](memory-maintain-dual-entry-design.md)；入站/出站抽象见 [`inbound-routing-design.md`](inbound-routing-design.md)、[`outbound-events-design.md`](outbound-events-design.md)。
+本文描述 **当前实现** 中从进程启动到单轮对话、转写与 dialog 落盘、定时任务与出站的**主路径**，便于对照代码阅读。细节配置见 [`config.md`](config.md)；入站/出站抽象见 [`inbound-routing-design.md`](inbound-routing-design.md)、[`outbound-events-design.md`](outbound-events-design.md)。历史 **LLM 维护双入口** 设计见 [`memory-maintain-dual-entry-design.md`](memory-maintain-dual-entry-design.md)（**主路径未接入**）。
 
 ---
 
 ## 1. 进程入口：`cmd/oneclaw`
 
-解析 **`$HOME`**、**`-config`**（可选）后，按标志分为多条互斥路径（**`-init` / `-export-session` / `-maintain-once` / 常驻**）：
+解析 **`$HOME`**、**`-config`**（可选）后，按标志分为多条互斥路径（**`-init` / `-export-session` / 常驻**）：
 
 | 路径 | 条件 | 行为摘要 |
 |------|------|----------|
 | **初始化** | `-init` | `config.InitWorkspace`：补全 `.oneclaw` 与 `config.yaml`，退出 |
-| **单次远场维护** | `-maintain-once` | 加载配置 → `memory.RunScheduledMaintain`（只读工具 registry），退出；不启动 IM |
-| **常驻服务** | 默认 | 加载配置 → MCP（可选）→ **WorkerPool** → **maintainloop**（可选）→ **clawbridge** → 消费入站 |
+| **导出快照** | `-export-session <dir>` | `workspace.ExportSessionSnapshot`：复制用户数据根到指定目录，退出（无需 API key） |
+| **常驻服务** | 默认 | 加载配置 → MCP（可选）→ **WorkerPool** → **clawbridge** → 每客户端可选 **schedule poller** → 消费入站 |
 
 常驻模式要求配置中至少有一个启用的 `clawbridge.clients`，否则进程报错退出。
 
@@ -21,14 +21,13 @@ flowchart TB
   start([main 启动]) --> home[home + UserDataRoot]
   home --> init{-init?}
   init -->|是| ws[InitWorkspace] --> exit1([退出])
-  init -->|否| load[Load 合并 YAML + PushRuntime]
-  load --> mo{-maintain-once?}
-  mo -->|是| sm[RunScheduledMaintain] --> exit2([退出])
-  mo -->|否| api{有 API key?}
+  init -->|否| exp{-export-session?}
+  exp -->|是| snap[ExportSessionSnapshot] --> exit05([退出])
+  exp -->|否| load[Load 合并 YAML + PushRuntime]
+  load --> api{有 API key?}
   api -->|否| err([退出: 缺密钥])
   api -->|是| pool[NewWorkerPool + MainEngineFactory]
-  pool --> mloop[maintainloop.Start 可选]
-  mloop --> cb[clawbridge.New / Start]
+  pool --> cb[clawbridge.New / Start]
   cb --> poll[每客户端 schedule poller 可选]
   poll --> loop[goroutine: ConsumeInbound → SubmitUser]
   loop --> sig[等待 SIGINT/SIGTERM]
@@ -49,19 +48,19 @@ flowchart TB
   fac[MainEngineFactory]
   eng[Engine per job]
   loop[loop.RunTurn]
-  mem[memory: PostTurn / Maintain]
+  disk[transcript + dialog_history 落盘]
   drivers <--> bus
   bus -->|ConsumeInbound| wp
   wp --> fac
   fac --> eng
   eng --> loop
   loop --> eng
-  eng --> mem
+  eng --> disk
   eng -->|publishOutbound| bus
 ```
 
 - **WorkerPool**：按 `hash(session_key) % N` 分片，**同一会话固定落在同一 worker**，每轮任务 **新建 Engine**（`factory`），执行完 `SubmitUser` 后丢弃，避免无界 Engine 映射。
-- **SessionHandle**：由入站的 `ClientID`（clawbridge client id）+ 会话键（`InboundSessionKey`：优先 `SessionID`，否则 `Peer.ID`）派生；**StableSessionID**（SHA256 截断）用于 sqlite、目录名等。**Engine.CWD** 为 `<UserDataRoot>/sessions/<StableSessionID>/`（见 `config.UserDataRoot()` 与 [session-home-isolation-design.md](session-home-isolation-design.md)）。
+- **SessionHandle**：由入站的 `ClientID`（clawbridge client id）+ 会话键（`InboundSessionKey`：优先 `SessionID`，否则 `Peer.ID`）派生；**StableSessionID**（SHA256 截断）用于目录名、转写路径等。**Engine.CWD** 为 **`<UserDataRoot>/workspace`**（默认）或 **`<UserDataRoot>/sessions/<StableSessionID>/workspace`**（`sessions.isolate_workspace: true`），见 `session.MainEngineFactory` 与 [session-home-isolation-design.md](session-home-isolation-design.md)。
 
 ---
 
@@ -78,17 +77,15 @@ flowchart TB
   RT --> OK{成功?}
   OK -->|否| ERR[返回 err]
   OK -->|是| N4[ToUserVisible + SaveTranscript / WorkingTranscript]
-  N4 --> PT[memory.PostTurn]
-  N4 --> MT[go MaybePostTurnMaintain]
-  N4 --> PR[persistRecall 可选 sessdb]
+  N4 --> DH[appendDialogHistoryIfComplete]
 ```
 
 **要点**：
 
-- **prepareSharedTurn**：注入 `MEMORY.md` / recall、预算、`ToolContext` 与入站路由字段合并（见入站设计文档 §2.1）。
-- **loop.RunTurn**：模型 ↔ 工具循环；工具轨迹可在 `ToolTraceSink` 中收集，供 `PostTurnInput` 与 notify 使用。
-- **PostTurn**：同步写回合相关记忆管线（如 daily log）；**MaybePostTurnMaintain** 在独立 goroutine 中执行，**不阻塞**渠道返回。
-- **本地 slash**（如 `/help`、`/status`、`/paths`、`/recall reset`、`/reset`、`/stop`；CLI 的 `/exit` 由终端处理）：走 `submitLocalSlashTurn`，**不**调用 `loop.RunTurn`，**不**走 `PostTurn` / `MaybePostTurnMaintain`（刻意设计）。`/stop` 在入站 goroutine 内还会先调用 `WorkerPool.CancelInflightTurn` 取消**当前已在执行**的该会话轮次（`context.WithCancel(root)`）。内置列表见 `session/slash_local.go` 与 `/help`。
+- **prepareSharedTurn**：注入 `MEMORY.md`、预算、`ToolContext` 与入站路由字段合并（见入站设计文档 §2.1）。
+- **loop.RunTurn**：模型 ↔ 工具循环；工具轨迹可在 `ToolTraceSink` 中收集，供 notify 等使用。
+- **成功后**：折叠可见消息、**`SaveTranscript` / `SaveWorkingTranscript`**，并 **`appendDialogHistoryIfComplete`**（`workspace.AppendDialogHistoryPair`）。
+- **本地 slash**（如 `/help`、`/status`、`/paths`、`/reset`、`/stop`；CLI 的 `/exit` 由终端处理）：走 `submitLocalSlashTurn`，**不**调用 `loop.RunTurn`（刻意设计）。`/stop` 在入站 goroutine 内还会先调用 `WorkerPool.CancelInflightTurn` 取消**当前已在执行**的该会话轮次（`context.WithCancel(root)`）。内置列表见 `session/slash_local.go` 与 `/help`。
 
 ---
 
@@ -108,30 +105,10 @@ flowchart TB
 
 ---
 
-## 5. Memory 维护：两条 LLM 入口 + 多种触发方式
+## 5. Episodic / dialog 与历史 LLM 维护
 
-| 类型 | 函数 | 典型触发 |
-|------|------|----------|
-| **近场（回合后）** | `MaybePostTurnMaintain` → `RunPostTurnMaintain` | 每轮 `SubmitUser` 成功后异步 goroutine |
-| **远场（定时/批量）** | `RunScheduledMaintain` | `maintainloop` 周期、`oneclaw -maintain-once`、`cmd/maintain` |
-
-两者通过 **`maintainPipelineMu` 串行化写盘**，避免与远场维护争抢同一批 memory 文件。开关见 `features.disable_auto_maintenance`、`features.disable_scheduled_maintenance` 及 `maintain.interval` 等（[`config.md`](config.md)）。
-
-```mermaid
-flowchart TB
-  subgraph post [回合后]
-    SU[SubmitUser 成功] --> P[PostTurn 同步]
-    P --> M[MaybePostTurnMaintain goroutine]
-  end
-  subgraph sched [定时远场]
-    ML[maintainloop 定时器] --> R[RunScheduledMaintain]
-    CLI[oneclaw -maintain-once] --> R
-    CM[cmd/maintain] --> R
-  end
-  M --> MU[maintainPipelineMu]
-  R --> MU
-  MU --> disk[(.oneclaw/memory 等)]
-```
+- **当前主路径**：回合成功后写 **转写**（`sessions/<id>/transcript.json` 等）与 **`workspace` 包下的 `dialog_history.json`**（见 `workspace/dialog_history.go`）；**无** `memory` 包、**无** `MaybePostTurnMaintain` / `RunScheduledMaintain` / `maintainloop` / **`-maintain-once`** 接入 `cmd/oneclaw`。
+- **历史设计**（近场 / 远场 LLM 维护、`maintain.*` YAML）：见 [memory-maintain-dual-entry-design.md](memory-maintain-dual-entry-design.md)、[embedded-maintain-scheduler-design.md](embedded-maintain-scheduler-design.md)，**与当前仓库实现不一致处以代码为准**。
 
 ---
 
@@ -165,9 +142,7 @@ flowchart TB
 | 能力 | 作用 |
 |------|------|
 | **MCP** | `mcpclient.RegisterIfEnabled` 向共享 Registry 注册工具，系统提示可选 `MCPSystemNote` |
-| **sessdb** | 配置 SQLite 路径时，`RecallBridge` 在 factory 中注入，跨重启恢复 `RecallState` |
-| **审计类 NotifySink** | `RegisterAuditSinks`：LLM 步 / 编排 / 用户可见等 JSONL（见 [`notify-sinks-audit-design.md`](notify-sinks-audit-design.md)） |
-| **Notify 生命周期** | `notify` 事件：入站、回合起止、工具结束等（见 [`notification-hooks-design.md`](notification-hooks-design.md)） |
+| **Notify 生命周期** | `notify` 事件：入站、回合起止、工具结束等（见 [`notification-hooks-design.md`](notification-hooks-design.md)）；**审计类 JSONL Sink 已移除**（[`notify-sinks-audit-design.md`](notify-sinks-audit-design.md) 为归档） |
 
 ---
 

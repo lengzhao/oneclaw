@@ -7,18 +7,17 @@ import (
 	"context"
 	"encoding/json"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/lengzhao/oneclaw/loop"
-	"github.com/lengzhao/oneclaw/memory"
-	"github.com/lengzhao/oneclaw/rtopts"
 	"github.com/lengzhao/clawbridge/bus"
+	"github.com/lengzhao/oneclaw/loop"
+	"github.com/lengzhao/oneclaw/rtopts"
 	"github.com/lengzhao/oneclaw/tasks"
 	"github.com/lengzhao/oneclaw/test/openaistub"
 	"github.com/lengzhao/oneclaw/toolctx"
 	"github.com/lengzhao/oneclaw/tools/builtin"
+	"github.com/lengzhao/oneclaw/workspace"
 	"github.com/openai/openai-go"
 )
 
@@ -67,20 +66,21 @@ func TestE2E_109_TaskToolsWriteFileAndDisableHidesBlock(t *testing.T) {
 	client := openai.NewClient(stubOpenAIOptions(stub)...)
 	msgs := []openai.ChatCompletionMessageParamUnion{}
 	err := loop.RunTurn(context.Background(), loop.Config{
-		Client:      &client,
-		Model:       "gpt-4o",
-		System:      "Use tools.",
-		MaxTokens:   512,
-		MaxSteps:    8,
-		Messages:    &msgs,
-		Registry:    builtin.DefaultRegistry(),
-		ToolContext: toolctx.New(cwd, context.Background()),
+		Client:       &client,
+		Model:        "gpt-4o",
+		System:       "Use tools.",
+		MaxTokens:    512,
+		MaxSteps:     8,
+		Messages:     &msgs,
+		Registry:     builtin.DefaultRegistry(),
+		ToolContext:  toolctx.New(cwd, context.Background()),
+		TurnMaxSteps: 8,
 	}, bus.InboundMessage{Content: "create task"})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	path := filepath.Join(cwd, memory.DotDir, "tasks.json")
+	path := workspace.JoinSessionWorkspace(cwd, false, "tasks.json")
 	b, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("tasks.json: %v", err)
@@ -111,14 +111,15 @@ func TestE2E_109_TaskToolsWriteFileAndDisableHidesBlock(t *testing.T) {
 	client2 := openai.NewClient(stubOpenAIOptions(stub2)...)
 	msgs2 := []openai.ChatCompletionMessageParamUnion{}
 	err = loop.RunTurn(context.Background(), loop.Config{
-		Client:      &client2,
-		Model:       "gpt-4o",
-		System:      "Use tools.",
-		MaxTokens:   512,
-		MaxSteps:    8,
-		Messages:    &msgs2,
-		Registry:    builtin.DefaultRegistry(),
-		ToolContext: toolctx.New(cwd, context.Background()),
+		Client:       &client2,
+		Model:        "gpt-4o",
+		System:       "Use tools.",
+		MaxTokens:    512,
+		MaxSteps:     8,
+		Messages:     &msgs2,
+		Registry:     builtin.DefaultRegistry(),
+		ToolContext:  toolctx.New(cwd, context.Background()),
+		TurnMaxSteps: 8,
 	}, bus.InboundMessage{Content: "complete it"})
 	if err != nil {
 		t.Fatal(err)

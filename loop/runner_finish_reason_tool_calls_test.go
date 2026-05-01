@@ -48,6 +48,7 @@ func TestRunTurn_toolCallsWhenFinishReasonEmpty(t *testing.T) {
 		Registry:      reg,
 		ToolContext:   toolctx.New(t.TempDir(), context.Background()),
 		ChatTransport: "non_stream",
+		TurnMaxSteps:  2,
 	}, bus.InboundMessage{Content: "hi"})
 	if err != nil {
 		t.Fatal(err)

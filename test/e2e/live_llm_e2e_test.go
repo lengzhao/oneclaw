@@ -7,7 +7,6 @@
 package e2e_test
 
 import (
-	"bytes"
 	"context"
 	"os"
 	"path/filepath"
@@ -16,13 +15,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/oneclaw/config"
 	"github.com/lengzhao/oneclaw/loop"
-	"github.com/lengzhao/oneclaw/memory"
 	"github.com/lengzhao/oneclaw/rtopts"
-	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/oneclaw/session"
 	"github.com/lengzhao/oneclaw/tools/builtin"
+	"github.com/lengzhao/oneclaw/workspace"
 	"github.com/openai/openai-go"
 )
 
@@ -94,7 +93,7 @@ func TestLiveLLM_ChatRoundTrip(t *testing.T) {
 	s.DisableMemory = true
 	rtopts.Set(&s)
 	sessionHome := filepath.Join(r.UserDataRoot(), "sessions", "e2e-live")
-	if err := os.MkdirAll(filepath.Join(sessionHome, memory.DotDir), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(sessionHome, workspace.DotDir), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	e := newLiveEngine(t, r, sessionHome)
@@ -110,65 +109,4 @@ func TestLiveLLM_ChatRoundTrip(t *testing.T) {
 		t.Fatal("empty assistant reply")
 	}
 	t.Logf("assistant: %s", out)
-}
-
-// TestLiveLLM_DailyLogExtract 验证自学/进化链路之一：PostTurn 写入当日 daily log（需开启 memory 与 extract）。
-func TestLiveLLM_DailyLogExtract(t *testing.T) {
-	if testing.Short() {
-		t.Skip("-short")
-	}
-	cfgPath := testLiveConfigPath(t)
-	if _, err := os.Stat(cfgPath); err != nil {
-		if os.IsNotExist(err) {
-			t.Skipf("missing %s — copy live_llm.config.example.yaml and fill api_key", cfgPath)
-		}
-		t.Fatal(err)
-	}
-
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	t.Setenv("OPENAI_BASE_URL", "")
-
-	r := loadLiveResolved(t, cfgPath, home)
-	r.PushRuntime()
-	s2 := rtopts.Current()
-	s2.MemoryBase = filepath.Join(home, memory.DotDir)
-	s2.DisableMemory = false
-	s2.DisableMemoryExtract = false
-	s2.DisableAutoMemory = false
-	rtopts.Set(&s2)
-
-	sessionHome := filepath.Join(r.UserDataRoot(), "sessions", "e2e-live-mem")
-	if err := os.MkdirAll(filepath.Join(sessionHome, memory.DotDir), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	e := newLiveEngine(t, r, sessionHome)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-	defer cancel()
-
-	token := "E2E_LIVE_MEM_TOKEN_9911"
-	msg := "For the project log: remember token " + token + " for testing. Reply with one short acknowledgment sentence only."
-	if err := e.SubmitUser(ctx, bus.InboundMessage{Content: msg}); err != nil {
-		t.Fatal(err)
-	}
-	if strings.TrimSpace(loop.LastAssistantDisplay(e.Messages)) == "" {
-		t.Fatal("empty assistant reply")
-	}
-
-	layout := memory.DefaultLayout(sessionHome, home)
-	today := time.Now().Format("2006-01-02")
-	logPath := memory.DailyLogPath(layout.Auto, today)
-	b, err := os.ReadFile(logPath)
-	if err != nil {
-		t.Fatalf("daily log not written at %s: %v", logPath, err)
-	}
-	if len(bytes.TrimSpace(b)) == 0 {
-		t.Fatalf("daily log empty: %s", logPath)
-	}
-	if !bytes.Contains(b, []byte(token)) {
-		t.Logf("log path: %s", logPath)
-		t.Logf("log content:\n%s", b)
-		t.Fatalf("daily log does not contain token %q (extract line may diverge; check model/output)", token)
-	}
 }

@@ -1,6 +1,7 @@
-package memory
+package workspace
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 )
@@ -30,6 +31,12 @@ func JoinSessionWorkspaceWithInstruction(cwd, instructionRoot string, flat bool,
 	base := filepath.Clean(cwd)
 	if flat && strings.TrimSpace(instructionRoot) != "" {
 		base = filepath.Clean(instructionRoot)
+	} else if !flat && strings.TrimSpace(instructionRoot) == "" {
+		// Repo-style overlay: session files under <cwd>/.oneclaw/ when that directory exists.
+		dot := filepath.Join(base, DotDir)
+		if st, err := os.Stat(dot); err == nil && st.IsDir() {
+			base = dot
+		}
 	}
 	rel := SessionWorkspaceRel(flat, elem...)
 	if rel == "" {

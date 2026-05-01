@@ -8,7 +8,7 @@ import (
 
 	"github.com/lengzhao/oneclaw/config"
 	"github.com/lengzhao/oneclaw/logx"
-	"github.com/lengzhao/oneclaw/memory"
+	"github.com/lengzhao/oneclaw/workspace"
 )
 
 func TestInitWorkspaceWritesConfigAndDirs(t *testing.T) {
@@ -18,7 +18,7 @@ func TestInitWorkspaceWritesConfigAndDirs(t *testing.T) {
 	if err := config.InitWorkspace(home, home); err != nil {
 		t.Fatal(err)
 	}
-	cfgPath := filepath.Join(home, memory.DotDir, "config.yaml")
+	cfgPath := filepath.Join(home, workspace.DotDir, "config.yaml")
 	if _, err := os.Stat(cfgPath); err != nil {
 		t.Fatalf("config: %v", err)
 	}
@@ -39,16 +39,16 @@ func TestInitWorkspaceWritesConfigAndDirs(t *testing.T) {
 	if string(raw) != string(raw2) {
 		t.Fatal("config should be unchanged on second init")
 	}
-	memPath := filepath.Join(home, memory.DotDir, "memory", "MEMORY.md")
+	memPath := filepath.Join(home, workspace.DotDir, "memory", "MEMORY.md")
 	if _, err := os.Stat(memPath); err != nil {
 		t.Fatalf("MEMORY.md from init template: %v", err)
 	}
-	agentPath := filepath.Join(home, memory.DotDir, "AGENT.md")
+	agentPath := filepath.Join(home, workspace.DotDir, "AGENT.md")
 	if _, err := os.Stat(agentPath); err != nil {
 		t.Fatalf("AGENT.md from init template: %v", err)
 	}
 	for _, name := range []string{"MAINTAIN_SCHEDULED.md", "MAINTAIN_POST_TURN.md"} {
-		p := filepath.Join(home, memory.DotDir, name)
+		p := filepath.Join(home, workspace.DotDir, name)
 		raw, err := os.ReadFile(p)
 		if err != nil {
 			t.Fatalf("%s from init template: %v", name, err)
@@ -63,7 +63,7 @@ func TestInitWorkspaceMergesMissingKeys(t *testing.T) {
 	closeLog := logx.Init("error", "text", "")
 	defer closeLog()
 	home := t.TempDir()
-	dot := filepath.Join(home, memory.DotDir)
+	dot := filepath.Join(home, workspace.DotDir)
 	if err := os.MkdirAll(dot, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +90,7 @@ func TestInitWorkspaceInvalidYAML(t *testing.T) {
 	closeLog := logx.Init("error", "text", "")
 	defer closeLog()
 	home := t.TempDir()
-	dot := filepath.Join(home, memory.DotDir)
+	dot := filepath.Join(home, workspace.DotDir)
 	if err := os.MkdirAll(dot, 0o755); err != nil {
 		t.Fatal(err)
 	}

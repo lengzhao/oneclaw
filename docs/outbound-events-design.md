@@ -10,7 +10,7 @@
 - **桥实例**：**`session.Engine.Bridge`** 由 **`MainEngineFactoryDeps`** / 单测显式赋值，出站为 **`Bridge.Bus().PublishOutbound`**，入站状态为 **`Bridge.UpdateStatus`**（见 **`session/bridge.go`**、`session/turn_prepare.go`、`session/engine.go`）。
 - **与 `loop` 的衔接**：**`loop.Config.OutboundText`** 在 **`session.prepareSharedTurn`** 中实现为：将助手可见文本封装为 **`OutboundMessage`** 再 **`Engine.publishOutbound`**；**`ErrNotInitialized`** 在闭包内吞掉，避免无桥时 **`loop.outbound.emit_failed`** 刷屏（见 `session/turn_prepare.go`）。
 - **入站状态**：**`Bridge.UpdateStatus(ctx, inbound, state, metadata)`**（**`UpdateStatusState`**）；**`Bridge.EditMessage`** 基于 **`OutboundMessage`**（含 **`message_id`** 引用已发消息；**`Send`** 忽略该字段）。
-- **审计 / 通知**：**`notify`** 包内 **`notify.Sink`** 的 **`Emit`** 用于 LLM / 编排 / 可见消息等 **JSONL 审计**（见 [notify-sinks-audit-design.md](notify-sinks-audit-design.md)），与上文的 **`PublishOutbound`** 并行，**不是**同一套 `Record{seq,kind}` 协议。
+- **通知**：**`notify`** 包内 **`notify.Sink`** 的 **`Emit`** 仍可用于其它订阅者；**JSONL 审计 Sink 已移除**（历史方案见 [notify-sinks-audit-design.md](notify-sinks-audit-design.md)）。与 **`PublishOutbound`** 并行者**不是**同一套 `Record{seq,kind}` 协议。
 
 ---
 
@@ -78,4 +78,4 @@ sequenceDiagram
 ## 6. 相关文档
 
 - 入站、`WorkerPool`、工具注册表：[inbound-routing-design.md](inbound-routing-design.md)
-- 审计 JSONL：[notify-sinks-audit-design.md](notify-sinks-audit-design.md)
+- 历史审计 JSONL 设计（已移除实现）：[notify-sinks-audit-design.md](notify-sinks-audit-design.md)

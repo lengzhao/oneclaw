@@ -11,54 +11,30 @@ const defaultContextTokens = 110_000
 // Global holds byte caps. MaxPromptBytes is the overall context text budget (explicit bytes or token×2 from config).
 // Segment fields > 0 override defaults; 0 means use a simple fraction of MaxPromptBytes.
 type Global struct {
-	MaxPromptBytes    int
-	MinTailMessages   int
-	RecallMaxBytes    int // ceiling for RecallBytes(); 0 means 12_000
-	HistoryMaxBytes   int
+	MaxPromptBytes      int
+	MinTailMessages     int
+	HistoryMaxBytes     int
 	SystemExtraMaxBytes int
-	AgentMdMaxBytes   int
-	SkillIndexBytes   int
-	InheritedMessages int
+	AgentMdMaxBytes     int
+	SkillIndexBytes     int
+	InheritedMessages   int
 }
 
 // DefaultGlobal matches the historical default when YAML omits budget (110000 tokens ×2, etc.).
 func DefaultGlobal() Global {
 	maxB := defaultContextTokens * 2
 	return Global{
-		MaxPromptBytes:    maxB,
-		MinTailMessages:   6,
-		RecallMaxBytes:    12_000,
-		HistoryMaxBytes:   0,
+		MaxPromptBytes:      maxB,
+		MinTailMessages:     6,
+		HistoryMaxBytes:     0,
 		SystemExtraMaxBytes: 0,
-		AgentMdMaxBytes:   0,
-		SkillIndexBytes:   0,
-		InheritedMessages: 0,
+		AgentMdMaxBytes:     0,
+		SkillIndexBytes:     0,
+		InheritedMessages:   0,
 	}
 }
 
 func (g Global) Enabled() bool { return g.MaxPromptBytes > 0 }
-
-// RecallBytes caps memory recall (SelectRecall). Uses RecallMaxBytes as ceiling (default 12_000); default share of MaxPromptBytes when enabled.
-func (g Global) RecallBytes() int {
-	ceil := g.RecallMaxBytes
-	if ceil <= 0 {
-		ceil = 12_000
-	}
-	if !g.Enabled() {
-		if ceil < 4_000 {
-			ceil = 4_000
-		}
-		return ceil
-	}
-	n := g.MaxPromptBytes * 10 / 100
-	if n < 4_000 {
-		n = 4_000
-	}
-	if n > ceil {
-		n = ceil
-	}
-	return n
-}
 
 // InjectCaps returns max bytes for system memory suffix and agentMd block.
 func (g Global) InjectCaps() (systemExtra, agentMd int) {

@@ -68,7 +68,7 @@ flowchart LR
 
 - **索引器**：扫描 `Layout` 下可索引路径（与当前 `listMemoryMarkdownFiles` 范围对齐），将 Markdown 切为稳定 chunk，写入主表并维护 FTS。
 - **query compiler**：把用户输入转为安全、可控、与索引同构的 `MATCH` 子句。
-- **召回器**：FTS 检索后做轻量 rerank，再应用 `budget.recall_max_bytes` 与 chunk 级 `RecallState`，最终格式化为现有 `Attachment: relevant_memories` 文本块。
+- **召回器**：FTS 检索后做轻量 rerank，再应用固定字节上限与 chunk 级 `RecallState`，最终格式化为现有 `Attachment: relevant_memories` 文本块。
 
 ### 3.1 `RecallBackend` 抽象
 
@@ -332,7 +332,7 @@ flowchart TD
 
 - 去重以 **chunk** 为主，不再以 path 一刀切；
 - 同一文件允许多个高价值 chunk 入选，但要受预算和多样性约束；
-- 仍沿用 `budget.recall_max_bytes` 作为最终裁剪边界。
+- 仍沿用固定字节上限作为最终裁剪边界。
 
 说明：`RecallState` 属于 `RecallBackend` 的跨轮调用状态，但其**序列化与注入语义**仍由外层控制；backend 只消费并返回更新后的状态，不自行决定 session 持久化格式。
 
@@ -407,7 +407,7 @@ flowchart TD
 | `memory.recall.chunk_overlap_bytes` | 超长 chunk 二级切分的 overlap。 |
 | `memory.recall.force_scan_on_stale` | 检测到索引落后时是否强制回退 `scan`。 |
 
-**预算**：`budget.recall_max_bytes` 仍为最终注入上限；`RecallState` 改为 chunk 级去重，但总预算语义不变。
+**预算**：最终注入上限由实现内固定或按比例裁剪；`RecallState` 改为 chunk 级去重，但总预算语义不变。
 
 ---
 

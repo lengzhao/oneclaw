@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/lengzhao/oneclaw/loop"
 	"github.com/lengzhao/clawbridge/bus"
+	"github.com/lengzhao/oneclaw/loop"
 	"github.com/lengzhao/oneclaw/test/openaistub"
 	"github.com/lengzhao/oneclaw/toolctx"
 	"github.com/lengzhao/oneclaw/tools"
@@ -29,14 +29,15 @@ func TestE2E_StubTextReply(t *testing.T) {
 	msgs := []openai.ChatCompletionMessageParamUnion{}
 	reg := tools.NewRegistry()
 	err := loop.RunTurn(context.Background(), loop.Config{
-		Client:      &client,
-		Model:       "gpt-4o",
-		System:      "You are a test assistant.",
-		MaxTokens:   256,
-		MaxSteps:    4,
-		Messages:    &msgs,
-		Registry:    reg,
-		ToolContext: toolctx.New(cwd, context.Background()),
+		Client:       &client,
+		Model:        "gpt-4o",
+		System:       "You are a test assistant.",
+		MaxTokens:    256,
+		MaxSteps:     4,
+		Messages:     &msgs,
+		Registry:     reg,
+		ToolContext:  toolctx.New(cwd, context.Background()),
+		TurnMaxSteps: 4,
 	}, bus.InboundMessage{Content: "hi"})
 	if err != nil {
 		t.Fatal(err)
@@ -72,14 +73,15 @@ func TestE2E_StubToolThenText(t *testing.T) {
 	reg := builtin.DefaultRegistry()
 
 	err := loop.RunTurn(context.Background(), loop.Config{
-		Client:      &client,
-		Model:       "gpt-4o",
-		System:      "Use tools when needed.",
-		MaxTokens:   256,
-		MaxSteps:    8,
-		Messages:    &msgs,
-		Registry:    reg,
-		ToolContext: toolctx.New(cwd, context.Background()),
+		Client:       &client,
+		Model:        "gpt-4o",
+		System:       "Use tools when needed.",
+		MaxTokens:    256,
+		MaxSteps:     8,
+		Messages:     &msgs,
+		Registry:     reg,
+		ToolContext:  toolctx.New(cwd, context.Background()),
+		TurnMaxSteps: 8,
 	}, bus.InboundMessage{Content: "read note.txt"})
 	if err != nil {
 		t.Fatal(err)

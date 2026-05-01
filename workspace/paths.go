@@ -1,5 +1,5 @@
-// Package memory implements file-based memory discovery, injection, and helpers for phase B.
-package memory
+// Package workspace holds user/session path layout, write roots, and related helpers (no LLM recall or maintenance).
+package workspace
 
 import (
 	"crypto/sha256"
@@ -18,10 +18,15 @@ const DotDir = ".oneclaw"
 // AgentInstructionsFile is the repo/user instructions entry filename.
 const AgentInstructionsFile = "AGENT.md"
 
-const entrypointName = "MEMORY.md"
+// RulesMemoryFile is the short rules / standing memory entry (same directory as AGENT.md in IM layouts).
+const RulesMemoryFile = "MEMORY.md"
 
-// expandTilde replaces a leading "~/" or "~\" (and bare "~") with home. Other paths are unchanged.
-// Shells expand ~ in .env files, but many loaders pass the string through literally; Go treats "~" as a normal path segment.
+// SoulFile is optional persona / tone notes (same directory as AGENT.md when used).
+const SoulFile = "SOUL.md"
+
+// TodoFile is optional freeform session todo notes (same directory as AGENT.md when used).
+const TodoFile = "TODO.md"
+
 func expandTilde(home, p string) string {
 	if home == "" || p == "" {
 		return p
@@ -44,18 +49,6 @@ func MemoryBaseDir(home string) string {
 		return filepath.Clean(expandTilde(home, v))
 	}
 	return filepath.Join(home, DotDir)
-}
-
-func recallSQLitePath(layout Layout) string {
-	p := strings.TrimSpace(rtopts.Current().MemoryRecallSQLitePath)
-	base := layout.MemoryBase
-	if p == "" {
-		return filepath.Join(base, "memory", "recall_index.sqlite")
-	}
-	if filepath.IsAbs(p) {
-		return filepath.Clean(p)
-	}
-	return filepath.Join(base, p)
 }
 
 // AutoMemoryDir is the per-project auto memory directory (<base>/projects/<slug>/memory).
@@ -152,6 +145,23 @@ func (l Layout) DialogHistoryPathForSession(date, sessionID string) string {
 	return filepath.Join(l.Project, date, seg, "dialog_history.json")
 }
 
+// PathUnderRoot reports whether abs is root or a path strictly under root (after filepath.Clean).
+func PathUnderRoot(abs, root string) bool {
+	abs = filepath.Clean(abs)
+	root = filepath.Clean(root)
+	if root == "" || root == "." {
+		return false
+	}
+	if abs == root {
+		return true
+	}
+	rel, err := filepath.Rel(root, abs)
+	if err != nil {
+		return false
+	}
+	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
 type AgentScope int
 
 const (
@@ -159,7 +169,7 @@ const (
 	AgentScopeProject
 )
 
-// Layout holds resolved memory directories for a session cwd.
+// Layout holds resolved workspace directories for a session cwd.
 type Layout struct {
 	CWD            string
 	MemoryBase     string
@@ -170,20 +180,22 @@ type Layout struct {
 	EntrypointName string
 	// InstructionRoot is the IM directory containing AGENT.md and MEMORY.md (same dir). Empty for repo-style layouts.
 	InstructionRoot string
-	// HostUserData is true when CWD is the IM user data root (~/.oneclaw): config, AGENT.md, audit, and
+	// HostUserData is true when CWD is the IM user data root (~/.oneclaw): config, AGENT.md, and
 	// scheduled_maintain_state live directly under CWD.
 	HostUserData bool
 }
 
 // DotOrDataRoot returns the directory holding host-style instruction/runtime files:
-// for repo cwd layout it is <cwd>; for IM host layout with InstructionRoot set it is InstructionRoot;
-// otherwise legacy IM host used CWD.
+// IM InstructionRoot when set; else repo <cwd>/.oneclaw when present; else legacy host CWD or plain repo CWD.
 func (l Layout) DotOrDataRoot() string {
 	if l.InstructionRoot != "" {
 		return filepath.Clean(l.InstructionRoot)
 	}
 	if l.HostUserData {
 		return filepath.Clean(l.CWD)
+	}
+	if ov := l.RepoOverlayDir(); ov != "" {
+		return ov
 	}
 	return filepath.Clean(l.CWD)
 }
@@ -208,7 +220,7 @@ func DefaultLayout(cwd, home string) Layout {
 		Project:        ProjectMemoryDir(cwd),
 		Auto:           auto,
 		AgentDefault:   agentDefaultPair(cwd, mb, "default"),
-		EntrypointName: entrypointName,
+		EntrypointName: RulesMemoryFile,
 	}
 }
 
@@ -225,7 +237,7 @@ func SessionDotLayout(dotRoot, home string) Layout {
 		Project:        filepath.Join(dot, "memory"),
 		Auto:           AutoMemoryDir(dot, mb),
 		AgentDefault:   []string{filepath.Join(mb, "agent-memory", "default"), agentProj},
-		EntrypointName: entrypointName,
+		EntrypointName: RulesMemoryFile,
 		HostUserData:   true,
 	}
 }
@@ -245,18 +257,17 @@ func IMSessionLayout(instructionRoot, home string) Layout {
 		Project:         projMem,
 		Auto:            AutoMemoryDir(ws, mb),
 		AgentDefault:    []string{filepath.Join(mb, "agent-memory", "default"), agentProj},
-		EntrypointName:  entrypointName,
+		EntrypointName:  RulesMemoryFile,
 		HostUserData:    true,
 	}
 }
 
-// LayoutForIMWorkspace selects memory layout for an Engine: repo-style DefaultLayout when WorkspaceFlat is false;
+// LayoutForIMWorkspace selects layout for an Engine: repo-style DefaultLayout when WorkspaceFlat is false;
 // when true, IM shared root uses IMHostMaintainLayout, IMSessionLayout for isolated sessions, or SessionDotLayout (legacy session dir).
 func LayoutForIMWorkspace(cwd, home, userDataRoot string, workspaceFlat bool, instructionRoot string) Layout {
 	if !workspaceFlat {
 		return DefaultLayout(cwd, home)
 	}
-	// filepath.Clean("") is "." in Go; treat trimmed empty roots as unset.
 	urRaw := strings.TrimSpace(userDataRoot)
 	var ur string
 	if urRaw != "" {
@@ -299,7 +310,7 @@ func IMHostMaintainLayout(userDataRoot, home string) Layout {
 		Project:         projMem,
 		Auto:            AutoMemoryDir(ws, mb),
 		AgentDefault:    []string{filepath.Join(mb, "agent-memory", "default"), agentHost},
-		EntrypointName:  entrypointName,
+		EntrypointName:  RulesMemoryFile,
 		HostUserData:    true,
 	}
 }
@@ -311,49 +322,7 @@ func agentDefaultPair(cwd, memoryBase, agentType string) []string {
 	}
 }
 
-// AuditWriteRoots is WriteRoots plus behavior-policy directories (for D2 audit coverage).
-// Individual AGENT.md files are handled by IsBehaviorPolicyFile.
-func (l Layout) AuditWriteRoots() []string {
-	seen := make(map[string]struct{})
-	var out []string
-	add := func(p string) {
-		p = filepath.Clean(p)
-		if p == "" || p == "." {
-			return
-		}
-		if _, ok := seen[p]; ok {
-			return
-		}
-		seen[p] = struct{}{}
-		out = append(out, p)
-	}
-	for _, p := range l.WriteRoots() {
-		add(p)
-	}
-	add(filepath.Join(l.DotOrDataRoot(), "rules"))
-	add(filepath.Join(l.MemoryBase, "rules"))
-	add(filepath.Join(l.DotOrDataRoot(), "skills"))
-	add(filepath.Join(l.MemoryBase, "skills"))
-	return out
-}
-
-// IsBehaviorPolicyFile reports whether abs is one of the canonical AGENT.md locations
-// (project `AGENT.md` or user memory base `~/.oneclaw/AGENT.md`).
-func (l Layout) IsBehaviorPolicyFile(abs string) bool {
-	abs = filepath.Clean(abs)
-	candidates := []string{
-		filepath.Join(l.DotOrDataRoot(), AgentInstructionsFile),
-		filepath.Join(l.MemoryBase, AgentInstructionsFile),
-	}
-	for _, c := range candidates {
-		if abs == filepath.Clean(c) {
-			return true
-		}
-	}
-	return false
-}
-
-// WriteRoots returns distinct directory roots tools may write for memory topics and logs.
+// WriteRoots returns distinct directory roots tools may write for topics and logs.
 func (l Layout) WriteRoots() []string {
 	seen := make(map[string]struct{})
 	var out []string
@@ -377,7 +346,7 @@ func (l Layout) WriteRoots() []string {
 	return out
 }
 
-// EnsureDirs creates memory directories so Write can succeed without mkdir in the model.
+// EnsureDirs creates workspace directories so Write can succeed without mkdir in the model.
 func (l Layout) EnsureDirs() {
 	for _, d := range l.WriteRoots() {
 		_ = os.MkdirAll(d, 0o755)
@@ -387,4 +356,29 @@ func (l Layout) EnsureDirs() {
 // AutoMemoryDisabled reports features.disable_auto_memory from config.
 func AutoMemoryDisabled() bool {
 	return rtopts.Current().DisableAutoMemory
+}
+
+// RepoOverlayDir returns <cwd>/.oneclaw when it exists as a directory (repo-style overlay); empty otherwise.
+// Not used when InstructionRoot is set (IM layouts).
+func (l Layout) RepoOverlayDir() string {
+	if strings.TrimSpace(l.InstructionRoot) != "" {
+		return ""
+	}
+	dot := filepath.Join(filepath.Clean(l.CWD), DotDir)
+	if st, err := os.Stat(dot); err == nil && st.IsDir() {
+		return dot
+	}
+	return ""
+}
+
+// RulesEntryDir is the directory holding project MEMORY.md / SOUL.md / TODO.md beside AGENT.md:
+// IM InstructionRoot when set, else repo overlay when present, else the project memory root directory.
+func (l Layout) RulesEntryDir() string {
+	if ir := strings.TrimSpace(l.InstructionRoot); ir != "" {
+		return filepath.Clean(ir)
+	}
+	if ov := l.RepoOverlayDir(); ov != "" {
+		return ov
+	}
+	return filepath.Clean(l.Project)
 }

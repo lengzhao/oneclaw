@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lengzhao/oneclaw/memory"
+	"github.com/lengzhao/oneclaw/workspace"
 	"github.com/lengzhao/oneclaw/toolctx"
 	"github.com/openai/openai-go"
 )
@@ -276,7 +276,7 @@ func shellSingleQuote(s string) string {
 func execSessionDir(cwd, sessionID string, workspaceFlat bool, instructionRoot string) (dir string, runLogPath string, err error) {
 	_ = sessionID
 	ts := fmt.Sprintf("%d", time.Now().Unix())
-	dir = memory.JoinSessionWorkspaceWithInstruction(cwd, instructionRoot, workspaceFlat, "exec_log", ts)
+	dir = workspace.JoinSessionWorkspaceWithInstruction(cwd, instructionRoot, workspaceFlat, "exec_log", ts)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", "", fmt.Errorf("exec: mkdir exec_log dir: %w", err)
 	}

@@ -8,7 +8,6 @@ import (
 
 	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/oneclaw/loop"
-	"github.com/lengzhao/oneclaw/memory"
 	"github.com/openai/openai-go"
 )
 
@@ -17,16 +16,12 @@ func TestTrySlashLocalTurn_StatusAndPaths(t *testing.T) {
 	e.SessionID = "test-sid"
 	e.UserDataRoot = "/tmp/udr"
 	e.TranscriptPath = "/tmp/t.jsonl"
-	e.RecallState = memory.RecallState{
-		SurfacedPaths: map[string]struct{}{"/a": {}},
-		SurfacedBytes: 42,
-	}
 
 	reply, ok := e.trySlashLocalTurn(bus.InboundMessage{Content: "/status", ClientID: "cli"})
 	if !ok {
 		t.Fatal("expected local slash")
 	}
-	for _, want := range []string{"test-sid", "cli", "TranscriptPath:", "Recall: 1", "工作区会话 ID", "driver client_id"} {
+	for _, want := range []string{"test-sid", "cli", "TranscriptPath:", "工作区会话 ID", "driver client_id"} {
 		if !strings.Contains(reply, want) {
 			t.Fatalf("status reply missing %q:\n%s", want, reply)
 		}
@@ -95,10 +90,6 @@ func TestTrySlashLocalTurn_ResetClearsMessagesAndTranscript(t *testing.T) {
 	e.WorkingTranscriptPath = wp
 	e.Messages = []openai.ChatCompletionMessageParamUnion{openai.UserMessage("old")}
 	e.Transcript = []openai.ChatCompletionMessageParamUnion{openai.UserMessage("old"), openai.AssistantMessage("gone")}
-	e.RecallState = memory.RecallState{
-		SurfacedPaths: map[string]struct{}{"/x": {}},
-		SurfacedBytes: 3,
-	}
 
 	reply, ok := e.trySlashLocalTurn(bus.InboundMessage{Content: "/reset"})
 	if !ok || !strings.Contains(reply, "已清空") {
@@ -106,9 +97,6 @@ func TestTrySlashLocalTurn_ResetClearsMessagesAndTranscript(t *testing.T) {
 	}
 	if len(e.Messages) != 0 || len(e.Transcript) != 0 {
 		t.Fatalf("expected empty slices, messages=%d transcript=%d", len(e.Messages), len(e.Transcript))
-	}
-	if len(e.RecallState.SurfacedPaths) != 0 || e.RecallState.SurfacedBytes != 0 {
-		t.Fatalf("recall not cleared: %+v", e.RecallState)
 	}
 	raw, err := os.ReadFile(tp)
 	if err != nil {
@@ -140,20 +128,13 @@ func TestTrySlashLocalTurn_ResetRejectsArgs(t *testing.T) {
 	}
 }
 
-func TestTrySlashLocalTurn_RecallReset(t *testing.T) {
+func TestTrySlashLocalTurn_RecallIsStub(t *testing.T) {
 	e := NewEngine(t.TempDir(), nil)
-	e.RecallState = memory.RecallState{
-		SurfacedPaths: map[string]struct{}{"/p": {}},
-		SurfacedBytes: 99,
-	}
 	reply, ok := e.trySlashLocalTurn(bus.InboundMessage{Content: "/recall reset"})
 	if !ok {
 		t.Fatal("expected local slash")
 	}
-	if !strings.Contains(reply, "已重置") {
+	if !strings.Contains(reply, "recall") {
 		t.Fatalf("reply: %q", reply)
-	}
-	if len(e.RecallState.SurfacedPaths) != 0 || e.RecallState.SurfacedBytes != 0 {
-		t.Fatalf("recall not cleared: %+v", e.RecallState)
 	}
 }

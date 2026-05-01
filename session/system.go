@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/lengzhao/oneclaw/budget"
-	"github.com/lengzhao/oneclaw/memory"
+	"github.com/lengzhao/oneclaw/instructions"
 	"github.com/lengzhao/oneclaw/prompts"
 	"github.com/lengzhao/oneclaw/schedule"
 	"github.com/lengzhao/oneclaw/skills"
@@ -50,7 +50,7 @@ func shellForPrompt() string {
 // buildTurnSystem renders the main-thread system prompt (docs/prompts/10-main-thread.md).
 // e.System is appended last as "Additional system context" only; the default identity lives in prompts/templates/main_thread_system.tmpl.
 // cat lists available run_agent roles (see docs/orchestrator-business-agents.md).
-func (e *Engine) buildTurnSystem(memOK bool, bundle memory.TurnBundle, bg budget.Global, home string, herr error, cat *subagent.Catalog) string {
+func (e *Engine) buildTurnSystem(memOK bool, bundle instructions.TurnBundle, bg budget.Global, home string, herr error, cat *subagent.Catalog) string {
 	d := MainThreadSystemData{
 		CWD:                   e.CWD,
 		Platform:              runtime.GOOS,

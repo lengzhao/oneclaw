@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lengzhao/oneclaw/memory"
+	"github.com/lengzhao/oneclaw/workspace"
 )
 
 func TestParseFrontmatter(t *testing.T) {
@@ -28,7 +28,7 @@ Body **here**.
 func TestLoadAllProjectOverridesUser(t *testing.T) {
 	home := t.TempDir()
 	cwd := t.TempDir()
-	userSkills := filepath.Join(home, memory.DotDir, "skills")
+	userSkills := filepath.Join(home, workspace.DotDir, "skills")
 	projSkills := filepath.Join(cwd, "skills")
 	_ = os.MkdirAll(filepath.Join(userSkills, "demo"), 0o755)
 	_ = os.MkdirAll(filepath.Join(projSkills, "demo"), 0o755)

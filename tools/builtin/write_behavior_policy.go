@@ -10,7 +10,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/lengzhao/oneclaw/memory"
+	"github.com/lengzhao/oneclaw/workspace"
 	"github.com/lengzhao/oneclaw/rtopts"
 	"github.com/lengzhao/oneclaw/toolctx"
 	"github.com/openai/openai-go"
@@ -101,7 +101,7 @@ func validatedAgentType(agentType string) (string, error) {
 	return name, nil
 }
 
-func inferAgentMemoryScope(lay memory.Layout, hostDataRoot, scope string) (string, error) {
+func inferAgentMemoryScope(lay workspace.Layout, hostDataRoot, scope string) (string, error) {
 	scope = strings.TrimSpace(scope)
 	if scope != "" {
 		if scope != "public" && scope != "local" {
@@ -151,7 +151,7 @@ func resolveBehaviorPolicyPath(cwd string, workspaceFlat bool, instructionRoot, 
 		if ir != "" {
 			dir = filepath.Join(filepath.Clean(ir), "rules")
 		} else {
-			dir = memory.JoinSessionWorkspace(cwd, workspaceFlat, "rules")
+			dir = workspace.JoinSessionWorkspace(cwd, workspaceFlat, "rules")
 		}
 		return filepath.Join(dir, name), nil
 	case "skill":
@@ -162,17 +162,21 @@ func resolveBehaviorPolicyPath(cwd string, workspaceFlat bool, instructionRoot, 
 		if ir != "" {
 			return filepath.Join(filepath.Clean(ir), "skills", stem, skillEntryFile), nil
 		}
-		return memory.JoinSessionWorkspace(cwd, workspaceFlat, "skills", stem, skillEntryFile), nil
+		return workspace.JoinSessionWorkspace(cwd, workspaceFlat, "skills", stem, skillEntryFile), nil
 	case "agent_md":
 		if ir != "" {
-			return filepath.Join(filepath.Clean(ir), memory.AgentInstructionsFile), nil
+			return filepath.Join(filepath.Clean(ir), workspace.AgentInstructionsFile), nil
 		}
-		return memory.JoinSessionWorkspace(cwd, workspaceFlat, memory.AgentInstructionsFile), nil
+		return workspace.JoinSessionWorkspace(cwd, workspaceFlat, workspace.AgentInstructionsFile), nil
 	case "memory":
 		if ir != "" {
-			return filepath.Join(filepath.Clean(ir), "MEMORY.md"), nil
+			return filepath.Join(filepath.Clean(ir), workspace.RulesMemoryFile), nil
 		}
-		return memory.JoinSessionWorkspace(cwd, workspaceFlat, "memory", "MEMORY.md"), nil
+		dot := filepath.Join(filepath.Clean(cwd), workspace.DotDir)
+		if st, err := os.Stat(dot); err == nil && st.IsDir() {
+			return filepath.Join(dot, workspace.RulesMemoryFile), nil
+		}
+		return workspace.JoinSessionWorkspace(cwd, workspaceFlat, "memory", workspace.RulesMemoryFile), nil
 	default:
 		return "", fmt.Errorf("unknown target %q", target)
 	}
@@ -197,7 +201,7 @@ func behaviorPolicyRelativePath(ruleName string) (string, error) {
 	return clean, nil
 }
 
-func resolveBehaviorPolicyPathWithLayout(lay memory.Layout, cwd string, workspaceFlat bool, instructionRoot, hostDataRoot, target, ruleName, scope, agentType string) (string, error) {
+func resolveBehaviorPolicyPathWithLayout(lay workspace.Layout, cwd string, workspaceFlat bool, instructionRoot, hostDataRoot, target, ruleName, scope, agentType string) (string, error) {
 	switch target {
 	case "agent_memory":
 		rel, err := behaviorPolicyRelativePath(ruleName)
@@ -278,7 +282,7 @@ func (WriteBehaviorPolicyTool) Execute(_ context.Context, input json.RawMessage,
 	if home == "" {
 		home, _ = os.UserHomeDir()
 	}
-	lay := memory.LayoutForIMWorkspace(tctx.CWD, home, tctx.HostDataRoot, tctx.WorkspaceFlat, tctx.InstructionRoot)
+	lay := workspace.LayoutForIMWorkspace(tctx.CWD, home, tctx.HostDataRoot, tctx.WorkspaceFlat, tctx.InstructionRoot)
 	abs, err := resolveBehaviorPolicyPathWithLayout(lay, tctx.CWD, tctx.WorkspaceFlat, tctx.InstructionRoot, tctx.HostDataRoot, target, in.RuleName, in.Scope, in.AgentType)
 	if err != nil {
 		return "", err
@@ -293,21 +297,20 @@ func (WriteBehaviorPolicyTool) Execute(_ context.Context, input json.RawMessage,
 	if err := os.WriteFile(abs, b, 0o644); err != nil {
 		return "", err
 	}
-	memory.AppendMemoryAudit(lay, abs, "write_behavior_policy", b)
 	return "ok: wrote " + abs, nil
 }
 
-func validatePolicyPath(lay memory.Layout, abs, target string) error {
+func validatePolicyPath(lay workspace.Layout, abs, target string) error {
 	abs = filepath.Clean(abs)
 	switch target {
 	case "rule":
 		rulesDir := filepath.Clean(filepath.Join(lay.DotOrDataRoot(), "rules"))
-		if !memory.PathUnderRoot(abs, rulesDir) {
+		if !workspace.PathUnderRoot(abs, rulesDir) {
 			return fmt.Errorf("internal error: rule path outside rules dir")
 		}
 	case "skill":
 		skillsRoot := filepath.Clean(filepath.Join(lay.DotOrDataRoot(), "skills"))
-		if !memory.PathUnderRoot(abs, skillsRoot) || filepath.Base(abs) != skillEntryFile {
+		if !workspace.PathUnderRoot(abs, skillsRoot) || filepath.Base(abs) != skillEntryFile {
 			return fmt.Errorf("internal error: skill path outside skills root or wrong file")
 		}
 		rel, err := filepath.Rel(skillsRoot, filepath.Dir(abs))
@@ -315,15 +318,12 @@ func validatePolicyPath(lay memory.Layout, abs, target string) error {
 			return fmt.Errorf("internal error: skill must be <workspace>/skills/<name>/SKILL.md")
 		}
 	case "agent_md":
-		want := filepath.Clean(filepath.Join(lay.DotOrDataRoot(), memory.AgentInstructionsFile))
+		want := filepath.Clean(filepath.Join(lay.DotOrDataRoot(), workspace.AgentInstructionsFile))
 		if abs != want {
 			return fmt.Errorf("internal error: agent path mismatch")
 		}
 	case "memory":
-		want := filepath.Clean(filepath.Join(lay.Project, lay.EntrypointName))
-		if lay.InstructionRoot != "" {
-			want = filepath.Clean(filepath.Join(lay.InstructionRoot, lay.EntrypointName))
-		}
+		want := filepath.Clean(filepath.Join(lay.RulesEntryDir(), lay.EntrypointName))
 		if abs != want {
 			return fmt.Errorf("internal error: memory entrypoint path mismatch")
 		}
@@ -337,14 +337,14 @@ func validatePolicyPath(lay memory.Layout, abs, target string) error {
 			return fmt.Errorf("internal error: missing agent_memory public root")
 		}
 		publicRoot := filepath.Clean(filepath.Dir(lay.AgentDefault[0]))
-		if memory.PathUnderRoot(abs, publicRoot) {
+		if workspace.PathUnderRoot(abs, publicRoot) {
 			return nil
 		}
 		if len(lay.AgentDefault) < 2 {
 			return fmt.Errorf("internal error: missing agent_memory local root")
 		}
 		localRoot := filepath.Clean(filepath.Dir(lay.AgentDefault[1]))
-		if memory.PathUnderRoot(abs, localRoot) {
+		if workspace.PathUnderRoot(abs, localRoot) {
 			return nil
 		}
 		return fmt.Errorf("internal error: agent_memory path outside roots")
@@ -354,7 +354,7 @@ func validatePolicyPath(lay memory.Layout, abs, target string) error {
 	return nil
 }
 
-func targetAgentType(abs string, lay memory.Layout) string {
+func targetAgentType(abs string, lay workspace.Layout) string {
 	roots := []string{}
 	if len(lay.AgentDefault) > 0 {
 		roots = append(roots, filepath.Clean(filepath.Dir(lay.AgentDefault[0])))
@@ -363,7 +363,7 @@ func targetAgentType(abs string, lay memory.Layout) string {
 		roots = append(roots, filepath.Clean(filepath.Dir(lay.AgentDefault[1])))
 	}
 	for _, root := range roots {
-		if !memory.PathUnderRoot(abs, root) {
+		if !workspace.PathUnderRoot(abs, root) {
 			continue
 		}
 		rel, err := filepath.Rel(root, abs)

@@ -9,10 +9,11 @@ import (
 	"github.com/lengzhao/clawbridge"
 	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/oneclaw/budget"
-	"github.com/lengzhao/oneclaw/memory"
+	"github.com/lengzhao/oneclaw/instructions"
 	"github.com/lengzhao/oneclaw/rtopts"
 	"github.com/lengzhao/oneclaw/subagent"
 	"github.com/lengzhao/oneclaw/toolctx"
+	"github.com/lengzhao/oneclaw/workspace"
 )
 
 // sharedTurnPrep is the common substrate for SubmitUser and submitLocalSlashTurn:
@@ -21,18 +22,18 @@ type sharedTurnPrep struct {
 	tctx         *toolctx.Context
 	bg           budget.Global
 	memOK        bool
-	layout       memory.Layout
-	bundle       memory.TurnBundle
+	layout       workspace.Layout
+	bundle       instructions.TurnBundle
 	outboundText func(ctx context.Context, text string) error
 	system       string
 	catalog      *subagent.Catalog
 	turnSnap     bus.InboundMessage
 }
 
-// prepareSharedTurn builds tctx, memory recall/agent blocks, optional OutboundText, buildTurnSystem, and subRunner.
+// prepareSharedTurn builds tctx, instruction agent blocks, optional OutboundText, buildTurnSystem, and subRunner.
 // wireSendMessage sets tctx.SendMessage when true (full model turns only).
 // parentTurnID and parentCorrelationID are used for subagent notify correlation (same values as the current user turn).
-func (e *Engine) prepareSharedTurn(ctx context.Context, in bus.InboundMessage, preview string, wireSendMessage bool, parentTurnID, parentCorrelationID string) (sharedTurnPrep, error) {
+func (e *Engine) prepareSharedTurn(ctx context.Context, in bus.InboundMessage, wireSendMessage bool, parentTurnID, parentCorrelationID string) (sharedTurnPrep, error) {
 	var p sharedTurnPrep
 	p.turnSnap = in
 	p.bg = rtopts.Current().Budget
@@ -52,11 +53,8 @@ func (e *Engine) prepareSharedTurn(ctx context.Context, in bus.InboundMessage, p
 	p.memOK = herr == nil && !rtopts.Current().DisableMemory
 	if p.memOK {
 		p.layout = e.MemoryLayout(home)
-		p.bundle = memory.BuildTurn(p.layout, home, preview, &e.RecallState, p.bg.RecallBytes())
-		memory.ApplyTurnBudget(&p.bundle, p.bg)
-		if p.bundle.UpdatedRecall != nil {
-			e.RecallState = *p.bundle.UpdatedRecall
-		}
+		p.bundle = instructions.BuildTurn(p.layout, home)
+		instructions.ApplyTurnBudget(&p.bundle, p.bg)
 		p.tctx.MemoryWriteRoots = p.layout.WriteRoots()
 	} else if herr != nil {
 		slog.Warn("session.user_home", "err", herr)

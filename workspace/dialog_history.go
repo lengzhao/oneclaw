@@ -1,4 +1,4 @@
-package memory
+package workspace
 
 import (
 	"encoding/json"
@@ -34,7 +34,7 @@ func trimDialogHistoryFront(msgs []json.RawMessage, max int) []json.RawMessage {
 // sessionID selects a per-session file under the date directory when non-empty; otherwise the legacy single file path is used.
 func AppendDialogHistoryPair(layout Layout, date, sessionID string, user, assistant openai.ChatCompletionMessageParamUnion) error {
 	if layout.CWD == "" {
-		return fmt.Errorf("memory: empty layout cwd")
+		return fmt.Errorf("workspace: empty layout cwd")
 	}
 	var path string
 	if strings.TrimSpace(sessionID) != "" {
@@ -67,7 +67,7 @@ func AppendDialogHistoryPair(layout Layout, date, sessionID string, user, assist
 	before := len(wrap.Messages)
 	wrap.Messages = trimDialogHistoryFront(wrap.Messages, maxDialogHistoryMessages)
 	if len(wrap.Messages) < before {
-		slog.Info("memory.dialog_history.trimmed", "path", path, "dropped", before-len(wrap.Messages), "kept", len(wrap.Messages), "cap", maxDialogHistoryMessages)
+		slog.Info("workspace.dialog_history.trimmed", "path", path, "dropped", before-len(wrap.Messages), "kept", len(wrap.Messages), "cap", maxDialogHistoryMessages)
 	}
 
 	out, err := json.MarshalIndent(wrap, "", "  ")
@@ -83,6 +83,6 @@ func AppendDialogHistoryPair(layout Layout, date, sessionID string, user, assist
 		_ = os.Remove(tmp)
 		return fmt.Errorf("rename dialog history: %w", err)
 	}
-	slog.Debug("memory.dialog_history.appended", "path", path, "messages", len(wrap.Messages))
+	slog.Debug("workspace.dialog_history.appended", "path", path, "messages", len(wrap.Messages))
 	return nil
 }

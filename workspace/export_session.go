@@ -1,4 +1,4 @@
-package memory
+package workspace
 
 import (
 	"fmt"
@@ -14,7 +14,7 @@ import (
 // Large `artifacts/` trees are skipped by default to avoid huge DOM dumps.
 func ExportSessionSnapshot(dataRoot, outDir string) error {
 	if dataRoot == "" {
-		return fmt.Errorf("memory: empty data root")
+		return fmt.Errorf("workspace: empty data root")
 	}
 	srcRoot := filepath.Clean(dataRoot)
 	if st, err := os.Stat(srcRoot); err != nil {
@@ -24,7 +24,7 @@ func ExportSessionSnapshot(dataRoot, outDir string) error {
 	}
 	outDir = filepath.Clean(outDir)
 	if outDir == "" || outDir == "." {
-		return fmt.Errorf("memory: invalid export output directory")
+		return fmt.Errorf("workspace: invalid export output directory")
 	}
 	if err := os.MkdirAll(outDir, 0o755); err != nil {
 		return fmt.Errorf("mkdir export dir: %w", err)
@@ -34,7 +34,7 @@ func ExportSessionSnapshot(dataRoot, outDir string) error {
 		"oneclaw session export\n"+
 			"generated_utc: %s\n"+
 			"source_data_root: %s\n\n"+
-			"Includes: top-level config/sqlite/jobs, memory/, sessions/, sidechain/ when present.\n"+
+			"Includes: top-level config/jobs, memory/, sessions/, sidechain/ when present.\n"+
 			"Excludes: artifacts/ (use your own copy if needed).\n",
 		time.Now().UTC().Format(time.RFC3339), srcRoot,
 	)
@@ -49,7 +49,6 @@ func ExportSessionSnapshot(dataRoot, outDir string) error {
 		"config.yaml",
 		"scheduled_maintain_state.json",
 		"scheduled_jobs.json",
-		"sessions.sqlite",
 	}
 	for _, name := range files {
 		if err := copyFileIfExists(filepath.Join(srcRoot, name), filepath.Join(dstDot, name)); err != nil {

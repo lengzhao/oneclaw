@@ -77,7 +77,7 @@ flowchart TB
 |------|----------|------|
 | **Go：`NotifySink` / `LifecycleHook` 函数组** | 进程内插件、测试、桥接到 MQ | 与 `loop.Config` / `Engine` 字段注入一致；日志用 `slog` |
 | **HTTP Webhook** | 外部 SaaS、无代码集成 | 独立包或 `channel` 适配；需签名、超时、payload 大小上限 |
-| **文件 / JSONL** | 本地审计 | notify audit sinks（`.oneclaw/.../audit/...`） |
+| **文件 / JSONL** | 本地落盘 | **未内置**；用 **`notify.FuncSink`** 自行写 JSONL（历史多路审计 JSONL 已移除，见 [`notify-sinks-audit-design.md`](notify-sinks-audit-design.md)） |
 
 **MVP 已选**：进程内 **`notify.Sink`** + **`notify.Multi`**；Webhook / JSONL 文件 sink **未实现**，可自行用 `FuncSink` 写文件或调 HTTP。
 
@@ -110,13 +110,12 @@ eng.Notify.Register(myJSONL, notify.FuncSink(func(ctx context.Context, ev notify
 
 ### 3.3 `memory_turn_context`
 
-在 **`memory.BuildTurn`** 与 **`ApplyTurnBudget`** 完成之后、**`agent_turn_start`** 之前发出（主线程 `SubmitUser` 与 **local slash** 路径均会发）。用于审计本轮**实际注入**的 recall / agent-md / memory 系统块全文。
+在 **`memory.BuildTurn`** 与 **`ApplyTurnBudget`** 完成之后、**`agent_turn_start`** 之前发出（主线程 `SubmitUser` 与 **local slash** 路径均会发）。用于审计本轮**实际注入**的 agent-md / memory 系统块全文。
 
 - **`data`**：
   - **`memory_enabled`**：是否走 memory 路径（用户主目录不可用或配置关闭时为 `false`，此时各块多为空串）。
-  - **`recall_block`**：本轮 **recall 附件块全文**（与注入 `loop.Config.MemoryRecall` 一致；未命中则为 `""`）。
   - **`agent_md_block`**：**AGENT.md / rules / `<system-reminder>`** 等全文（与 `MemoryAgentMd` 一致）。
-  - **`recall_block_bytes`** / **`agent_md_block_bytes`**：UTF-8 字节长度。
+  - **`agent_md_block_bytes`**：UTF-8 字节长度。
   - 当 **`memory_enabled`** 为真时另带 **`memory_system_prompt_block`**（`TurnBundle.SystemSuffix`，即主线程 system 模板中的 **File-based memory** 说明段）及 **`memory_system_prompt_block_bytes`**。
 
 子 Agent 内层 `RunTurn` **不**发本事件（嵌套循环不单独做 `BuildTurn`；由父轮记录）。

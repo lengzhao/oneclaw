@@ -11,14 +11,14 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/oneclaw/budget"
 	"github.com/lengzhao/oneclaw/loop"
-	"github.com/lengzhao/oneclaw/memory"
-	"github.com/lengzhao/oneclaw/rtopts"
-	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/oneclaw/notify"
+	"github.com/lengzhao/oneclaw/rtopts"
 	"github.com/lengzhao/oneclaw/toolctx"
 	"github.com/lengzhao/oneclaw/tools"
+	"github.com/lengzhao/oneclaw/workspace"
 	"github.com/openai/openai-go"
 )
 
@@ -45,11 +45,11 @@ type Host struct {
 	// ChatTransport overrides default transport when non-empty.
 	ChatTransport string
 	// Notify and parent correlation for subagent_start/end and nested loop lifecycle (optional).
-	Notify                notify.Sink
-	ParentAgentID         string
-	ParentTurnID          string
-	ParentCorrelationID   string
-	OnNestedLifecycle     func(ctx context.Context, childTurnID, childRunID, nestedAgentID string, depth int) *loop.LifecycleCallbacks
+	Notify              notify.Sink
+	ParentAgentID       string
+	ParentTurnID        string
+	ParentCorrelationID string
+	OnNestedLifecycle   func(ctx context.Context, childTurnID, childRunID, nestedAgentID string, depth int) *loop.LifecycleCallbacks
 }
 
 func (h *Host) maxInherited() int {
@@ -165,24 +165,28 @@ func RunAgent(ctx context.Context, h *Host, parent *toolctx.Context, agentType, 
 
 	sys := buildSubagentSystem(h.CWD, def.SystemPrompt)
 	extraJSON := rtopts.Current().ChatCompletionExtraJSON
+	maxSteps := h.maxStepsForDef(def)
+	if maxSteps < 1 {
+		maxSteps = 1
+	}
 	cfg := loop.Config{
-		Client:        h.Client,
-		Model:         effectiveModel(h, def),
-		System:        sys,
-		MaxTokens:     h.MaxTokens,
-		MaxSteps:      h.maxStepsForDef(def),
-		Messages:      &msgs,
-		Registry:      reg,
-		ToolContext:   child,
-		SessionID:     h.SessionID,
-		CanUseTool:    h.CanUseTool,
-		OutboundText:  nil,
-		MemoryAgentMd: "",
-		MemoryRecall:  "",
+		Client:                  h.Client,
+		Model:                   effectiveModel(h, def),
+		System:                  sys,
+		MaxTokens:               h.MaxTokens,
+		MaxSteps:                maxSteps,
+		Messages:                &msgs,
+		Registry:                reg,
+		ToolContext:             child,
+		SessionID:               h.SessionID,
+		CanUseTool:              h.CanUseTool,
+		OutboundText:            nil,
+		MemoryAgentMd:           "",
 		Budget:                  h.HistoryBudget,
 		ChatTransport:           h.ChatTransport,
 		ChatCompletionExtraJSON: extraJSON,
 		Lifecycle:               lc,
+		TurnMaxSteps:            maxSteps,
 	}
 	if err = loop.RunTurn(ctx, cfg, bus.InboundMessage{Content: task}); err != nil {
 		return "", err
@@ -248,22 +252,27 @@ func RunFork(ctx context.Context, h *Host, parent *toolctx.Context, task string,
 	}
 
 	extraJSON := rtopts.Current().ChatCompletionExtraJSON
+	maxSteps := h.MaxSteps
+	if maxSteps < 1 {
+		maxSteps = 1
+	}
 	cfg := loop.Config{
-		Client:        h.Client,
-		Model:         h.Model,
-		System:        h.ParentSystem,
-		MaxTokens:     h.MaxTokens,
-		MaxSteps:      h.MaxSteps,
-		Messages:      &msgs,
-		Registry:      reg,
-		ToolContext:   child,
-		SessionID:     h.SessionID,
-		CanUseTool:    wrapConservative(h.CanUseTool),
-		OutboundText:  nil,
+		Client:                  h.Client,
+		Model:                   h.Model,
+		System:                  h.ParentSystem,
+		MaxTokens:               h.MaxTokens,
+		MaxSteps:                maxSteps,
+		Messages:                &msgs,
+		Registry:                reg,
+		ToolContext:             child,
+		SessionID:               h.SessionID,
+		CanUseTool:              wrapConservative(h.CanUseTool),
+		OutboundText:            nil,
 		Budget:                  h.HistoryBudget,
 		ChatTransport:           h.ChatTransport,
 		ChatCompletionExtraJSON: extraJSON,
 		Lifecycle:               lc,
+		TurnMaxSteps:            maxSteps,
 	}
 	if err = loop.RunTurn(ctx, cfg, bus.InboundMessage{Content: task}); err != nil {
 		return "", err
@@ -417,7 +426,7 @@ func writeSidechain(tctx *toolctx.Context, agentID, kind string, msgs []openai.C
 	if tctx == nil || strings.TrimSpace(tctx.CWD) == "" {
 		return "", nil
 	}
-	dir := memory.JoinSessionWorkspaceWithInstruction(tctx.CWD, tctx.InstructionRoot, tctx.WorkspaceFlat, "sidechain")
+	dir := workspace.JoinSessionWorkspaceWithInstruction(tctx.CWD, tctx.InstructionRoot, tctx.WorkspaceFlat, "sidechain")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}

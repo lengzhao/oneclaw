@@ -2,13 +2,12 @@ package session
 
 import (
 	"fmt"
-	"log/slog"
 	"os"
 	"path/filepath"
 
 	"github.com/lengzhao/clawbridge"
 	"github.com/lengzhao/oneclaw/config"
-	"github.com/lengzhao/oneclaw/memory"
+	"github.com/lengzhao/oneclaw/workspace"
 	"github.com/lengzhao/oneclaw/tools"
 	"github.com/openai/openai-go"
 )
@@ -21,16 +20,11 @@ type MainEngineFactoryDeps struct {
 	Model    string
 	// MCPSystemNote is optional MCP section for the main-thread system prompt.
 	MCPSystemNote string
-	LLMAudit      bool
-	OrchAudit     bool
-	VisAudit      bool
-	// NewRecallPersister, if non-nil, provides recall persistence for the given handle (e.g. sessdb bridge).
-	NewRecallPersister func(SessionHandle) RecallPersister
 	// Bridge is the clawbridge instance for outbound and inbound status; required for IM runs ([cmd/oneclaw] always sets it).
 	Bridge *clawbridge.Bridge
 }
 
-// MainEngineFactory returns a factory suitable for NewWorkerPool.
+// MainEngineFactory returns a factory suitable for [NewTurnHub] or [NewWorkerPool].
 func MainEngineFactory(deps MainEngineFactoryDeps) func(SessionHandle) (*Engine, error) {
 	return func(h SessionHandle) (*Engine, error) {
 		if deps.Resolved == nil {
@@ -45,7 +39,7 @@ func MainEngineFactory(deps MainEngineFactoryDeps) func(SessionHandle) (*Engine,
 		if deps.Resolved.SessionIsolateWorkspace() {
 			instructionRoot = filepath.Join(userRoot, "sessions", sid)
 		}
-		workspaceCWD := filepath.Join(instructionRoot, memory.IMWorkspaceDirName)
+		workspaceCWD := filepath.Join(instructionRoot, workspace.IMWorkspaceDirName)
 		if err := os.MkdirAll(workspaceCWD, 0o755); err != nil {
 			return nil, fmt.Errorf("session: mkdir workspace: %w", err)
 		}
@@ -71,17 +65,6 @@ func MainEngineFactory(deps MainEngineFactoryDeps) func(SessionHandle) (*Engine,
 		}
 		eng.Bridge = deps.Bridge
 		// Outbound / inbound status: [Engine.publishOutbound] and [Engine.updateInboundStatus] use [Engine.Bridge] only.
-		eng.RegisterAuditSinks(deps.LLMAudit, deps.OrchAudit, deps.VisAudit)
-		if np := deps.NewRecallPersister; np != nil {
-			eng.RecallPersister = np(h)
-			if eng.RecallPersister != nil {
-				if st, err := eng.RecallPersister.LoadRecall(sid); err != nil {
-					slog.Warn("session.recall_load", "session_id", sid, "err", err)
-				} else {
-					eng.RecallState = st
-				}
-			}
-		}
 		if tp := eng.TranscriptPath; tp != "" {
 			if b, err := os.ReadFile(tp); err == nil {
 				if err := eng.LoadTranscript(b); err != nil {

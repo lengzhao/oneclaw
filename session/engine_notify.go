@@ -3,7 +3,7 @@ package session
 import (
 	"context"
 
-	"github.com/lengzhao/oneclaw/memory"
+	"github.com/lengzhao/oneclaw/instructions"
 	"github.com/lengzhao/oneclaw/notify"
 )
 
@@ -19,8 +19,8 @@ func (e *Engine) hasNotify() bool {
 	return e != nil && len(e.Notify) > 0
 }
 
-// emitMemoryTurnContextNotify records recall / agent-md / memory system block after budget apply, before the model loop.
-func (e *Engine) emitMemoryTurnContextNotify(ctx context.Context, turnID, corrID string, memOK bool, bundle memory.TurnBundle) {
+// emitMemoryTurnContextNotify records agent-md / memory system block after budget apply, before the model loop.
+func (e *Engine) emitMemoryTurnContextNotify(ctx context.Context, turnID, corrID string, memOK bool, bundle instructions.TurnBundle) {
 	if !e.hasNotify() {
 		return
 	}
@@ -28,9 +28,7 @@ func (e *Engine) emitMemoryTurnContextNotify(ctx context.Context, turnID, corrID
 	e.applyNotifyCorrelation(&ev, turnID, corrID)
 	data := map[string]any{
 		"memory_enabled":       memOK,
-		"recall_block":         bundle.RecallBlock,
 		"agent_md_block":       bundle.AgentMdBlock,
-		"recall_block_bytes":   len(bundle.RecallBlock),
 		"agent_md_block_bytes": len(bundle.AgentMdBlock),
 	}
 	if memOK {

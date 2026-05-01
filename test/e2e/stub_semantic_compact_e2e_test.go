@@ -7,10 +7,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/oneclaw/budget"
 	"github.com/lengzhao/oneclaw/loop"
 	"github.com/lengzhao/oneclaw/rtopts"
-	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/oneclaw/test/openaistub"
 	"github.com/lengzhao/oneclaw/toolctx"
 	"github.com/lengzhao/oneclaw/tools/builtin"
@@ -24,14 +24,13 @@ func TestE2E_103_SemanticCompactInChatRequest(t *testing.T) {
 	e2eEnvMinimal(t, stub)
 	s := rtopts.Current()
 	s.Budget = budget.Global{
-		MaxPromptBytes:    52_000,
-		MinTailMessages:   4,
-		RecallMaxBytes:    12_000,
-		HistoryMaxBytes:   0,
+		MaxPromptBytes:      52_000,
+		MinTailMessages:     4,
+		HistoryMaxBytes:     0,
 		SystemExtraMaxBytes: 0,
-		AgentMdMaxBytes:   0,
-		SkillIndexBytes:   0,
-		InheritedMessages: 0,
+		AgentMdMaxBytes:     0,
+		SkillIndexBytes:     0,
+		InheritedMessages:   0,
 	}
 	s.DisableSemanticCompact = false
 	rtopts.Set(&s)
@@ -45,15 +44,16 @@ func TestE2E_103_SemanticCompactInChatRequest(t *testing.T) {
 	}
 
 	err := loop.RunTurn(ctx, loop.Config{
-		Client:      &client,
-		Model:       "gpt-4o",
-		System:      strings.Repeat("z", 400),
-		MaxTokens:   128,
-		MaxSteps:    4,
-		Messages:    &msgs,
-		Registry:    builtin.DefaultRegistry(),
-		ToolContext: toolctx.New(cwd, ctx),
-		Budget:      rtopts.Current().Budget,
+		Client:       &client,
+		Model:        "gpt-4o",
+		System:       strings.Repeat("z", 400),
+		MaxTokens:    128,
+		MaxSteps:     4,
+		Messages:     &msgs,
+		Registry:     builtin.DefaultRegistry(),
+		ToolContext:  toolctx.New(cwd, ctx),
+		Budget:       rtopts.Current().Budget,
+		TurnMaxSteps: 4,
 	}, bus.InboundMessage{Content: "E2E103_FINAL_USER"})
 	if err != nil {
 		t.Fatal(err)
@@ -79,14 +79,13 @@ func TestE2E_104_SemanticCompactDisabledNoBoundaryTag(t *testing.T) {
 	e2eEnvMinimal(t, stub)
 	s := rtopts.Current()
 	s.Budget = budget.Global{
-		MaxPromptBytes:    52_000,
-		MinTailMessages:   4,
-		RecallMaxBytes:    12_000,
-		HistoryMaxBytes:   0,
+		MaxPromptBytes:      52_000,
+		MinTailMessages:     4,
+		HistoryMaxBytes:     0,
 		SystemExtraMaxBytes: 0,
-		AgentMdMaxBytes:   0,
-		SkillIndexBytes:   0,
-		InheritedMessages: 0,
+		AgentMdMaxBytes:     0,
+		SkillIndexBytes:     0,
+		InheritedMessages:   0,
 	}
 	s.DisableSemanticCompact = true
 	rtopts.Set(&s)
@@ -100,15 +99,16 @@ func TestE2E_104_SemanticCompactDisabledNoBoundaryTag(t *testing.T) {
 	}
 
 	err := loop.RunTurn(ctx, loop.Config{
-		Client:      &client,
-		Model:       "gpt-4o",
-		System:      strings.Repeat("z", 400),
-		MaxTokens:   128,
-		MaxSteps:    4,
-		Messages:    &msgs,
-		Registry:    builtin.DefaultRegistry(),
-		ToolContext: toolctx.New(cwd, ctx),
-		Budget:      rtopts.Current().Budget,
+		Client:       &client,
+		Model:        "gpt-4o",
+		System:       strings.Repeat("z", 400),
+		MaxTokens:    128,
+		MaxSteps:     4,
+		Messages:     &msgs,
+		Registry:     builtin.DefaultRegistry(),
+		ToolContext:  toolctx.New(cwd, ctx),
+		Budget:       rtopts.Current().Budget,
+		TurnMaxSteps: 4,
 	}, bus.InboundMessage{Content: "E2E104_FINAL_USER"})
 	if err != nil {
 		t.Fatal(err)

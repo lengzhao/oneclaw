@@ -2,7 +2,7 @@
 
 本文约定 **IM 常驻模式**下「配置 / 说明与规则记忆入口」与「默认干活目录」的拆分方式，以及与 [session-home-isolation-design.md](session-home-isolation-design.md) 的关系。**实现以本文与 `config.Resolved` 派生规则为准逐步对齐**；旧文档中仅描述「SessionHome = CWD」或「`<SessionHome>/.oneclaw` 整树」的段落，在落地本布局后应视为被本文细化或替代。
 
-**路径约定**：用户数据根目录名为 `~/.oneclaw`（或 `paths.memory_base`）；**在该目录树内不再出现嵌套的子目录名 `.oneclaw`**（运行时与 episodic 等直接落在 `memory/`、`tasks.json`、`audit/` 等路径下）。**推荐心智**：只需配置好用户数据根；按仓库/工作目录区分的自动记忆落在 **`<memory_base>/projects/<slug>/`** 即可，**不依赖**在独立仓库里再建 `<repo>/.oneclaw/`。历史实现里 `memory.DefaultLayout` 仍可能把部分 project 路径指到 `<cwd>/.oneclaw/...`，后续可收敛为与上表一致。
+**路径约定**：用户数据根目录名为 `~/.oneclaw`（或 `paths.memory_base`）；**在该目录树内不再出现嵌套的子目录名 `.oneclaw`**（运行时与 episodic 等直接落在 `memory/`、`tasks.json`、`usage/` 等路径下）。**推荐心智**：只需配置好用户数据根；按仓库/工作目录区分的自动记忆落在 **`<memory_base>/projects/<slug>/`** 即可，**不依赖**在独立仓库里再建 `<repo>/.oneclaw/`。仓库模式下若存在 `<cwd>/.oneclaw/`，`workspace.Layout.RepoOverlayDir` 仍会把规则入口指到该目录（与 `workspace.DefaultLayout` 的 project `memory/` 并列）；IM 扁平布局以 `workspace.IMHostMaintainLayout` / `IMSessionLayout` 为准。
 
 ---
 
@@ -37,7 +37,7 @@
 - **`MEMORY.md` 与 `AGENT.md` 位于同一目录**，即同一 **InstructionRoot** 下，路径形如：
   - `<InstructionRoot>/AGENT.md`
   - `<InstructionRoot>/MEMORY.md`
-- **其它**路径（日更 episodic、tasks、exec 日志、审计、mediastore 等）**不强制**与 InstructionRoot 同层；实现可沿用现有 `memory.Layout`、`Resolved` 派生规则，**只要不与「AGENT / MEMORY 同目录」冲突**即可。
+- **其它**路径（日更 episodic、tasks、exec 日志、mediastore、用量目录等）**不强制**与 InstructionRoot 同层；实现沿用 `workspace.Layout` 与 `config.Resolved` 派生规则，**只要不与「AGENT / MEMORY 同目录」冲突**即可。
 
 ---
 
@@ -55,9 +55,7 @@
   rules/                    # 可选
   memory/                   # 日更 episodic、dialog_history 等（与 rules 并列，无嵌套 .oneclaw）
   tasks.json                # 可选：会话运行时任务列表
-  audit/                    # 可选：审计 JSONL
   usage/                    # 可选：用量落盘
-  sessions.sqlite           # 或其它用户级索引，按现有约定
   sessions/                 # 每会话 transcript 等（见 Resolved）
     <session_id>/
       transcript.json
@@ -128,7 +126,7 @@ flowchart TB
 | 项 | 说明 |
 |----|------|
 | **CWD** | `MainEngineFactory` / `Engine`：默认 `CWD = filepath.Join(InstructionRoot, "workspace")`（需在创建目录时 `MkdirAll`）。 |
-| **memory.Layout** | `layout.CWD` 与「规则 MEMORY 入口」路径应对齐 InstructionRoot + `MEMORY.md`；episodic、project memory 等其它根路径按现有 `DefaultLayout` 演进，避免把规则入口指到与 `AGENT.md` 不同目录。 |
+| **workspace.Layout** | `layout.CWD` 与「规则 MEMORY 入口」路径应对齐 InstructionRoot + `MEMORY.md`；episodic、project memory 等其它根路径按 `workspace.DefaultLayout` / `IMHostMaintainLayout` 等演进，避免把规则入口指到与 `AGENT.md` 不同目录。 |
 | **迁移** | 从旧「嵌套 `~/.oneclaw/.oneclaw/` 或 `sessions/<id>/.oneclaw/`」迁出时：将文件挪到上表所示无嵌套 `.oneclaw` 的路径，并保证 **MEMORY.md 与 AGENT.md 已同目录**。 |
 
 ---

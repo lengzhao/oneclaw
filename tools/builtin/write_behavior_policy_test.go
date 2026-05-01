@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lengzhao/oneclaw/memory"
+	"github.com/lengzhao/oneclaw/workspace"
 	"github.com/lengzhao/oneclaw/toolctx"
 )
 
@@ -51,7 +51,7 @@ func TestWriteBehaviorPolicyMemory(t *testing.T) {
 	if _, err := tool.Execute(context.Background(), payload, tctx); err != nil {
 		t.Fatal(err)
 	}
-	want := filepath.Join(memory.ProjectMemoryDir(cwd), "MEMORY.md")
+	want := filepath.Join(workspace.ProjectMemoryDir(cwd), workspace.RulesMemoryFile)
 	b, err := os.ReadFile(want)
 	if err != nil || string(b) != "# MEMORY\n\n- ok\n" {
 		t.Fatalf("read back: %v %q", err, string(b))
@@ -124,9 +124,9 @@ func TestWriteBehaviorPolicyAgentMemoryRequiresAgentType(t *testing.T) {
 
 func TestWriteBehaviorPolicyAgentMemoryDefaultsToLocalInIsolatedSession(t *testing.T) {
 	home := t.TempDir()
-	userRoot := filepath.Join(home, memory.DotDir)
+	userRoot := filepath.Join(home, workspace.DotDir)
 	sessionRoot := filepath.Join(userRoot, "sessions", "s1")
-	cwd := filepath.Join(sessionRoot, memory.IMWorkspaceDirName)
+	cwd := filepath.Join(sessionRoot, workspace.IMWorkspaceDirName)
 	tctx := toolctx.New(cwd, context.Background())
 	tctx.HomeDir = home
 	tctx.HostDataRoot = userRoot

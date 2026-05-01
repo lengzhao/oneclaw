@@ -46,9 +46,6 @@
 | E2E-90 | `run_agent` 子循环 + sidechain 落盘 | [x] | `TestE2E_StubRunAgentNested` · `stub_subagent_test.go` |
 | E2E-91 | `fork_context` 共享 system | [x] | `TestE2E_StubForkContext` · `stub_subagent_test.go` |
 | E2E-92 | 近场维护写入 `memory/YYYY-MM-DD.md`（测试中显式放开 `DisableAutoMaintenance`） | [x] | `TestE2E_92_AutoMaintenanceAppends` · `stub_maintain_test.go` |
-| E2E-93 | PostTurn daily log 落在 `<memory_base>/projects/...`，**不**写入 `memory-write.jsonl` | [x] | `TestE2E_93_PostTurnDailyLogSkipsProjectsAudit` · `stub_audit_test.go` |
-| E2E-94 | `features.disable_memory_audit` 不写审计文件 | [x] | `TestE2E_94_MemoryAuditDisabledNoFile` · `stub_audit_test.go` |
-| E2E-95 | `write_file` 写 project memory 根时审计含 `write_file` | [x] | `TestE2E_95_MemoryAuditWriteFileUnderMemoryRoot` · `stub_audit_test.go` |
 | E2E-96 | `oneclaw -maintain-once` 子进程 + stub 写回当日 `memory/YYYY-MM-DD.md` | [x] | `TestE2E_96_MaintainCLIOnce` · `stub_maintain_cli_test.go` |
 | E2E-97 | `oneclaw -init` 子进程写入项目 `config.yaml` | [x] | `TestE2E_97_OneclawInitWritesProjectConfig` · `stub_maintain_cli_test.go` |
 | E2E-101 | 近场维护：第 2 次请求仅含 Current turn 快照 + 规则 `MEMORY.md` 摘录；不含 daily log / topic；写回当日 episodic 日文件 | [x] | `TestE2E_101_PostTurnMaintainPromptSessionOnly` · `stub_maintain_pipeline_e2e_test.go` |
@@ -239,15 +236,7 @@
 
 ---
 
-## 11. Memory 审计（阶段 D2）
-
-### E2E-93～E2E-95
-
-- **E2E-93**：默认开启审计（对非 projects 路径仍生效）；`SubmitUser` 后 `PostTurn` 写当日 daily log；断言 log 文件存在，且审计文件中**无** `source=daily_log_line`（`<memory_base>/projects/` 不落审计）。
-- **E2E-94**：`features.disable_memory_audit` 时上述审计文件不存在。
-- **E2E-95**：stub 下发 `write_file` 至 `<cwd>/.oneclaw/memory/...`；审计中至少一行 `source=write_file` 且 `path` 为绝对目标路径。
-
-## 12. 维护与初始化 CLI（`cmd/oneclaw`）
+## 11. 维护与初始化 CLI（`cmd/oneclaw`）
 
 ### E2E-96
 

@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lengzhao/oneclaw/loop"
 	"github.com/lengzhao/clawbridge/bus"
+	"github.com/lengzhao/oneclaw/loop"
 	"github.com/lengzhao/oneclaw/test/openaistub"
 	"github.com/lengzhao/oneclaw/toolctx"
 	"github.com/lengzhao/oneclaw/tools"
@@ -42,14 +42,15 @@ func TestE2E_82_UnknownToolName(t *testing.T) {
 	client := openai.NewClient(stubOpenAIOptions(stub)...)
 	msgs := []openai.ChatCompletionMessageParamUnion{}
 	err := loop.RunTurn(context.Background(), loop.Config{
-		Client:      &client,
-		Model:       "gpt-4o",
-		System:      "test",
-		MaxTokens:   256,
-		MaxSteps:    8,
-		Messages:    &msgs,
-		Registry:    tools.NewRegistry(),
-		ToolContext: toolctx.New(cwd, context.Background()),
+		Client:       &client,
+		Model:        "gpt-4o",
+		System:       "test",
+		MaxTokens:    256,
+		MaxSteps:     8,
+		Messages:     &msgs,
+		Registry:     tools.NewRegistry(),
+		ToolContext:  toolctx.New(cwd, context.Background()),
+		TurnMaxSteps: 8,
 	}, bus.InboundMessage{Content: "hi"})
 	if err != nil {
 		t.Fatal(err)

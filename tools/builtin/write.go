@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/lengzhao/oneclaw/memory"
 	"github.com/lengzhao/oneclaw/toolctx"
 	"github.com/lengzhao/oneclaw/tools/pathutil"
 	"github.com/openai/openai-go"
@@ -55,12 +54,6 @@ func (WriteTool) Execute(ctx context.Context, input json.RawMessage, tctx *toolc
 	if err := os.WriteFile(abs, content, 0o644); err != nil {
 		return "", err
 	}
-	home := tctx.HomeDir
-	if home == "" {
-		home, _ = os.UserHomeDir()
-	}
-	lay := memory.LayoutForIMWorkspace(tctx.CWD, home, tctx.HostDataRoot, tctx.WorkspaceFlat, tctx.InstructionRoot)
-	memory.AppendMemoryAudit(lay, abs, "write_file", content)
 	tctx.SetCachedRead(abs, in.Content)
 	return "ok", nil
 }

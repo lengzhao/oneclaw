@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/lengzhao/oneclaw/memory"
+	"github.com/lengzhao/oneclaw/workspace"
 )
 
 // InitWorkspace creates <home>/.oneclaw when needed (first argument is the user home directory or parent of the dot dir). It copies `config/init_template/` into the directory
@@ -18,7 +18,7 @@ func InitWorkspace(cwd, home string) error {
 	if cwd == "" {
 		return fmt.Errorf("config.init: empty cwd")
 	}
-	dot := filepath.Join(cwd, memory.DotDir)
+	dot := filepath.Join(cwd, workspace.DotDir)
 	if err := os.MkdirAll(dot, 0o755); err != nil {
 		return fmt.Errorf("config.init: mkdir %s: %w", dot, err)
 	}
@@ -63,7 +63,7 @@ func InitWorkspace(cwd, home string) error {
 		slog.Info("config.init.template", "path", cfgPath, "reason", "copied_from_init_template")
 	}
 
-	memory.DefaultLayout(cwd, home).EnsureDirs()
+	workspace.DefaultLayout(cwd, home).EnsureDirs()
 	slog.Info("config.init.dirs", "cwd", cwd)
 	return nil
 }

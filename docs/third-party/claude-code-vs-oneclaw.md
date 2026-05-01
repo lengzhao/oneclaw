@@ -46,7 +46,7 @@
 - **共享回合准备**：`prepareSharedTurn` 统一 `SubmitUser` 与本地 slash 的前半段，减少双路径漂移（见 [`code-simplification-opportunities.md`](../code-simplification-opportunities.md)）。
 - **本地 slash 旁路**：无模型回合**不**跑 `PostTurn` / 回合后维护，避免噪声维护（与 Claude Code「有对话增量」前提对齐方式不同，属**显式产品选择**）。
 - **出站聚合**：`channel.DrainTextReply` 等助手统一「多段文本 → 单条回复 + Done」语义，便于 HTTP/IM 接入。
-- **可观测**：Notify Hook + 多路审计 JSONL（LLM 步 / 编排 / 用户可见），可按 feature 关闭（见 [`notification-hooks-design.md`](../notification-hooks-design.md)、[`notify-sinks-audit-design.md`](../notify-sinks-audit-design.md)）。
+- **可观测**：Notify Hook（`notify.Sink`）；**多路审计 JSONL 已从实现移除**（历史文档 [`notify-sinks-audit-design.md`](../notify-sinks-audit-design.md)）。
 
 ### 2.5 维护与运维
 

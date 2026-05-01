@@ -1,10 +1,12 @@
-package memory
+package instructions
 
 import (
 	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/lengzhao/oneclaw/workspace"
 )
 
 // InstructionKind classifies discovered instruction files.
@@ -24,13 +26,13 @@ type InstructionChunk struct {
 
 // DiscoverUserAgentMd loads ~/.oneclaw/AGENT.md if present.
 func DiscoverUserAgentMd(home string) []InstructionChunk {
-	p := filepath.Join(MemoryBaseDir(home), AgentInstructionsFile)
+	p := filepath.Join(workspace.MemoryBaseDir(home), workspace.AgentInstructionsFile)
 	return loadInstructionPath(p, KindUser)
 }
 
 // DiscoverUserRules loads ~/.oneclaw/rules/**/*.md (non-conditional simplified: all md).
 func DiscoverUserRules(home string) []InstructionChunk {
-	dir := filepath.Join(MemoryBaseDir(home), "rules")
+	dir := filepath.Join(workspace.MemoryBaseDir(home), "rules")
 	return walkRulesMD(dir, KindUser)
 }
 
@@ -42,19 +44,26 @@ func DiscoverFlatDotRootInstructions(root string) []InstructionChunk {
 		return nil
 	}
 	var out []InstructionChunk
-	out = append(out, loadInstructionPath(filepath.Join(root, AgentInstructionsFile), KindProject)...)
+	out = append(out, loadInstructionPath(filepath.Join(root, workspace.AgentInstructionsFile), KindProject)...)
 	out = append(out, walkRulesMD(filepath.Join(root, "rules"), KindProject)...)
 	return out
 }
 
 // DiscoverProjectInstructions walks from filesystem root toward cwd (outer roots first, cwd last).
+// At each level it loads repo-root AGENT.md / rules/ and, when present, <dir>/.oneclaw/AGENT.md and rules/.
 func DiscoverProjectInstructions(cwd string) []InstructionChunk {
 	chain := walkUpDirs(cwd)
 	var out []InstructionChunk
 	for i := len(chain) - 1; i >= 0; i-- {
 		dir := chain[i]
-		out = append(out, loadInstructionPath(filepath.Join(dir, AgentInstructionsFile), KindProject)...)
+		out = append(out, loadInstructionPath(filepath.Join(dir, workspace.AgentInstructionsFile), KindProject)...)
 		out = append(out, walkRulesMD(filepath.Join(dir, "rules"), KindProject)...)
+		dot := filepath.Join(dir, workspace.DotDir)
+		if st, err := os.Stat(dot); err != nil || !st.IsDir() {
+			continue
+		}
+		out = append(out, loadInstructionPath(filepath.Join(dot, workspace.AgentInstructionsFile), KindProject)...)
+		out = append(out, walkRulesMD(filepath.Join(dot, "rules"), KindProject)...)
 	}
 	return out
 }

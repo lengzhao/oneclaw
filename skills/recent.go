@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lengzhao/oneclaw/memory"
+	"github.com/lengzhao/oneclaw/workspace"
 	"github.com/lengzhao/oneclaw/rtopts"
 )
 
@@ -29,7 +29,7 @@ func RecentFilePath(cwd string, workspaceFlat bool, instructionRoot string) stri
 	if p := strings.TrimSpace(rtopts.Current().SkillsRecent); p != "" {
 		return filepath.Clean(p)
 	}
-	return memory.JoinSessionWorkspaceWithInstruction(cwd, instructionRoot, workspaceFlat, "skills-recent.json")
+	return workspace.JoinSessionWorkspaceWithInstruction(cwd, instructionRoot, workspaceFlat, "skills-recent.json")
 }
 
 // LoadRecent reads the recent-usage file. Missing or invalid file yields empty Version 1.

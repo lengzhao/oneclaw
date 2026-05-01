@@ -58,7 +58,7 @@
 
 ## 6. 与出站文档的关系
 
-- **事件与载荷**：观测、审计 JSONL 等见 [outbound-events-design.md](outbound-events-design.md)、[notify-sinks-audit-design.md](notify-sinks-audit-design.md)。
+- **事件与载荷**：观测与出站草案见 [outbound-events-design.md](outbound-events-design.md)；历史 JSONL 审计见 [notify-sinks-audit-design.md](notify-sinks-audit-design.md)（实现已移除）。
 - **主路径**：助手回复以 **`bus.OutboundMessage`** 经 **`Outbound.PublishOutbound`** 发出，与 `Record`/`seq` 类 JSON 观测草案可并存（见出站文档）。
 
 ---
@@ -73,7 +73,7 @@
 
 ## 8. 会话与 WorkerPool
 
-- **`cmd/oneclaw`** 使用 **`session.NewWorkerPool`** + **`session.MainEngineFactory`**。按 `sessions.worker_count` 固定 worker 数，按 **`SessionHandle` 哈希分片**；**每条入站任务**在 worker 内 **`factory(handle)` 新建 `*Engine`，`SubmitUser` 结束后丢弃**，状态依赖转写 / SQLite 等落盘（`session/worker_pool.go`）。
+- **`cmd/oneclaw`** 使用 **`session.NewWorkerPool`** + **`session.MainEngineFactory`**。按 `sessions.worker_count` 固定 worker 数，按 **`SessionHandle` 哈希分片**；**每条入站任务**在 worker 内 **`factory(handle)` 新建 `*Engine`，`SubmitUser` 结束后丢弃**，状态依赖转写等落盘（`session/worker_pool.go`）。
 - **单测 / e2e**：可直接 **`session.NewEngine(...)`** 调用 **`SubmitUser`**，不经过 **`WorkerPool`**。
 
 ---

@@ -34,12 +34,12 @@ type Context struct {
 	// HostDataRoot is the IM config/data root (~/.oneclaw) for host-wide files (e.g. scheduled_jobs.json). Empty uses project-style paths under CWD only.
 	HostDataRoot string
 
-	// WorkspaceFlat: when true, tasks.json / agents / exec_log / skills-recent / usage live under <InstructionRoot>/ when set (see memory.JoinSessionWorkspaceWithInstruction).
+	// WorkspaceFlat: when true, tasks.json / agents / exec_log / skills-recent / usage live under <InstructionRoot>/ when set (see workspace.JoinSessionWorkspaceWithInstruction).
 	WorkspaceFlat bool
 	// InstructionRoot is the IM directory containing AGENT.md/MEMORY.md; empty in repo-style or legacy contexts.
 	InstructionRoot string
 
-	// SessionID is the stable logical session (e.g. Engine.SessionID / SQLite session row). Empty in tests or non-session hosts.
+	// SessionID is the stable logical session (e.g. Engine.SessionID). Empty in tests or non-session hosts.
 	SessionID string
 
 	// AgentID is the logical agent for this tool-execution frame: root Engine id on the main thread,
@@ -47,7 +47,7 @@ type Context struct {
 	// Session seeds it from Engine.RootAgentID; subagent overwrites it on child contexts.
 	AgentID string
 
-	// HomeDir is the session user's home directory (for audit / policy paths). Empty if unknown.
+	// HomeDir is the session user's home directory (for policy paths). Empty if unknown.
 	HomeDir string
 
 	// Abort is cancelled when the user or host aborts the turn.

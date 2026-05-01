@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/lengzhao/oneclaw/memory"
+	"github.com/lengzhao/oneclaw/workspace"
 )
 
 const maxAgentListingDescRunes = 120
@@ -30,7 +30,7 @@ func LoadCatalog(cwd string, workspaceFlat bool, instructionRoot string) *Catalo
 	for _, d := range builtinDefinitions() {
 		byName[d.AgentType] = d
 	}
-	dir := memory.JoinSessionWorkspaceWithInstruction(cwd, instructionRoot, workspaceFlat, "agents")
+	dir := workspace.JoinSessionWorkspaceWithInstruction(cwd, instructionRoot, workspaceFlat, "agents")
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		if !os.IsNotExist(err) {

@@ -17,19 +17,14 @@ type Snapshot struct {
 
 	ChatTransport string
 
-	DisableMemory              bool
-	DisableAutoMemory          bool
-	DisableMemoryExtract       bool
-	DisableTranscript          bool
-	DisableAutoMaintenance     bool
-	DisableScheduledMaintenance bool
-	DisableMemoryAudit         bool
-	DisableContextBudget       bool
+	DisableMemory        bool
+	DisableAutoMemory    bool
+	DisableContextBudget bool
 
-	DisableUsageLedger    bool
-	UsageEstimateCost     bool
-	UsageInputPerMtok     float64
-	UsageOutputPerMtok    float64
+	DisableUsageLedger bool
+	UsageEstimateCost  bool
+	UsageInputPerMtok  float64
+	UsageOutputPerMtok float64
 
 	DisableBehaviorPolicyWrite bool
 
@@ -39,43 +34,13 @@ type Snapshot struct {
 
 	SidechainMerge string
 
-	DisableSemanticCompact  bool
-	CompactSummaryMaxBytes  int
+	DisableSemanticCompact bool
+	CompactSummaryMaxBytes int
 
 	DisableSkills bool
 	SkillsRecent  string
 
-	MemoryRecallBackend    string
-	MemoryRecallSQLitePath string
-
 	DisableTasks bool
-
-	// Scheduled / post-turn maintenance tuning (defaults in DefaultSnapshot; YAML via PushRuntime).
-	MaintenanceLogDays              int
-	MaintenanceMinLogBytes          int
-	MaintenanceMaxLogRead           int
-	MaintenanceMaxCombinedLogBytes  int
-	PostTurnMinLogBytes             int
-	PostTurnMemoryPreviewBytes      int
-	ScheduledMaintainTimeout        time.Duration
-	PostTurnMaintainTimeout         time.Duration
-	ScheduledMaintainMaxSteps       int
-	MaintenanceMaxTopicFiles        int
-	MaintenanceTopicExcerptBytes    int
-	MaintenanceIncrementalOverlap   time.Duration
-	MaintenanceIncrementalMaxSpan   time.Duration
-	PostTurnUserSnapshotBytes       int
-	PostTurnAssistantSnapshotBytes  int
-	PostTurnLogDays                 int
-	PostTurnMaxCombinedLogBytes     int
-	PostTurnMaxLogBytes             int
-	PostTurnMaxTopicFiles           int
-	PostTurnTopicExcerptBytes       int
-	PostTurnMaxTokens               int64
-
-	MaintenanceModel          string
-	MaintenanceScheduledModel string
-	MaintenanceMaxTokens      int64
 
 	// ChatCompletionExtraJSON: optional JSON fragment merged into each Chat Completions request before runtime fields (model, messages, tools, …).
 	ChatCompletionExtraJSON []byte
@@ -86,27 +51,11 @@ var cur atomic.Pointer[Snapshot]
 // DefaultSnapshot returns the legacy baseline (empty YAML, no env).
 func DefaultSnapshot() Snapshot {
 	return Snapshot{
-		Budget:                         budget.DefaultGlobal(),
-		UsageInputPerMtok:              5,
-		UsageOutputPerMtok:             15,
-		ScheduleMinSleep:               time.Second,
-		ScheduleIdleSleep:              time.Hour,
-		MaintenanceLogDays:             3,
-		MaintenanceMinLogBytes:         200,
-		MaintenanceMaxLogRead:          24_000,
-		MaintenanceMaxCombinedLogBytes: 48_000,
-		PostTurnMinLogBytes:            200,
-		PostTurnMemoryPreviewBytes:     4000,
-		ScheduledMaintainTimeout:       1800 * time.Second,
-		PostTurnMaintainTimeout:        60 * time.Second,
-		ScheduledMaintainMaxSteps:      24,
-		MaintenanceMaxTopicFiles:       12,
-		MaintenanceTopicExcerptBytes:   2048,
-		MaintenanceIncrementalOverlap:  2 * time.Minute,
-		MaintenanceIncrementalMaxSpan:  168 * time.Hour,
-		PostTurnUserSnapshotBytes:      4000,
-		PostTurnAssistantSnapshotBytes: 8000,
-		PostTurnLogDays:                0,
+		Budget:             budget.DefaultGlobal(),
+		UsageInputPerMtok:  5,
+		UsageOutputPerMtok: 15,
+		ScheduleMinSleep:   time.Second,
+		ScheduleIdleSleep:  time.Hour,
 	}
 }
 

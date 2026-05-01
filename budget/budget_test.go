@@ -16,17 +16,6 @@ func TestTruncateUTF8_ascii(t *testing.T) {
 	}
 }
 
-func TestRecallBytes_respectsCeil(t *testing.T) {
-	g := Global{
-		MaxPromptBytes:  900_000,
-		MinTailMessages: 6,
-		RecallMaxBytes:  12_000,
-	}
-	if g.RecallBytes() != 12000 {
-		t.Fatalf("RecallBytes=%d want 12000", g.RecallBytes())
-	}
-}
-
 func TestGlobal_disabled(t *testing.T) {
 	g := Global{MaxPromptBytes: 0, MinTailMessages: 4}
 	if g.Enabled() {

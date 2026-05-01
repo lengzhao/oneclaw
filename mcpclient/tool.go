@@ -10,7 +10,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/lengzhao/oneclaw/memory"
+	"github.com/lengzhao/oneclaw/workspace"
 	"github.com/lengzhao/oneclaw/toolctx"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/openai/openai-go"
@@ -259,7 +259,7 @@ func (t *Tool) formatResult(content []mcp.Content, tctx *toolctx.Context) (strin
 		}
 		return out, nil
 	}
-	dir := memory.JoinSessionWorkspaceWithInstruction(cwd, tctx.InstructionRoot, tctx.WorkspaceFlat, "artifacts", "mcp")
+	dir := workspace.JoinSessionWorkspaceWithInstruction(cwd, tctx.InstructionRoot, tctx.WorkspaceFlat, "artifacts", "mcp")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", fmt.Errorf("mcp artifact dir: %w", err)
 	}

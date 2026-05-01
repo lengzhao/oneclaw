@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/lengzhao/clawbridge/bus"
-	"github.com/lengzhao/oneclaw/memory"
+	"github.com/lengzhao/oneclaw/workspace"
 )
 
 // StartHostPollerIfEnabled runs the due-job poller and submits synthetic inbound messages (same role as legacy channel.schedule_poll).
@@ -59,7 +59,7 @@ func deliverHostScheduledTurns(ctx context.Context, userDataRoot string, session
 	sort.Strings(names)
 	for _, name := range names {
 		sessionRoot := filepath.Join(userDataRoot, "sessions", name)
-		sessionWorkspace := filepath.Join(sessionRoot, memory.IMWorkspaceDirName)
+		sessionWorkspace := filepath.Join(sessionRoot, workspace.IMWorkspaceDirName)
 		if st, err := os.Stat(sessionRoot); err != nil || !st.IsDir() {
 			continue
 		}
@@ -109,7 +109,7 @@ func nextWakeHost(userDataRoot string, sessionIsolate bool, targetSource string,
 			continue
 		}
 		sessionRoot := filepath.Join(userDataRoot, "sessions", e.Name())
-		sessionWorkspace := filepath.Join(sessionRoot, memory.IMWorkspaceDirName)
+		sessionWorkspace := filepath.Join(sessionRoot, workspace.IMWorkspaceDirName)
 		if st, err := os.Stat(sessionRoot); err != nil || !st.IsDir() {
 			continue
 		}

@@ -12,7 +12,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// PromptInitIfTerminal interactively fills openai（api_key/base_url）、model、maintain（model/scheduled_model）、
+// PromptInitIfTerminal interactively fills openai（api_key/base_url）、model、
 // sessions.isolate_workspace、clawbridge.clients 预设（noop / webchat 组合及监听地址）when stdin is a TTY.
 // 非终端（CI、管道、子进程）下立即返回且不读 stdin，不改变文件。
 func PromptInitIfTerminal(cfgPath string, stdin *os.File, stdout io.Writer) error {
@@ -70,24 +70,6 @@ func PromptInitIfTerminal(cfgPath string, stdin *os.File, stdout io.Writer) erro
 	}
 	modelInput := strings.TrimSpace(modelLine)
 
-	maintainMap := maintainSection(root)
-	curMaintModel, _ := scalarString(maintainMap["model"])
-	curSchedModel, _ := scalarString(maintainMap["scheduled_model"])
-
-	fmt.Fprintf(stdout, "维护模型 maintain.model [%s]: ", promptDefault(curMaintModel))
-	maintModelLine, err := readLine(br)
-	if err != nil {
-		return fmt.Errorf("config.init.prompt: read maintain.model: %w", err)
-	}
-	maintModelInput := strings.TrimSpace(maintModelLine)
-
-	fmt.Fprintf(stdout, "定时维护模型 maintain.scheduled_model [%s]: ", promptDefault(curSchedModel))
-	schedModelLine, err := readLine(br)
-	if err != nil {
-		return fmt.Errorf("config.init.prompt: read maintain.scheduled_model: %w", err)
-	}
-	schedModelInput := strings.TrimSpace(schedModelLine)
-
 	sessionsMap := sessionsSection(root)
 	curIsolate := false
 	if v, ok := sessionsMap["isolate_workspace"]; ok {
@@ -136,16 +118,6 @@ func PromptInitIfTerminal(cfgPath string, stdin *os.File, stdout io.Writer) erro
 		changed = true
 	}
 	root["openai"] = openaiMap
-
-	if maintModelInput != "" {
-		maintainMap["model"] = maintModelInput
-		changed = true
-	}
-	if schedModelInput != "" {
-		maintainMap["scheduled_model"] = schedModelInput
-		changed = true
-	}
-	root["maintain"] = maintainMap
 
 	if clientsChanged {
 		changed = true
@@ -225,33 +197,6 @@ func parseYesNoInput(s string) (newVal bool, explicit bool, valid bool) {
 		return false, true, true
 	}
 	return false, false, false
-}
-
-func maintainSection(root map[string]any) map[string]any {
-	raw, ok := root["maintain"]
-	if !ok || raw == nil {
-		m := map[string]any{}
-		root["maintain"] = m
-		return m
-	}
-	if sm, ok := raw.(map[string]any); ok {
-		return sm
-	}
-	if am, ok := raw.(map[any]any); ok {
-		sm := make(map[string]any, len(am))
-		for k, v := range am {
-			ks, ok := k.(string)
-			if !ok {
-				continue
-			}
-			sm[ks] = v
-		}
-		root["maintain"] = sm
-		return sm
-	}
-	m := map[string]any{}
-	root["maintain"] = m
-	return m
 }
 
 func clawbridgeSection(root map[string]any) map[string]any {

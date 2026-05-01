@@ -18,46 +18,32 @@ import (
 
 	"github.com/lengzhao/oneclaw/config"
 	"github.com/lengzhao/oneclaw/logx"
-	"github.com/lengzhao/oneclaw/maintainloop"
 	"github.com/lengzhao/oneclaw/mcpclient"
-	"github.com/lengzhao/oneclaw/memory"
 	"github.com/lengzhao/oneclaw/schedule"
-	"github.com/lengzhao/oneclaw/sessdb"
 	"github.com/lengzhao/oneclaw/session"
 	"github.com/lengzhao/oneclaw/tools/builtin"
+	"github.com/lengzhao/oneclaw/workspace"
 	"github.com/openai/openai-go"
 )
 
 func main() {
 	configPath := flag.String("config", "", "path to extra YAML layer (merged after ~/.oneclaw/config.yaml; relative paths are under ~/.oneclaw/)")
-	maintainOnce := flag.Bool("maintain-once", false, "run one scheduled memory distill pass and exit (no channels)")
-	initFlag := flag.Bool("init", false, "create ~/.oneclaw from template; merge config keys if config.yaml already exists; if stdin is a TTY, prompt for openai, model, maintain models, sessions.isolate_workspace, clawbridge.clients preset; then exit")
+	initFlag := flag.Bool("init", false, "create ~/.oneclaw from template; merge config keys if config.yaml already exists; if stdin is a TTY, prompt for openai, model, sessions.isolate_workspace, clawbridge.clients preset; then exit")
 	exportSession := flag.String("export-session", "", "copy host data from ~/.oneclaw into this directory, then exit (no API key required)")
-	probeMaintainModel := flag.Bool("probe-maintain-model", false, "send a minimal chat request for each configured maintenance model, then exit (needs API key)")
 	logLevel := flag.String("log-level", "", "debug|info|warn|error (overrides config log.level when non-empty)")
 	logFormat := flag.String("log-format", "", "text|json (overrides config log.format when non-empty)")
 	logFile := flag.String("log-file", "", "append logs to this file (UTF-8) in addition to stderr; overrides config log.file when non-empty; relative to ~/.oneclaw after first load, else ~/.oneclaw for early init/export")
 	flag.Parse()
 
-	if *maintainOnce && *initFlag {
-		slog.Error("cli.usage", "err", "use only one of -maintain-once or -init")
-		os.Exit(2)
-	}
 	exclusive := 0
 	if *exportSession != "" {
-		exclusive++
-	}
-	if *probeMaintainModel {
-		exclusive++
-	}
-	if *maintainOnce {
 		exclusive++
 	}
 	if *initFlag {
 		exclusive++
 	}
 	if exclusive > 1 {
-		slog.Error("cli.usage", "err", "use only one of -export-session, -probe-maintain-model, -maintain-once, -init")
+		slog.Error("cli.usage", "err", "use only one of -export-session or -init")
 		os.Exit(2)
 	}
 
@@ -66,7 +52,7 @@ func main() {
 		slog.Error("user home", "err", err)
 		os.Exit(1)
 	}
-	userDataRoot := filepath.Join(home, memory.DotDir)
+	userDataRoot := filepath.Join(home, workspace.DotDir)
 
 	var logClose func()
 	defer func() {
@@ -91,7 +77,7 @@ func main() {
 
 	if *exportSession != "" {
 		logClose = logx.Init(*logLevel, *logFormat, config.ResolveLogPath(userDataRoot, *logFile))
-		if err := memory.ExportSessionSnapshot(userDataRoot, *exportSession); err != nil {
+		if err := workspace.ExportSessionSnapshot(userDataRoot, *exportSession); err != nil {
 			slog.Error("export-session", "err", err)
 			os.Exit(1)
 		}
@@ -107,67 +93,11 @@ func main() {
 	cfg.PushRuntime()
 	logClose = logx.Init(cfg.LogLevel(*logLevel), cfg.LogFormat(*logFormat), cfg.LogFile(*logFile))
 
-	if *probeMaintainModel {
-		if !cfg.HasAPIKey() {
-			slog.Error("missing API key: set openai.api_key in config",
-				"user_config", filepath.Join(home, config.UserRelPath),
-			)
-			os.Exit(1)
-		}
-		client := openai.NewClient(cfg.OpenAIOptions()...)
-		mainModel := string(openai.ChatModelGPT4o)
-		if m := cfg.ChatModel(); m != "" {
-			mainModel = m
-		}
-		pctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
-		defer cancel()
-		if err := memory.ProbeMaintenanceModels(pctx, &client, mainModel); err != nil {
-			slog.Error("probe-maintain-model", "err", err)
-			os.Exit(1)
-		}
-		slog.Info("probe-maintain-model.ok")
-		return
-	}
-
-	if *maintainOnce {
-		if !cfg.HasAPIKey() {
-			slog.Error("missing API key: set openai.api_key in config",
-				"user_config", filepath.Join(home, config.UserRelPath),
-			)
-			os.Exit(1)
-		}
-		client := openai.NewClient(cfg.OpenAIOptions()...)
-		mainModel := string(openai.ChatModelGPT4o)
-		if m := cfg.ChatModel(); m != "" {
-			mainModel = m
-		}
-		maxTok := memory.MaintenanceMaxOutputTokens(8192)
-		reg := builtin.ScheduledMaintainReadRegistry()
-		ur := cfg.UserDataRoot()
-		slog.Info("memory.maintain.scheduled_pass", "reason", "maintain-once", "data_root", ur)
-		memory.RunScheduledMaintain(context.Background(), memory.IMHostMaintainLayout(ur, home), &client, mainModel, maxTok,
-			&memory.ScheduledMaintainOpts{ToolRegistry: reg})
-		return
-	}
-
 	sharedReg := builtin.DefaultRegistry()
 	sharedClient := openai.NewClient(cfg.OpenAIOptions()...)
 	mainModel := string(openai.ChatModelGPT4o)
 	if m := cfg.ChatModel(); m != "" {
 		mainModel = m
-	}
-
-	llmAudit, orchAudit, visAudit := cfg.NotifyAuditSinkPaths()
-
-	var sessStore *sessdb.Store
-	if p := cfg.SessionsSQLitePath(); p != "" {
-		st, err := sessdb.Open(p)
-		if err != nil {
-			slog.Warn("sessdb.open", "path", p, "err", err)
-		} else {
-			sessStore = st
-			defer func() { _ = sessStore.Close() }()
-		}
 	}
 
 	if !cfg.HasAPIKey() {
@@ -212,41 +142,25 @@ func main() {
 		Client:        sharedClient,
 		Model:         mainModel,
 		MCPSystemNote: mcpNote,
-		LLMAudit:      llmAudit,
-		OrchAudit:     orchAudit,
-		VisAudit:      visAudit,
 		Bridge:        bridge,
-	}
-	if sessStore != nil {
-		deps.NewRecallPersister = func(h session.SessionHandle) session.RecallPersister {
-			return sessdb.NewRecallBridge(sessStore, h)
-		}
 	}
 	engineFactory := session.MainEngineFactory(deps)
 
-	workers := cfg.SessionWorkerCount()
-	workerPool, err := session.NewWorkerPool(workers, engineFactory)
+	turnPolicy := session.ParseTurnPolicy(cfg.SessionTurnPolicyRaw())
+	turnHub, err := session.NewTurnHub(rootCtx, turnPolicy, engineFactory)
 	if err != nil {
-		slog.Error("session.worker_pool", "err", err)
+		slog.Error("session.turn_hub", "err", err)
 		os.Exit(1)
 	}
-	defer workerPool.Close()
+	defer turnHub.Close()
 
 	submitInbound := func(ctx context.Context, m bus.InboundMessage) error {
 		h := session.SessionHandle{Source: m.ClientID, SessionKey: session.InboundSessionKey(m)}
 		if session.IsStopSlashCommand(m.Content) {
-			workerPool.CancelInflightTurn(h)
+			turnHub.CancelInflightTurn(h)
 		}
-		return workerPool.SubmitUser(ctx, m)
+		return turnHub.Submit(ctx, m)
 	}
-
-	maintainloop.Start(rootCtx, maintainloop.Params{
-		Interval:          cfg.EmbeddedScheduledMaintainInterval(),
-		Layout:            memory.IMHostMaintainLayout(cfg.UserDataRoot(), home),
-		Client:            &sharedClient,
-		MainModel:         mainModel,
-		MaxMaintainTokens: 8192,
-	})
 
 	if err := bridge.Start(rootCtx); err != nil {
 		slog.Error("clawbridge.start", "err", err)

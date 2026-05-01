@@ -6,13 +6,11 @@ import (
 	"context"
 	"encoding/json"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/lengzhao/oneclaw/loop"
-	"github.com/lengzhao/oneclaw/memory"
 	"github.com/lengzhao/clawbridge/bus"
+	"github.com/lengzhao/oneclaw/loop"
 	"github.com/lengzhao/oneclaw/schedule"
 	"github.com/lengzhao/oneclaw/test/openaistub"
 	"github.com/lengzhao/oneclaw/toolctx"
@@ -33,20 +31,21 @@ func TestE2E_111_CronToolWritesFile(t *testing.T) {
 	client := openai.NewClient(stubOpenAIOptions(stub)...)
 	msgs := []openai.ChatCompletionMessageParamUnion{}
 	err := loop.RunTurn(context.Background(), loop.Config{
-		Client:      &client,
-		Model:       "gpt-4o",
-		System:      "Use tools.",
-		MaxTokens:   512,
-		MaxSteps:    8,
-		Messages:    &msgs,
-		Registry:    builtin.DefaultRegistry(),
-		ToolContext: toolctx.New(cwd, context.Background()),
+		Client:       &client,
+		Model:        "gpt-4o",
+		System:       "Use tools.",
+		MaxTokens:    512,
+		MaxSteps:     8,
+		Messages:     &msgs,
+		Registry:     builtin.DefaultRegistry(),
+		ToolContext:  toolctx.New(cwd, context.Background()),
+		TurnMaxSteps: 8,
 	}, bus.InboundMessage{Content: "schedule a job", ClientID: "cli"})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	path := filepath.Join(cwd, memory.DotDir, "scheduled_jobs.json")
+	path := schedule.JobsFilePath(cwd, "", false, "")
 	b, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("scheduled_jobs.json: %v", err)

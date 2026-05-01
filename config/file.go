@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	cbconfig "github.com/lengzhao/clawbridge/config"
-	"github.com/lengzhao/oneclaw/memory"
+	"github.com/lengzhao/oneclaw/workspace"
 	"gopkg.in/yaml.v3"
 )
 
@@ -77,26 +77,17 @@ type File struct {
 	} `yaml:"paths"`
 
 	Features struct {
-		DisableTranscript           *bool `yaml:"disable_transcript"`
-		DisableMemory               *bool `yaml:"disable_memory"`
-		DisableAutoMemory           *bool `yaml:"disable_auto_memory"`
-		DisableMemoryExtract        *bool `yaml:"disable_memory_extract"`
-		DisableAutoMaintenance      *bool `yaml:"disable_auto_maintenance"`
-		DisableScheduledMaintenance *bool `yaml:"disable_scheduled_maintenance"`
-		DisableMemoryAudit          *bool `yaml:"disable_memory_audit"`
-		DisableContextBudget        *bool `yaml:"disable_context_budget"`
-		DisableUsageLedger          *bool `yaml:"disable_usage_ledger"`
-		UsageEstimateCost           *bool `yaml:"usage_estimate_cost"`
-		DisableBehaviorPolicyWrite  *bool `yaml:"disable_behavior_policy_write"`
-		DisableScheduledTasks       *bool `yaml:"disable_scheduled_tasks"`
-		DisableSemanticCompact      *bool `yaml:"disable_semantic_compact"`
-		DisableSkills               *bool `yaml:"disable_skills"`
-		DisableTasks                *bool `yaml:"disable_tasks"`
-		// Notify audit JSONL sinks (.oneclaw/audit/...): disable_audit_sinks turns all off; the rest are per-path.
-		DisableAuditSinks           *bool `yaml:"disable_audit_sinks"`
-		DisableAuditLLM             *bool `yaml:"disable_audit_llm"`
-		DisableAuditOrchestration   *bool `yaml:"disable_audit_orchestration"`
-		DisableAuditVisible         *bool `yaml:"disable_audit_visible"`
+		DisableTranscript          *bool `yaml:"disable_transcript"`
+		DisableMemory              *bool `yaml:"disable_memory"`
+		DisableAutoMemory          *bool `yaml:"disable_auto_memory"`
+		DisableContextBudget       *bool `yaml:"disable_context_budget"`
+		DisableUsageLedger         *bool `yaml:"disable_usage_ledger"`
+		UsageEstimateCost          *bool `yaml:"usage_estimate_cost"`
+		DisableBehaviorPolicyWrite *bool `yaml:"disable_behavior_policy_write"`
+		DisableScheduledTasks      *bool `yaml:"disable_scheduled_tasks"`
+		DisableSemanticCompact     *bool `yaml:"disable_semantic_compact"`
+		DisableSkills              *bool `yaml:"disable_skills"`
+		DisableTasks               *bool `yaml:"disable_tasks"`
 		// DisableMultimodalImage: when true, inbound images use read_file hints only (no vision API parts).
 		DisableMultimodalImage *bool `yaml:"disable_multimodal_image"`
 		// DisableMultimodalAudio: when true, inbound wav/mp3 use read_file hints only (no input_audio parts).
@@ -107,40 +98,12 @@ type File struct {
 		MaxContextTokens      int `yaml:"max_context_tokens"` // ×2 → byte budget when max_prompt_bytes unset
 		MaxPromptBytes        int `yaml:"max_prompt_bytes"`
 		MinTranscriptMessages int `yaml:"min_transcript_messages"`
-		RecallMaxBytes        int `yaml:"recall_max_bytes"`
 		HistoryMaxBytes       int `yaml:"history_max_bytes"`
 		SystemExtraMaxBytes   int `yaml:"system_extra_max_bytes"`
 		AgentMdMaxBytes       int `yaml:"agent_md_max_bytes"`
 		SkillIndexMaxBytes    int `yaml:"skill_index_max_bytes"`
 		InheritedMessages     int `yaml:"inherited_messages"`
 	} `yaml:"budget"`
-
-	Maintain struct {
-		Interval        string `yaml:"interval"`
-		LogDays         int    `yaml:"log_days"` // calendar-mode window for scheduled maintain; 0 = default 3
-		Model           string `yaml:"model"`
-		ScheduledModel  string `yaml:"scheduled_model"`
-		MaxTokens       int64  `yaml:"max_tokens"`
-		MinLogBytes     int    `yaml:"min_log_bytes"`
-		MaxLogReadBytes int    `yaml:"max_log_bytes"`
-		PostTurn        struct {
-			LogDays                int   `yaml:"log_days"`
-			MaxCombinedLogBytes    int   `yaml:"max_combined_log_bytes"`
-			MaxLogBytes            int   `yaml:"max_log_bytes"`
-			MinLogBytes            int   `yaml:"min_log_bytes"`
-			MaxTopicFiles          int   `yaml:"max_topic_files"`
-			TopicExcerptBytes      int   `yaml:"topic_excerpt_bytes"`
-			MemoryPreviewBytes     int   `yaml:"memory_preview_bytes"`
-			TimeoutSeconds         int   `yaml:"timeout_seconds"`
-			MaxTokens              int64 `yaml:"max_tokens"`
-			UserSnapshotBytes      int   `yaml:"user_snapshot_bytes"`
-			AssistantSnapshotBytes int   `yaml:"assistant_snapshot_bytes"`
-		} `yaml:"post_turn"`
-		ScheduledTimeoutSeconds int    `yaml:"scheduled_timeout_seconds"`
-		ScheduledMaxSteps       int    `yaml:"scheduled_max_steps"`
-		IncrementalOverlap      string `yaml:"incremental_overlap"`
-		IncrementalMaxSpan      string `yaml:"incremental_max_span"`
-	} `yaml:"maintain"`
 
 	Log struct {
 		Level  string `yaml:"level"`
@@ -169,22 +132,15 @@ type File struct {
 		RecentPath string `yaml:"recent_path"`
 	} `yaml:"skills"`
 
-	Memory struct {
-		Recall struct {
-			Backend    string `yaml:"backend"`
-			SQLitePath string `yaml:"sqlite_path"`
-		} `yaml:"recall"`
-	} `yaml:"memory"`
-
-	// Sessions: per-chat isolation (IM threads). SQLite stores session index + recall state; transcripts stay as files under sessions/<id>/.
+	// Sessions: per-chat isolation (IM threads). Transcripts and per-session dirs under sessions/<id>/.
 	Sessions struct {
-		DisableSQLite *bool  `yaml:"disable_sqlite"`
-		SQLitePath    string `yaml:"sqlite_path"`
 		// WorkerCount: fixed goroutine shards for cmd/oneclaw (hash session → worker). 0 = default 8.
 		WorkerCount int `yaml:"worker_count"`
 		// IsolateWorkspace: when true, InstructionRoot is <UserDataRoot>/sessions/<id>/ (per-session AGENT/MEMORY/workspace).
 		// When false (default), InstructionRoot is UserDataRoot; transcripts remain per-session under sessions/<id>/.
 		IsolateWorkspace *bool `yaml:"isolate_workspace"`
+		// TurnPolicy: serial (default), insert, preempt — see session.TurnHub / session.ParseTurnPolicy.
+		TurnPolicy string `yaml:"turn_policy"`
 	} `yaml:"sessions"`
 
 	// Clawbridge is IM 总线配置，形状与 github.com/lengzhao/clawbridge/config.Config 一致（media + clients）。
@@ -257,10 +213,6 @@ func mergeFile(dst *File, src File) {
 	mergeBoolPtr(&dst.Features.DisableTranscript, src.Features.DisableTranscript)
 	mergeBoolPtr(&dst.Features.DisableMemory, src.Features.DisableMemory)
 	mergeBoolPtr(&dst.Features.DisableAutoMemory, src.Features.DisableAutoMemory)
-	mergeBoolPtr(&dst.Features.DisableMemoryExtract, src.Features.DisableMemoryExtract)
-	mergeBoolPtr(&dst.Features.DisableAutoMaintenance, src.Features.DisableAutoMaintenance)
-	mergeBoolPtr(&dst.Features.DisableScheduledMaintenance, src.Features.DisableScheduledMaintenance)
-	mergeBoolPtr(&dst.Features.DisableMemoryAudit, src.Features.DisableMemoryAudit)
 	mergeBoolPtr(&dst.Features.DisableContextBudget, src.Features.DisableContextBudget)
 	mergeBoolPtr(&dst.Features.DisableUsageLedger, src.Features.DisableUsageLedger)
 	mergeBoolPtr(&dst.Features.UsageEstimateCost, src.Features.UsageEstimateCost)
@@ -269,10 +221,6 @@ func mergeFile(dst *File, src File) {
 	mergeBoolPtr(&dst.Features.DisableSemanticCompact, src.Features.DisableSemanticCompact)
 	mergeBoolPtr(&dst.Features.DisableSkills, src.Features.DisableSkills)
 	mergeBoolPtr(&dst.Features.DisableTasks, src.Features.DisableTasks)
-	mergeBoolPtr(&dst.Features.DisableAuditSinks, src.Features.DisableAuditSinks)
-	mergeBoolPtr(&dst.Features.DisableAuditLLM, src.Features.DisableAuditLLM)
-	mergeBoolPtr(&dst.Features.DisableAuditOrchestration, src.Features.DisableAuditOrchestration)
-	mergeBoolPtr(&dst.Features.DisableAuditVisible, src.Features.DisableAuditVisible)
 	mergeBoolPtr(&dst.Features.DisableMultimodalImage, src.Features.DisableMultimodalImage)
 	mergeBoolPtr(&dst.Features.DisableMultimodalAudio, src.Features.DisableMultimodalAudio)
 	if src.Budget.MaxContextTokens != 0 {
@@ -283,9 +231,6 @@ func mergeFile(dst *File, src File) {
 	}
 	if src.Budget.MinTranscriptMessages != 0 {
 		dst.Budget.MinTranscriptMessages = src.Budget.MinTranscriptMessages
-	}
-	if src.Budget.RecallMaxBytes != 0 {
-		dst.Budget.RecallMaxBytes = src.Budget.RecallMaxBytes
 	}
 	if src.Budget.HistoryMaxBytes != 0 {
 		dst.Budget.HistoryMaxBytes = src.Budget.HistoryMaxBytes
@@ -301,74 +246,6 @@ func mergeFile(dst *File, src File) {
 	}
 	if src.Budget.InheritedMessages != 0 {
 		dst.Budget.InheritedMessages = src.Budget.InheritedMessages
-	}
-	if src.Maintain.Interval != "" {
-		dst.Maintain.Interval = src.Maintain.Interval
-	}
-	if src.Maintain.LogDays != 0 {
-		dst.Maintain.LogDays = src.Maintain.LogDays
-	}
-	if src.Maintain.Model != "" {
-		dst.Maintain.Model = src.Maintain.Model
-	}
-	if src.Maintain.ScheduledModel != "" {
-		dst.Maintain.ScheduledModel = src.Maintain.ScheduledModel
-	}
-	if src.Maintain.MaxTokens != 0 {
-		dst.Maintain.MaxTokens = src.Maintain.MaxTokens
-	}
-	if src.Maintain.MinLogBytes != 0 {
-		dst.Maintain.MinLogBytes = src.Maintain.MinLogBytes
-	}
-	if src.Maintain.MaxLogReadBytes != 0 {
-		dst.Maintain.MaxLogReadBytes = src.Maintain.MaxLogReadBytes
-	}
-	spt := src.Maintain.PostTurn
-	dpt := &dst.Maintain.PostTurn
-	if spt.LogDays != 0 {
-		dpt.LogDays = spt.LogDays
-	}
-	if spt.MaxCombinedLogBytes != 0 {
-		dpt.MaxCombinedLogBytes = spt.MaxCombinedLogBytes
-	}
-	if spt.MaxLogBytes != 0 {
-		dpt.MaxLogBytes = spt.MaxLogBytes
-	}
-	if spt.MinLogBytes != 0 {
-		dpt.MinLogBytes = spt.MinLogBytes
-	}
-	if spt.MaxTopicFiles != 0 {
-		dpt.MaxTopicFiles = spt.MaxTopicFiles
-	}
-	if spt.TopicExcerptBytes != 0 {
-		dpt.TopicExcerptBytes = spt.TopicExcerptBytes
-	}
-	if spt.MemoryPreviewBytes != 0 {
-		dpt.MemoryPreviewBytes = spt.MemoryPreviewBytes
-	}
-	if spt.TimeoutSeconds != 0 {
-		dpt.TimeoutSeconds = spt.TimeoutSeconds
-	}
-	if spt.MaxTokens != 0 {
-		dpt.MaxTokens = spt.MaxTokens
-	}
-	if spt.UserSnapshotBytes != 0 {
-		dpt.UserSnapshotBytes = spt.UserSnapshotBytes
-	}
-	if spt.AssistantSnapshotBytes != 0 {
-		dpt.AssistantSnapshotBytes = spt.AssistantSnapshotBytes
-	}
-	if src.Maintain.ScheduledTimeoutSeconds != 0 {
-		dst.Maintain.ScheduledTimeoutSeconds = src.Maintain.ScheduledTimeoutSeconds
-	}
-	if src.Maintain.ScheduledMaxSteps != 0 {
-		dst.Maintain.ScheduledMaxSteps = src.Maintain.ScheduledMaxSteps
-	}
-	if src.Maintain.IncrementalOverlap != "" {
-		dst.Maintain.IncrementalOverlap = src.Maintain.IncrementalOverlap
-	}
-	if src.Maintain.IncrementalMaxSpan != "" {
-		dst.Maintain.IncrementalMaxSpan = src.Maintain.IncrementalMaxSpan
 	}
 	if src.Log.Level != "" {
 		dst.Log.Level = src.Log.Level
@@ -400,24 +277,17 @@ func mergeFile(dst *File, src File) {
 	if src.Skills.RecentPath != "" {
 		dst.Skills.RecentPath = src.Skills.RecentPath
 	}
-	if src.Memory.Recall.Backend != "" {
-		dst.Memory.Recall.Backend = src.Memory.Recall.Backend
-	}
-	if src.Memory.Recall.SQLitePath != "" {
-		dst.Memory.Recall.SQLitePath = src.Memory.Recall.SQLitePath
-	}
 	if src.Clawbridge.Media.Root != "" {
 		dst.Clawbridge.Media.Root = src.Clawbridge.Media.Root
 	}
 	if len(src.Clawbridge.Clients) > 0 {
 		dst.Clawbridge.Clients = append([]cbconfig.ClientConfig(nil), src.Clawbridge.Clients...)
 	}
-	mergeBoolPtr(&dst.Sessions.DisableSQLite, src.Sessions.DisableSQLite)
-	if src.Sessions.SQLitePath != "" {
-		dst.Sessions.SQLitePath = src.Sessions.SQLitePath
-	}
 	if src.Sessions.WorkerCount != 0 {
 		dst.Sessions.WorkerCount = src.Sessions.WorkerCount
+	}
+	if src.Sessions.TurnPolicy != "" {
+		dst.Sessions.TurnPolicy = src.Sessions.TurnPolicy
 	}
 	mergeBoolPtr(&dst.Sessions.IsolateWorkspace, src.Sessions.IsolateWorkspace)
 	mergeMCP(&dst.MCP, src.MCP)
@@ -459,7 +329,7 @@ func Load(opt LoadOptions) (*Resolved, error) {
 	if explicit != "" {
 		p := explicit
 		if !filepath.IsAbs(p) {
-			p = filepath.Join(opt.Home, memory.DotDir, p)
+			p = filepath.Join(opt.Home, workspace.DotDir, p)
 		}
 		p = filepath.Clean(p)
 		if _, err := os.Stat(p); err != nil {

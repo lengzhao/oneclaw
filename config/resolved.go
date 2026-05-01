@@ -2,13 +2,11 @@ package config
 
 import (
 	"fmt"
-	"log/slog"
 	"path/filepath"
 	"strings"
-	"time"
 
 	cbconfig "github.com/lengzhao/clawbridge/config"
-	"github.com/lengzhao/oneclaw/memory"
+	"github.com/lengzhao/oneclaw/workspace"
 	"github.com/openai/openai-go/option"
 )
 
@@ -35,7 +33,7 @@ type Resolved struct {
 	explicitConfig string
 }
 
-// UserDataRoot is the host data directory (~/.oneclaw or paths.memory_base): sessions, sqlite, and flat host files.
+// UserDataRoot is the host data directory (~/.oneclaw or paths.memory_base): sessions, transcripts, and flat host files.
 func (r *Resolved) UserDataRoot() string {
 	if r == nil || r.home == "" {
 		return ""
@@ -44,7 +42,7 @@ func (r *Resolved) UserDataRoot() string {
 	if mb != "" {
 		return filepath.Clean(expandTilde(r.home, mb))
 	}
-	return filepath.Join(r.home, memory.DotDir)
+	return filepath.Join(r.home, workspace.DotDir)
 }
 
 // HasAPIKey reports whether a non-empty API key is set in merged YAML.
@@ -198,35 +196,6 @@ func (r *Resolved) transcriptDisabled() bool {
 	return boolPtrTrue(r.merged.Features.DisableTranscript)
 }
 
-// SessionsSQLiteDisabled reports sessions.disable_sqlite (default false = SQLite enabled when path resolves).
-func (r *Resolved) SessionsSQLiteDisabled() bool {
-	if r == nil {
-		return true
-	}
-	return boolPtrTrue(r.merged.Sessions.DisableSQLite)
-}
-
-// SessionsSQLitePath returns the SQLite database path for session metadata and recall state.
-// Empty means "do not open SQLite" (when disabled or misconfigured).
-func (r *Resolved) SessionsSQLitePath() string {
-	if r == nil || r.SessionsSQLiteDisabled() {
-		return ""
-	}
-	p := strings.TrimSpace(r.merged.Sessions.SQLitePath)
-	base := r.UserDataRoot()
-	if p == "" {
-		return filepath.Join(base, "sessions.sqlite")
-	}
-	if filepath.IsAbs(p) {
-		return filepath.Clean(p)
-	}
-	abs, err := filepath.Abs(filepath.Join(base, p))
-	if err != nil {
-		return filepath.Join(base, p)
-	}
-	return abs
-}
-
 // SessionTranscriptDir is the session workspace root: <userDataRoot>/sessions/<id>/.
 func (r *Resolved) SessionTranscriptDir(sessionSegment string) string {
 	seg := strings.TrimSpace(sessionSegment)
@@ -252,6 +221,14 @@ func (r *Resolved) SessionIsolateWorkspace() bool {
 	return boolPtrTrue(r.merged.Sessions.IsolateWorkspace)
 }
 
+// SessionTurnPolicyRaw returns sessions.turn_policy from YAML (trimmed). Empty means serial; see session.ParseTurnPolicy.
+func (r *Resolved) SessionTurnPolicyRaw() string {
+	if r == nil {
+		return ""
+	}
+	return strings.TrimSpace(r.merged.Sessions.TurnPolicy)
+}
+
 // SessionTranscriptPaths returns per-session transcript.json and working_transcript.json paths.
 // When transcript is disabled, both are empty.
 func (r *Resolved) SessionTranscriptPaths(sessionSegment string) (transcript, working string) {
@@ -260,21 +237,6 @@ func (r *Resolved) SessionTranscriptPaths(sessionSegment string) (transcript, wo
 	}
 	dir := r.SessionTranscriptDir(sessionSegment)
 	return filepath.Join(dir, "transcript.json"), filepath.Join(dir, "working_transcript.json")
-}
-
-// NotifyAuditSinkPaths returns which notify audit JSONL sinks should register.
-// Default is all true (llm, orchestration, visible). disable_audit_sinks disables all;
-// per-path flags further turn off individual sinks.
-func (r *Resolved) NotifyAuditSinkPaths() (llm, orchestration, visible bool) {
-	if r == nil {
-		return true, true, true
-	}
-	if boolPtrTrue(r.merged.Features.DisableAuditSinks) {
-		return false, false, false
-	}
-	return !boolPtrTrue(r.merged.Features.DisableAuditLLM),
-		!boolPtrTrue(r.merged.Features.DisableAuditOrchestration),
-		!boolPtrTrue(r.merged.Features.DisableAuditVisible)
 }
 
 // MultimodalImageDisabled reports features.disable_multimodal_image (default false = vision parts allowed).
@@ -295,30 +257,4 @@ func (r *Resolved) MultimodalAudioDisabled() bool {
 
 func boolPtrTrue(p *bool) bool {
 	return p != nil && *p
-}
-
-// EmbeddedScheduledMaintainInterval returns the interval for in-process maintainloop (oneclaw main).
-// It is 0 unless maintain.interval is non-empty in merged YAML.
-func (r *Resolved) EmbeddedScheduledMaintainInterval() time.Duration {
-	if strings.TrimSpace(r.merged.Maintain.Interval) == "" {
-		return 0
-	}
-	return r.MaintainLoopInterval()
-}
-
-// MaintainLoopInterval parses maintain.interval from YAML.
-func (r *Resolved) MaintainLoopInterval() time.Duration {
-	v := strings.TrimSpace(r.merged.Maintain.Interval)
-	if v == "" {
-		return time.Hour
-	}
-	if v == "0" || strings.EqualFold(v, "off") || strings.EqualFold(v, "false") {
-		return 0
-	}
-	d, err := time.ParseDuration(v)
-	if err != nil || d < 0 {
-		slog.Warn("config.invalid_maintain_interval", "maintain.interval", v, "fallback", "1h")
-		return time.Hour
-	}
-	return d
 }

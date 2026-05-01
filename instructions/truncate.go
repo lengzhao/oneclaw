@@ -1,4 +1,4 @@
-package memory
+package instructions
 
 import (
 	"fmt"
@@ -11,7 +11,7 @@ const (
 	MaxEntrypointBytes = 25_000
 )
 
-// EntrypointTruncation is the result of truncating a MEMORY.md index.
+// EntrypointTruncation is the result of truncating a markdown entry file.
 type EntrypointTruncation struct {
 	Content          string
 	LineCount        int
@@ -21,7 +21,8 @@ type EntrypointTruncation struct {
 }
 
 // TruncateEntrypointContent applies line cap then byte cap (at last newline before cap).
-func TruncateEntrypointContent(raw string) EntrypointTruncation {
+// displayName is used in the WARNING line (e.g. "MEMORY.md").
+func TruncateEntrypointContent(raw, displayName string) EntrypointTruncation {
 	trimmed := strings.TrimSpace(raw)
 	lines := splitLines(trimmed)
 	lineCount := len(lines)
@@ -64,7 +65,7 @@ func TruncateEntrypointContent(raw string) EntrypointTruncation {
 
 	warning := fmt.Sprintf(
 		"\n\n> WARNING: %s is %s. Only part of it was loaded. Keep index entries to one line under ~200 chars; move detail into topic files.",
-		entrypointName,
+		displayName,
 		reason,
 	)
 	return EntrypointTruncation{

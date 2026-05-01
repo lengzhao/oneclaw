@@ -17,24 +17,18 @@ import (
 	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/clawbridge/client"
 	"github.com/lengzhao/oneclaw/loop"
-	"github.com/lengzhao/oneclaw/memory"
 	"github.com/lengzhao/oneclaw/notify"
 	"github.com/lengzhao/oneclaw/rtopts"
 	"github.com/lengzhao/oneclaw/tools"
+	"github.com/lengzhao/oneclaw/workspace"
 	"github.com/openai/openai-go"
 )
 
-// DefaultRootAgentID is the default notify / audit id for the root Engine created by NewEngine.
+// DefaultRootAgentID is the default notify segment id for the root Engine created by NewEngine.
 const DefaultRootAgentID = "AGENT"
 
 // DefaultMainAgentID is an alias of DefaultRootAgentID for older call sites.
 const DefaultMainAgentID = DefaultRootAgentID
-
-// RecallPersister persists memory recall dedupe state per session (optional; e.g. SQLite).
-type RecallPersister interface {
-	LoadRecall(sessionID string) (memory.RecallState, error)
-	SaveRecall(sessionID string, state memory.RecallState) error
-}
 
 // Engine holds conversation state and configuration for one chat session.
 type Engine struct {
@@ -47,9 +41,9 @@ type Engine struct {
 	MaxSteps  int
 	// Messages is the live API history. After each successful RunTurn it is collapsed to
 	// user-visible rows only (loop.ToUserVisibleMessages): injections and tool rounds are dropped
-	// to save tokens; facts can be re-fetched with tools or memory recall.
+	// to save tokens; facts can be re-fetched with tools or instruction files.
 	Messages []openai.ChatCompletionMessageParamUnion
-	// Transcript is the slim audit log (real user lines + final assistant text per turn), same
+	// Transcript is the slim persisted log (real user lines + final assistant text per turn), same
 	// visibility rules as Messages; agentMd / inbound / tool rows are not persisted here.
 	Transcript []openai.ChatCompletionMessageParamUnion
 	Registry   *tools.Registry
@@ -70,16 +64,12 @@ type Engine struct {
 	// Notify is a fan-out list (notify.Multi) of lifecycle sinks; default empty no-op.
 	// Register handlers with RegisterNotify(sink) or assign notify.Multi{…} directly.
 	Notify notify.Multi
-	// TranscriptPath is where SaveTranscript writes after each successful loop.RunTurn (before PostTurn; post-turn maintain runs asynchronously). Empty disables auto-save.
+	// TranscriptPath is where SaveTranscript writes after each successful loop.RunTurn. Empty disables auto-save.
 	TranscriptPath string
 	// WorkingTranscriptPath persists Messages (already user-visible in memory after each turn).
 	WorkingTranscriptPath string
 	// WorkingTranscriptMaxMessages is the max tail messages to persist; 0 means default 30; negative means unlimited.
 	WorkingTranscriptMaxMessages int
-	// RecallState tracks memory recall surfacing across turns (phase B).
-	RecallState memory.RecallState
-	// RecallPersister loads/saves RecallState across restarts when set (e.g. sessdb).
-	RecallPersister RecallPersister
 	// ChatTransport overrides default transport when non-empty (from unified config).
 	ChatTransport string
 	// MCPSystemNote is optional; non-empty injects the MCP section in the main-thread system prompt.
@@ -90,6 +80,8 @@ type Engine struct {
 	DisableMultimodalAudio bool
 	// Bridge is the IM bus for outbound publish and inbound message status. When nil, outbound/status calls return [clawbridge.ErrNotInitialized]. [cmd/oneclaw] / [MainEngineFactoryDeps] set this from [clawbridge.New]; tests set it from a noop bridge.
 	Bridge *clawbridge.Bridge
+	// BeforeModelStep is optional; when set, passed to [loop.RunTurn] to append mid-turn user lines (e.g. [TurnHub] insert policy).
+	BeforeModelStep func(ctx context.Context, step int, msgs *[]openai.ChatCompletionMessageParamUnion) error
 }
 
 // NewEngine builds an engine with sensible defaults.
@@ -153,7 +145,7 @@ func (e *Engine) SubmitUser(ctx context.Context, in bus.InboundMessage) (err err
 	preview := combinedInboundPreview(text, atts)
 	slog.Debug("session.submit", "cwd", e.CWD, "model", e.Model, "preview_chars", utf8.RuneCountInString(preview))
 
-	prep, err := e.prepareSharedTurn(ctx, in, preview, true, turnID, corrID)
+	prep, err := e.prepareSharedTurn(ctx, in, true, turnID, corrID)
 	if err != nil {
 		if e.hasNotify() {
 			ev := notify.NewEvent(notify.EventTurnError, "error")
@@ -174,12 +166,11 @@ func (e *Engine) SubmitUser(ctx context.Context, in bus.InboundMessage) (err err
 	)
 	bg := prep.bg
 	memOK := prep.memOK
-	layout := prep.layout
 	bundle := prep.bundle
 	system := prep.system
 
 	var traceSink *loop.ToolTraceSink
-	needToolTrace := (memOK && memory.MemoryExtractEnabled()) || e.hasNotify()
+	needToolTrace := e.hasNotify()
 	if needToolTrace {
 		traceSink = &loop.ToolTraceSink{}
 	}
@@ -209,7 +200,6 @@ func (e *Engine) SubmitUser(ctx context.Context, in bus.InboundMessage) (err err
 		CanUseTool:              e.CanUseTool,
 		OutboundText:            prep.outboundText,
 		MemoryAgentMd:           bundle.AgentMdBlock,
-		MemoryRecall:            bundle.RecallBlock,
 		InboundMeta:             InboundMetaForModel(in),
 		InboundAttachmentChunks: attChunks,
 		UserLine:                userLine,
@@ -221,7 +211,12 @@ func (e *Engine) SubmitUser(ctx context.Context, in bus.InboundMessage) (err err
 		SlimTranscript: func(assistantText string) {
 			e.Transcript = append(e.Transcript, openai.AssistantMessage(assistantText))
 		},
-		Lifecycle: e.buildLoopLifecycle(turnID, corrID, prep.tctx.AgentID),
+		Lifecycle:       e.buildLoopLifecycle(turnID, corrID, prep.tctx.AgentID),
+		BeforeModelStep: e.BeforeModelStep,
+		TurnMaxSteps:    e.MaxSteps,
+	}
+	if cfg.TurnMaxSteps < 1 {
+		cfg.TurnMaxSteps = 1
 	}
 
 	visibleCountBefore := len(loop.ToUserVisibleMessages(e.Transcript))
@@ -290,21 +285,6 @@ func (e *Engine) SubmitUser(ctx context.Context, in bus.InboundMessage) (err err
 		slog.Error("session.working_transcript_save", "err", err)
 	}
 	e.appendDialogHistoryIfComplete()
-	if memOK {
-		var tools []loop.ToolTraceEntry
-		if traceSink != nil {
-			tools = traceSink.Snapshot()
-		}
-		pti := memory.PostTurnInput{
-			SessionID:        e.SessionID,
-			CorrelationID:    strings.TrimSpace(in.MessageID),
-			UserText:         preview,
-			AssistantVisible: loop.LastAssistantDisplay(e.Messages),
-			Tools:            append([]loop.ToolTraceEntry(nil), tools...),
-		}
-		e.runPostTurnAndScheduleMaintain(layout, pti)
-	}
-	e.persistRecall()
 	return nil
 }
 
@@ -345,8 +325,7 @@ func (e *Engine) SendMessage(ctx context.Context, in bus.InboundMessage) error {
 func (e *Engine) submitLocalSlashTurn(ctx context.Context, in bus.InboundMessage, atts []Attachment, reply string, turnID, corrID string) error {
 	slog.Debug("session.submit_local_slash", "cwd", e.CWD)
 	text := strings.TrimSpace(in.Content)
-	preview := combinedInboundPreview(text, atts)
-	prep, err := e.prepareSharedTurn(ctx, in, preview, false, turnID, corrID)
+	prep, err := e.prepareSharedTurn(ctx, in, false, turnID, corrID)
 	if err != nil {
 		if e.hasNotify() {
 			ev := notify.NewEvent(notify.EventTurnError, "error")
@@ -395,26 +374,7 @@ func (e *Engine) submitLocalSlashTurn(ctx context.Context, in bus.InboundMessage
 		}
 		notify.EmitSafe(e.Notify, ctx, ev)
 	}
-	// No memory.PostTurn / MaybePostTurnMaintain: local slash is an intentional bypass (see docs/memory-maintain-dual-entry-design.md §2.4).
-	e.persistRecall()
 	return nil
-}
-
-func (e *Engine) persistRecall() {
-	if e.RecallPersister == nil {
-		return
-	}
-	if err := e.RecallPersister.SaveRecall(e.SessionID, e.RecallState); err != nil {
-		slog.Warn("session.recall_persist", "session_id", e.SessionID, "err", err)
-	}
-}
-
-// runPostTurnAndScheduleMaintain runs memory.PostTurn and starts MaybePostTurnMaintain asynchronously (best-effort; does not block the channel).
-func (e *Engine) runPostTurnAndScheduleMaintain(layout memory.Layout, pti memory.PostTurnInput) {
-	memory.PostTurn(layout, pti)
-	go func(in memory.PostTurnInput) {
-		memory.MaybePostTurnMaintain(context.Background(), layout, &e.Client, e.Model, e.MaxTokens, &in)
-	}(pti)
 }
 
 // publishOutboundSubmitUserError sends a user-visible assistant line with the failure reason when
@@ -433,6 +393,11 @@ func (e *Engine) publishOutboundSubmitUserError(ctx context.Context, in *bus.Inb
 	if pubErr := e.publishOutbound(ctx, msg); pubErr != nil && !errors.Is(pubErr, clawbridge.ErrNotInitialized) {
 		slog.Warn("session.submit_user_error_outbound", "err", pubErr)
 	}
+}
+
+// ApplyInboundMessageStatus updates driver-visible inbound status when MessageID, ClientID, and SessionID are set.
+func (e *Engine) ApplyInboundMessageStatus(ctx context.Context, in bus.InboundMessage, state string) {
+	e.applyInboundMessageStatus(ctx, in, state)
 }
 
 func (e *Engine) applyInboundMessageStatus(ctx context.Context, in bus.InboundMessage, state string) {
@@ -546,7 +511,7 @@ func (e *Engine) appendDialogHistoryIfComplete() {
 	}
 	layout := e.MemoryLayout(home)
 	date := time.Now().Format("2006-01-02")
-	if err := memory.AppendDialogHistoryPair(layout, date, e.SessionID, u, a); err != nil {
+	if err := workspace.AppendDialogHistoryPair(layout, date, e.SessionID, u, a); err != nil {
 		slog.Warn("session.dialog_history.append", "err", err)
 	}
 }

@@ -13,7 +13,3 @@ model: gpt-4o
 chat:
   # stream | non_stream；stub/CI 建议 non_stream
   transport: non_stream
-
-features:
-  # false：与生产一致，回合结束后会跑 MaybeMaintain（多一次维护模型调用，更费 token / 更慢，但更真实）
-  disable_auto_maintenance: false

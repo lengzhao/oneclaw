@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lengzhao/oneclaw/memory"
+	"github.com/lengzhao/oneclaw/workspace"
 	"github.com/lengzhao/oneclaw/rtopts"
 )
 
@@ -25,7 +25,7 @@ func PathForWorkspace(cwd string, workspaceFlat bool) string {
 
 // PathForWorkspaceWithInstruction uses <instructionRoot>/ when flat and instructionRoot is set (see docs/user-root-workspace-layout.md).
 func PathForWorkspaceWithInstruction(cwd, instructionRoot string, workspaceFlat bool) string {
-	return memory.JoinSessionWorkspaceWithInstruction(cwd, instructionRoot, workspaceFlat, fileName)
+	return workspace.JoinSessionWorkspaceWithInstruction(cwd, instructionRoot, workspaceFlat, fileName)
 }
 
 // Disabled reports features.disable_tasks from config.

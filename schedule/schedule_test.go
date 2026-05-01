@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lengzhao/oneclaw/memory"
+	"github.com/lengzhao/oneclaw/workspace"
 )
 
 func TestFormatScheduledUserText(t *testing.T) {
@@ -45,11 +45,11 @@ func TestAddEveryAndCollectDue(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Force immediate fire: write job with next run in the past
-	path := Path(cwd)
-	dir := filepath.Join(cwd, memory.DotDir)
+	dir := filepath.Join(cwd, workspace.DotDir)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
+	path := JobsFilePath(cwd, "", false, "")
 	past := time.Now().UTC().Add(-time.Minute)
 	f := &File{Version: 1, Jobs: []Job{{
 		ID:           "sj_test1",
@@ -95,11 +95,11 @@ func TestCollectDueAtRemovesJob(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	path := Path(cwd)
-	dir := filepath.Join(cwd, memory.DotDir)
+	dir := filepath.Join(cwd, workspace.DotDir)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
+	path := JobsFilePath(cwd, "", false, "")
 	f := &File{Version: 1, Jobs: []Job{{
 		ID:           "sj_at1",
 		Name:         "once",
@@ -130,11 +130,11 @@ func TestCollectDueAtRemovesJob(t *testing.T) {
 
 func TestCompactDisabledJobsOnList(t *testing.T) {
 	cwd := t.TempDir()
-	path := Path(cwd)
-	dir := filepath.Join(cwd, memory.DotDir)
+	dir := filepath.Join(cwd, workspace.DotDir)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
+	path := JobsFilePath(cwd, "", false, "")
 	f := &File{Version: 1, Jobs: []Job{
 		{ID: "a", Name: "on", Message: "m", Enabled: true, TargetSource: "cli", Schedule: ScheduleSpec{Kind: "every", EverySeconds: 3600}, NextRun: time.Now().UTC().Add(time.Hour)},
 		{ID: "b", Name: "off", Message: "x", Enabled: false, TargetSource: "cli", Schedule: ScheduleSpec{Kind: "every", EverySeconds: 3600}, NextRun: time.Now().UTC().Add(time.Hour)},
@@ -193,11 +193,11 @@ func TestNextWakeDuration(t *testing.T) {
 		t.Fatal(err)
 	}
 	past := time.Now().UTC().Add(-time.Minute)
-	path := Path(cwd)
-	dir := filepath.Join(cwd, memory.DotDir)
+	dir := filepath.Join(cwd, workspace.DotDir)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
+	path := JobsFilePath(cwd, "", false, "")
 	f := &File{Version: 1, Jobs: []Job{{
 		ID:           "sj_w1",
 		Name:         "w",
@@ -234,11 +234,11 @@ func TestJobsFilePathSharedVsIsolated(t *testing.T) {
 	home := t.TempDir()
 	ur := filepath.Join(home, ".oneclaw")
 	sessionRoot := filepath.Join(ur, "sessions", "abc123")
-	sessionWS := filepath.Join(sessionRoot, memory.IMWorkspaceDirName)
+	sessionWS := filepath.Join(sessionRoot, workspace.IMWorkspaceDirName)
 	if err := os.MkdirAll(sessionWS, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	shared := JobsFilePath(filepath.Join(ur, memory.IMWorkspaceDirName), ur, true, ur)
+	shared := JobsFilePath(filepath.Join(ur, workspace.IMWorkspaceDirName), ur, true, ur)
 	if want := filepath.Join(ur, "scheduled_jobs.json"); shared != want {
 		t.Fatalf("shared path: got %q want %q", shared, want)
 	}

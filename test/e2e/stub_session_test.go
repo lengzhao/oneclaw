@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/lengzhao/oneclaw/loop"
 	"github.com/lengzhao/clawbridge/bus"
+	"github.com/lengzhao/oneclaw/loop"
 	"github.com/lengzhao/oneclaw/test/openaistub"
 	"github.com/lengzhao/oneclaw/toolctx"
 	"github.com/lengzhao/oneclaw/tools/builtin"
@@ -36,6 +36,10 @@ func TestE2E_02_MultiTurnSameSession(t *testing.T) {
 		Messages:    &msgs,
 		Registry:    builtin.DefaultRegistry(),
 		ToolContext: toolctx.New(cwd, context.Background()),
+	}
+	cfg.TurnMaxSteps = cfg.MaxSteps
+	if cfg.TurnMaxSteps < 1 {
+		cfg.TurnMaxSteps = 1
 	}
 
 	if err := loop.RunTurn(context.Background(), cfg, bus.InboundMessage{Content: "turn one"}); err != nil {
@@ -80,14 +84,15 @@ func TestE2E_04_WriteThenRead(t *testing.T) {
 	client := openai.NewClient(stubOpenAIOptions(stub)...)
 	msgs := []openai.ChatCompletionMessageParamUnion{}
 	err := loop.RunTurn(context.Background(), loop.Config{
-		Client:      &client,
-		Model:       "gpt-4o",
-		System:      "Use tools.",
-		MaxTokens:   256,
-		MaxSteps:    12,
-		Messages:    &msgs,
-		Registry:    builtin.DefaultRegistry(),
-		ToolContext: toolctx.New(cwd, context.Background()),
+		Client:       &client,
+		Model:        "gpt-4o",
+		System:       "Use tools.",
+		MaxTokens:    256,
+		MaxSteps:     12,
+		Messages:     &msgs,
+		Registry:     builtin.DefaultRegistry(),
+		ToolContext:  toolctx.New(cwd, context.Background()),
+		TurnMaxSteps: 12,
 	}, bus.InboundMessage{Content: "create and read subdir/x.txt"})
 	if err != nil {
 		t.Fatal(err)
@@ -123,14 +128,15 @@ func TestE2E_05_AbortCanceledContext(t *testing.T) {
 	client := openai.NewClient(stubOpenAIOptions(stub)...)
 	msgs := []openai.ChatCompletionMessageParamUnion{}
 	err := loop.RunTurn(ctx, loop.Config{
-		Client:      &client,
-		Model:       "gpt-4o",
-		System:      "test",
-		MaxTokens:   256,
-		MaxSteps:    4,
-		Messages:    &msgs,
-		Registry:    builtin.DefaultRegistry(),
-		ToolContext: toolctx.New(cwd, context.Background()),
+		Client:       &client,
+		Model:        "gpt-4o",
+		System:       "test",
+		MaxTokens:    256,
+		MaxSteps:     4,
+		Messages:     &msgs,
+		Registry:     builtin.DefaultRegistry(),
+		ToolContext:  toolctx.New(cwd, context.Background()),
+		TurnMaxSteps: 4,
 	}, bus.InboundMessage{Content: "hi"})
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("want context.Canceled, got %v", err)

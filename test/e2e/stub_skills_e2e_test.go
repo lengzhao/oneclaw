@@ -11,19 +11,19 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lengzhao/oneclaw/loop"
-	"github.com/lengzhao/oneclaw/memory"
 	"github.com/lengzhao/clawbridge/bus"
+	"github.com/lengzhao/oneclaw/loop"
 	"github.com/lengzhao/oneclaw/rtopts"
 	"github.com/lengzhao/oneclaw/test/openaistub"
 	"github.com/lengzhao/oneclaw/toolctx"
 	"github.com/lengzhao/oneclaw/tools/builtin"
+	"github.com/lengzhao/oneclaw/workspace"
 	"github.com/openai/openai-go"
 )
 
 func writeSkill(t *testing.T, cwd, name, description, body string) {
 	t.Helper()
-	dir := filepath.Join(cwd, memory.DotDir, "skills", name)
+	dir := filepath.Join(cwd, workspace.DotDir, "skills", name)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -81,14 +81,15 @@ func TestE2E_106_InvokeSkillToolAndRecentFile(t *testing.T) {
 	client := openai.NewClient(stubOpenAIOptions(stub)...)
 	msgs := []openai.ChatCompletionMessageParamUnion{}
 	err := loop.RunTurn(context.Background(), loop.Config{
-		Client:      &client,
-		Model:       "gpt-4o",
-		System:      "You may use tools.",
-		MaxTokens:   512,
-		MaxSteps:    8,
-		Messages:    &msgs,
-		Registry:    builtin.DefaultRegistry(),
-		ToolContext: toolctx.New(cwd, context.Background()),
+		Client:       &client,
+		Model:        "gpt-4o",
+		System:       "You may use tools.",
+		MaxTokens:    512,
+		MaxSteps:     8,
+		Messages:     &msgs,
+		Registry:     builtin.DefaultRegistry(),
+		ToolContext:  toolctx.New(cwd, context.Background()),
+		TurnMaxSteps: 8,
 	}, bus.InboundMessage{Content: "load the skill"})
 	if err != nil {
 		t.Fatal(err)
@@ -111,7 +112,7 @@ func TestE2E_106_InvokeSkillToolAndRecentFile(t *testing.T) {
 		t.Fatalf("tool output missing base dir line:\n%s", toolOut)
 	}
 
-	recentPath := filepath.Join(cwd, memory.DotDir, "skills-recent.json")
+	recentPath := filepath.Join(cwd, workspace.DotDir, "skills-recent.json")
 	b, err := os.ReadFile(recentPath)
 	if err != nil {
 		t.Fatalf("skills-recent.json: %v", err)

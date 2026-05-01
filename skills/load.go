@@ -6,21 +6,21 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/lengzhao/oneclaw/memory"
+	"github.com/lengzhao/oneclaw/workspace"
 )
 
 // skillFileName is the only supported entry inside each skill directory.
 const skillFileName = "SKILL.md"
 
 func userSkillsRoot(home string) string {
-	return filepath.Join(home, memory.DotDir, "skills")
+	return filepath.Join(home, workspace.DotDir, "skills")
 }
 
 func projectSkillsRoot(cwd string, workspaceFlat bool, instructionRoot string) string {
 	if strings.TrimSpace(instructionRoot) != "" {
 		return filepath.Join(filepath.Clean(instructionRoot), "skills")
 	}
-	return memory.JoinSessionWorkspace(cwd, workspaceFlat, "skills")
+	return workspace.JoinSessionWorkspace(cwd, workspaceFlat, "skills")
 }
 
 func mergeSkillsFromRoot(byName map[string]Skill, root string) {

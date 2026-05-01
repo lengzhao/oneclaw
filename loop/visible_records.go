@@ -28,7 +28,7 @@ func ChatTurnRecords(msgs []openai.ChatCompletionMessageParamUnion) []map[string
 }
 
 // VisibleTranscriptAppendSince returns role/content records for visible rows that appear after
-// the first visibleCountBefore user-visible messages in fullTranscript. Used to audit one turn
+// the first visibleCountBefore user-visible messages in fullTranscript. Used for notify payloads
 // without rewriting the full session history each time.
 func VisibleTranscriptAppendSince(fullTranscript []openai.ChatCompletionMessageParamUnion, visibleCountBefore int) []map[string]string {
 	vis := ToUserVisibleMessages(fullTranscript)

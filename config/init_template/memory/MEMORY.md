@@ -10,5 +10,5 @@
 
 ## 不要写在这里
 
-- **单次会话的流水**、临时结论、具体 bug 的长篇复现：应落在 **episodic** 文件（`memory/YYYY-MM-DD.md`）；自动维护会把要点合并进当日 `## Auto-maintained` 段，而不是写回本文件。
+- **单次会话的流水**、临时结论、具体 bug 的长篇复现：落在按日 **episodic**（`memory/YYYY-MM-DD.md`）或运行时的 **`dialog_history.json`**，不要写回本规则文件。
 - 密钥、token、个人隐私信息。

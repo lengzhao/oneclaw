@@ -14,18 +14,15 @@ type InboundUserChunk struct {
 }
 
 // AppendTurnUserMessages appends memory / inbound-orchestration / user line to the live message list (API history).
-// memAgentMd and memRecall are optional leading user-shaped blocks (phase B).
+// memAgentMd is an optional leading user-shaped block (phase B).
 // inboundMeta is optional routing context for the model (correlation_id must stay out — caller responsibility).
 // inboundAttachmentChunks are attachment-derived user messages (text hints and/or multimodal parts).
 // userLine is the primary user turn text (non-empty after engine validation, except attachment-only placeholder).
-func AppendTurnUserMessages(msgs *[]openai.ChatCompletionMessageParamUnion, memAgentMd, memRecall, inboundMeta string, inboundAttachmentChunks []InboundUserChunk, userLine string) {
+func AppendTurnUserMessages(msgs *[]openai.ChatCompletionMessageParamUnion, memAgentMd, inboundMeta string, inboundAttachmentChunks []InboundUserChunk, userLine string) {
 	if msgs == nil {
 		return
 	}
 	if s := strings.TrimSpace(memAgentMd); s != "" {
-		*msgs = append(*msgs, openai.UserMessage(s))
-	}
-	if s := strings.TrimSpace(memRecall); s != "" {
 		*msgs = append(*msgs, openai.UserMessage(s))
 	}
 	if s := strings.TrimSpace(inboundMeta); s != "" {

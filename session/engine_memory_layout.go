@@ -1,11 +1,11 @@
 package session
 
-import "github.com/lengzhao/oneclaw/memory"
+import "github.com/lengzhao/oneclaw/workspace"
 
-// MemoryLayout returns file-memory paths for this engine (shared IM root vs per-session root vs repo layout).
-func (e *Engine) MemoryLayout(home string) memory.Layout {
+// MemoryLayout returns file paths for this engine (shared IM root vs per-session root vs repo layout).
+func (e *Engine) MemoryLayout(home string) workspace.Layout {
 	if e == nil {
-		return memory.Layout{}
+		return workspace.Layout{}
 	}
-	return memory.LayoutForIMWorkspace(e.CWD, home, e.UserDataRoot, e.WorkspaceFlat, e.InstructionRoot)
+	return workspace.LayoutForIMWorkspace(e.CWD, home, e.UserDataRoot, e.WorkspaceFlat, e.InstructionRoot)
 }

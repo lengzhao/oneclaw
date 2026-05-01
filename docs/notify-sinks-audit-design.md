@@ -1,5 +1,7 @@
 # 审计类 Notify Sink 技术方案
 
+> **当前仓库**：以下 JSONL 审计 Sink 与 `AppendMemoryAudit` / `audit/memory-write.jsonl` **已从实现中移除**；本文仅作历史设计参考。
+
 目标：三条**相互独立**的落盘通道，分别服务 **LLM 全量技术细节**、**回合编排与工具链（含 recall/压缩）**、**用户可见完整对话**，供 **maintain / 审计 / 优化** 使用。
 
 设计前提见 [notification-hooks-design.md](notification-hooks-design.md)。
@@ -169,7 +171,7 @@ flowchart LR
 | **v2** | Sink 2：`memory_turn_context`、`history_budget_applied`；tool/recall **可配置全文** |
 | **v3** | YAML/rtopts 路径、按 `agent_id` 分卷、与 maintain 任务 schema 契约测试 |
 
-**v1 代码入口**：`notify/sinks` 提供三个构造函数；`(*session.Engine).RegisterAuditSinks(llm, orchestration, visible)` 按布尔开关注册（`cmd/oneclaw` 默认从 `(*config.Resolved).NotifyAuditSinkPaths()` 取值，YAML 见 `features.disable_audit_*`，默认全开）。
+**v1 代码入口（历史）**：曾位于 `notify/sinks` + `session.RegisterAuditSinks` + `config.NotifyAuditSinkPaths`；**当前代码已删除**，不再注册。
 
 ---
 

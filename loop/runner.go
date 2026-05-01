@@ -33,9 +33,8 @@ type Config struct {
 	CanUseTool  tools.CanUseTool
 	// OutboundText publishes assistant-visible text per model step; nil skips.
 	OutboundText func(ctx context.Context, text string) error
-	// MemoryAgentMd / MemoryRecall are optional extra user messages before the real user turn (phase B).
+	// MemoryAgentMd is an optional extra user message before the real user turn (phase B).
 	MemoryAgentMd string
-	MemoryRecall  string
 	// InboundMeta is optional channel routing context as a user-shaped block (see session orchestration).
 	InboundMeta string
 	// InboundAttachmentChunks are attachment-derived user messages (read_file hints and/or multimodal parts).
@@ -60,6 +59,14 @@ type Config struct {
 	SessionID string
 	// Lifecycle optional hooks (model steps, tool execute start). Nil fields are skipped.
 	Lifecycle *LifecycleCallbacks
+	// BeforeModelStep, if non-nil, runs at the start of each model step after the ctx cancellation check
+	// and before building the chat completion request. It may append user-shaped rows to *msgs (mid-turn injection).
+	BeforeModelStep func(ctx context.Context, step int, msgs *[]openai.ChatCompletionMessageParamUnion) error
+	// TurnMaxSteps is the maximum number of tool-phase model rounds (each request may include tools).
+	// If the model returns no tool_calls, that assistant message is the turn result (no extra request).
+	// If the tool phase stops only because this cap was reached after a tool batch, RunTurn performs one
+	// more completion without tools so the model can answer in text. Must be >= 1.
+	TurnMaxSteps int
 }
 
 func logOutboundEmit(op string, err error) {
@@ -68,13 +75,179 @@ func logOutboundEmit(op string, err error) {
 	}
 }
 
-// RunTurn appends a user message from in.Content, then runs model ↔ tool until stop or limits.
+// runCompletionRound performs one chat completion, appends the assistant message to msgs, records usage,
+// and returns tool calls (possibly empty). offerTools controls whether tools are attached to the request.
+func runCompletionRound(ctx context.Context, cfg Config, msgs *[]openai.ChatCompletionMessageParamUnion, step int, offerTools bool, maxToolRounds int) ([]toolCallInv, error) {
+	ApplyHistoryBudget(cfg.Budget, cfg.System, msgs)
+	select {
+	case <-ctx.Done():
+		if cfg.Lifecycle != nil && (cfg.Lifecycle.OnModelStepStart != nil || cfg.Lifecycle.OnModelStepEnd != nil) {
+			reqMsgs := buildRequestMessages(cfg.System, *msgs)
+			toolN := 0
+			if offerTools {
+				toolN = len(cfg.Registry.OpenAITools())
+			}
+			stepMark := time.Now()
+			if cfg.Lifecycle.OnModelStepStart != nil {
+				cfg.Lifecycle.OnModelStepStart(ctx, step, toolN, reqMsgs)
+			}
+			if cfg.Lifecycle.OnModelStepEnd != nil {
+				cfg.Lifecycle.OnModelStepEnd(ctx, step, ModelStepEndInfo{
+					Model:                  cfg.Model,
+					OK:                     false,
+					DurationMs:             time.Since(stepMark).Milliseconds(),
+					Err:                    ctx.Err(),
+					BeforeRequestCancelled: true,
+				})
+			}
+		}
+		return nil, ctx.Err()
+	default:
+	}
+
+	if cfg.BeforeModelStep != nil {
+		if err := cfg.BeforeModelStep(ctx, step, msgs); err != nil {
+			return nil, err
+		}
+	}
+
+	reqMsgs := buildRequestMessages(cfg.System, *msgs)
+	ApplyOutboundAssistantExtensionFields(reqMsgs)
+	params := openai.ChatCompletionNewParams{}
+	if len(cfg.ChatCompletionExtraJSON) > 0 {
+		if err := json.Unmarshal(cfg.ChatCompletionExtraJSON, &params); err != nil {
+			slog.Warn("loop.completion_extra.unmarshal_failed", "err", err)
+		}
+	}
+	params.Model = cfg.Model
+	params.Messages = reqMsgs
+	params.MaxCompletionTokens = openai.Int(cfg.MaxTokens)
+	params.StreamOptions = openai.ChatCompletionStreamOptionsParam{IncludeUsage: openai.Bool(true)}
+	if offerTools {
+		params.Tools = cfg.Registry.OpenAITools()
+		params.ParallelToolCalls = openai.Bool(true)
+	}
+
+	slog.Info("loop.model.request",
+		"step", step,
+		"turn_max_steps", maxToolRounds,
+		"model", cfg.Model,
+		"history_messages", len(reqMsgs),
+		"tools", len(params.Tools),
+		"tools_offered", offerTools,
+		"max_completion_tokens", cfg.MaxTokens,
+		"completion_extra_len", len(cfg.ChatCompletionExtraJSON),
+	)
+	if cfg.Lifecycle != nil && cfg.Lifecycle.OnModelStepStart != nil {
+		cfg.Lifecycle.OnModelStepStart(ctx, step, len(params.Tools), reqMsgs)
+	}
+	stepStart := time.Now()
+	completion, err := model.CompleteWithTransport(ctx, cfg.Client, params, cfg.ChatTransport)
+	if err != nil {
+		slog.Error("loop.model.error", "step", step, "model", cfg.Model, "duration_ms", time.Since(stepStart).Milliseconds(), "err", err)
+		if cfg.Lifecycle != nil && cfg.Lifecycle.OnModelStepEnd != nil {
+			cfg.Lifecycle.OnModelStepEnd(ctx, step, ModelStepEndInfo{
+				Model:      cfg.Model,
+				OK:         false,
+				DurationMs: time.Since(stepStart).Milliseconds(),
+				Err:        err,
+			})
+		}
+		return nil, fmt.Errorf("model step %d: %w", step, err)
+	}
+	if len(completion.Choices) == 0 {
+		emptyErr := fmt.Errorf("model step %d: empty choices", step)
+		if cfg.Lifecycle != nil && cfg.Lifecycle.OnModelStepEnd != nil {
+			cfg.Lifecycle.OnModelStepEnd(ctx, step, ModelStepEndInfo{
+				Model:      cfg.Model,
+				OK:         false,
+				DurationMs: time.Since(stepStart).Milliseconds(),
+				Err:        emptyErr,
+			})
+		}
+		return nil, emptyErr
+	}
+
+	choice := completion.Choices[0]
+	calls := collectToolCalls(choice.Message)
+	if len(calls) > 0 && !offerTools {
+		return nil, fmt.Errorf("model step %d: tool_calls but tools were not offered", step)
+	}
+
+	*msgs = append(*msgs, assistantParamFromCompletion(choice.Message))
+	if cfg.OutboundText != nil {
+		if vis := assistantVisibleText(choice.Message); vis != "" {
+			logOutboundEmit("text", cfg.OutboundText(ctx, vis))
+		}
+	}
+	slog.Info("loop.model.response",
+		"step", step,
+		"finish_reason", choice.FinishReason,
+		"duration_ms", time.Since(stepStart).Milliseconds(),
+		"tool_calls", len(choice.Message.ToolCalls),
+		"prompt_tokens", completion.Usage.PromptTokens,
+		"completion_tokens", completion.Usage.CompletionTokens,
+	)
+	if cfg.Lifecycle != nil && cfg.Lifecycle.OnModelStepEnd != nil {
+		endInfo := ModelStepEndInfo{
+			Model:            cfg.Model,
+			OK:               true,
+			AssistantVisible: assistantVisibleText(choice.Message),
+			FinishReason:     choice.FinishReason,
+			ToolCallsCount:   len(choice.Message.ToolCalls),
+			DurationMs:       time.Since(stepStart).Milliseconds(),
+			PromptTokens:     completion.Usage.PromptTokens,
+			CompletionTokens: completion.Usage.CompletionTokens,
+			TotalTokens:      completion.Usage.TotalTokens,
+		}
+		endInfo.ToolCallsJSON = toolCallsJSONFromMessage(choice.Message)
+		cfg.Lifecycle.OnModelStepEnd(ctx, step, endInfo)
+	}
+
+	cwd := ""
+	var inbound bus.InboundMessage
+	depth := 0
+	if cfg.ToolContext != nil {
+		cwd = cfg.ToolContext.CWD
+		inbound = cfg.ToolContext.TurnInbound
+		depth = cfg.ToolContext.SubagentDepth
+	}
+	wf := false
+	var instr string
+	if cfg.ToolContext != nil {
+		wf = cfg.ToolContext.WorkspaceFlat
+		instr = cfg.ToolContext.InstructionRoot
+	}
+	usageledger.MaybeRecord(usageledger.RecordParams{
+		CWD:              cwd,
+		SessionID:        cfg.SessionID,
+		Model:            cfg.Model,
+		Step:             step,
+		SubagentDepth:    depth,
+		PromptTokens:     completion.Usage.PromptTokens,
+		CompletionTokens: completion.Usage.CompletionTokens,
+		TotalTokens:      completion.Usage.TotalTokens,
+		UsageJSON:        completion.Usage.RawJSON(),
+		Inbound:          inbound,
+		WorkspaceFlat:    wf,
+		InstructionRoot:  instr,
+	})
+
+	return calls, nil
+}
+
+// RunTurn appends a user message from in.Content, then runs a tool phase (model with tools until
+// no tool_calls or TurnMaxSteps tool rounds). When the cap is hit after tools, one final completion
+// without tools may run; otherwise the last assistant message already ends the turn.
 func RunTurn(ctx context.Context, cfg Config, in bus.InboundMessage) (err error) {
 	if cfg.Messages == nil {
 		return fmt.Errorf("loop: Config.Messages is nil")
 	}
 	if cfg.ToolContext != nil {
 		cfg.ToolContext.ApplyTurnInboundToToolContext(in)
+	}
+	if cfg.TurnMaxSteps < 1 {
+		return fmt.Errorf("loop: Config.TurnMaxSteps must be >= 1")
 	}
 
 	msgs := cfg.Messages
@@ -88,175 +261,31 @@ func RunTurn(ctx context.Context, cfg Config, in bus.InboundMessage) (err error)
 	if userLine == "" {
 		userLine = strings.TrimSpace(in.Content)
 	}
-	AppendTurnUserMessages(msgs, cfg.MemoryAgentMd, cfg.MemoryRecall, cfg.InboundMeta, cfg.InboundAttachmentChunks, userLine)
+	AppendTurnUserMessages(msgs, cfg.MemoryAgentMd, cfg.InboundMeta, cfg.InboundAttachmentChunks, userLine)
 
-	maxSteps := cfg.MaxSteps
-	if maxSteps < 1 {
-		maxSteps = 32
-	}
-
-	for step := 0; step < maxSteps; step++ {
-		offerTools := maxSteps > 1 && step < maxSteps-1
-
-		ApplyHistoryBudget(cfg.Budget, cfg.System, msgs)
-		select {
-		case <-ctx.Done():
-			if cfg.Lifecycle != nil && (cfg.Lifecycle.OnModelStepStart != nil || cfg.Lifecycle.OnModelStepEnd != nil) {
-				reqMsgs := buildRequestMessages(cfg.System, *msgs)
-				toolN := 0
-				if offerTools {
-					toolN = len(cfg.Registry.OpenAITools())
-				}
-				stepMark := time.Now()
-				if cfg.Lifecycle.OnModelStepStart != nil {
-					cfg.Lifecycle.OnModelStepStart(ctx, step, toolN, reqMsgs)
-				}
-				if cfg.Lifecycle.OnModelStepEnd != nil {
-					cfg.Lifecycle.OnModelStepEnd(ctx, step, ModelStepEndInfo{
-						Model:                  cfg.Model,
-						OK:                     false,
-						DurationMs:             time.Since(stepMark).Milliseconds(),
-						Err:                    ctx.Err(),
-						BeforeRequestCancelled: true,
-					})
-				}
-			}
-			return ctx.Err()
-		default:
+	max := cfg.TurnMaxSteps
+	toolRounds := 0
+	modelStep := 0
+	// When the model returns no tool_calls, the assistant message is already the turn outcome — no extra hop.
+	// A final completion without tools is only needed when we stop because we hit TurnMaxSteps tool rounds
+	// right after executing tools (history ends with tool results, no assistant text yet).
+	exhaustedToolRounds := false
+	for {
+		if toolRounds >= max {
+			exhaustedToolRounds = true
+			break
 		}
-
-		reqMsgs := buildRequestMessages(cfg.System, *msgs)
-		ApplyOutboundAssistantExtensionFields(reqMsgs)
-		params := openai.ChatCompletionNewParams{}
-		if len(cfg.ChatCompletionExtraJSON) > 0 {
-			if err := json.Unmarshal(cfg.ChatCompletionExtraJSON, &params); err != nil {
-				slog.Warn("loop.completion_extra.unmarshal_failed", "err", err)
-			}
-		}
-		params.Model = cfg.Model
-		params.Messages = reqMsgs
-		params.MaxCompletionTokens = openai.Int(cfg.MaxTokens)
-		params.StreamOptions = openai.ChatCompletionStreamOptionsParam{IncludeUsage: openai.Bool(true)}
-		if offerTools {
-			params.Tools = cfg.Registry.OpenAITools()
-			// Let the model batch tool calls; executor partitions by Registry.ConcurrencySafe (read parallel, write serial).
-			params.ParallelToolCalls = openai.Bool(true)
-		}
-
-		slog.Info("loop.model.request",
-			"step", step,
-			"model", cfg.Model,
-			"history_messages", len(reqMsgs),
-			"tools", len(params.Tools),
-			"tools_offered", offerTools,
-			"max_completion_tokens", cfg.MaxTokens,
-			"completion_extra_len", len(cfg.ChatCompletionExtraJSON),
-		)
-		if cfg.Lifecycle != nil && cfg.Lifecycle.OnModelStepStart != nil {
-			cfg.Lifecycle.OnModelStepStart(ctx, step, len(params.Tools), reqMsgs)
-		}
-		stepStart := time.Now()
-		completion, err := model.CompleteWithTransport(ctx, cfg.Client, params, cfg.ChatTransport)
+		calls, err := runCompletionRound(ctx, cfg, msgs, modelStep, true, max)
 		if err != nil {
-			slog.Error("loop.model.error", "step", step, "model", cfg.Model, "duration_ms", time.Since(stepStart).Milliseconds(), "err", err)
-			if cfg.Lifecycle != nil && cfg.Lifecycle.OnModelStepEnd != nil {
-				cfg.Lifecycle.OnModelStepEnd(ctx, step, ModelStepEndInfo{
-					Model:      cfg.Model,
-					OK:         false,
-					DurationMs: time.Since(stepStart).Milliseconds(),
-					Err:        err,
-				})
-			}
-			return fmt.Errorf("model step %d: %w", step, err)
+			return err
 		}
-		if len(completion.Choices) == 0 {
-			emptyErr := fmt.Errorf("model step %d: empty choices", step)
-			if cfg.Lifecycle != nil && cfg.Lifecycle.OnModelStepEnd != nil {
-				cfg.Lifecycle.OnModelStepEnd(ctx, step, ModelStepEndInfo{
-					Model:      cfg.Model,
-					OK:         false,
-					DurationMs: time.Since(stepStart).Milliseconds(),
-					Err:        emptyErr,
-				})
-			}
-			return emptyErr
-		}
-
-		choice := completion.Choices[0]
-		*msgs = append(*msgs, assistantParamFromCompletion(choice.Message))
-		if cfg.OutboundText != nil {
-			if vis := assistantVisibleText(choice.Message); vis != "" {
-				logOutboundEmit("text", cfg.OutboundText(ctx, vis))
-			}
-		}
-		slog.Info("loop.model.response",
-			"step", step,
-			"finish_reason", choice.FinishReason,
-			"duration_ms", time.Since(stepStart).Milliseconds(),
-			"tool_calls", len(choice.Message.ToolCalls),
-			"prompt_tokens", completion.Usage.PromptTokens,
-			"completion_tokens", completion.Usage.CompletionTokens,
-		)
-		if cfg.Lifecycle != nil && cfg.Lifecycle.OnModelStepEnd != nil {
-			endInfo := ModelStepEndInfo{
-				Model:            cfg.Model,
-				OK:               true,
-				AssistantVisible: assistantVisibleText(choice.Message),
-				FinishReason:     choice.FinishReason,
-				ToolCallsCount:   len(choice.Message.ToolCalls),
-				DurationMs:       time.Since(stepStart).Milliseconds(),
-				PromptTokens:     completion.Usage.PromptTokens,
-				CompletionTokens: completion.Usage.CompletionTokens,
-				TotalTokens:      completion.Usage.TotalTokens,
-			}
-			endInfo.ToolCallsJSON = toolCallsJSONFromMessage(choice.Message)
-			cfg.Lifecycle.OnModelStepEnd(ctx, step, endInfo)
-		}
-
-		cwd := ""
-		var inbound bus.InboundMessage
-		depth := 0
-		if cfg.ToolContext != nil {
-			cwd = cfg.ToolContext.CWD
-			inbound = cfg.ToolContext.TurnInbound
-			depth = cfg.ToolContext.SubagentDepth
-		}
-		wf := false
-		var instr string
-		if cfg.ToolContext != nil {
-			wf = cfg.ToolContext.WorkspaceFlat
-			instr = cfg.ToolContext.InstructionRoot
-		}
-		usageledger.MaybeRecord(usageledger.RecordParams{
-			CWD:              cwd,
-			SessionID:        cfg.SessionID,
-			Model:            cfg.Model,
-			Step:             step,
-			SubagentDepth:    depth,
-			PromptTokens:     completion.Usage.PromptTokens,
-			CompletionTokens: completion.Usage.CompletionTokens,
-			TotalTokens:      completion.Usage.TotalTokens,
-			UsageJSON:        completion.Usage.RawJSON(),
-			Inbound:          inbound,
-			WorkspaceFlat:    wf,
-			InstructionRoot:  instr,
-		})
-
-		// Decide tool rounds from the message payload, not only finish_reason: some gateways
-		// leave finish_reason empty when returning tool_calls, which would otherwise skip tools
-		// and end the turn with no assistant text (and no webchat outbound).
-		calls := collectToolCalls(choice.Message)
+		modelStep++
 		if len(calls) == 0 {
-			recordSlimTranscript()
-			return nil
+			exhaustedToolRounds = false
+			break
 		}
-		if !offerTools {
-			return fmt.Errorf("model step %d: tool_calls but tools were not offered (max_steps=%d)", step, maxSteps)
-		}
-
-		slog.Info("loop.tools.batch", "step", step, "n", len(calls), "names", toolCallNames(calls))
-
-		toolMsgs, err := executeToolBatches(ctx, calls, cfg, step)
+		slog.Info("loop.tools.batch", "tool_round", toolRounds, "n", len(calls), "names", toolCallNames(calls))
+		toolMsgs, err := executeToolBatches(ctx, calls, cfg, toolRounds)
 		if err != nil {
 			return err
 		}
@@ -268,9 +297,20 @@ func RunTurn(ctx context.Context, cfg Config, in bus.InboundMessage) (err error)
 				*msgs = append(*msgs, um)
 			}
 		}
+		toolRounds++
 	}
 
-	return fmt.Errorf("loop: internal: model loop fell through (max_steps=%d)", maxSteps)
+	if exhaustedToolRounds {
+		calls, err := runCompletionRound(ctx, cfg, msgs, modelStep, false, max)
+		if err != nil {
+			return err
+		}
+		if len(calls) > 0 {
+			return fmt.Errorf("model step %d: tool_calls but tools were not offered", modelStep)
+		}
+	}
+	recordSlimTranscript()
+	return nil
 }
 
 func buildRequestMessages(system string, history []openai.ChatCompletionMessageParamUnion) []openai.ChatCompletionMessageParamUnion {

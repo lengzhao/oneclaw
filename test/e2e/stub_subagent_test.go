@@ -6,11 +6,11 @@ package e2e_test
 import (
 	"context"
 	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/oneclaw/test/openaistub"
+	"github.com/lengzhao/oneclaw/workspace"
 )
 
 // E2E-90 run_agent：主线程 transcript 与子循环隔离；子循环单独消耗 stub 队列项。
@@ -35,7 +35,7 @@ func TestE2E_StubRunAgentNested(t *testing.T) {
 		t.Fatalf("expected parent final assistant, got %#v", last)
 	}
 
-	sideDir := filepath.Join(cwd, ".oneclaw", "sidechain")
+	sideDir := workspace.JoinSessionWorkspace(cwd, false, "sidechain")
 	entries, err := os.ReadDir(sideDir)
 	if err != nil || len(entries) == 0 {
 		t.Fatalf("expected sidechain files under %s: %v entries=%v", sideDir, err, entries)

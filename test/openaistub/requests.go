@@ -34,7 +34,7 @@ func ChatRequestUserTextConcat(body []byte) (string, error) {
 
 // FirstChatUserMessageContaining returns the decoded text of the first user message in a chat
 // completions request whose content contains needle. Used when in-memory history is collapsed
-// but the first API request still carries injections (agentMd, recall, …).
+// but the first API request still carries injections (agentMd, inbound meta, …).
 func FirstChatUserMessageContaining(body []byte, needle string) (text string, ok bool, err error) {
 	var req struct {
 		Messages []struct {

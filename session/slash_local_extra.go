@@ -9,7 +9,6 @@ import (
 
 	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/oneclaw/loop"
-	"github.com/lengzhao/oneclaw/memory"
 )
 
 func (e *Engine) slashSession(in bus.InboundMessage, args string) string {
@@ -93,11 +92,6 @@ func (e *Engine) slashStatus(in bus.InboundMessage) string {
 	vis := loop.ToUserVisibleMessages(e.Messages)
 	fmt.Fprintf(&b, "可见 API 消息条数: %d\n", len(vis))
 	fmt.Fprintf(&b, "Transcript 条数: %d\n", len(e.Transcript))
-	nPaths := 0
-	if e.RecallState.SurfacedPaths != nil {
-		nPaths = len(e.RecallState.SurfacedPaths)
-	}
-	fmt.Fprintf(&b, "Recall: %d 条已展示路径, 累计约 %d 字节\n", nPaths, e.RecallState.SurfacedBytes)
 	return strings.TrimRight(b.String(), "\n")
 }
 
@@ -131,41 +125,30 @@ func (e *Engine) slashPaths() string {
 	return strings.TrimRight(b.String(), "\n")
 }
 
-// slashReset clears in-memory chat state and persisted slim/working transcripts for this session,
-// and resets recall dedupe (same as /recall reset). Does not delete MEMORY.md or other memory files.
+// slashReset clears in-memory chat state and persisted slim/working transcripts for this session.
+// Does not delete MEMORY.md or other instruction files on disk.
 func (e *Engine) slashReset(args string) string {
 	if strings.TrimSpace(args) != "" {
 		return fmt.Sprintf("用法：仅发送 /reset（不要附加参数）。收到：%q", strings.TrimSpace(args))
 	}
 	e.Messages = nil
 	e.Transcript = nil
-	e.RecallState = memory.RecallState{SurfacedPaths: make(map[string]struct{})}
 	if err := e.SaveTranscript(); err != nil {
 		slog.Error("session.transcript_save_reset", "err", err)
 	}
 	if err := e.SaveWorkingTranscript(); err != nil {
 		slog.Error("session.working_transcript_save_reset", "err", err)
 	}
-	e.persistRecall()
 	return strings.TrimSpace(`
-已清空本会话的模型上下文与 slim 转录（内存与已配置的磁盘路径），并重置 recall 去重状态。
-磁盘上的 MEMORY.md 等记忆文件未删除。本地斜杠命令的确认文案不会写入会话转录。
+已清空本会话的模型上下文与 slim 转录（内存与已配置的磁盘路径）。
+磁盘上的 MEMORY.md 等说明文件未删除。本地斜杠命令的确认文案不会写入会话转录。
 `)
 }
 
 func (e *Engine) slashRecall(args string) string {
-	a := strings.ToLower(strings.TrimSpace(args))
-	switch a {
-	case "", "help", "h", "?":
-		return strings.TrimSpace(`
-/recall reset — 清空本会话的 recall 展示去重状态（SurfacedPaths / 字节计数），并尝试写回持久化。
-下次对话会重新按规则注入记忆召回。不影响磁盘上的 MEMORY.md 等文件。
-`)
-	case "reset", "clear":
-		e.RecallState = memory.RecallState{SurfacedPaths: make(map[string]struct{})}
-		e.persistRecall()
-		return "已重置 recall 状态并已尝试持久化。"
-	default:
-		return fmt.Sprintf("未知子命令 %q。输入 /recall 查看用法。", strings.TrimSpace(args))
-	}
+	_ = strings.ToLower(strings.TrimSpace(args))
+	return strings.TrimSpace(
+		"文件召回（recall）已移除。每轮仍会注入 AGENT.md / MEMORY.md / SOUL.md / TODO.md 与规则片段；" +
+			"需要时用 read_file 自行读取磁盘。",
+	)
 }

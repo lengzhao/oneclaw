@@ -8,7 +8,7 @@
 
 ## 1. 背景与动机
 
-**现状（项目-centric）**：`cmd/oneclaw` 用 `-cwd` 解析出的**项目根**作为 `Engine.CWD` / `toolctx.CWD`。同一项目目录下多个 IM 会话共享同一棵 `<cwd>/.oneclaw/`（除 `sessions/<id>/` 下转写、审计等已按会话分片外），**exec 默认 pwd、tasks、session 级 memory 路径**仍以项目根为锚，会话之间容易在「相对路径与任务文件」层面交叉影响。
+**现状（项目-centric）**：`cmd/oneclaw` 用 `-cwd` 解析出的**项目根**作为 `Engine.CWD` / `toolctx.CWD`。同一项目目录下多个 IM 会话共享同一棵 `<cwd>/.oneclaw/`（除 `sessions/<id>/` 下转写等已按会话分片外），**exec 默认 pwd、tasks、session 级 memory 路径**仍以项目根为锚，会话之间容易在「相对路径与任务文件」层面交叉影响。
 
 **目标**：把「会话可见、可写的默认文件宇宙」收束到**每会话独占目录**；**配置与全局 AGENT / rules** 仍集中在用户根，避免每个会话复制一份密钥与总规范。
 
@@ -35,7 +35,7 @@
 
 | 术语 | 含义 |
 |------|------|
-| **UserRoot** | `memory.MemoryBaseDir(home)` 解析结果，默认 `~/.oneclaw` |
+| **UserRoot** | 与 **`(*config.Resolved).UserDataRoot()`** 一致（`paths.memory_base` 或默认 `~/.oneclaw`；见 `config/resolved.go`） |
 | **session_id** | 与现实现一致：`session.StableSessionID(SessionHandle)`（稳定、可哈希、用于目录名） |
 | **SessionHome / InstructionRoot** | `filepath.Join(UserRoot, "sessions", session_id)`；**`Engine.CWD`** = `filepath.Join(SessionHome, "workspace")` |
 | **ProjectRoot（旧）** | 当前 `cmd/oneclaw` 的 `-cwd`；本设计在 IM 主路径上**不再**作为工具默认 cwd |
@@ -52,7 +52,6 @@
   AGENT.md                  # 全局默认 Agent 说明（可选；会话内可覆盖见 §7）
   rules/                    # 全局规则片段（可选）
   skills/                   # 若采用「用户级 skills 索引」策略（可选）
-  sessions.sqlite           # 可选：仍可放在 UserRoot（推荐），与「会话数据在 sessions/ 下」一致
   sessions/
     <session_id>/
       ...                   # SessionHome：见 §4.2
@@ -60,7 +59,7 @@
 
 ### 4.2 会话根（隔离）
 
-将 **SessionHome** 视为**小 `UserRoot`**：其下**不再**嵌套名为 `.oneclaw` 的子目录；`AGENT.md`、`MEMORY.md`、`memory/`、`tasks.json`、`audit/` 等与未隔离时的 `~/.oneclaw` **相对结构一致**。
+将 **SessionHome** 视为**小 `UserRoot`**：其下**不再**嵌套名为 `.oneclaw` 的子目录；`AGENT.md`、`MEMORY.md`、`memory/`、`tasks.json` 等与未隔离时的 `~/.oneclaw` **相对结构一致**。
 
 ```text
 ~/.oneclaw/sessions/<session_id>/
@@ -69,14 +68,13 @@
   rules/                    # 可选
   memory/                   # 日更 episodic 等
   tasks.json
-  audit/
   transcript.json
   working_transcript.json
   workspace/                # Engine.CWD；exec、read/write 默认锚点
     media/inbound/          # 入站附件等（实现以代码为准）
 ```
 
-**说明**：上表为逻辑布局；**transcript / sqlite / audit** 的精确路径应与 `config.Resolved` 的派生规则一次性对齐（§5），避免「配置算一套路径、Engine 另一套 cwd」长期分裂。按项目分片的自动记忆推荐落在 **`<memory_base>/projects/<slug>/`**（见 `memory.AutoMemoryDir`），**不必**在仓库内再建 `<repo>/.oneclaw/`；旧代码路径仍以 `memory.DefaultLayout` 为准，直至收敛。
+**说明**：上表为逻辑布局；**transcript** 等路径应与 `config.Resolved` 的派生规则一次性对齐（§5），避免「配置算一套路径、Engine 另一套 cwd」长期分裂。按项目分片的自动记忆推荐落在 **`<memory_base>/projects/<slug>/`**（见 `workspace` 布局），**不必**在仓库内再建 `<repo>/.oneclaw/`。
 
 ---
 
@@ -89,9 +87,8 @@
 - **ConfigRoot / UserRoot**：加载 YAML、API key、MCP 静态配置等；默认仅 `~/.oneclaw` + 可选 `-config` 文件。
 - **SessionWorkspace**：`SessionHome`，仅由 **`session_id`** 派生；**`MainEngineFactory` 创建 `Engine` 时写入 `Engine.CWD`**。
 
-`config.SessionTranscriptPaths(session_id)`、`SessionsSQLitePath()` 等应基于 **同一套「数据根」** 计算：推荐 **UserRoot** 为会话索引根，例如：
+`config.SessionTranscriptPaths(session_id)` 等应基于 **同一套「数据根」** 计算：推荐 **UserRoot** 为会话索引根，例如：
 
-- `sessions.sqlite` → `~/.oneclaw/sessions.sqlite`（或 YAML 覆盖）
 - `transcript` → `~/.oneclaw/sessions/<session_id>/transcript.json`（与 SessionHome 同级，**不**再置于 `SessionHome/.oneclaw/`）
 
 避免 transcript 仍在「旧项目 cwd」而工具已在 SessionHome 的**跨盘不一致**。
@@ -194,7 +191,7 @@ flowchart LR
 
 ## 13. 建议落地顺序
 
-1. **路径层**：`Resolved` / `MainEngineFactory`：派生 `SessionHome`，`Engine.CWD = SessionHome`；**transcript / sqlite** 与 UserRoot 对齐。
+1. **路径层**：`Resolved` / `MainEngineFactory`：派生 `SessionHome`，`Engine.CWD = SessionHome`；**transcript** 与 UserRoot 对齐。
 2. **exec / mediastore / tasks**：验证相对路径与日志路径无歧义。
 3. **prompt**：全局 AGENT/rules + 可选会话覆盖。
 4. **maintain / export / docs**：更新 [config.md](config.md)、[runtime-flow.md](runtime-flow.md) 中的「会话与多通道」一节，标明 IM 模式默认数据根。
@@ -204,7 +201,7 @@ flowchart LR
 ## 14. 小结
 
 - **可以**用 `~/.oneclaw` 管配置与公共 `AGENT.md`/`rules`，用 `~/.oneclaw/sessions/<session_id>/` **替换**当前 IM 路径下的项目 `cwd`，从而在**默认工具与文件布局**上实现会话级隔离。
-- 实现关键是 **ConfigRoot 与 SessionWorkspace 分离**，并 **统一 transcript、SQLite、审计、MCP artifact** 的锚点，避免半套旧「项目 cwd」半套新 SessionHome。
+- 实现关键是 **ConfigRoot 与 SessionWorkspace 分离**，并 **统一 transcript、MCP artifact** 的锚点，避免半套旧「项目 cwd」半套新 SessionHome。
 - **完全隔离**仅限文件与约定层面；安全边界仍需工具策略与运维模型配合。
 
 ---
@@ -213,11 +210,11 @@ flowchart LR
 
 已在主进程落地（`home` 非空的 `config.Load` 路径）：
 
-- `config.Resolved.UserDataRoot()`、`SessionTranscriptPaths` / `SessionsSQLitePath` / 默认 media 等与用户数据根对齐。
-- `MainEngineFactory`：`Engine.CWD` 由 **`sessions.isolate_workspace`** 决定（默认 **false**：`CWD = <UserDataRoot>/workspace`；**true**：`CWD = <UserDataRoot>/sessions/<StableSessionID>/workspace`）。`Engine.UserDataRoot` 供 cron / system 提示；用户数据根树内**不**再嵌套名为 `.oneclaw` 的目录（tasks、memory、audit 等锚 **InstructionRoot**，见 `memory.JoinSessionWorkspaceWithInstruction`）。
+- `config.Resolved.UserDataRoot()`、`SessionTranscriptPaths` / 默认 media 等与用户数据根对齐。
+- `MainEngineFactory`：`Engine.CWD` 由 **`sessions.isolate_workspace`** 决定（默认 **false**：`CWD = <UserDataRoot>/workspace`；**true**：`CWD = <UserDataRoot>/sessions/<StableSessionID>/workspace`）。`Engine.UserDataRoot` 供 cron / system 提示；用户数据根树内**不**再嵌套名为 `.oneclaw` 的目录（tasks 等锚 **InstructionRoot**，见 `workspace.JoinSessionWorkspaceWithInstruction`）。
 - `toolctx.HostDataRoot`：`schedule.Add/List/Remove` 写入 `<UserDataRoot>/scheduled_jobs.json`；`StartHostPollerIfEnabled` 使用同一根目录。
-- 审计：`RegisterAuditSinks` 在 IM 下使用 **InstructionRoot** + `OmitDotDir`，路径为 `<InstructionRoot>/audit/…`。
+- **审计**：`RegisterAuditSinks` 与 JSONL 审计落盘 **已移除**（历史方案为 `<InstructionRoot>/audit/…`）。
 - exec：`run.log` 位于实现约定路径（如 `<InstructionRoot>/exec_log/<ts>/`），**不**经 `SessionHome/.oneclaw/`。
-- 定时维护：`maintainloop` 使用 `memory.IMHostMaintainLayout(UserDataRoot, home)`。
+- **定时 LLM 维护**（历史 `maintainloop` / `RunScheduledMaintain` 等）：**当前 `cmd/oneclaw` 主路径未接入**；布局与 episodic 仍以 **`workspace.LayoutForIMWorkspace`**（含 **`workspace.IMHostMaintainLayout`**）为准，见 `workspace/paths.go`。
 
-`config.Load` **仅**合并 `~/.oneclaw/config.yaml` 与可选 `-config`（相对路径相对 `~/.oneclaw/`），**不再**读取项目目录或进程 `cwd`。`-init` / `-export-session` / `-maintain-once` 均以 **`UserDataRoot()`**（默认 `~/.oneclaw`）为数据根。
+`config.Load` **仅**合并 `~/.oneclaw/config.yaml` 与可选 `-config`（相对路径相对 `~/.oneclaw/`），**不再**读取项目目录或进程 `cwd`。`-init` / `-export-session` 以 **`UserDataRoot()`**（默认 `~/.oneclaw`）为数据根。

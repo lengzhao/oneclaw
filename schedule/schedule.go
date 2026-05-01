@@ -14,7 +14,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lengzhao/oneclaw/memory"
+	"github.com/lengzhao/oneclaw/workspace"
 	"github.com/lengzhao/oneclaw/rtopts"
 	"github.com/robfig/cron/v3"
 )
@@ -29,7 +29,7 @@ func Path(cwd string) string {
 // JobsFilePath returns the absolute path to scheduled_jobs.json.
 //   - When hostDataRoot is set and projectCWD is empty: <hostDataRoot>/scheduled_jobs.json (host poller compat).
 //   - When hostDataRoot is set and projectCWD equals hostDataRoot or <hostDataRoot>/workspace (shared IM): same flat file under user root.
-//   - Otherwise: memory.JoinSessionWorkspaceWithInstruction(projectCWD, instructionRoot, …) — per-session runtime under <instructionRoot>/.
+//   - Otherwise: workspace.JoinSessionWorkspaceWithInstruction(projectCWD, instructionRoot, …) — per-session runtime under <instructionRoot>/.
 func JobsFilePath(projectCWD, hostDataRoot string, workspaceFlat bool, instructionRoot string) string {
 	ur := strings.TrimSpace(hostDataRoot)
 	pc := strings.TrimSpace(projectCWD)
@@ -39,12 +39,12 @@ func JobsFilePath(projectCWD, hostDataRoot string, workspaceFlat bool, instructi
 	p := filepath.Clean(pc)
 	if ur != "" {
 		u := filepath.Clean(ur)
-		ws := filepath.Join(u, memory.IMWorkspaceDirName)
+		ws := filepath.Join(u, workspace.IMWorkspaceDirName)
 		if p == u || p == ws {
 			return filepath.Join(u, fileName)
 		}
 	}
-	return memory.JoinSessionWorkspaceWithInstruction(p, instructionRoot, workspaceFlat, fileName)
+	return workspace.JoinSessionWorkspaceWithInstruction(p, instructionRoot, workspaceFlat, fileName)
 }
 
 // Disabled reports features.disable_scheduled_tasks from config.

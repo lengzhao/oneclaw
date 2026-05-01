@@ -14,12 +14,12 @@ import (
 	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/clawbridge/client"
 	_ "github.com/lengzhao/clawbridge/drivers"
-	"github.com/lengzhao/oneclaw/memory"
 	"github.com/lengzhao/oneclaw/rtopts"
 	"github.com/lengzhao/oneclaw/session"
 	"github.com/lengzhao/oneclaw/test/openaistub"
 	"github.com/lengzhao/oneclaw/tools"
 	"github.com/lengzhao/oneclaw/tools/builtin"
+	"github.com/lengzhao/oneclaw/workspace"
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
 )
@@ -109,7 +109,7 @@ func e2eEnvMinimal(t *testing.T, stub *openaistub.Server) {
 	rtopts.Set(&s)
 }
 
-// e2eIsolateUserMemory pins paths.memory_base to filepath.Join(home, memory.DotDir) so tests stay under tmp HOME.
+// e2eIsolateUserMemory pins paths.memory_base to filepath.Join(home, workspace.DotDir) so tests stay under tmp HOME.
 // Call after t.Setenv("HOME", home) and after e2eEnvWithMemory. For home == "", clears the override.
 func e2eIsolateUserMemory(t *testing.T, home string) {
 	t.Helper()
@@ -117,7 +117,7 @@ func e2eIsolateUserMemory(t *testing.T, home string) {
 	if strings.TrimSpace(home) == "" {
 		s.MemoryBase = ""
 	} else {
-		s.MemoryBase = filepath.Join(home, memory.DotDir)
+		s.MemoryBase = filepath.Join(home, workspace.DotDir)
 	}
 	rtopts.Set(&s)
 }
@@ -154,13 +154,11 @@ func e2eWaitForFile(t *testing.T, path string, deadline time.Duration) []byte {
 
 // e2eEnvWithMemory keeps stub transport defaults and does not disable memory.
 // Use with t.Setenv("HOME", tmpDir) and mkdir .oneclaw under HOME / cwd as needed.
-// Disables post-turn model maintenance so stub queues need not account for a second API call (production default is maintenance on).
 func e2eEnvWithMemory(t *testing.T, stub *openaistub.Server) {
 	t.Helper()
 	baseStubTransport(t, stub)
 	s := rtopts.Current()
 	s.MemoryBase = ""
-	s.DisableAutoMaintenance = true
 	rtopts.Set(&s)
 }
 
