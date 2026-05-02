@@ -125,7 +125,7 @@ go run ./cmd/oneclaw -init
 # 或手动：cp config/init_template/config.yaml ~/.oneclaw/config.yaml
 ```
 
-**常用 YAML 段**：`model`、`chat.transport`、`openai.*`、`paths.*`、`budget.*`、`features.disable_*`、`log.*`、`usage.*`、`schedule.*`、`sessions.*`、`clawbridge.*`、`mcp.*` — 字段说明与默认值见 [`docs/config.md`](docs/config.md)。
+**常用 YAML 段**：`model`、`openai.*`、`paths.*`、`budget.*`、`features.disable_*`、`log.*`、`usage.*`、`schedule.*`、`sessions.*`、`clawbridge.*`、`mcp.*` — 字段说明与默认值见 [`docs/config.md`](docs/config.md)。
 
 ---
 

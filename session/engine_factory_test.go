@@ -7,7 +7,6 @@ import (
 
 	"github.com/lengzhao/oneclaw/config"
 	"github.com/lengzhao/oneclaw/tools"
-	"github.com/openai/openai-go"
 )
 
 func TestMainEngineFactory_WiresEinoRuntimeAndCredentials(t *testing.T) {
@@ -32,7 +31,6 @@ model: gpt-4o-mini
 	f := MainEngineFactory(MainEngineFactoryDeps{
 		Resolved: resolved,
 		Registry: tools.NewRegistry(),
-		Client:   openai.NewClient(),
 		Model:    resolved.ChatModel(),
 	})
 	eng, err := f(SessionHandle{Source: "test", SessionKey: "s1"})
@@ -49,4 +47,3 @@ model: gpt-4o-mini
 		t.Fatalf("base url = %q", eng.EinoOpenAIBaseURL)
 	}
 }
-

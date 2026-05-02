@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/cloudwego/eino/schema"
 	"github.com/lengzhao/oneclaw/loop"
-	"github.com/openai/openai-go"
 )
 
 // maxDialogHistoryMessages caps stored messages (user+assistant pairs count as two). Oldest entries drop first.
@@ -32,7 +32,7 @@ func trimDialogHistoryFront(msgs []json.RawMessage, max int) []json.RawMessage {
 
 // AppendDialogHistoryPair appends one slim user message and one assistant message to the day's dialog_history.json.
 // sessionID selects a per-session file under the date directory when non-empty; otherwise the legacy single file path is used.
-func AppendDialogHistoryPair(layout Layout, date, sessionID string, user, assistant openai.ChatCompletionMessageParamUnion) error {
+func AppendDialogHistoryPair(layout Layout, date, sessionID string, user, assistant *schema.Message) error {
 	if layout.CWD == "" {
 		return fmt.Errorf("workspace: empty layout cwd")
 	}

@@ -1,8 +1,6 @@
 package config
 
 import (
-	"encoding/json"
-	"log/slog"
 	"strings"
 	"time"
 
@@ -75,7 +73,6 @@ func (r *Resolved) PushRuntime() {
 
 	s.Budget = buildBudgetGlobal(f)
 	s.MemoryBase = strings.TrimSpace(f.Paths.MemoryBase)
-	s.ChatTransport = strings.TrimSpace(f.Chat.Transport)
 
 	s.DisableMemory = featTrue(f.Features.DisableMemory)
 	s.DisableAutoMemory = featTrue(f.Features.DisableAutoMemory)
@@ -94,15 +91,6 @@ func (r *Resolved) PushRuntime() {
 		s.CompactSummaryMaxBytes = f.SemanticCompact.SummaryMaxBytes
 	}
 	s.SkillsRecent = strings.TrimSpace(f.Skills.RecentPath)
-	s.ChatCompletionExtraJSON = nil
-	if len(f.Agent.CompletionExtra) > 0 {
-		b, err := json.Marshal(f.Agent.CompletionExtra)
-		if err != nil {
-			slog.Warn("config.completion_extra.marshal_failed", "err", err)
-		} else {
-			s.ChatCompletionExtraJSON = b
-		}
-	}
 
 	rtopts.Set(&s)
 }

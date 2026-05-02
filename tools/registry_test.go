@@ -23,16 +23,16 @@ func (s stubTool) Execute(context.Context, json.RawMessage, *toolctx.Context) (s
 	return "", nil
 }
 
-func TestOpenAIToolsSortedByName(t *testing.T) {
+func TestEinoBindingsSortedByName(t *testing.T) {
 	r := NewRegistry()
 	_ = r.Register(stubTool{name: "zebra"})
 	_ = r.Register(stubTool{name: "alpha"})
 	_ = r.Register(stubTool{name: "middle"})
-	names := make([]string, 3)
-	for i, p := range r.OpenAITools() {
-		names[i] = p.Function.Name
+	b := r.EinoBindings()
+	if len(b) != 3 {
+		t.Fatalf("len=%d", len(b))
 	}
-	if names[0] != "alpha" || names[1] != "middle" || names[2] != "zebra" {
-		t.Fatalf("want alphabetical order, got %v", names)
+	if b[0].Name != "alpha" || b[1].Name != "middle" || b[2].Name != "zebra" {
+		t.Fatalf("want alphabetical order, got %v, %v, %v", b[0].Name, b[1].Name, b[2].Name)
 	}
 }

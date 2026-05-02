@@ -12,8 +12,8 @@ model: gpt-4o
 openai:
   api_key: ""
   base_url: ""
-chat:
-  transport: auto
+log:
+  level: info
 `)
 	exist := []byte(`
 model: my-model
@@ -41,19 +41,19 @@ openai:
 	if oa["base_url"] != "" {
 		t.Fatalf("base_url: want empty default from template, got %q", oa["base_url"])
 	}
-	if _, ok := out["chat"]; !ok {
-		t.Fatal("expected chat from template")
+	if log, ok := out["log"].(map[string]any); !ok || log["level"] != "info" {
+		t.Fatalf("expected log.level from template, got %v", out["log"])
 	}
 }
 
 func TestMergeInitYAMLNoChangeWhenComplete(t *testing.T) {
 	tmpl := []byte(`model: gpt-4o
-chat:
-  transport: auto
+log:
+  level: info
 `)
 	exist := []byte(`model: gpt-4o
-chat:
-  transport: auto
+log:
+  level: info
 `)
 	_, changed, err := mergeInitYAML(tmpl, exist)
 	if err != nil {

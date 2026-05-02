@@ -17,7 +17,7 @@
 | 区域 | 包 / 入口 |
 |------|-----------|
 | 进程与配置 | `cmd/oneclaw`、`config`、`rtopts` |
-| 会话与编排 | `session`（`Engine`、`TurnRunner`、`turn_prepare`、`WorkerPool`） |
+| 会话与编排 | `session`（`Engine`、`TurnRunner`、`turn_prepare`、`TurnHub`、`WorkerPool`） |
 | 模型 ↔ 工具循环 | **`session/eino_*`**（Eino ADK；须 OpenAI key）、**`loop`**（Chat Completions 循环实现，可供直接调用）、**`tools`**、**`mcpclient`** |
 | 每轮指令装配 | `instructions`（`BuildTurn`） |
 | 路径与落盘 | `workspace`（Layout、transcript、`dialog_history`） |
@@ -25,7 +25,7 @@
 | 子 Agent | `subagent` |
 | 提示模板 | `prompts`（如 `main_thread_system.tmpl`） |
 
-**执行内核**：单一 **`einoTurnRunner`**；YAML **`agent.runtime`** 已废弃（解析合并后忽略）。**缺 OpenAI key 则模型回合失败**（不再回退）。嵌套子代理与主线程共用同一 **`TurnRunner`**。**`session.NewEngine`** 调用方需传入非 nil **`Registry`**。细则见 [`runtime-flow.md`](runtime-flow.md) §3.1 与 [`config.md`](config.md)。
+**执行内核**：单一 **`einoTurnRunner`**；**`config.File`** 不再包含 **`agent.runtime`**（旧 YAML 中的键可被忽略）。**缺 OpenAI key 则模型回合失败**（不再回退）。嵌套子代理与主线程共用同一 **`TurnRunner`**。**`session.NewEngine`** 调用方需传入非 nil **`Registry`**。细则见 [`runtime-flow.md`](runtime-flow.md) §3.1 与 [`config.md`](config.md)。
 
 ---
 

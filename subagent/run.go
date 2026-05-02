@@ -11,15 +11,14 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/cloudwego/eino/schema"
 	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/oneclaw/budget"
 	"github.com/lengzhao/oneclaw/loop"
 	"github.com/lengzhao/oneclaw/notify"
-	"github.com/lengzhao/oneclaw/rtopts"
 	"github.com/lengzhao/oneclaw/toolctx"
 	"github.com/lengzhao/oneclaw/tools"
 	"github.com/lengzhao/oneclaw/workspace"
-	"github.com/openai/openai-go"
 )
 
 // maxSidechainTranscriptMessages limits messages persisted per sidechain JSONL record (oldest dropped first).
@@ -27,7 +26,6 @@ const maxSidechainTranscriptMessages = 128
 
 // Host carries parent-session knobs for nested loops (TS: cache-safe / tool-use shell).
 type Host struct {
-	Client         *openai.Client
 	Model          string
 	MaxTokens      int64
 	MaxSteps       int
@@ -37,24 +35,21 @@ type Host struct {
 	SessionID      string
 	Catalog        *Catalog
 	ParentSystem   string
-	ParentMessages *[]openai.ChatCompletionMessageParamUnion
+	ParentMessages *[]*schema.Message
 	// MaxInheritedMessages caps fork / inheritContext parent tail (0 → default 32).
 	MaxInheritedMessages int
 	// HistoryBudget trims nested transcript each step (usually same as main session).
 	HistoryBudget budget.Global
-	// ChatTransport overrides default transport when non-empty.
-	ChatTransport string
 	// EinoOpenAIAPIKey / EinoOpenAIBaseURL mirror main Engine for nested turns (same OpenAI-compatible backend).
 	EinoOpenAIAPIKey  string
 	EinoOpenAIBaseURL string
 	// Notify and parent correlation for nested loop lifecycle (optional).
 	Notify notify.Sink
 	// AppendExec writes structured execution rows to the parent turn's execution shard (optional).
-	AppendExec func(context.Context, map[string]any)
+	AppendExec          func(context.Context, map[string]any)
 	ParentAgentID       string
 	ParentTurnID        string
 	ParentCorrelationID string
-	OnNestedLifecycle   func(ctx context.Context, childTurnID, childRunID, nestedAgentID string, depth int) *loop.LifecycleCallbacks
 	// RunTurn executes one nested user turn (required). The session package sets this from the parent Engine's TurnRunner so nested turns use the same backend as the main thread.
 	RunTurn func(ctx context.Context, cfg loop.Config, in bus.InboundMessage) error
 }
@@ -95,7 +90,7 @@ func effectiveModel(h *Host, def Definition) string {
 }
 
 func validateNestedHost(h *Host) error {
-	if h == nil || h.Client == nil || h.Registry == nil {
+	if h == nil || h.Registry == nil || strings.TrimSpace(h.EinoOpenAIAPIKey) == "" {
 		return fmt.Errorf("subagent: incomplete host")
 	}
 	if h.RunTurn == nil {
@@ -169,42 +164,32 @@ func RunAgent(ctx context.Context, h *Host, parent *toolctx.Context, agentType, 
 		emitSubagentEnd(h, ctx, "run_agent", def.AgentType, child.SubagentDepth, childRunID, nestedTurnID, reply, err)
 	}()
 
-	var lc *loop.LifecycleCallbacks
-	if h.OnNestedLifecycle != nil {
-		lc = h.OnNestedLifecycle(ctx, nestedTurnID, childRunID, def.AgentType, child.SubagentDepth)
-	}
-
-	msgs := make([]openai.ChatCompletionMessageParamUnion, 0)
+	msgs := make([]*schema.Message, 0)
 	if inheritContext && h.ParentMessages != nil {
 		msgs = append(msgs, trimInheritedParentMessages(*h.ParentMessages, h.maxInherited())...)
 	}
 
 	sys := buildSubagentSystem(h.CWD, def.SystemPrompt)
-	extraJSON := rtopts.Current().ChatCompletionExtraJSON
 	maxSteps := h.maxStepsForDef(def)
 	if maxSteps < 1 {
 		maxSteps = 1
 	}
 	cfg := loop.Config{
-		Client:                  h.Client,
-		Model:                   effectiveModel(h, def),
-		System:                  sys,
-		MaxTokens:               h.MaxTokens,
-		MaxSteps:                maxSteps,
-		Messages:                &msgs,
-		Registry:                reg,
-		ToolContext:             child,
-		SessionID:               h.SessionID,
-		CanUseTool:              h.CanUseTool,
-		OutboundText:            nil,
-		MemoryAgentMd:           "",
-		Budget:                  h.HistoryBudget,
-		ChatTransport:           h.ChatTransport,
-		ChatCompletionExtraJSON: extraJSON,
-		EinoOpenAIAPIKey:        h.EinoOpenAIAPIKey,
-		EinoOpenAIBaseURL:       h.EinoOpenAIBaseURL,
-		Lifecycle:               lc,
-		TurnMaxSteps:            maxSteps,
+		Model:             effectiveModel(h, def),
+		System:            sys,
+		MaxTokens:         h.MaxTokens,
+		MaxSteps:          maxSteps,
+		Messages:          &msgs,
+		Registry:          reg,
+		ToolContext:       child,
+		SessionID:         h.SessionID,
+		CanUseTool:        h.CanUseTool,
+		OutboundText:      nil,
+		MemoryAgentMd:     "",
+		Budget:            h.HistoryBudget,
+		EinoOpenAIAPIKey:  h.EinoOpenAIAPIKey,
+		EinoOpenAIBaseURL: h.EinoOpenAIBaseURL,
+		TurnMaxSteps:      maxSteps,
 	}
 	if err = h.runTurn(ctx, cfg, bus.InboundMessage{Content: task}); err != nil {
 		return "", err
@@ -258,40 +243,30 @@ func RunFork(ctx context.Context, h *Host, parent *toolctx.Context, task string,
 		emitSubagentEnd(h, ctx, "fork_context", forkAgentID, child.SubagentDepth, childRunID, nestedTurnID, reply, err)
 	}()
 
-	var lc *loop.LifecycleCallbacks
-	if h.OnNestedLifecycle != nil {
-		lc = h.OnNestedLifecycle(ctx, nestedTurnID, childRunID, forkAgentID, child.SubagentDepth)
-	}
-
-	msgs := make([]openai.ChatCompletionMessageParamUnion, 0)
+	msgs := make([]*schema.Message, 0)
 	if h.ParentMessages != nil {
 		msgs = append(msgs, trimInheritedParentMessages(*h.ParentMessages, maxParentMessages)...)
 	}
 
-	extraJSON := rtopts.Current().ChatCompletionExtraJSON
 	maxSteps := h.MaxSteps
 	if maxSteps < 1 {
 		maxSteps = 1
 	}
 	cfg := loop.Config{
-		Client:                  h.Client,
-		Model:                   h.Model,
-		System:                  h.ParentSystem,
-		MaxTokens:               h.MaxTokens,
-		MaxSteps:                maxSteps,
-		Messages:                &msgs,
-		Registry:                reg,
-		ToolContext:             child,
-		SessionID:               h.SessionID,
-		CanUseTool:              wrapConservative(h.CanUseTool),
-		OutboundText:            nil,
-		Budget:                  h.HistoryBudget,
-		ChatTransport:           h.ChatTransport,
-		ChatCompletionExtraJSON: extraJSON,
-		EinoOpenAIAPIKey:        h.EinoOpenAIAPIKey,
-		EinoOpenAIBaseURL:       h.EinoOpenAIBaseURL,
-		Lifecycle:               lc,
-		TurnMaxSteps:            maxSteps,
+		Model:             h.Model,
+		System:            h.ParentSystem,
+		MaxTokens:         h.MaxTokens,
+		MaxSteps:          maxSteps,
+		Messages:          &msgs,
+		Registry:          reg,
+		ToolContext:       child,
+		SessionID:         h.SessionID,
+		CanUseTool:        wrapConservative(h.CanUseTool),
+		OutboundText:      nil,
+		Budget:            h.HistoryBudget,
+		EinoOpenAIAPIKey:  h.EinoOpenAIAPIKey,
+		EinoOpenAIBaseURL: h.EinoOpenAIBaseURL,
+		TurnMaxSteps:      maxSteps,
 	}
 	if err = h.runTurn(ctx, cfg, bus.InboundMessage{Content: task}); err != nil {
 		return "", err
@@ -311,7 +286,7 @@ func applySidechainMerge(parent *toolctx.Context, kind, agentID, scPath string, 
 		note := fmt.Sprintf(
 			"[Sidechain merge] kind=%s agent_id=%s\nTranscript file: %s\nThe preceding tool result carries the sub-agent's final reply.",
 			kind, agentID, scPath)
-		parent.DeferUserMessageAfterToolBatch(openai.UserMessage(note))
+		parent.DeferUserMessageAfterToolBatch(schema.UserMessage(note))
 		return
 	}
 	if SidechainMergeToolSuffix() && scPath != "" {
@@ -328,13 +303,13 @@ func buildSubagentSystem(cwd, role string) string {
 	return b.String()
 }
 
-func trimMessages(src []openai.ChatCompletionMessageParamUnion, max int) []openai.ChatCompletionMessageParamUnion {
+func trimMessages(src []*schema.Message, max int) []*schema.Message {
 	if max <= 0 || len(src) <= max {
-		out := make([]openai.ChatCompletionMessageParamUnion, len(src))
+		out := make([]*schema.Message, len(src))
 		copy(out, src)
 		return out
 	}
-	out := make([]openai.ChatCompletionMessageParamUnion, max)
+	out := make([]*schema.Message, max)
 	copy(out, src[len(src)-max:])
 	return out
 }
@@ -343,7 +318,7 @@ func trimMessages(src []openai.ChatCompletionMessageParamUnion, max int) []opena
 // invalid for chat.completions: orphaned leading tool messages, a trailing assistant with
 // unresolved tool_calls (e.g. the in-flight run_agent message), or a partial tool batch after such
 // an assistant.
-func trimInheritedParentMessages(src []openai.ChatCompletionMessageParamUnion, max int) []openai.ChatCompletionMessageParamUnion {
+func trimInheritedParentMessages(src []*schema.Message, max int) []*schema.Message {
 	out := trimMessages(src, max)
 	before := len(out)
 	out = dropLeadingOrphanToolMessages(out)
@@ -360,34 +335,34 @@ func trimInheritedParentMessages(src []openai.ChatCompletionMessageParamUnion, m
 	return out
 }
 
-func dropLeadingOrphanToolMessages(msgs []openai.ChatCompletionMessageParamUnion) []openai.ChatCompletionMessageParamUnion {
+func dropLeadingOrphanToolMessages(msgs []*schema.Message) []*schema.Message {
 	i := 0
-	for i < len(msgs) && msgs[i].OfTool != nil {
+	for i < len(msgs) && msgs[i] != nil && msgs[i].Role == schema.Tool {
 		i++
 	}
 	return msgs[i:]
 }
 
-func dropTrailingIncompleteAssistantToolBatch(msgs []openai.ChatCompletionMessageParamUnion) []openai.ChatCompletionMessageParamUnion {
+func dropTrailingIncompleteAssistantToolBatch(msgs []*schema.Message) []*schema.Message {
 	if len(msgs) == 0 {
 		return msgs
 	}
 	last := msgs[len(msgs)-1]
-	if last.OfAssistant != nil && len(last.OfAssistant.ToolCalls) > 0 {
+	if last != nil && last.Role == schema.Assistant && len(last.ToolCalls) > 0 {
 		return msgs[:len(msgs)-1]
 	}
-	if last.OfTool == nil {
+	if last == nil || last.Role != schema.Tool {
 		return msgs
 	}
 	toolStart := len(msgs) - 1
-	for toolStart >= 0 && msgs[toolStart].OfTool != nil {
+	for toolStart >= 0 && msgs[toolStart] != nil && msgs[toolStart].Role == schema.Tool {
 		toolStart--
 	}
 	if toolStart < 0 {
 		return nil
 	}
-	a := msgs[toolStart].OfAssistant
-	if a == nil || len(a.ToolCalls) == 0 {
+	a := msgs[toolStart]
+	if a == nil || a.Role != schema.Assistant || len(a.ToolCalls) == 0 {
 		return msgs[:toolStart+1]
 	}
 	want := len(a.ToolCalls)
@@ -402,8 +377,8 @@ func dropTrailingIncompleteAssistantToolBatch(msgs []openai.ChatCompletionMessag
 		}
 	}
 	for i := toolStart + 1; i < len(msgs); i++ {
-		tm := msgs[i].OfTool
-		if tm == nil {
+		tm := msgs[i]
+		if tm == nil || tm.Role != schema.Tool {
 			return msgs[:toolStart]
 		}
 		if _, ok := needed[tm.ToolCallID]; !ok {
@@ -441,7 +416,7 @@ func newNestedTurnID() string {
 	return "nturn_" + hex.EncodeToString(b[:])
 }
 
-func writeSidechain(tctx *toolctx.Context, agentID, kind string, msgs []openai.ChatCompletionMessageParamUnion) (string, error) {
+func writeSidechain(tctx *toolctx.Context, agentID, kind string, msgs []*schema.Message) (string, error) {
 	if tctx == nil || strings.TrimSpace(tctx.CWD) == "" {
 		return "", nil
 	}

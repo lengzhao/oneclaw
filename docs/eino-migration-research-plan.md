@@ -26,7 +26,7 @@
 
 - `session.Engine` 职责过重：会话编排、路由、通知、落盘、模型参数集中在单体对象。  
 - `loop.RunTurn` 强绑定 OpenAI 类型：`openai.ChatCompletionMessageParamUnion`、tool_calls 编解码深度内嵌。  
-- `tools.Registry` 直接输出 OpenAI Tool Schema（`OpenAITools()`），缺少 provider-neutral 抽象层。  
+- `tools.Registry` 以 **Eino 工具绑定**为主路径；若保留 OpenAI 兼容导出，宜收敛为少量适配函数而非散落重复的 schema 构造。  
 - `subagent` 依赖消息裁剪/修补函数维持一致性，语义复杂。  
 - 生命周期事件同时写 `notify` 和 `execution jsonl`，有字段重复与演进负担。  
 - `workspace` 路径策略（flat/isolate/instructionRoot）跨模块渗透，测试和迁移成本高。  
@@ -133,7 +133,7 @@ flowchart TB
 
 ## 9. 大重构交付物清单
 
-- **配置 / 内核**：已移除 **`legacy` 并行运行时**与 **`MainAgentRuntime()`**；内核固定 **`einoTurnRunner`**，`agent.runtime` YAML **废弃忽略**。无 **`openai.api_key`** 时不再回退 **`loop.RunTurn`**，模型回合直接失败。`session.NewEngine` 须提供非 nil `Registry`。
+- **配置 / 内核**：已移除 **`legacy` 并行运行时**与 **`MainAgentRuntime()`**；内核固定 **`einoTurnRunner`**；`agent.runtime` 不再出现在 **`config.File`**（旧 YAML 中的键可被解析器忽略）。无 **`openai.api_key`** 时不再回退 **`loop.RunTurn`**，模型回合直接失败。`session.NewEngine` 须提供非 nil `Registry`。
 - 新运行时架构文档（本文件）与迁移后 runtime-flow 更新。  
 - Eino Runtime Facade + Tool Bridge + Callback Bridge 代码落地。  
 - 子代理迁移后的行为回归报告。  

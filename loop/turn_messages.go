@@ -3,14 +3,14 @@ package loop
 import (
 	"strings"
 
-	"github.com/openai/openai-go"
+	"github.com/cloudwego/eino/schema"
 )
 
 // InboundUserChunk is one user message worth of inbound attachment material after orchestration.
 // Either Text (plain user message) or MediaParts (single multimodal user message) is set.
 type InboundUserChunk struct {
 	Text       string
-	MediaParts []openai.ChatCompletionContentPartUnionParam
+	MediaParts []schema.MessageInputPart
 }
 
 // AppendTurnUserMessages appends memory / inbound-orchestration / user line to the live message list (API history).
@@ -18,24 +18,27 @@ type InboundUserChunk struct {
 // inboundMeta is optional routing context for the model (correlation_id must stay out — caller responsibility).
 // inboundAttachmentChunks are attachment-derived user messages (text hints and/or multimodal parts).
 // userLine is the primary user turn text (non-empty after engine validation, except attachment-only placeholder).
-func AppendTurnUserMessages(msgs *[]openai.ChatCompletionMessageParamUnion, memAgentMd, inboundMeta string, inboundAttachmentChunks []InboundUserChunk, userLine string) {
+func AppendTurnUserMessages(msgs *[]*schema.Message, memAgentMd, inboundMeta string, inboundAttachmentChunks []InboundUserChunk, userLine string) {
 	if msgs == nil {
 		return
 	}
 	if s := strings.TrimSpace(memAgentMd); s != "" {
-		*msgs = append(*msgs, openai.UserMessage(s))
+		*msgs = append(*msgs, schema.UserMessage(s))
 	}
 	if s := strings.TrimSpace(inboundMeta); s != "" {
-		*msgs = append(*msgs, openai.UserMessage(s))
+		*msgs = append(*msgs, schema.UserMessage(s))
 	}
 	for _, ch := range inboundAttachmentChunks {
 		if len(ch.MediaParts) > 0 {
-			*msgs = append(*msgs, openai.UserMessage(ch.MediaParts))
+			*msgs = append(*msgs, &schema.Message{
+				Role:                  schema.User,
+				UserInputMultiContent: ch.MediaParts,
+			})
 			continue
 		}
 		if s := strings.TrimSpace(ch.Text); s != "" {
-			*msgs = append(*msgs, openai.UserMessage(s))
+			*msgs = append(*msgs, schema.UserMessage(s))
 		}
 	}
-	*msgs = append(*msgs, openai.UserMessage(userLine))
+	*msgs = append(*msgs, schema.UserMessage(userLine))
 }

@@ -24,20 +24,6 @@ model: gpt-4o
 agent:
   max_steps: 100
   max_tokens: 32768
-  # 可选：与 Chat Completions JSON 请求体对齐的额外字段（temperature、web_search_options、reasoning_effort 等）。
-  # 运行时仍会覆盖 model / messages / max_completion_tokens / stream_options / tools。
-  # completion_extra:
-  #   temperature: 0.7
-  #   web_search_options:
-  #     search_context_size: medium
-  #     user_location:
-  #       approximate:
-  #         country: "US"
-  #         city: "Seattle"
-
-chat:
-  # auto：流式失败则回退非流式；仅支持非流式的网关请用 non_stream
-  transport: auto
 
 # -----------------------------------------------------------------------------
 # 日志（oneclaw 可用：-log-level、-log-format、-log-file）
@@ -67,8 +53,6 @@ paths:
 # isolate_workspace：true 时每个会话 Engine.CWD 为 sessions/<id>/workspace；false（默认）时 CWD 为 <UserDataRoot>/workspace，多会话共享同一 workspace。
 # -----------------------------------------------------------------------------
 sessions:
-  # worker_count：历史字段（原 WorkerPool）；主路径 cmd/oneclaw 已不再使用，保留合并兼容。
-  worker_count: 0
   # 入站编排：serial（默认）| insert（同轮纯文本步间插入 messages）| preempt（新入站收缩当轮 effective max_steps；/stop 仍为硬取消）
   # turn_policy: serial
   # false：共享 <UserDataRoot>/workspace；true：每会话 <UserDataRoot>/sessions/<id>/workspace

@@ -3,13 +3,13 @@ package loop
 import (
 	"testing"
 
-	"github.com/openai/openai-go"
+	"github.com/cloudwego/eino/schema"
 )
 
 func TestMarshalTranscriptRoundTrip(t *testing.T) {
-	msgs := []openai.ChatCompletionMessageParamUnion{
-		openai.UserMessage("hi"),
-		openai.AssistantMessage("hello"),
+	msgs := []*schema.Message{
+		schema.UserMessage("hi"),
+		schema.AssistantMessage("hello", nil),
 	}
 	b, err := MarshalMessages(msgs)
 	if err != nil {
@@ -21,5 +21,11 @@ func TestMarshalTranscriptRoundTrip(t *testing.T) {
 	}
 	if len(out) != 2 {
 		t.Fatalf("len %d", len(out))
+	}
+	if UserMessageText(out[0]) != "hi" {
+		t.Fatalf("user: %q", UserMessageText(out[0]))
+	}
+	if AssistantParamText(out[1]) != "hello" {
+		t.Fatalf("assistant: %q", AssistantParamText(out[1]))
 	}
 }

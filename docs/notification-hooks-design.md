@@ -14,7 +14,7 @@
 | Agent 入口 | 本轮即将进入模型循环（或本地 slash 等旁路） |
 | 每次交互（模型步） | 每一轮 `model request → response`（含 `finish_reason`、usage 摘要） |
 | 工具调用 | 模型产生 `tool_calls` 后，**执行前**（名称、id、参数摘要） |
-| 工具响应 | 单次工具 **执行结束**（成功/拒绝/未知/错误，与现有 `ToolTraceEntry` 语义对齐） |
+| 工具响应 | 单次工具 **执行结束**（成功/拒绝/未知/错误；落地以 **`execution/*.jsonl`** 记录为准） |
 | 子 Agent | `run_agent` / `fork_context` 等嵌套循环 **开始与结束** |
 | 正常结束 | 本轮 `RunTurn` 成功返回（最终 user-visible 状态已收敛） |
 | 异常 | 模型错误、超时、`ctx` 取消、`max steps`、入站校验失败等 |
@@ -26,10 +26,10 @@
 
 当前代码中已有可复用锚点：
 
-- `session.Engine.SubmitUser`：入站准备、`loop.RunTurn` 前后、转写落盘、`PostTurn`（见 `session/engine.go`）。
-- `loop.RunTurn`：每步 `model.CompleteWithTransport`、工具批处理（见 `loop/runner.go`）。
-- `loop.Config.OnToolLogged` + `ToolTraceEntry`：工具结束后同步回调（仅 end，无独立 start 事件；并行 batch 时顺序为完成顺序）（见 `loop/tool_trace.go`）。
-- `subagent.RunAgent`（及 fork 路径）：嵌套循环入口（见 `subagent/run.go`）。
+- `session.Engine.SubmitUser`：入站准备、**`TurnRunner.RunTurn`**（Eino）前后、转写落盘、`PostTurn`（见 `session/engine.go`）。
+- **主路径模型回合**：`session/eino_turn_runner.go` 等；**不再**经 `loop.RunTurn` 调 Chat Completions。
+- **执行流水**：`session/exec_journal.go` 按轮写入 JSONL（与精简 `notify` 并行）。
+- `subagent.RunAgent`（及 fork 路径）：嵌套 Eino 回合（见 `subagent/run.go`）。
 
 ### 1.3 非目标（第一版可明确不做）
 
@@ -151,7 +151,7 @@ eng.Notify.Register(myJSONL, notify.FuncSink(func(ctx context.Context, ev notify
 ### 3.6 `tool_call_start` / `tool_call_end`
 
 - **start**：在 `runOneTool` **通过** `CanUseTool` 且 **registry 命中**、即将 `Execute` 之前发出；若 denied / unknown，可只发 **end**（带 `phase` 或 `status`）以保持与现有「仅 end 回调」兼容。
-- **end**：与 `ToolTraceEntry` 对齐并扩展：`tool_use_id`、`name`、`ok`、`err`、`args_preview`、`out_preview`、`duration_ms`、`model_step`。
+- **end**：工具结束载荷字段示例：`tool_use_id`、`name`、`ok`、`err`、`args_preview`、`out_preview`、`duration_ms`、`model_step`（以 **`execution/*.jsonl`** 或后续 Phase 2 notify 为准）。
 
 > 说明：当前 `OnToolLogged` 仅在 end 调用；若产品需要严格的 start/end 对称，需在 `runOneTool` 开头增加一次 Hook（注意并发 batch 时 start 顺序可能与 end 交错）。
 
@@ -279,11 +279,11 @@ notify:
 
 | 模块 | 建议插入点 |
 |------|------------|
-| **`notify`** | `Event` 常量含 **Phase 2**：`agent_turn_start`、`model_step_*`、`tool_call_start`、`subagent_*` 等；`Sink`、`EmitSafe`、`Multi`；**`loop.ToolTraceEntry.tool_use_id`** |
-| `session` | **`Engine.Notify` / `AgentID`**：`prepareSharedTurn` 注入 **父 `turn_id` / `correlation_id`** 到 `subRunner`；`buildLoopLifecycle` / `nestedLoopLifecycle`；`SubmitUser`：`inbound_received` → **`memory_turn_context`** → `agent_turn_start` →（loop 内 model/tool 事件）→ `turn_complete` / `turn_error`；**本地 slash**：同上（含 `memory_turn_context`）+ `agent_turn_start`（`local_slash`）+ `turn_complete` |
+| **`notify`** | **MVP**：`user_input`、`turn_start`、`turn_end`（见 `notify/event.go`）；`Sink`、`EmitSafe`、`Multi`。历史上规划的 Phase 2 事件未与当前 Eino 主路径绑定。 |
+| `session` | **`Engine.Notify` / `AgentID`**：`prepareSharedTurn`；`SubmitUser` 与精简 notify；**`execution/*.jsonl`** 承载按轮执行流水（见 `exec_journal.go`）。 |
 | `session`（续） | `SendMessage` 旁路：**当前 MVP 不发 notify**（与推理生命周期无关，可按需后续加 `proactive_outbound`） |
-| `loop` | **`LifecycleCallbacks`**：`OnModelStepStart(step, toolN, requestMessages)` / `OnModelStepEnd` / `OnToolStart`；`RunTurn` 在请求前后与失败路径调用；`runOneTool` 在 Execute 前调 `OnToolStart` |
-| `subagent` | **`Host.Notify` / `OnNestedLifecycle` / 父 turn 关联字段**；`RunAgent`、`RunFork` 发 `subagent_*` 并为嵌套 `loop.Config` 注入 lifecycle |
+| `loop` | 保留用于测试与概念文档；**主会话不再**注入 `LifecycleCallbacks` / `OnToolLogged`（已移除）。 |
+| `subagent` | **`Host.Notify`** 等仍可按需挂接；**不再**向嵌套 `loop.Config` 注入 lifecycle（已移除）。 |
 | `cmd/oneclaw` 或 `config` | **MVP**：未接 YAML；编排侧 `eng.Notify.Register(…)` 或 `RegisterNotify` / `AgentID`。**远期**：解析 `notify` 段注入 `Engine` |
 
 ---

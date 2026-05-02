@@ -7,10 +7,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/cloudwego/eino/schema"
 	"github.com/lengzhao/oneclaw/budget"
 	"github.com/lengzhao/oneclaw/rtopts"
 	"github.com/lengzhao/oneclaw/test/openaistub"
-	"github.com/openai/openai-go"
 )
 
 // E2E-103 语义 compact：全局预算裁剪时在发往模型的首条请求 user 侧出现 compact_boundary 摘要块。
@@ -33,9 +33,9 @@ func TestE2E_103_SemanticCompactInChatRequest(t *testing.T) {
 
 	cwd := t.TempDir()
 	ctx := context.Background()
-	msgs := make([]openai.ChatCompletionMessageParamUnion, 0, 160)
+	msgs := make([]*schema.Message, 0, 160)
 	for range 150 {
-		msgs = append(msgs, openai.UserMessage(strings.Repeat("q", 920)))
+		msgs = append(msgs, schema.UserMessage(strings.Repeat("q", 920)))
 	}
 
 	e := newStubEngine(t, stub, cwd)
@@ -77,9 +77,9 @@ func TestE2E_104_SemanticCompactDisabledNoBoundaryTag(t *testing.T) {
 
 	cwd := t.TempDir()
 	ctx := context.Background()
-	msgs := make([]openai.ChatCompletionMessageParamUnion, 0, 160)
+	msgs := make([]*schema.Message, 0, 160)
 	for range 150 {
-		msgs = append(msgs, openai.UserMessage(strings.Repeat("r", 920)))
+		msgs = append(msgs, schema.UserMessage(strings.Repeat("r", 920)))
 	}
 
 	e := newStubEngine(t, stub, cwd)

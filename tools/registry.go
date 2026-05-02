@@ -9,10 +9,9 @@ import (
 
 	"github.com/lengzhao/oneclaw/toolctx"
 	"github.com/openai/openai-go"
-	"github.com/openai/openai-go/shared"
 )
 
-// Registry maps tool names to implementations and exposes OpenAI tool definitions.
+// Registry maps tool names to implementations and exposes stable tool descriptors.
 type Registry struct {
 	mu    sync.RWMutex
 	items map[string]Tool
@@ -90,23 +89,6 @@ func (r *Registry) Descriptors() []Descriptor {
 			Parameters:      t.Parameters(),
 			ConcurrencySafe: t.ConcurrencySafe(),
 			Execute:         t.Execute,
-		})
-	}
-	return out
-}
-
-// OpenAITools builds ChatCompletionToolParam slice for ChatCompletionNewParams.
-// Tool order is sorted by name so requests are stable across processes and runs.
-func (r *Registry) OpenAITools() []openai.ChatCompletionToolParam {
-	descs := r.Descriptors()
-	out := make([]openai.ChatCompletionToolParam, 0, len(descs))
-	for _, d := range descs {
-		out = append(out, openai.ChatCompletionToolParam{
-			Function: shared.FunctionDefinitionParam{
-				Name:        d.Name,
-				Description: openai.String(d.Description),
-				Parameters:  d.Parameters,
-			},
 		})
 	}
 	return out

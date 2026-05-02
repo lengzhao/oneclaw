@@ -7,11 +7,11 @@
 | 层次 | 现状 |
 |------|------|
 | 配置 | 顶层 `model` + `openai.api_key` / `openai.base_url` / `org_id` / `project_id`；维护单独 `maintain.model`、`maintain.scheduled_model` |
-| 客户端 | 全局一个 `openai.Client`，由 `config.Resolved.OpenAIOptions()` 构造 |
-| 会话与循环 | `session.Engine` 持有 `openai.Client`；`loop.Config` 含 `*openai.Client` + `Model` 字符串 |
-| 补全调用 | `model.Complete` / `CompleteWithTransport` 直接调 `client.Chat.Completions`（流式 / 非流式） |
+| 客户端 | 主路径 **不**贯穿 `Engine` 上的 `openai.Client`；**Eino** 使用 **`Engine.EinoOpenAIAPIKey` / `EinoOpenAIBaseURL`**（来自 YAML）。`OpenAIOptions()` 仍可用于测试或其它辅助构造。 |
+| 会话与循环 | **`TurnRunner`（Eino ADK）**；`loop.Config` 含 `Model`、预算、工具、`EinoOpenAI*` 等 |
+| 补全调用 | **`session` Eino ChatModel**（eino-ext），非进程内 `openai-go` Chat Completions 循环 |
 | 消息与工具 | 全链路 `openai.ChatCompletionMessageParamUnion`、`openai.ChatCompletionToolParam` |
-| 其它入口 | `memory/maintain_run`、`subagent/run` 等同样依赖 `*openai.Client` 与同型消息 |
+| 其它入口 | `memory/maintain_run` 等若仍有 **`openai.Client`** 路径需单独盘点；**子代理主路径**与主会话一致走 **Eino + `EinoOpenAI*`** |
 
 **结论**：能力上已支持任意 **OpenAI Chat Completions 兼容** 网关（通过 `base_url`）；**未**按「协议前缀」拆分多后端，也**未**内置 Anthropic Messages 等非 OpenAI 形态 API。
 
@@ -82,8 +82,8 @@ Provider interface {
 
 ### 3.3 `loop` 改造要点
 
-- `loop.Config`：将 `Client *openai.Client` 替换为 `LLM llm.Provider`（或同时保留 Client 仅用于过渡期适配器）。  
-- `RunTurn` 内构建 `ChatRequest`，调用 `LLM.Chat`；工具执行仍用 `tools.Registry.OpenAITools()`，在 provider 边界转换为请求格式（OpenAI 兼容实现可为直通）。  
+- `loop.Config`：将凭据 + 模型选择抽象为 `LLM llm.Provider`（或保留当前 `EinoOpenAI*` 字段直至统一 provider 接口）。  
+- `RunTurn` 内构建 `ChatRequest`，调用 `LLM.Chat`；工具在 provider 边界由 **Registry 的 Eino/Provider 绑定** 转为各实现所需格式（OpenAI 兼容实现可为直通）。  
 ### 3.4 `session.Engine` 与入口
 
 - 由 `cmd` / 装配层根据 `Resolved` 构造 `llm.Provider`，注入 `Engine`（或只注入 `loop.Config`）。  

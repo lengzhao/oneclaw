@@ -6,10 +6,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/cloudwego/eino/schema"
 	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/oneclaw/loop"
 	"github.com/lengzhao/oneclaw/tools"
-	"github.com/openai/openai-go"
 )
 
 func TestTrySlashLocalTurn_StatusAndPaths(t *testing.T) {
@@ -89,8 +89,8 @@ func TestTrySlashLocalTurn_ResetClearsMessagesAndTranscript(t *testing.T) {
 	e := NewEngine(tmp, tools.NewRegistry())
 	e.TranscriptPath = tp
 	e.WorkingTranscriptPath = wp
-	e.Messages = []openai.ChatCompletionMessageParamUnion{openai.UserMessage("old")}
-	e.Transcript = []openai.ChatCompletionMessageParamUnion{openai.UserMessage("old"), openai.AssistantMessage("gone")}
+	e.Messages = []*schema.Message{schema.UserMessage("old")}
+	e.Transcript = []*schema.Message{schema.UserMessage("old"), schema.AssistantMessage("gone", nil)}
 
 	reply, ok := e.trySlashLocalTurn(bus.InboundMessage{Content: "/reset"})
 	if !ok || !strings.Contains(reply, "已清空") {
@@ -119,7 +119,7 @@ func TestTrySlashLocalTurn_ResetClearsMessagesAndTranscript(t *testing.T) {
 
 func TestTrySlashLocalTurn_ResetRejectsArgs(t *testing.T) {
 	e := NewEngine(t.TempDir(), tools.NewRegistry())
-	e.Messages = []openai.ChatCompletionMessageParamUnion{openai.UserMessage("keep")}
+	e.Messages = []*schema.Message{schema.UserMessage("keep")}
 	_, ok := e.trySlashLocalTurn(bus.InboundMessage{Content: "/reset all"})
 	if !ok {
 		t.Fatal("expected local reply")

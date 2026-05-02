@@ -9,12 +9,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lengzhao/oneclaw/loop"
 	"github.com/lengzhao/oneclaw/workspace"
 )
 
 // bindExecutionLogShard pins one NDJSON file for this user turn:
-//   <session-runtime>/execution/<agent_id>/<YYYY-MM-DD>/<turn_id>.jsonl
+//
+//	<session-runtime>/execution/<agent_id>/<YYYY-MM-DD>/<turn_id>.jsonl
+//
 // (same anchor rules as tasks.json via JoinSessionWorkspaceWithInstruction).
 func (e *Engine) bindExecutionLogShard(turnID string) {
 	if e == nil {
@@ -86,10 +87,6 @@ func (e *Engine) execJournalWanted() bool {
 	return e != nil && e.executionLogPath() != ""
 }
 
-func (e *Engine) wantsLifecycle() bool {
-	return e.hasNotify() || e.execJournalWanted()
-}
-
 // appendExecutionRecord appends one JSON object per line (best-effort; never panics).
 func (e *Engine) appendExecutionRecord(ctx context.Context, rec map[string]any) {
 	if e == nil || !e.execJournalWanted() {
@@ -134,23 +131,4 @@ func (e *Engine) appendExecutionRecord(ctx context.Context, rec map[string]any) 
 		slog.Warn("session.execution_log.close", "path", path, "err", err)
 	}
 	_ = ctx
-}
-
-func toolCallEndRecord(ent loop.ToolTraceEntry) map[string]any {
-	m := map[string]any{
-		"record":         "tool_call_end",
-		"model_step":     ent.Step,
-		"name":           ent.Name,
-		"ok":             ent.OK,
-		"duration_ms":    ent.DurationMs,
-		"args_preview":   ent.ArgsPreview,
-		"out_preview":    ent.OutPreview,
-	}
-	if ent.ToolUseID != "" {
-		m["tool_use_id"] = ent.ToolUseID
-	}
-	if ent.Err != "" {
-		m["err"] = ent.Err
-	}
-	return m
 }

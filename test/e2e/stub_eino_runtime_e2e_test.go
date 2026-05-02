@@ -17,7 +17,6 @@ import (
 	"github.com/lengzhao/oneclaw/test/openaistub"
 	"github.com/lengzhao/oneclaw/tools/builtin"
 	"github.com/lengzhao/oneclaw/workspace"
-	"github.com/openai/openai-go"
 )
 
 // e2eLoadStubEinoRuntimeResolved writes ~/.oneclaw/config.yaml with stub OpenAI URLs (kernel is always eino).
@@ -70,7 +69,6 @@ func TestE2E_StubEinoRuntime_SubmitUser(t *testing.T) {
 	f := session.MainEngineFactory(session.MainEngineFactoryDeps{
 		Resolved: resolved,
 		Registry: builtin.DefaultRegistry(),
-		Client:   openai.NewClient(stubOpenAIOptions(stub)...),
 		Model:    resolved.ChatModel(),
 		Bridge:   br,
 	})
@@ -142,7 +140,6 @@ func TestE2E_StubEinoRuntime_ToolReadFile(t *testing.T) {
 	f := session.MainEngineFactory(session.MainEngineFactoryDeps{
 		Resolved: resolved,
 		Registry: builtin.DefaultRegistry(),
-		Client:   openai.NewClient(stubOpenAIOptions(stub)...),
 		Model:    resolved.ChatModel(),
 		Bridge:   br,
 	})
@@ -196,7 +193,6 @@ func TestE2E_StubEinoRuntime_RunAgentNested(t *testing.T) {
 	f := session.MainEngineFactory(session.MainEngineFactoryDeps{
 		Resolved: resolved,
 		Registry: builtin.DefaultRegistry(),
-		Client:   openai.NewClient(stubOpenAIOptions(stub)...),
 		Model:    resolved.ChatModel(),
 		Bridge:   br,
 	})
@@ -246,7 +242,6 @@ func TestE2E_StubEinoRuntime_ForkContext(t *testing.T) {
 	f := session.MainEngineFactory(session.MainEngineFactoryDeps{
 		Resolved: resolved,
 		Registry: builtin.DefaultRegistry(),
-		Client:   openai.NewClient(stubOpenAIOptions(stub)...),
 		Model:    resolved.ChatModel(),
 		Bridge:   br,
 	})

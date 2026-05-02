@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/cloudwego/eino/schema"
 	"github.com/lengzhao/oneclaw/mediastore"
 )
 
@@ -45,15 +46,16 @@ func TestInboundUserChunksForAttachments_imagePNG(t *testing.T) {
 		t.Fatalf("expected 1 multimodal chunk, got %#v", chunks)
 	}
 	p := chunks[0].MediaParts[0]
-	if p.OfImageURL == nil || p.OfImageURL.ImageURL.URL == "" {
+	if p.Type != schema.ChatMessagePartTypeImageURL || p.Image == nil || p.Image.URL == nil || *p.Image.URL == "" {
 		t.Fatalf("expected image_url part")
 	}
-	if !strings.HasPrefix(p.OfImageURL.ImageURL.URL, "data:image/png;base64,") {
+	if !strings.HasPrefix(*p.Image.URL, "data:image/png;base64,") {
 		prefixLen := 40
-		if len(p.OfImageURL.ImageURL.URL) < prefixLen {
-			prefixLen = len(p.OfImageURL.ImageURL.URL)
+		u := *p.Image.URL
+		if len(u) < prefixLen {
+			prefixLen = len(u)
 		}
-		t.Fatalf("unexpected url prefix: %q", p.OfImageURL.ImageURL.URL[:prefixLen])
+		t.Fatalf("unexpected url prefix: %q", u[:prefixLen])
 	}
 }
 
@@ -86,8 +88,10 @@ func TestInboundUserChunksForAttachments_wavByExt(t *testing.T) {
 	if len(chunks) != 1 || len(chunks[0].MediaParts) != 1 {
 		t.Fatalf("expected 1 audio chunk, got %#v", chunks)
 	}
-	if chunks[0].MediaParts[0].OfInputAudio == nil || chunks[0].MediaParts[0].OfInputAudio.InputAudio.Format != "wav" {
-		t.Fatalf("expected wav input_audio")
+	ap := chunks[0].MediaParts[0]
+	if ap.Type != schema.ChatMessagePartTypeAudioURL || ap.Audio == nil || ap.Audio.Base64Data == nil ||
+		ap.Audio.MIMEType != "audio/wav" {
+		t.Fatalf("expected wav audio_url part")
 	}
 }
 

@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/cloudwego/eino/schema"
 	"github.com/lengzhao/oneclaw/loop"
-	"github.com/openai/openai-go"
 )
 
 // maxMultimodalBytes matches maxPersistAttachmentBytes (inbound store cap).
@@ -24,7 +24,7 @@ func InboundUserChunksForAttachments(cwd string, atts []Attachment, allowImage, 
 		return nil
 	}
 	var chunks []loop.InboundUserChunk
-	var pending []openai.ChatCompletionContentPartUnionParam
+	var pending []schema.MessageInputPart
 	flush := func() {
 		if len(pending) == 0 {
 			return
@@ -50,7 +50,7 @@ func InboundUserChunksForAttachments(cwd string, atts []Attachment, allowImage, 
 	return chunks
 }
 
-func tryMultimodalAttachment(cwd string, a Attachment, allowImage, allowAudio bool) ([]openai.ChatCompletionContentPartUnionParam, bool, error) {
+func tryMultimodalAttachment(cwd string, a Attachment, allowImage, allowAudio bool) ([]schema.MessageInputPart, bool, error) {
 	rel := strings.TrimSpace(a.Path)
 	if rel == "" {
 		return nil, false, nil
@@ -72,28 +72,46 @@ func tryMultimodalAttachment(cwd string, a Attachment, allowImage, allowAudio bo
 	}
 	if isVisionImageMIME(mt) {
 		dataURL := fmt.Sprintf("data:%s;base64,%s", visionDataMIME(mt), base64.StdEncoding.EncodeToString(data))
-		p := openai.ImageContentPart(openai.ChatCompletionContentPartImageImageURLParam{URL: dataURL})
-		return []openai.ChatCompletionContentPartUnionParam{p}, true, nil
+		url := dataURL
+		return []schema.MessageInputPart{{
+			Type: schema.ChatMessagePartTypeImageURL,
+			Image: &schema.MessageInputImage{
+				MessagePartCommon: schema.MessagePartCommon{URL: &url},
+				Detail:            schema.ImageURLDetailAuto,
+			},
+		}}, true, nil
 	}
 	if isWAV(mt, rel) && !allowAudio {
 		return nil, false, nil
 	}
 	if isWAV(mt, rel) {
-		p := openai.InputAudioContentPart(openai.ChatCompletionContentPartInputAudioInputAudioParam{
-			Data:   base64.StdEncoding.EncodeToString(data),
-			Format: "wav",
-		})
-		return []openai.ChatCompletionContentPartUnionParam{p}, true, nil
+		b64 := base64.StdEncoding.EncodeToString(data)
+		mimeWav := "audio/wav"
+		return []schema.MessageInputPart{{
+			Type: schema.ChatMessagePartTypeAudioURL,
+			Audio: &schema.MessageInputAudio{
+				MessagePartCommon: schema.MessagePartCommon{
+					Base64Data: &b64,
+					MIMEType:   mimeWav,
+				},
+			},
+		}}, true, nil
 	}
 	if isMP3(mt, rel) && !allowAudio {
 		return nil, false, nil
 	}
 	if isMP3(mt, rel) {
-		p := openai.InputAudioContentPart(openai.ChatCompletionContentPartInputAudioInputAudioParam{
-			Data:   base64.StdEncoding.EncodeToString(data),
-			Format: "mp3",
-		})
-		return []openai.ChatCompletionContentPartUnionParam{p}, true, nil
+		b64 := base64.StdEncoding.EncodeToString(data)
+		mimeMP3 := "audio/mpeg"
+		return []schema.MessageInputPart{{
+			Type: schema.ChatMessagePartTypeAudioURL,
+			Audio: &schema.MessageInputAudio{
+				MessagePartCommon: schema.MessagePartCommon{
+					Base64Data: &b64,
+					MIMEType:   mimeMP3,
+				},
+			},
+		}}, true, nil
 	}
 	return nil, false, nil
 }

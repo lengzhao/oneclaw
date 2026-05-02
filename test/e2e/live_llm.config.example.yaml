@@ -9,7 +9,3 @@ openai:
   # base_url: "https://api.openai.com/v1"
 
 model: gpt-4o
-
-chat:
-  # stream | non_stream；stub/CI 建议 non_stream
-  transport: non_stream

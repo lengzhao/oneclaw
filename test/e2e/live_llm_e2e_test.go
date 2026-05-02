@@ -22,7 +22,6 @@ import (
 	"github.com/lengzhao/oneclaw/session"
 	"github.com/lengzhao/oneclaw/tools/builtin"
 	"github.com/lengzhao/oneclaw/workspace"
-	"github.com/openai/openai-go"
 )
 
 func testLiveConfigPath(t *testing.T) string {
@@ -60,14 +59,10 @@ func loadLiveResolved(t *testing.T, cfgPath string, home string) *config.Resolve
 func newLiveEngine(t *testing.T, r *config.Resolved, cwd string) *session.Engine {
 	t.Helper()
 	e := session.NewEngine(cwd, builtin.DefaultRegistry())
-	e.Client = openai.NewClient(r.OpenAIOptions()...)
 	e.EinoOpenAIAPIKey = r.OpenAIAPIKey()
 	e.EinoOpenAIBaseURL = r.OpenAIBaseURL()
 	if m := r.ChatModel(); m != "" {
 		e.Model = m
-	}
-	if tr := r.ChatTransport(); tr != "" {
-		e.ChatTransport = tr
 	}
 	return e
 }

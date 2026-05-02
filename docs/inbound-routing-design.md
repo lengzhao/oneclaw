@@ -70,10 +70,10 @@
 
 ---
 
-## 8. 会话与 WorkerPool
+## 8. 会话与 TurnHub
 
-- **`cmd/oneclaw`** 使用 **`session.NewWorkerPool`** + **`session.MainEngineFactory`**。按 `sessions.worker_count` 固定 worker 数，按 **`SessionHandle` 哈希分片**；**每条入站任务**在 worker 内 **`factory(handle)` 新建 `*Engine`，`SubmitUser` 结束后丢弃**，状态依赖转写等落盘（`session/worker_pool.go`）。
-- **单测 / e2e**：可直接 **`session.NewEngine(...)`** 调用 **`SubmitUser`**，不经过 **`WorkerPool`**。
+- **`cmd/oneclaw`** 使用 **`session.NewTurnHub`** + **`session.MainEngineFactory`**，并按 **`sessions.turn_policy`**（serial / insert / preempt）编排。**每个 `SessionHandle` 一个 coordinator**：同会话入站在该 mailbox 上串行（或通过 policy 插入/抢占）；**每条入站任务** **`factory(handle)` 新建 `*Engine`，`SubmitUser` 结束后丢弃**，状态依赖转写等落盘（实现见 `session/turn_hub.go`）。**`session.WorkerPool`** 仍保留在仓库中供测试或自定义宿主复用，主进程路径不再使用。
+- **单测 / e2e**：可直接 **`session.NewEngine(...)`** 调用 **`SubmitUser`**，不经过 **`TurnHub`**。
 
 ---
 

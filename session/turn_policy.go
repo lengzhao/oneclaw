@@ -14,7 +14,8 @@ const (
 	// TurnPolicySerial: queue messages; one SubmitUser at a time (default).
 	TurnPolicySerial TurnPolicy = iota
 	// TurnPolicyInsert: plain-text follow-ups while a turn runs are appended as
-	// extra user lines before each model step (loop.BeforeModelStep).
+	// extra user lines before each ChatModel call ([Engine.BeforeChatModel], ADK
+	// BeforeModelRewriteState).
 	TurnPolicyInsert
 	// TurnPolicyPreempt: new inbounds are still ordered through the session mailbox (like serial) so they
 	// run after the current turn; use [TurnHub.CancelInflightTurn] (e.g. /stop) to hard-abort the active turn.

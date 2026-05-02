@@ -3,14 +3,14 @@ package loop_test
 import (
 	"testing"
 
+	"github.com/cloudwego/eino/schema"
 	"github.com/lengzhao/oneclaw/loop"
-	"github.com/openai/openai-go"
 )
 
 func TestLastAssistantDisplay(t *testing.T) {
-	msgs := []openai.ChatCompletionMessageParamUnion{
-		openai.UserMessage("hi"),
-		openai.AssistantMessage("Hello!"),
+	msgs := []*schema.Message{
+		schema.UserMessage("hi"),
+		schema.AssistantMessage("Hello!", nil),
 	}
 	if got := loop.LastAssistantDisplay(msgs); got != "Hello!" {
 		t.Fatalf("got %q", got)
@@ -18,7 +18,7 @@ func TestLastAssistantDisplay(t *testing.T) {
 }
 
 func TestAssistantParamText_plain(t *testing.T) {
-	m := openai.AssistantMessage("  hi  ")
+	m := schema.AssistantMessage("  hi  ", nil)
 	if got := loop.AssistantParamText(m); got != "hi" {
 		t.Fatalf("got %q", got)
 	}

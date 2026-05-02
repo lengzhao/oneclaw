@@ -3,17 +3,17 @@ package loop
 import (
 	"testing"
 
-	"github.com/openai/openai-go"
+	"github.com/cloudwego/eino/schema"
 )
 
 func TestVisibleTranscriptAppendSince(t *testing.T) {
-	var tr []openai.ChatCompletionMessageParamUnion
-	tr = append(tr, openai.UserMessage("u1"))
-	tr = append(tr, openai.AssistantMessage("a1"))
+	var tr []*schema.Message
+	tr = append(tr, schema.UserMessage("u1"))
+	tr = append(tr, schema.AssistantMessage("a1", nil))
 	n0 := len(ToUserVisibleMessages(tr))
 
-	tr = append(tr, openai.UserMessage("u2"))
-	tr = append(tr, openai.AssistantMessage("a2"))
+	tr = append(tr, schema.UserMessage("u2"))
+	tr = append(tr, schema.AssistantMessage("a2", nil))
 	delta := VisibleTranscriptAppendSince(tr, n0)
 	if len(delta) != 2 || delta[0]["role"] != "user" || delta[0]["content"] != "u2" {
 		t.Fatalf("delta user: %#v", delta)

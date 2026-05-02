@@ -1,6 +1,6 @@
 # E2E 用例清单（Stub 模型）
 
-所有用例使用 **`go test -tags=e2e`**；默认 **`test/openaistub`** 与 **`rtopts`** 的 **`chat.transport: non_stream`**。需要用户级数据时 **`t.Setenv("HOME", tmpHome)`** 再写 `~/.oneclaw`。
+所有用例使用 **`go test -tags=e2e`**；默认 **`test/openaistub`** + **`Engine.EinoOpenAI*`** 指向 stub；**`baseStubRtopts`** 重置 **`rtopts`**。需要用户级数据时 **`t.Setenv("HOME", tmpHome)`** 再写 `~/.oneclaw`。
 
 **状态**：`[x]` 表示 `test/e2e` 下已有对应测试函数。
 

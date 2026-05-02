@@ -3,7 +3,7 @@ package loop
 import (
 	"strings"
 
-	"github.com/openai/openai-go"
+	"github.com/cloudwego/eino/schema"
 )
 
 // ToUserVisibleMessages returns a copy of msgs reduced to chat turns a human would see:
@@ -12,16 +12,19 @@ import (
 // tool calls. Assistant messages that mix visible text with tool_calls are kept as text-only.
 // Use after a successful user turn (or when persisting working transcript) to cut token cost; the
 // model can re-invoke tools if facts are still needed (cf. file memory / recall).
-func ToUserVisibleMessages(msgs []openai.ChatCompletionMessageParamUnion) []openai.ChatCompletionMessageParamUnion {
+func ToUserVisibleMessages(msgs []*schema.Message) []*schema.Message {
 	if len(msgs) == 0 {
 		return msgs
 	}
-	out := make([]openai.ChatCompletionMessageParamUnion, 0, len(msgs))
+	out := make([]*schema.Message, 0, len(msgs))
 	for _, m := range msgs {
-		switch {
-		case m.OfTool != nil:
+		if m == nil {
 			continue
-		case m.OfUser != nil:
+		}
+		switch m.Role {
+		case schema.Tool:
+			continue
+		case schema.User:
 			t := UserMessageText(m)
 			hasMedia := UserMessageHasNonTextMedia(m)
 			if shouldDropNonVisibleUserText(t) && !hasMedia {
@@ -31,9 +34,9 @@ func ToUserVisibleMessages(msgs []openai.ChatCompletionMessageParamUnion) []open
 				continue
 			}
 			out = append(out, m)
-		case m.OfAssistant != nil:
+		case schema.Assistant:
 			text := AssistantParamText(m)
-			nTools := len(m.OfAssistant.ToolCalls)
+			nTools := len(m.ToolCalls)
 			if text == "" && nTools > 0 {
 				continue
 			}
@@ -41,7 +44,7 @@ func ToUserVisibleMessages(msgs []openai.ChatCompletionMessageParamUnion) []open
 				continue
 			}
 			if nTools > 0 {
-				out = append(out, openai.AssistantMessage(text))
+				out = append(out, schema.AssistantMessage(text, nil))
 				continue
 			}
 			out = append(out, m)

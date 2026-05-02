@@ -7,16 +7,14 @@ import (
 
 	"github.com/lengzhao/clawbridge"
 	"github.com/lengzhao/oneclaw/config"
-	"github.com/lengzhao/oneclaw/workspace"
 	"github.com/lengzhao/oneclaw/tools"
-	"github.com/openai/openai-go"
+	"github.com/lengzhao/oneclaw/workspace"
 )
 
 // MainEngineFactoryDeps wires a cmd/oneclaw-style Engine for each worker-pool job.
 type MainEngineFactoryDeps struct {
 	Resolved *config.Resolved
 	Registry *tools.Registry
-	Client   openai.Client
 	Model    string
 	// MCPSystemNote is optional MCP section for the main-thread system prompt.
 	MCPSystemNote string
@@ -48,13 +46,11 @@ func MainEngineFactory(deps MainEngineFactoryDeps) func(SessionHandle) (*Engine,
 		eng.UserDataRoot = userRoot
 		eng.InstructionRoot = instructionRoot
 		eng.WorkspaceFlat = true
-		eng.Client = deps.Client
 		eng.CanUseTool = DefaultCanUseToolWithScheduleGate()
 		eng.Model = deps.Model
 		eng.MaxSteps = deps.Resolved.MainAgentMaxSteps()
 		eng.MaxTokens = deps.Resolved.MainAgentMaxCompletionTokens()
 		eng.TurnRunner = newEinoTurnRunner()
-		eng.ChatTransport = deps.Resolved.ChatTransport()
 		eng.EinoOpenAIAPIKey = deps.Resolved.OpenAIAPIKey()
 		eng.EinoOpenAIBaseURL = deps.Resolved.OpenAIBaseURL()
 		tp, wp := deps.Resolved.SessionTranscriptPaths(sid)

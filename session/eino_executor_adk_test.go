@@ -6,11 +6,11 @@ import (
 	"testing"
 
 	einotool "github.com/cloudwego/eino/components/tool"
+	"github.com/cloudwego/eino/schema"
 	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/oneclaw/loop"
 	"github.com/lengzhao/oneclaw/toolctx"
 	"github.com/lengzhao/oneclaw/tools"
-	"github.com/openai/openai-go"
 )
 
 func TestADKEinoExecutor_ValidateInputs(t *testing.T) {
@@ -23,7 +23,7 @@ func TestADKEinoExecutor_ValidateInputs(t *testing.T) {
 
 func TestADKEinoExecutor_ErrorsWithoutAPIKey(t *testing.T) {
 	exec := newADKEinoExecutor()
-	msgs := make([]openai.ChatCompletionMessageParamUnion, 0)
+	msgs := make([]*schema.Message, 0)
 	cfg := loop.Config{
 		Messages: &msgs,
 		Registry: tools.NewRegistry(),
@@ -78,4 +78,3 @@ func TestBuildEinoTools_InfoAndInvoke(t *testing.T) {
 		t.Fatalf("output: got %s", out)
 	}
 }
-

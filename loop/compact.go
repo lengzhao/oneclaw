@@ -7,9 +7,9 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/cloudwego/eino/schema"
 	"github.com/lengzhao/oneclaw/prompts"
 	"github.com/lengzhao/oneclaw/rtopts"
-	"github.com/openai/openai-go"
 )
 
 // compactBoundaryKind is the marker string embedded in compact envelopes (persisted transcript).
@@ -60,37 +60,54 @@ func fallbackCompactEnvelope(ts, summary string) string {
 }
 
 // UserMessageText returns the user-visible UTF-8 text of m, or "" if not a user message.
-func UserMessageText(m openai.ChatCompletionMessageParamUnion) string {
-	if m.OfUser == nil {
+func UserMessageText(m *schema.Message) string {
+	if m == nil || m.Role != schema.User {
 		return ""
 	}
-	c := m.OfUser.Content
-	if c.OfString.Valid() {
-		return c.OfString.Value
+	if m.Content != "" {
+		return m.Content
 	}
 	var out strings.Builder
-	for _, part := range c.OfArrayOfContentParts {
-		if part.OfText != nil && part.OfText.Text != "" {
+	for _, p := range m.UserInputMultiContent {
+		if p.Type == schema.ChatMessagePartTypeText && p.Text != "" {
 			if out.Len() > 0 {
 				out.WriteByte('\n')
 			}
-			out.WriteString(part.OfText.Text)
+			out.WriteString(p.Text)
+		}
+	}
+	for _, p := range m.MultiContent {
+		if p.Type == schema.ChatMessagePartTypeText && p.Text != "" {
+			if out.Len() > 0 {
+				out.WriteByte('\n')
+			}
+			out.WriteString(p.Text)
 		}
 	}
 	return out.String()
 }
 
 // UserMessageHasNonTextMedia reports whether m is a user message carrying image/audio/file parts (not plain string content).
-func UserMessageHasNonTextMedia(m openai.ChatCompletionMessageParamUnion) bool {
-	if m.OfUser == nil {
+func UserMessageHasNonTextMedia(m *schema.Message) bool {
+	if m == nil || m.Role != schema.User {
 		return false
 	}
-	c := m.OfUser.Content
-	if c.OfString.Valid() {
+	if m.Content != "" {
 		return false
 	}
-	for _, part := range c.OfArrayOfContentParts {
-		if part.OfImageURL != nil || part.OfInputAudio != nil || part.OfFile != nil {
+	for _, p := range m.UserInputMultiContent {
+		switch p.Type {
+		case schema.ChatMessagePartTypeText:
+			continue
+		default:
+			return true
+		}
+	}
+	for _, p := range m.MultiContent {
+		switch p.Type {
+		case schema.ChatMessagePartTypeText:
+			continue
+		default:
 			return true
 		}
 	}
@@ -98,42 +115,58 @@ func UserMessageHasNonTextMedia(m openai.ChatCompletionMessageParamUnion) bool {
 }
 
 // userMessageMediaPayloadBytes approximates multimodal payload size for history budgeting (data URLs / base64 audio).
-func userMessageMediaPayloadBytes(m openai.ChatCompletionMessageParamUnion) int {
-	if m.OfUser == nil {
+func userMessageMediaPayloadBytes(m *schema.Message) int {
+	if m == nil || m.Role != schema.User {
 		return 0
 	}
-	c := m.OfUser.Content
-	if c.OfString.Valid() {
+	if m.Content != "" {
 		return 0
 	}
 	n := 0
-	for _, part := range c.OfArrayOfContentParts {
-		if part.OfImageURL != nil {
-			n += len(part.OfImageURL.ImageURL.URL)
-		}
-		if part.OfInputAudio != nil {
-			n += len(part.OfInputAudio.InputAudio.Data)
-		}
-		if part.OfFile != nil {
+	for _, p := range m.UserInputMultiContent {
+		switch p.Type {
+		case schema.ChatMessagePartTypeImageURL:
+			if p.Image != nil && p.Image.URL != nil {
+				n += len(*p.Image.URL)
+			}
+		case schema.ChatMessagePartTypeAudioURL:
+			if p.Audio != nil && p.Audio.Base64Data != nil {
+				n += len(*p.Audio.Base64Data)
+			}
+		case schema.ChatMessagePartTypeFileURL:
 			n += 4096
+		default:
+			n += 256
+		}
+	}
+	for _, p := range m.MultiContent {
+		switch p.Type {
+		case schema.ChatMessagePartTypeImageURL:
+			if p.ImageURL != nil {
+				n += len(p.ImageURL.URL)
+			}
+		case schema.ChatMessagePartTypeAudioURL:
+			if p.AudioURL != nil {
+				n += len(p.AudioURL.URL) + len(p.AudioURL.URI)
+			}
+		case schema.ChatMessagePartTypeFileURL:
+			n += 4096
+		default:
+			n += 256
 		}
 	}
 	return n
 }
 
-func toolMessageText(m openai.ChatCompletionMessageParamUnion) string {
-	if m.OfTool == nil {
+func toolMessageText(m *schema.Message) string {
+	if m == nil || m.Role != schema.Tool {
 		return ""
 	}
-	c := m.OfTool.Content
-	if c.OfString.Valid() {
-		return c.OfString.Value
-	}
-	return ""
+	return m.Content
 }
 
 // buildCompactSummary turns dropped history into short labeled lines (no extra model call).
-func buildCompactSummary(dropped []openai.ChatCompletionMessageParamUnion, maxBytes int) string {
+func buildCompactSummary(dropped []*schema.Message, maxBytes int) string {
 	if maxBytes <= 0 || len(dropped) == 0 {
 		return ""
 	}
@@ -149,19 +182,22 @@ func buildCompactSummary(dropped []openai.ChatCompletionMessageParamUnion, maxBy
 		if b.Len() >= maxBytes {
 			break
 		}
-		switch {
-		case m.OfUser != nil:
+		if m == nil {
+			continue
+		}
+		switch m.Role {
+		case schema.User:
 			t := strings.TrimSpace(UserMessageText(m))
 			if t == "" {
 				continue
 			}
 			t = oneLinePreview(t, perLine)
 			fmt.Fprintf(&b, "- user: %s\n", t)
-		case m.OfAssistant != nil:
-			t := strings.TrimSpace(assistantContentString(m.OfAssistant))
-			if t == "" && m.OfAssistant != nil && len(m.OfAssistant.ToolCalls) > 0 {
-				names := make([]string, 0, len(m.OfAssistant.ToolCalls))
-				for _, tc := range m.OfAssistant.ToolCalls {
+		case schema.Assistant:
+			t := strings.TrimSpace(AssistantTextContent(m))
+			if t == "" && len(m.ToolCalls) > 0 {
+				names := make([]string, 0, len(m.ToolCalls))
+				for _, tc := range m.ToolCalls {
 					if tc.Function.Name != "" {
 						names = append(names, tc.Function.Name)
 					}
@@ -172,7 +208,7 @@ func buildCompactSummary(dropped []openai.ChatCompletionMessageParamUnion, maxBy
 			if t != "" {
 				fmt.Fprintf(&b, "- assistant: %s\n", t)
 			}
-		case m.OfTool != nil:
+		case schema.Tool:
 			t := strings.TrimSpace(toolMessageText(m))
 			t = oneLinePreview(t, perLine)
 			if t != "" {

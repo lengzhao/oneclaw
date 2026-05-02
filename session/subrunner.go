@@ -36,7 +36,6 @@ func (r *subRunner) host(parent *toolctx.Context) *subagent.Host {
 		return nil
 	}
 	h := &subagent.Host{
-		Client:               &r.eng.Client,
 		Model:                r.eng.Model,
 		MaxTokens:            r.eng.MaxTokens,
 		MaxSteps:             r.eng.MaxSteps,
@@ -49,7 +48,6 @@ func (r *subRunner) host(parent *toolctx.Context) *subagent.Host {
 		ParentMessages:       &r.eng.Messages,
 		MaxInheritedMessages: r.bg.InheritedMessageCap(),
 		HistoryBudget:        r.bg,
-		ChatTransport:        r.eng.ChatTransport,
 		EinoOpenAIAPIKey:     r.eng.EinoOpenAIAPIKey,
 		EinoOpenAIBaseURL:    r.eng.EinoOpenAIBaseURL,
 	}
@@ -70,11 +68,6 @@ func (r *subRunner) host(parent *toolctx.Context) *subagent.Host {
 	}
 	if len(r.eng.Notify) > 0 {
 		h.Notify = r.eng.Notify
-	}
-	if r.eng.wantsLifecycle() {
-		h.OnNestedLifecycle = func(ctx context.Context, childTurnID, childRunID, nestedAgentID string, depth int) *loop.LifecycleCallbacks {
-			return r.eng.nestedLoopLifecycle(r.parentTurnID, r.parentCorrelationID, childTurnID, childRunID, nestedAgentID, strings.TrimSpace(h.ParentAgentID), depth)
-		}
 	}
 	return h
 }

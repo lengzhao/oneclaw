@@ -10,17 +10,18 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cloudwego/eino/schema"
 	"github.com/lengzhao/clawbridge"
 	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/clawbridge/client"
 	_ "github.com/lengzhao/clawbridge/drivers"
+	"github.com/lengzhao/oneclaw/loop"
 	"github.com/lengzhao/oneclaw/rtopts"
 	"github.com/lengzhao/oneclaw/session"
 	"github.com/lengzhao/oneclaw/test/openaistub"
 	"github.com/lengzhao/oneclaw/tools"
 	"github.com/lengzhao/oneclaw/tools/builtin"
 	"github.com/lengzhao/oneclaw/workspace"
-	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
 )
 
@@ -61,7 +62,6 @@ func newStubEngine(t *testing.T, stub *openaistub.Server, cwd string) *session.E
 	e := session.NewEngine(cwd, builtin.DefaultRegistry())
 	e.MaxTokens = 512
 	e.MaxSteps = 16
-	e.Client = openai.NewClient(stubOpenAIOptions(stub)...)
 	e.EinoOpenAIAPIKey = "sk-test-stub"
 	e.EinoOpenAIBaseURL = stub.BaseURL()
 	return e
@@ -73,7 +73,6 @@ func newStubEngineWithRegistry(t *testing.T, stub *openaistub.Server, cwd string
 	e := session.NewEngine(cwd, reg)
 	e.MaxTokens = 512
 	e.MaxSteps = 16
-	e.Client = openai.NewClient(stubOpenAIOptions(stub)...)
 	e.EinoOpenAIAPIKey = "sk-test-stub"
 	e.EinoOpenAIBaseURL = stub.BaseURL()
 	return e
@@ -102,34 +101,33 @@ func inboundWithPersistedAttachments(t *testing.T, cwd, content, channel, peerID
 	}
 }
 
-func concatUserText(msgs []openai.ChatCompletionMessageParamUnion) string {
+func concatUserText(msgs []*schema.Message) string {
 	var sb strings.Builder
 	for _, m := range msgs {
-		if m.OfUser == nil {
+		if m == nil || m.Role != schema.User {
 			continue
 		}
-		c := m.OfUser.Content
-		if c.OfString.Valid() {
-			sb.WriteString(c.OfString.Value)
+		t := loop.UserMessageText(m)
+		if t != "" {
+			sb.WriteString(t)
 			sb.WriteByte('\n')
 		}
 	}
 	return sb.String()
 }
 
-// baseStubTransport sets non-stream chat transport via rtopts (API URL/key go through stubOpenAIOptions).
-func baseStubTransport(t *testing.T, _ *openaistub.Server) {
+// baseStubRtopts resets process rtopts for isolated e2e (PushRuntime / prior tests).
+func baseStubRtopts(t *testing.T, _ *openaistub.Server) {
 	t.Helper()
 	t.Cleanup(func() { rtopts.Set(nil) })
 	s := rtopts.DefaultSnapshot()
-	s.ChatTransport = "non_stream"
 	rtopts.Set(&s)
 }
 
 // e2eEnvMinimal is for tests that should not load file-based memory (faster, fewer moving parts).
 func e2eEnvMinimal(t *testing.T, stub *openaistub.Server) {
 	t.Helper()
-	baseStubTransport(t, stub)
+	baseStubRtopts(t, stub)
 	s := rtopts.Current()
 	s.DisableMemory = true
 	s.MemoryBase = ""
@@ -179,11 +177,11 @@ func e2eWaitForFile(t *testing.T, path string, deadline time.Duration) []byte {
 	return raw
 }
 
-// e2eEnvWithMemory keeps stub transport defaults and does not disable memory.
+// e2eEnvWithMemory resets rtopts baseline and does not disable memory.
 // Use with t.Setenv("HOME", tmpDir) and mkdir .oneclaw under HOME / cwd as needed.
 func e2eEnvWithMemory(t *testing.T, stub *openaistub.Server) {
 	t.Helper()
-	baseStubTransport(t, stub)
+	baseStubRtopts(t, stub)
 	s := rtopts.Current()
 	s.MemoryBase = ""
 	rtopts.Set(&s)

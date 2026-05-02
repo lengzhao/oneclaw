@@ -12,15 +12,12 @@ import (
 	"github.com/lengzhao/oneclaw/rtopts"
 	"github.com/lengzhao/oneclaw/test/openaistub"
 	"github.com/lengzhao/oneclaw/tools"
-	"github.com/openai/openai-go"
-	"github.com/openai/openai-go/option"
 )
 
 func TestSubmitUser_localSlashDoesNotPersistTranscript(t *testing.T) {
 	stub := openaistub.New(t)
 	t.Cleanup(func() { rtopts.Set(nil) })
 	s := rtopts.DefaultSnapshot()
-	s.ChatTransport = "non_stream"
 	s.DisableMemory = true
 	s.MemoryBase = ""
 	rtopts.Set(&s)
@@ -31,10 +28,6 @@ func TestSubmitUser_localSlashDoesNotPersistTranscript(t *testing.T) {
 
 	eng := NewEngine(tmp, tools.NewRegistry())
 	eng.MaxSteps = 4
-	eng.Client = openai.NewClient(
-		option.WithAPIKey("sk-test-stub"),
-		option.WithBaseURL(stub.BaseURL()),
-	)
 	eng.EinoOpenAIAPIKey = "sk-test-stub"
 	eng.EinoOpenAIBaseURL = stub.BaseURL()
 	eng.TranscriptPath = tp

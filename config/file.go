@@ -12,41 +12,6 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// mergeStringAnyMaps merges src into dst (dst may be nil; recursive for nested maps). Other value types overwrite.
-func mergeStringAnyMaps(dst map[string]any, src map[string]any) map[string]any {
-	if len(src) == 0 {
-		return dst
-	}
-	if dst == nil {
-		dst = make(map[string]any)
-	}
-	for k, v := range src {
-		srcMap, ok := v.(map[string]any)
-		if !ok {
-			dst[k] = v
-			continue
-		}
-		if dstMap, ok := dst[k].(map[string]any); ok {
-			mergeStringAnyMaps(dstMap, srcMap)
-		} else {
-			dst[k] = cloneStringAnyMap(srcMap)
-		}
-	}
-	return dst
-}
-
-func cloneStringAnyMap(m map[string]any) map[string]any {
-	out := make(map[string]any, len(m))
-	for k, v := range m {
-		if vm, ok := v.(map[string]any); ok {
-			out[k] = cloneStringAnyMap(vm)
-		} else {
-			out[k] = v
-		}
-	}
-	return out
-}
-
 // UserRelPath is the config file under the user's home directory (~/.oneclaw/config.yaml).
 const UserRelPath = ".oneclaw/config.yaml"
 
@@ -56,20 +21,11 @@ type File struct {
 	Model  string     `yaml:"model"`
 	// Agent configures the main session model loop (per inbound turn).
 	Agent struct {
-		// Deprecated: ignored at runtime (always Eino ADK + loop fallback). Kept for YAML merge compatibility.
-		Runtime string `yaml:"runtime"`
 		// MaxSteps is model calls per turn; the last call is sent without tools (earlier calls can use tools).
 		MaxSteps int `yaml:"max_steps"`
 		// MaxTokens is max_completion_tokens per model step (main thread / IM sessions). 0 = use Resolved default.
 		MaxTokens int64 `yaml:"max_tokens"`
-		// CompletionExtra: optional map merged into each Chat Completions request (JSON shape matches openai.ChatCompletionNewParams).
-		// Runtime always overwrites model, messages, max_completion_tokens, stream_options, and tool fields when applicable. See docs/config.md.
-		CompletionExtra map[string]any `yaml:"completion_extra"`
 	} `yaml:"agent"`
-
-	Chat struct {
-		Transport string `yaml:"transport"`
-	} `yaml:"chat"`
 
 	Paths struct {
 		MemoryBase                   string `yaml:"memory_base"`
@@ -129,8 +85,6 @@ type File struct {
 
 	// Sessions: per-chat isolation (IM threads). Transcripts and per-session dirs under sessions/<id>/.
 	Sessions struct {
-		// WorkerCount: fixed goroutine shards for cmd/oneclaw (hash session → worker). 0 = default 8.
-		WorkerCount int `yaml:"worker_count"`
 		// IsolateWorkspace: when true, InstructionRoot is <UserDataRoot>/sessions/<id>/ (per-session AGENT/MEMORY/workspace).
 		// When false (default), InstructionRoot is UserDataRoot; transcripts remain per-session under sessions/<id>/.
 		IsolateWorkspace *bool `yaml:"isolate_workspace"`
@@ -184,17 +138,8 @@ func mergeFile(dst *File, src File) {
 	if src.Agent.MaxSteps != 0 {
 		dst.Agent.MaxSteps = src.Agent.MaxSteps
 	}
-	if src.Agent.Runtime != "" {
-		dst.Agent.Runtime = src.Agent.Runtime
-	}
 	if src.Agent.MaxTokens != 0 {
 		dst.Agent.MaxTokens = src.Agent.MaxTokens
-	}
-	if len(src.Agent.CompletionExtra) > 0 {
-		dst.Agent.CompletionExtra = mergeStringAnyMaps(dst.Agent.CompletionExtra, src.Agent.CompletionExtra)
-	}
-	if src.Chat.Transport != "" {
-		dst.Chat.Transport = src.Chat.Transport
 	}
 	if src.Paths.MemoryBase != "" {
 		dst.Paths.MemoryBase = src.Paths.MemoryBase
@@ -272,9 +217,6 @@ func mergeFile(dst *File, src File) {
 	}
 	if len(src.Clawbridge.Clients) > 0 {
 		dst.Clawbridge.Clients = append([]cbconfig.ClientConfig(nil), src.Clawbridge.Clients...)
-	}
-	if src.Sessions.WorkerCount != 0 {
-		dst.Sessions.WorkerCount = src.Sessions.WorkerCount
 	}
 	if src.Sessions.TurnPolicy != "" {
 		dst.Sessions.TurnPolicy = src.Sessions.TurnPolicy

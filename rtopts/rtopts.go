@@ -15,8 +15,6 @@ type Snapshot struct {
 
 	MemoryBase string
 
-	ChatTransport string
-
 	DisableMemory        bool
 	DisableAutoMemory    bool
 	DisableContextBudget bool
@@ -36,9 +34,6 @@ type Snapshot struct {
 	SkillsRecent  string
 
 	DisableTasks bool
-
-	// ChatCompletionExtraJSON: optional JSON fragment merged into each Chat Completions request before runtime fields (model, messages, tools, …).
-	ChatCompletionExtraJSON []byte
 }
 
 var cur atomic.Pointer[Snapshot]

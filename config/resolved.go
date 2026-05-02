@@ -152,11 +152,6 @@ func (r *Resolved) ClawbridgeConfigForRun() (cbconfig.Config, error) {
 	return cfg, nil
 }
 
-// ChatTransport returns YAML chat.transport, else empty (use library default).
-func (r *Resolved) ChatTransport() string {
-	return strings.TrimSpace(r.merged.Chat.Transport)
-}
-
 // LogLevel returns CLI override first, then YAML log.level.
 func (r *Resolved) LogLevel(cliOverride string) string {
 	if v := strings.TrimSpace(cliOverride); v != "" {
@@ -219,14 +214,6 @@ func (r *Resolved) SessionTranscriptDir(sessionSegment string) string {
 		seg = "default"
 	}
 	return filepath.Join(r.UserDataRoot(), "sessions", seg)
-}
-
-// SessionWorkerCount returns sessions.worker_count; values < 1 mean the session package default (8).
-func (r *Resolved) SessionWorkerCount() int {
-	if r == nil {
-		return 0
-	}
-	return r.merged.Sessions.WorkerCount
 }
 
 // SessionIsolateWorkspace reports sessions.isolate_workspace (default false: shared UserDataRoot as Engine.CWD).

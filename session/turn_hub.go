@@ -8,8 +8,8 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/cloudwego/eino/schema"
 	"github.com/lengzhao/clawbridge/bus"
-	"github.com/openai/openai-go"
 )
 
 const turnHubMailCap = 256
@@ -217,7 +217,7 @@ func (c *turnCoordinator) tryInject(parentCtx context.Context, in bus.InboundMes
 	return true, nil
 }
 
-func (c *turnCoordinator) drainInjectToMessages(msgs *[]openai.ChatCompletionMessageParamUnion) error {
+func (c *turnCoordinator) drainInjectToMessages(msgs *[]*schema.Message) error {
 	c.mu.Lock()
 	lines := c.injectBuf
 	c.injectBuf = nil
@@ -226,7 +226,7 @@ func (c *turnCoordinator) drainInjectToMessages(msgs *[]openai.ChatCompletionMes
 		if strings.TrimSpace(line) == "" {
 			continue
 		}
-		*msgs = append(*msgs, openai.UserMessage(line))
+		*msgs = append(*msgs, schema.UserMessage(line))
 	}
 	return nil
 }
@@ -250,10 +250,10 @@ func (c *turnCoordinator) runOne(w *inboundWork) {
 		return
 	}
 	if c.policy == TurnPolicyInsert {
-		eng.BeforeModelStep = func(ctx context.Context, step int, msgs *[]openai.ChatCompletionMessageParamUnion) error {
+		eng.BeforeChatModel = func(ctx context.Context, step int, msgs *[]*schema.Message) error {
 			return c.drainInjectToMessages(msgs)
 		}
-		defer func() { eng.BeforeModelStep = nil }()
+		defer func() { eng.BeforeChatModel = nil }()
 	}
 
 	err = eng.SubmitUser(turnCtx, w.in)

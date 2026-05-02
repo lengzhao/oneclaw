@@ -4,14 +4,14 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/cloudwego/eino/schema"
 	"github.com/lengzhao/oneclaw/budget"
-	"github.com/openai/openai-go"
 )
 
 func TestTrimMessagesToBudget_dropsOldestUser(t *testing.T) {
-	var msgs []openai.ChatCompletionMessageParamUnion
+	var msgs []*schema.Message
 	for i := 0; i < 20; i++ {
-		msgs = append(msgs, openai.UserMessage(strings.Repeat("u", 500)))
+		msgs = append(msgs, schema.UserMessage(strings.Repeat("u", 500)))
 	}
 	trimmed := TrimMessagesToBudget(msgs, 4000, 4)
 	if len(trimmed) >= len(msgs) {
@@ -23,9 +23,9 @@ func TestTrimMessagesToBudget_dropsOldestUser(t *testing.T) {
 }
 
 func TestApplyHistoryBudget_insertsCompactBoundary(t *testing.T) {
-	var msgs []openai.ChatCompletionMessageParamUnion
+	var msgs []*schema.Message
 	for range 200 {
-		msgs = append(msgs, openai.UserMessage(strings.Repeat("z", 900)))
+		msgs = append(msgs, schema.UserMessage(strings.Repeat("z", 900)))
 	}
 	g := budget.Global{MaxPromptBytes: 120_000, MinTailMessages: 6}
 	before := len(msgs)
@@ -44,9 +44,9 @@ func TestApplyHistoryBudget_insertsCompactBoundary(t *testing.T) {
 }
 
 func TestDropOldestPrefix_twoUsers(t *testing.T) {
-	msgs := []openai.ChatCompletionMessageParamUnion{
-		openai.UserMessage("a"),
-		openai.UserMessage("b"),
+	msgs := []*schema.Message{
+		schema.UserMessage("a"),
+		schema.UserMessage("b"),
 	}
 	next, ok := dropOldestPrefix(msgs)
 	if !ok || len(next) != 1 {

@@ -12,7 +12,7 @@
 |------|------|----------|
 | **初始化** | `-init` | `config.InitWorkspace`：补全 `.oneclaw` 与 `config.yaml`，退出 |
 | **导出快照** | `-export-session <dir>` | `workspace.ExportSessionSnapshot`：复制用户数据根到指定目录，退出（无需 API key） |
-| **常驻服务** | 默认 | 加载配置 → MCP（可选）→ **WorkerPool** → **clawbridge** → 每客户端可选 **schedule poller** → 消费入站 |
+| **常驻服务** | 默认 | 加载配置 → MCP（可选）→ **TurnHub** → **clawbridge** → 每客户端可选 **schedule poller** → 消费入站 |
 
 常驻模式要求配置中至少有一个启用的 `clawbridge.clients`，否则进程报错退出。
 
@@ -26,8 +26,8 @@ flowchart TB
   exp -->|否| load[Load 合并 YAML + PushRuntime]
   load --> api{有 API key?}
   api -->|否| err([退出: 缺密钥])
-  api -->|是| pool[NewWorkerPool + MainEngineFactory]
-  pool --> cb[clawbridge.New / Start]
+  api -->|是| hub[NewTurnHub + MainEngineFactory]
+  hub --> cb[clawbridge.New / Start]
   cb --> poll[每客户端 schedule poller 可选]
   poll --> loop[goroutine: ConsumeInbound → SubmitUser]
   loop --> sig[等待 SIGINT/SIGTERM]
@@ -44,15 +44,15 @@ flowchart TB
     drivers[clawbridge drivers]
   end
   bus[bus: Inbound / Outbound]
-  wp[session.WorkerPool]
+  th[session.TurnHub]
   fac[MainEngineFactory]
   eng[Engine per job]
   tr[einoTurnRunner]
   adk[Eino ADK]
   disk[transcript + dialog_history 落盘]
   drivers <--> bus
-  bus -->|ConsumeInbound| wp
-  wp --> fac
+  bus -->|ConsumeInbound| th
+  th --> fac
   fac --> eng
   eng --> tr
   tr --> adk
@@ -61,7 +61,7 @@ flowchart TB
   eng -->|publishOutbound| bus
 ```
 
-- **WorkerPool**：按 `hash(session_key) % N` 分片，**同一会话固定落在同一 worker**，每轮任务 **新建 Engine**（`factory`），执行完 `SubmitUser` 后丢弃，避免无界 Engine 映射。
+- **TurnHub**：按 **`SessionHandle`** 维护 **每会话一个 coordinator**（mailbox），**同一会话内入站串行**（或由 **`sessions.turn_policy`** 决定 insert/preempt）；每轮任务 **`factory(handle)` 新建 Engine**，执行完 `SubmitUser` 后丢弃，避免无界 Engine 映射。
 - **TurnRunner**：固定为 **`einoTurnRunner`**（`MainEngineFactory` / `NewEngine`）；须配置 **`openai.api_key`**（映射到 **`Engine.EinoOpenAIAPIKey`**），否则 **`SubmitUser` 报错**。见 **§3.1**。
 - **SessionHandle**：由入站的 `ClientID`（clawbridge client id）+ 会话键（`InboundSessionKey`：优先 `SessionID`，否则 `Peer.ID`）派生；**StableSessionID**（SHA256 截断）用于目录名、转写路径等。**Engine.CWD** 为 **`<UserDataRoot>/workspace`**（默认）或 **`<UserDataRoot>/sessions/<StableSessionID>/workspace`**（`sessions.isolate_workspace: true`），见 `session.MainEngineFactory` 与 [session-home-isolation-design.md](session-home-isolation-design.md)。
 
@@ -73,7 +73,7 @@ flowchart TB
 
 ```mermaid
 flowchart TB
-  WP[WorkerPool: factory → SubmitUser] --> N1[prepareInbound / notify inbound]
+  WP[TurnHub: factory → SubmitUser] --> N1[prepareInbound / notify inbound]
   N1 --> N2[prepareSharedTurn：布局、bundle、system、budget、tctx]
   N2 --> N3[写 user 行到 transcript]
   N3 --> RT[TurnRunner.RunTurn]
@@ -86,13 +86,13 @@ flowchart TB
 **要点**：
 
 - **prepareSharedTurn**：注入 `MEMORY.md`、预算、`ToolContext` 与入站路由字段合并（见入站设计文档 §2.1）。
-- **TurnRunner.RunTurn**（`session.TurnRunner`）：**Eino ADK** + `tools.Registry` 的 Eino 绑定；**无 API key 则失败**（不再调用 **`loop.RunTurn`**）。工具轨迹仍可在 `ToolTraceSink` 中收集，供 notify 等使用。
+- **TurnRunner.RunTurn**（`session.TurnRunner`）：**Eino ADK** + `tools.Registry` 的 Eino 绑定；**无 API key 则失败**（不再调用 **`loop.RunTurn`**）。细粒度模型步 / 工具事件见会话 **`execution/*.jsonl`**（`session/exec_journal.go`），与精简版 `notify` 分工。
 - **成功后**：折叠可见消息、**`SaveTranscript` / `SaveWorkingTranscript`**，并 **`appendDialogHistoryIfComplete`**（`workspace.AppendDialogHistoryPair`）。
-- **本地 slash**（如 `/help`、`/status`、`/paths`、`/reset`、`/stop`；CLI 的 `/exit` 由终端处理）：走 `submitLocalSlashTurn`，**不**调用模型回合（刻意设计）。`/stop` 在入站 goroutine 内还会先调用 `WorkerPool.CancelInflightTurn` 取消**当前已在执行**的该会话轮次（`context.WithCancel(root)`）。内置列表见 `session/slash_local.go` 与 `/help`。
+- **本地 slash**（如 `/help`、`/status`、`/paths`、`/reset`、`/stop`；CLI 的 `/exit` 由终端处理）：走 `submitLocalSlashTurn`，**不**调用模型回合（刻意设计）。`/stop` 在入站路径上还会先调用 **`TurnHub.CancelInflightTurn`** 取消**当前已在执行**的该会话轮次（`context.WithCancel(root)`）。内置列表见 `session/slash_local.go` 与 `/help`。
 
 ### 3.1 不再分支「双运行时」
 
-- **`agent.runtime`**：YAML 中仍可出现（合并兼容），**运行时忽略**，内核始终 **`einoTurnRunner`**。
+- **内核**：始终 **`einoTurnRunner`**（`agent.runtime` 等历史 YAML 键不再解析进 `config.File`，写入 YAML 时会被忽略）。
 - **密钥**：必须配置 **`openai.api_key`**（以及按需 **`base_url`**），经 **`MainEngineFactory`** / **`Engine`** 写入 **`EinoOpenAIAPIKey` / `EinoOpenAIBaseURL`**；**缺密钥则 `SubmitUser` 失败**。单测须设置与 **`openai.Client`** 一致的 stub 密钥与 URL。
 - **嵌套子代理**（`run_agent` / `fork_context`）：**`subagent.Host.RunTurn`** 与主线程一致；嵌套 **`loop.Config`** 必须带 **`EinoOpenAI*`**，否则与父轮次同样报错。
 - **`session.NewEngine`**：默认 **`einoTurnRunner`**，须传入**非 nil** **`tools.Registry`**。
@@ -126,13 +126,13 @@ flowchart TB
 ## 6. Agent 定时任务（`cron` 工具 / `scheduled_jobs.json`）
 
 - 任务持久化在 **`UserDataRoot` 下的 `scheduled_jobs.json`**（默认 **`~/.oneclaw/scheduled_jobs.json`**；见 `schedule.JobsFilePath`）。
-- 每个启用的 clawbridge **client** 可启动 **`schedule.StartHostPollerIfEnabled`**：轮询到期任务，构造 **合成入站** `bus.InboundMessage`，调用与人工消息相同的 **`workerPool.SubmitUser`**，从而走完整模型回合。
+- 每个启用的 clawbridge **client** 可启动 **`schedule.StartHostPollerIfEnabled`**：轮询到期任务，构造 **合成入站** `bus.InboundMessage`，调用与人工消息相同的 **`TurnHub.Submit`**（经 `submitInbound`），从而走完整模型回合。
 
 ```mermaid
 flowchart TB
   JSON[scheduled_jobs.json] --> poller[host poller per client]
   poller --> syn[合成 InboundMessage]
-  syn --> WP[WorkerPool.SubmitUser]
+  syn --> WP[TurnHub.Submit]
 ```
 
 `features.disable_scheduled_tasks` 为关总开关。

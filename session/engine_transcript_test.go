@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/cloudwego/eino/schema"
 	"github.com/lengzhao/oneclaw/loop"
 	"github.com/lengzhao/oneclaw/tools"
-	"github.com/openai/openai-go"
 )
 
 func TestEngineSaveTranscriptTo(t *testing.T) {
@@ -38,7 +38,7 @@ func TestEngineSaveWorkingTranscriptTo_tailCapDefault30(t *testing.T) {
 	dir := t.TempDir()
 	e := NewEngine(dir, tools.NewRegistry())
 	for i := 0; i < 40; i++ {
-		e.Messages = append(e.Messages, openai.UserMessage("x"))
+		e.Messages = append(e.Messages, schema.UserMessage("x"))
 	}
 	p := filepath.Join(dir, "w.json")
 	if err := e.SaveWorkingTranscriptTo(p); err != nil {
@@ -68,7 +68,7 @@ func TestEngineSaveWorkingTranscriptTo_unlimitedWhenNegative(t *testing.T) {
 	e := NewEngine(dir, tools.NewRegistry())
 	e.WorkingTranscriptMaxMessages = -1
 	for i := 0; i < 35; i++ {
-		e.Messages = append(e.Messages, openai.AssistantMessage("a"))
+		e.Messages = append(e.Messages, schema.AssistantMessage("a", nil))
 	}
 	p := filepath.Join(dir, "w.json")
 	if err := e.SaveWorkingTranscriptTo(p); err != nil {

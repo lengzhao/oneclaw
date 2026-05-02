@@ -14,12 +14,12 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/cloudwego/eino/schema"
 	"github.com/lengzhao/clawbridge"
 	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/clawbridge/client"
 	"github.com/lengzhao/oneclaw/loop"
 	"github.com/lengzhao/oneclaw/notify"
-	"github.com/lengzhao/oneclaw/rtopts"
 	"github.com/lengzhao/oneclaw/tools"
 	"github.com/lengzhao/oneclaw/workspace"
 	"github.com/openai/openai-go"
@@ -33,8 +33,7 @@ const DefaultMainAgentID = DefaultRootAgentID
 
 // Engine holds conversation state and configuration for one chat session.
 type Engine struct {
-	Client openai.Client
-	Model  string
+	Model string
 	// System is optional text appended at the end of the main-thread system prompt (see prompts/templates/main_thread_system.tmpl).
 	// Identity and section order live in that template; leave empty if you do not need extra constraints.
 	System    string
@@ -43,10 +42,10 @@ type Engine struct {
 	// Messages is the live API history. After each successful SubmitUser turn it is collapsed to
 	// user-visible rows only (loop.ToUserVisibleMessages): injections and tool rounds are dropped
 	// to save tokens; facts can be re-fetched with tools or instruction files.
-	Messages []openai.ChatCompletionMessageParamUnion
+	Messages []*schema.Message
 	// Transcript is the slim persisted log (real user lines + final assistant text per turn), same
 	// visibility rules as Messages; agentMd / inbound / tool rows are not persisted here.
-	Transcript []openai.ChatCompletionMessageParamUnion
+	Transcript []*schema.Message
 	Registry   *tools.Registry
 	CWD        string
 	// WorkspaceFlat: when true, session runtime files (tasks.json, memory/, agents/, exec_log/, …) live directly under
@@ -77,8 +76,6 @@ type Engine struct {
 	WorkingTranscriptPath string
 	// WorkingTranscriptMaxMessages is the max tail messages to persist; 0 means default 30; negative means unlimited.
 	WorkingTranscriptMaxMessages int
-	// ChatTransport overrides default transport when non-empty (from unified config).
-	ChatTransport string
 	// EinoOpenAI* are used by the Eino executor path.
 	EinoOpenAIAPIKey  string
 	EinoOpenAIBaseURL string
@@ -90,9 +87,8 @@ type Engine struct {
 	DisableMultimodalAudio bool
 	// Bridge is the IM bus for outbound publish and inbound message status. When nil, outbound/status calls return [clawbridge.ErrNotInitialized]. [cmd/oneclaw] / [MainEngineFactoryDeps] set this from [clawbridge.New]; tests set it from a noop bridge.
 	Bridge *clawbridge.Bridge
-	// BeforeModelStep is optional; when set, passed to the runtime turn runner
-	// to append mid-turn user lines (e.g. [TurnHub] insert policy).
-	BeforeModelStep func(ctx context.Context, step int, msgs *[]openai.ChatCompletionMessageParamUnion) error
+	// BeforeChatModel is optional; see [loop.Config.BeforeChatModel].
+	BeforeChatModel func(ctx context.Context, step int, msgs *[]*schema.Message) error
 	// TurnRunner is the runtime execution backend for one user turn.
 	// NewEngine defaults to eino TurnRunner; pass a non-nil Registry.
 	TurnRunner TurnRunner
@@ -101,7 +97,6 @@ type Engine struct {
 // NewEngine builds an engine with sensible defaults.
 func NewEngine(cwd string, reg *tools.Registry) *Engine {
 	e := &Engine{
-		Client:      openai.NewClient(),
 		Model:       string(openai.ChatModelGPT4o),
 		MaxTokens:   32768,
 		MaxSteps:    32,
@@ -175,26 +170,9 @@ func (e *Engine) SubmitUser(ctx context.Context, in bus.InboundMessage) (err err
 	bundle := prep.bundle
 	system := prep.system
 
-	var traceSink *loop.ToolTraceSink
-	needToolTrace := e.wantsLifecycle()
-	if needToolTrace {
-		traceSink = &loop.ToolTraceSink{}
-	}
-	var onToolLogged func(loop.ToolTraceEntry)
-	if needToolTrace {
-		onToolLogged = func(ent loop.ToolTraceEntry) {
-			rec := toolCallEndRecord(ent)
-			rec["turn_id"] = turnID
-			rec["correlation_id"] = corrID
-			e.appendExecutionRecord(ctx, rec)
-		}
-	}
-
 	userLine := ModelUserLine(text, len(atts) > 0)
 	attChunks := InboundUserChunksForAttachments(e.CWD, atts, !e.DisableMultimodalImage, !e.DisableMultimodalAudio)
-	extraJSON := rtopts.Current().ChatCompletionExtraJSON
 	cfg := loop.Config{
-		Client:                  &e.Client,
 		Model:                   e.Model,
 		System:                  system,
 		MaxTokens:               e.MaxTokens,
@@ -210,17 +188,12 @@ func (e *Engine) SubmitUser(ctx context.Context, in bus.InboundMessage) (err err
 		InboundAttachmentChunks: attChunks,
 		UserLine:                userLine,
 		Budget:                  bg,
-		ChatTransport:           e.ChatTransport,
-		ChatCompletionExtraJSON: extraJSON,
 		EinoOpenAIAPIKey:        e.EinoOpenAIAPIKey,
 		EinoOpenAIBaseURL:       e.EinoOpenAIBaseURL,
-		ToolTrace:               traceSink,
-		OnToolLogged:            onToolLogged,
 		SlimTranscript: func(assistantText string) {
-			e.Transcript = append(e.Transcript, openai.AssistantMessage(assistantText))
+			e.Transcript = append(e.Transcript, schema.AssistantMessage(assistantText, nil))
 		},
-		Lifecycle:       e.buildLoopLifecycle(turnID, corrID, prep.tctx.AgentID),
-		BeforeModelStep: e.BeforeModelStep,
+		BeforeChatModel: e.BeforeChatModel,
 		TurnMaxSteps:    e.MaxSteps,
 	}
 	if cfg.TurnMaxSteps < 1 {
@@ -229,7 +202,7 @@ func (e *Engine) SubmitUser(ctx context.Context, in bus.InboundMessage) (err err
 
 	visibleCountBefore := len(loop.ToUserVisibleMessages(e.Transcript))
 	// Claude Code–style: record user turn before query loop so crash/interrupt still leaves the request on disk.
-	e.Transcript = append(e.Transcript, openai.UserMessage(SlimTranscriptUserLine(text, atts)))
+	e.Transcript = append(e.Transcript, schema.UserMessage(SlimTranscriptUserLine(text, atts)))
 	if err := e.SaveTranscript(); err != nil {
 		slog.Error("session.transcript_save_user", "err", err)
 	}
@@ -273,13 +246,9 @@ func (e *Engine) SubmitUser(ctx context.Context, in bus.InboundMessage) (err err
 		return err
 	}
 	e.Messages = loop.ToUserVisibleMessages(e.Messages)
-	toolCount := 0
-	if traceSink != nil {
-		toolCount = len(traceSink.Snapshot())
-	}
 	e.emitTurnEndHook(ctx, turnID, corrID, true, map[string]any{
 		"runtime_runner":          runnerName,
-		"tool_count":              toolCount,
+		"tool_count":              0,
 		"final_assistant_preview": notify.Preview(loop.LastAssistantDisplay(e.Messages), notify.DefaultPreviewRunes),
 		"truncated_by_max_steps":  false,
 		"messages":                loop.VisibleTranscriptAppendSince(e.Transcript, visibleCountBefore),
@@ -493,7 +462,7 @@ func (e *Engine) appendDialogHistoryIfComplete() {
 	}
 	u := e.Transcript[n-2]
 	a := e.Transcript[n-1]
-	if u.OfUser == nil || a.OfAssistant == nil {
+	if !loop.IsUserMessage(u) || !loop.IsAssistantMessage(a) {
 		return
 	}
 	home, err := os.UserHomeDir()
@@ -578,7 +547,7 @@ func (e *Engine) LoadTranscript(data []byte) error {
 	}
 	clean := loop.ToUserVisibleMessages(msgs)
 	e.Transcript = clean
-	e.Messages = append([]openai.ChatCompletionMessageParamUnion(nil), clean...)
+	e.Messages = loop.CloneMessages(clean)
 	slog.Info("transcript loaded", "messages", len(clean))
 	return nil
 }

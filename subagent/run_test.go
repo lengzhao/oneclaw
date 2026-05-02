@@ -8,65 +8,68 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/cloudwego/eino/schema"
 	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/oneclaw/loop"
 	"github.com/lengzhao/oneclaw/toolctx"
 	"github.com/lengzhao/oneclaw/tools"
-	"github.com/openai/openai-go"
 )
 
-func assistantWithToolCalls(ids ...string) openai.ChatCompletionMessageParamUnion {
-	tcs := make([]openai.ChatCompletionMessageToolCallParam, 0, len(ids))
+func assistantWithToolCalls(ids ...string) *schema.Message {
+	tcs := make([]schema.ToolCall, 0, len(ids))
 	for _, id := range ids {
-		tcs = append(tcs, openai.ChatCompletionMessageToolCallParam{
-			ID: id,
-			Function: openai.ChatCompletionMessageToolCallFunctionParam{
+		tcs = append(tcs, schema.ToolCall{
+			ID:   id,
+			Type: "function",
+			Function: schema.FunctionCall{
 				Name:      "run_agent",
 				Arguments: "{}",
 			},
 		})
 	}
-	return openai.ChatCompletionMessageParamUnion{
-		OfAssistant: &openai.ChatCompletionAssistantMessageParam{ToolCalls: tcs},
+	return schema.AssistantMessage("", tcs)
+}
+
+func UserText(m *schema.Message) string {
+	if m == nil {
+		return ""
+	}
+	switch m.Role {
+	case schema.User:
+		return loop.UserMessageText(m)
+	case schema.Assistant:
+		return loop.AssistantParamText(m)
+	default:
+		return ""
 	}
 }
 
 func TestTrimInheritedParentMessages_dropsTrailingAssistantWithUnresolvedToolCalls(t *testing.T) {
 	pending := assistantWithToolCalls("call_pending")
-	src := []openai.ChatCompletionMessageParamUnion{
-		openai.UserMessage("hi"),
-		openai.AssistantMessage("ok"),
+	src := []*schema.Message{
+		schema.UserMessage("hi"),
+		schema.AssistantMessage("ok", nil),
 		pending,
 	}
 	out := trimInheritedParentMessages(src, 32)
 	if len(out) != 2 {
 		t.Fatalf("len=%d want 2: %+v", len(out), out)
 	}
-	if out[0].OfUser == nil || UserText(out[0]) != "hi" {
+	if out[0].Role != schema.User || UserText(out[0]) != "hi" {
 		t.Fatalf("first message: %+v", out[0])
 	}
-	if out[1].OfAssistant == nil || UserText(out[1]) != "ok" {
+	if out[1].Role != schema.Assistant || UserText(out[1]) != "ok" {
 		t.Fatalf("second message: %+v", out[1])
 	}
 }
 
-func UserText(m openai.ChatCompletionMessageParamUnion) string {
-	if m.OfUser != nil {
-		return m.OfUser.Content.OfString.Value
-	}
-	if m.OfAssistant != nil && m.OfAssistant.Content.OfString.Valid() {
-		return m.OfAssistant.Content.OfString.Value
-	}
-	return ""
-}
-
 func TestTrimInheritedParentMessages_keepsCompleteToolRound(t *testing.T) {
 	a := assistantWithToolCalls("c1", "c2")
-	src := []openai.ChatCompletionMessageParamUnion{
-		openai.UserMessage("u"),
+	src := []*schema.Message{
+		schema.UserMessage("u"),
 		a,
-		openai.ToolMessage("out1", "c1"),
-		openai.ToolMessage("out2", "c2"),
+		schema.ToolMessage("out1", "c1"),
+		schema.ToolMessage("out2", "c2"),
 	}
 	out := trimInheritedParentMessages(src, 32)
 	if len(out) != 4 {
@@ -76,25 +79,25 @@ func TestTrimInheritedParentMessages_keepsCompleteToolRound(t *testing.T) {
 
 func TestTrimInheritedParentMessages_dropsPartialToolBatch(t *testing.T) {
 	a := assistantWithToolCalls("c1", "c2")
-	src := []openai.ChatCompletionMessageParamUnion{
-		openai.UserMessage("u"),
+	src := []*schema.Message{
+		schema.UserMessage("u"),
 		a,
-		openai.ToolMessage("only one", "c1"),
+		schema.ToolMessage("only one", "c1"),
 	}
 	out := trimInheritedParentMessages(src, 32)
 	if len(out) != 1 {
 		t.Fatalf("len=%d want 1 (user only)", len(out))
 	}
-	if out[0].OfUser == nil {
+	if out[0].Role != schema.User {
 		t.Fatal("expected user only")
 	}
 }
 
 func TestTrimInheritedParentMessages_dropsLeadingOrphanTools(t *testing.T) {
-	src := []openai.ChatCompletionMessageParamUnion{
-		openai.ToolMessage("orphan", "ghost"),
-		openai.UserMessage("u"),
-		openai.AssistantMessage("a"),
+	src := []*schema.Message{
+		schema.ToolMessage("orphan", "ghost"),
+		schema.UserMessage("u"),
+		schema.AssistantMessage("a", nil),
 	}
 	out := trimInheritedParentMessages(src, 32)
 	if len(out) != 2 {
@@ -103,9 +106,9 @@ func TestTrimInheritedParentMessages_dropsLeadingOrphanTools(t *testing.T) {
 }
 
 func TestTrimInheritedParentMessages_tailCapThenSanitize(t *testing.T) {
-	src := make([]openai.ChatCompletionMessageParamUnion, 0, 40)
+	src := make([]*schema.Message, 0, 40)
 	for i := range 40 {
-		src = append(src, openai.UserMessage(string(rune('a'+i%26))))
+		src = append(src, schema.UserMessage(string(rune('a'+i%26))))
 	}
 	pending := assistantWithToolCalls("call_x")
 	src = append(src, pending)
@@ -115,7 +118,7 @@ func TestTrimInheritedParentMessages_tailCapThenSanitize(t *testing.T) {
 		t.Fatalf("len=%d want 4", len(out))
 	}
 	for _, m := range out {
-		if m.OfAssistant != nil && len(m.OfAssistant.ToolCalls) > 0 {
+		if m.Role == schema.Assistant && len(m.ToolCalls) > 0 {
 			t.Fatal("tail must not contain unresolved assistant tool_calls")
 		}
 	}
@@ -127,9 +130,9 @@ func TestWriteSidechain_flatInstructionRoot(t *testing.T) {
 	parent := toolctx.New(cwd, nil)
 	parent.WorkspaceFlat = true
 	parent.InstructionRoot = instructionRoot
-	msgs := []openai.ChatCompletionMessageParamUnion{
-		openai.UserMessage("hi"),
-		openai.AssistantMessage("hello"),
+	msgs := []*schema.Message{
+		schema.UserMessage("hi"),
+		schema.AssistantMessage("hello", nil),
 	}
 
 	path, err := writeSidechain(parent, "agent1", "run_agent", msgs)
@@ -164,10 +167,9 @@ func TestHostRunTurn_UsesOverride(t *testing.T) {
 }
 
 func TestValidateNestedHost_requiresRunTurn(t *testing.T) {
-	c := openai.NewClient()
 	h := &Host{
-		Client:   &c,
-		Registry: tools.NewRegistry(),
+		EinoOpenAIAPIKey: "sk-test",
+		Registry:         tools.NewRegistry(),
 	}
 	if err := validateNestedHost(h); err == nil {
 		t.Fatal("expected error when RunTurn is nil")

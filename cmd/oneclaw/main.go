@@ -94,7 +94,6 @@ func main() {
 	logClose = logx.Init(cfg.LogLevel(*logLevel), cfg.LogFormat(*logFormat), cfg.LogFile(*logFile))
 
 	sharedReg := builtin.DefaultRegistry()
-	sharedClient := openai.NewClient(cfg.OpenAIOptions()...)
 	mainModel := string(openai.ChatModelGPT4o)
 	if m := cfg.ChatModel(); m != "" {
 		mainModel = m
@@ -139,7 +138,6 @@ func main() {
 	deps := session.MainEngineFactoryDeps{
 		Resolved:      cfg,
 		Registry:      sharedReg,
-		Client:        sharedClient,
 		Model:         mainModel,
 		MCPSystemNote: mcpNote,
 		Bridge:        bridge,

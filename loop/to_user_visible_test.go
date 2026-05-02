@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/cloudwego/eino/schema"
 	"github.com/lengzhao/oneclaw/loop"
-	"github.com/openai/openai-go"
 )
 
 func TestToUserVisibleMessages_dropsInjectionsAndTools(t *testing.T) {
@@ -73,15 +73,15 @@ func TestToUserVisibleMessages_stripsToolCallsFromMixedAssistant(t *testing.T) {
 	if loop.AssistantParamText(out[1]) != "好的" {
 		t.Fatalf("got %q", loop.AssistantParamText(out[1]))
 	}
-	if out[1].OfAssistant != nil && len(out[1].OfAssistant.ToolCalls) != 0 {
+	if out[1].Role != schema.Assistant || len(out[1].ToolCalls) != 0 {
 		t.Fatal("expected tool_calls stripped")
 	}
 }
 
 func TestToUserVisibleMessages_keepsNormalUserWithAgentMdMention(t *testing.T) {
 	t.Parallel()
-	msgs := []openai.ChatCompletionMessageParamUnion{
-		openai.UserMessage("讨论 # agentMd 这个标题可以吗"),
+	msgs := []*schema.Message{
+		schema.UserMessage("讨论 # agentMd 这个标题可以吗"),
 	}
 	out := loop.ToUserVisibleMessages(msgs)
 	if len(out) != 1 {
@@ -91,10 +91,20 @@ func TestToUserVisibleMessages_keepsNormalUserWithAgentMdMention(t *testing.T) {
 
 func TestToUserVisibleMessages_keepsMultimodalUserWithoutText(t *testing.T) {
 	t.Parallel()
-	mm := openai.UserMessage([]openai.ChatCompletionContentPartUnionParam{
-		openai.ImageContentPart(openai.ChatCompletionContentPartImageImageURLParam{URL: "data:image/png;base64,xxx"}),
-	})
-	out := loop.ToUserVisibleMessages([]openai.ChatCompletionMessageParamUnion{mm})
+	url := "data:image/png;base64,xxx"
+	mm := &schema.Message{
+		Role: schema.User,
+		UserInputMultiContent: []schema.MessageInputPart{
+			{
+				Type: schema.ChatMessagePartTypeImageURL,
+				Image: &schema.MessageInputImage{
+					MessagePartCommon: schema.MessagePartCommon{URL: &url},
+					Detail:            schema.ImageURLDetailAuto,
+				},
+			},
+		},
+	}
+	out := loop.ToUserVisibleMessages([]*schema.Message{mm})
 	if len(out) != 1 {
 		t.Fatalf("len=%d want 1", len(out))
 	}

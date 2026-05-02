@@ -7,8 +7,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/cloudwego/eino/schema"
 	"github.com/lengzhao/clawbridge/bus"
-	"github.com/openai/openai-go"
 )
 
 // SessionHost groups turn-level capabilities wired by session.Engine: inbound defaults for tools,
@@ -61,7 +61,7 @@ type Context struct {
 
 	// DeferredUserAfterToolBatch are user messages appended to the transcript immediately after
 	// the current step's tool result messages (e.g. sidechain merge in user mode).
-	DeferredUserAfterToolBatch []openai.ChatCompletionMessageParamUnion
+	DeferredUserAfterToolBatch []*schema.Message
 	deferMu                    sync.Mutex
 
 	// SubagentDepth is 0 on the main thread; incremented for each nested run_agent/fork_context.
@@ -227,7 +227,7 @@ func (c *Context) SetCachedRead(absPath, content string) {
 }
 
 // DeferUserMessageAfterToolBatch queues a user message to append after the current model step's tool outputs.
-func (c *Context) DeferUserMessageAfterToolBatch(m openai.ChatCompletionMessageParamUnion) {
+func (c *Context) DeferUserMessageAfterToolBatch(m *schema.Message) {
 	if c == nil {
 		return
 	}
@@ -237,7 +237,7 @@ func (c *Context) DeferUserMessageAfterToolBatch(m openai.ChatCompletionMessageP
 }
 
 // TakeDeferredUserMessagesAfterToolBatch returns and clears queued user messages.
-func (c *Context) TakeDeferredUserMessagesAfterToolBatch() []openai.ChatCompletionMessageParamUnion {
+func (c *Context) TakeDeferredUserMessagesAfterToolBatch() []*schema.Message {
 	if c == nil {
 		return nil
 	}

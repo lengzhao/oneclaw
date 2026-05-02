@@ -1,5 +1,5 @@
 // Package openaistub is a minimal OpenAI-compatible HTTP server for integration tests.
-// Use option.WithBaseURL(s.BaseURL()) (see test/e2e stubOpenAIOptions) and rtopts chat.transport non_stream.
+// Point Engine.EinoOpenAIBaseURL at s.BaseURL() and match api_key (see test/e2e helpers stubOpenAIOptions).
 package openaistub
 
 import (

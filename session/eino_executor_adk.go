@@ -6,17 +6,17 @@ import (
 	"fmt"
 	"strings"
 
+	einoopenai "github.com/cloudwego/eino-ext/components/model/openai"
 	"github.com/cloudwego/eino/adk"
 	einotool "github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/compose"
+	"github.com/cloudwego/eino/schema"
 	einoschema "github.com/cloudwego/eino/schema"
-	einoopenai "github.com/cloudwego/eino-ext/components/model/openai"
 	"github.com/eino-contrib/jsonschema"
 	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/oneclaw/loop"
 	"github.com/lengzhao/oneclaw/toolctx"
 	"github.com/lengzhao/oneclaw/tools"
-	"github.com/openai/openai-go"
 )
 
 // adkEinoExecutor runs the Eino ADK ChatModelAgent. OpenAI API key is required
@@ -52,6 +52,10 @@ func (e adkEinoExecutor) Execute(ctx context.Context, cfg loop.Config, in bus.In
 	if err != nil {
 		return err
 	}
+	var handlers []adk.ChatModelAgentMiddleware
+	if h := maybeBeforeModelInjectHandler(&cfg); h != nil {
+		handlers = append(handlers, h)
+	}
 	agent, err := adk.NewChatModelAgent(ctx, &adk.ChatModelAgentConfig{
 		Name:        "oneclaw_eino_runtime",
 		Description: "oneclaw runtime via eino adk",
@@ -62,6 +66,7 @@ func (e adkEinoExecutor) Execute(ctx context.Context, cfg loop.Config, in bus.In
 				Tools: buildEinoTools(bindings, cfg.ToolContext),
 			},
 		},
+		Handlers:      handlers,
 		GenModelInput: loopMessagesGenModelInput(&cfg),
 		MaxIterations: max(1, cfg.TurnMaxSteps),
 	})
@@ -93,7 +98,7 @@ func (e adkEinoExecutor) Execute(ctx context.Context, cfg loop.Config, in bus.In
 	if strings.TrimSpace(reply) == "" {
 		return fmt.Errorf("session: eino empty reply")
 	}
-	*cfg.Messages = append(*cfg.Messages, openai.AssistantMessage(reply))
+	*cfg.Messages = append(*cfg.Messages, schema.AssistantMessage(reply, nil))
 	if cfg.OutboundText != nil {
 		_ = cfg.OutboundText(ctx, reply)
 	}
@@ -152,5 +157,3 @@ func buildEinoTools(bindings []tools.EinoBinding, tctx *toolctx.Context) []einot
 	}
 	return out
 }
-
-

@@ -85,4 +85,3 @@ func TestNewEinoTurnRunner_UsesDefaultFactory(t *testing.T) {
 		t.Fatal("expected default executor factory result to be used")
 	}
 }
-
