@@ -1,61 +1,79 @@
-# 文档索引（oneclaw）
+# Claw / Agent 运行时 — 设计文档套件（本仓库为 `docs/`）
 
-实现与扩展 **Go Agent / Memory 运行时** 时，以本目录**根下** Markdown 为设计真源。**[`third-party/`](third-party/README.md)** 存放 **Claude Code 对照长文**、官方 Hooks 调研、OMC 等第三方整理，**非** oneclaw 实现规格。内容已从原 `claude-code-2026-03-31/docs` 归档至此；**删除该子项目不影响本目录**。
-
----
-
-## 先读这些
-
-| 文档 | 说明 |
-|------|------|
-| [`agent-runtime-golang-plan.md`](agent-runtime-golang-plan.md) | **立项摘要**：目标与边界、当前包职责、延伸阅读（与实现对齐） |
-| [`third-party/claude-code-vs-oneclaw.md`](third-party/claude-code-vs-oneclaw.md) | **与 Claude Code 异同**：对齐点、oneclaw 优化与运维差异、缺失/后置能力一览 |
-| [`runtime-flow.md`](runtime-flow.md) | **运行时主路径**：`main`、WorkerPool、`SubmitUser`、`einoTurnRunner`（须配置 API key）、转写/dialog、定时任务、出站与扩展装配 |
-| [`config.md`](config.md) | 统一 YAML：合并顺序、`PushRuntime` / `rtopts`、密钥与功能开关 |
+本目录是一套**可整体复制**的文字规格：产品简介、抽象架构、目标技术栈（Eino + MD + **Workflow/Graph**）、**目标 PRD**、术语与数据布局附录。**套件内部交叉引用仅使用本目录内相对路径**；复制到其他仓库时可改名为 `docs/design/` 等任意路径，保持相对链接即可。
 
 ---
 
-## 运行时设计（按主题）
+## 项目简介
 
-| 文档 | 说明 |
-|------|------|
-| [`session-home-isolation-design.md`](session-home-isolation-design.md) | 用户根 `~/.oneclaw` 与 SessionHome、会话隔离与落地顺序 |
-| [`user-root-workspace-layout.md`](user-root-workspace-layout.md) | **用户数据根 + `workspace/`**：InstructionRoot 与默认 cwd 拆分，`AGENT.md`/`MEMORY.md` 同目录 |
-| [`multi-llm-provider-design.md`](multi-llm-provider-design.md) | 多 LLM / 多协议：`llm.Provider` 与分阶段改造 |
-| [`outbound-events-design.md`](outbound-events-design.md) | 出站 `Record` / `Sink`、CLI/HTTP 行为 |
-| [`notification-hooks-design.md`](notification-hooks-design.md) | 通知 Hook 与 outbound 分工、`NotifySink` |
-| [`inbound-routing-design.md`](inbound-routing-design.md) | 入站字段、ToolContext 合并、`PublishOutbound` / `WorkerPool`（当前实现） |
-| [`architecture-modularity-simplification.md`](architecture-modularity-simplification.md) | **模块化路线**：优先抽象/简化、`Engine` 收窄、I/O 与指令文件概念分层；拆仓库后置 |
-| [`orchestrator-business-agents.md`](orchestrator-business-agents.md) | 主编排、`.oneclaw/agents`、`run_agent` 约定 |
+**Claw** 这一类产品的目标：**用 Agent 运行时连接模型、工具与渠道，把用户意图落成可重复的自动化**——读写工作区、执行命令、调度提醒、多轮推理与子 Agent 委派，在对话或集成界面**交付结果**，而不止于单次问答。
 
-### 渠道与 I/O
-
-| 文档 | 说明 |
-|------|------|
-| [`im-channel-technical-design.md`](im-channel-technical-design.md) | 多 IM 接入原则与架构（**clawbridge + `WorkerPool`**） |
-| [`picoclaw-channel.md`](picoclaw-channel.md) | 对标 [sipeed/picoclaw](https://github.com/sipeed/picoclaw) 的调研笔记（接口与分层对照） |
-| [`clawbridge-migration-design.md`](clawbridge-migration-design.md) | **clawbridge I/O 契约**（字段、`PublishOutbound`、配置）；与 `inbound-routing-design` 配套 |
+常驻多通道（IM 等）侧推荐 Go 模块 **`github.com/lengzhao/clawbridge`** 与运行时对接。
 
 ---
 
-## 实验与可选
+## 文档一览与依赖关系
 
-| 文档 | 说明 |
-|------|------|
-| [`self-evolution-plan.md`](self-evolution-plan.md) | 「行为修正」闭环的可复现实验方案（与 §1 自我进化定义互补） |
+| 文件 | 角色 | 复制到新项目时 |
+|------|------|----------------|
+| [README.md](README.md) | 本索引与复制指南 | **必留** |
+| [glossary.md](glossary.md) | 术语统一 | **建议保留**（可与 README 合并） |
+| [appendix-data-layout.md](appendix-data-layout.md) | UserDataRoot / InstructionRoot / 隔离策略摘要 | **建议保留**（落地路径设计时对照） |
+| [reference-architecture.md](reference-architecture.md) | 架构原则 + 场景化 PRD 条目 + 落地顺序 | **建议保留** |
+| [architecture.md](architecture.md) | **主流程 + 各子系统生命周期**（Mermaid） | **建议保留** |
+| [eino-md-chain-architecture.md](eino-md-chain-architecture.md) | Eino + 全 MD + `agents/` + **Workflow（Graph）** | **选 Go+Eino 时核心** |
+| [workflows-spec.md](workflows-spec.md) | **`workflows/*.yaml` Graph、`steps` 糖、manifest** | **实现编排必读** |
+| [eino-integration-surface.md](eino-integration-surface.md) | **Eino / eino-ext 接口与包清单**（实现对照） | **实现工程师必读** |
+| [harness-governance-extensions.md](harness-governance-extensions.md) | Harness 治理、SafeHarness 映射、**扩展 backlog** 与初期预留扩展性 | **增强方向**；一期验收以 requirements 为准 |
+| [requirements.md](requirements.md) | **目标产品 PRD**（FR/NFR、验收要点） | **绿场核心**；若产品范围不同可删或替换 |
+
+```mermaid
+flowchart TB
+  README[README.md]
+  G[glossary.md]
+  A[architecture.md]
+  L[appendix-data-layout.md]
+  R[reference-architecture.md]
+  E[eino-md-chain-architecture.md]
+  H[harness-governance-extensions.md]
+  Q[requirements.md]
+  README --> G
+  README --> A
+  README --> L
+  README --> R
+  README --> E
+  README --> H
+  README --> Q
+  R --> A
+  A -.->|流程对齐| E
+  R -.->|原则对齐| E
+  Q -.->|FR 细化| R
+  Q --> L
+  R --> G
+  E --> G
+  H -.->|扩展挂钩| E
+  H -.->|非一期必达| Q
+```
 
 ---
 
-## Claude Code 与第三方对照（归档）
+## 推荐阅读顺序
 
-范式与能力对照、**非** oneclaw 实现规格。全文索引与条目说明见 **[`third-party/README.md`](third-party/README.md)**（含 `claude-code-*.md` 主流程/记忆/子 Agent/Skills/工具等，以及 Hooks 官方调研、oh-my-claudecode 等）。
+1. **[glossary.md](glossary.md)**（首次阅读扫一遍术语）
+2. **[architecture.md](architecture.md)** — **主流程与各生命周期图**（建议第二读）
+3. **[reference-architecture.md](reference-architecture.md)** — 边界、架构块、PRD、落地顺序  
+4. **[eino-md-chain-architecture.md](eino-md-chain-architecture.md)** — 若技术栈含 Go + Eino  
+5. **[workflows-spec.md](workflows-spec.md)** — `workflows/*.yaml`（DAG）与内置节点  
+6. **[eino-integration-surface.md](eino-integration-surface.md)** — Eino / eino-ext **包与接口清单**（实现对照）  
+7. **[appendix-data-layout.md](appendix-data-layout.md)** — 定目录与隔离策略时（含 **§6 其余推荐默认**）  
+8. **[requirements.md](requirements.md)** — PRD 与验收要点  
+9. **[harness-governance-extensions.md](harness-governance-extensions.md)** — 治理增强、扩展路线与初期预留扩展性（可选）  
 
 ---
 
-## Prompt 结构参考
+## 复制到其他新项目时的说明
 
-见 [`prompts/README.md`](prompts/README.md) 及各文件（`00-request-envelope`、`10-main-thread` 等）。
-
----
-
-*若从仓库移除 `claude-code-2026-03-31`，以本 `docs/` 为唯一设计来源；需要源码对照时请单独克隆参考实现。*
+1. **整目录拷贝**：将本目录原样放入目标仓库的 `docs/design/`（或任意路径），保持相对链接有效即可。
+2. **收窄范围**：若不需要完整 PRD，可删除或改写 **[requirements.md](requirements.md)**，并同步调整其他文档中的交叉引用。
+3. **非 Go / 不用 Eino**：保留 [reference-architecture.md](reference-architecture.md) + [glossary.md](glossary.md) + [appendix-data-layout.md](appendix-data-layout.md)；[eino-md-chain-architecture.md](eino-md-chain-architecture.md) 可作「若将来迁移到 Eino」存档或删除。
+4. **自洽性**：本套件对外部仓库链接主要包括 **`github.com/lengzhao/clawbridge`**（术语表与架构参考）及 **requirements.md §6** 等；其余多为本目录内 `.md`。
