@@ -53,7 +53,10 @@ func MainEngineFactory(deps MainEngineFactoryDeps) func(SessionHandle) (*Engine,
 		eng.Model = deps.Model
 		eng.MaxSteps = deps.Resolved.MainAgentMaxSteps()
 		eng.MaxTokens = deps.Resolved.MainAgentMaxCompletionTokens()
+		eng.TurnRunner = newEinoTurnRunner()
 		eng.ChatTransport = deps.Resolved.ChatTransport()
+		eng.EinoOpenAIAPIKey = deps.Resolved.OpenAIAPIKey()
+		eng.EinoOpenAIBaseURL = deps.Resolved.OpenAIBaseURL()
 		tp, wp := deps.Resolved.SessionTranscriptPaths(sid)
 		eng.TranscriptPath = tp
 		eng.WorkingTranscriptPath = wp

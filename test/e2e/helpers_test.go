@@ -24,11 +24,34 @@ import (
 	"github.com/openai/openai-go/option"
 )
 
+// stubChatRequestPromptText joins system + user message strings from one POST /v1/chat/completions body.
+// Eino ADK often puts AGENT.md / inbound meta in system messages rather than only user-role rows.
+func stubChatRequestPromptText(body []byte) (string, error) {
+	sys, err := openaistub.ChatRequestSystemTextConcat(body)
+	if err != nil {
+		return "", err
+	}
+	user, err := openaistub.ChatRequestUserTextConcat(body)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(sys + "\n" + user), nil
+}
+
 // stubOpenAIOptions returns client options for openaistub (no process env).
 func stubOpenAIOptions(stub *openaistub.Server) []option.RequestOption {
 	return []option.RequestOption{
 		option.WithAPIKey("sk-test-stub"),
 		option.WithBaseURL(stub.BaseURL()),
+	}
+}
+
+// stubInbound is a minimal clawbridge envelope for Engine.SubmitUser in stub E2E (no bridge required).
+func stubInbound(content string) bus.InboundMessage {
+	return bus.InboundMessage{
+		ClientID:  "e2e",
+		SessionID: "e2e",
+		Content:   content,
 	}
 }
 
@@ -39,6 +62,8 @@ func newStubEngine(t *testing.T, stub *openaistub.Server, cwd string) *session.E
 	e.MaxTokens = 512
 	e.MaxSteps = 16
 	e.Client = openai.NewClient(stubOpenAIOptions(stub)...)
+	e.EinoOpenAIAPIKey = "sk-test-stub"
+	e.EinoOpenAIBaseURL = stub.BaseURL()
 	return e
 }
 
@@ -49,6 +74,8 @@ func newStubEngineWithRegistry(t *testing.T, stub *openaistub.Server, cwd string
 	e.MaxTokens = 512
 	e.MaxSteps = 16
 	e.Client = openai.NewClient(stubOpenAIOptions(stub)...)
+	e.EinoOpenAIAPIKey = "sk-test-stub"
+	e.EinoOpenAIBaseURL = stub.BaseURL()
 	return e
 }
 

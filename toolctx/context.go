@@ -84,7 +84,8 @@ func New(cwd string, abort context.Context) *Context {
 }
 
 // ApplyTurnInboundToToolContext merges envelope routing into TurnInbound.
-// RunTurn calls this at the start of each turn so tools see ClientID/SessionID/Peer/… and nested Content-only turns do not keep parent MediaPaths.
+// Engine.prepareSharedTurn calls this when wiring tool context so tools see ClientID/SessionID/Peer/…
+// and nested Content-only turns do not keep parent MediaPaths.
 func (c *Context) ApplyTurnInboundToToolContext(in bus.InboundMessage) {
 	if c == nil {
 		return

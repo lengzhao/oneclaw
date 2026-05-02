@@ -8,11 +8,12 @@ import (
 
 	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/oneclaw/loop"
+	"github.com/lengzhao/oneclaw/tools"
 	"github.com/openai/openai-go"
 )
 
 func TestTrySlashLocalTurn_StatusAndPaths(t *testing.T) {
-	e := NewEngine(t.TempDir(), nil)
+	e := NewEngine(t.TempDir(), tools.NewRegistry())
 	e.SessionID = "test-sid"
 	e.UserDataRoot = "/tmp/udr"
 	e.TranscriptPath = "/tmp/t.jsonl"
@@ -37,7 +38,7 @@ func TestTrySlashLocalTurn_StatusAndPaths(t *testing.T) {
 }
 
 func TestTrySlashLocalTurn_SessionSubcommand(t *testing.T) {
-	e := NewEngine(t.TempDir(), nil)
+	e := NewEngine(t.TempDir(), tools.NewRegistry())
 	e.SessionID = "x"
 	reply, ok := e.trySlashLocalTurn(bus.InboundMessage{Content: "/session full"})
 	if !ok || !strings.Contains(reply, "工作区会话 ID") || !strings.Contains(reply, "x") {
@@ -46,7 +47,7 @@ func TestTrySlashLocalTurn_SessionSubcommand(t *testing.T) {
 }
 
 func TestTrySlashLocalTurn_SessionShort_showsDriverEnvelope(t *testing.T) {
-	e := NewEngine(t.TempDir(), nil)
+	e := NewEngine(t.TempDir(), tools.NewRegistry())
 	e.SessionID = "ws-hex"
 	reply, ok := e.trySlashLocalTurn(bus.InboundMessage{
 		Content:   "/session",
@@ -70,7 +71,7 @@ func TestTrySlashLocalTurn_SessionShort_showsDriverEnvelope(t *testing.T) {
 }
 
 func TestTrySlashLocalTurn_Stop(t *testing.T) {
-	e := NewEngine(t.TempDir(), nil)
+	e := NewEngine(t.TempDir(), tools.NewRegistry())
 	reply, ok := e.trySlashLocalTurn(bus.InboundMessage{Content: "/stop"})
 	if !ok || !strings.Contains(reply, "/stop") {
 		t.Fatalf("got ok=%v reply=%q", ok, reply)
@@ -85,7 +86,7 @@ func TestTrySlashLocalTurn_ResetClearsMessagesAndTranscript(t *testing.T) {
 	tmp := t.TempDir()
 	tp := filepath.Join(tmp, "t.json")
 	wp := filepath.Join(tmp, "w.json")
-	e := NewEngine(tmp, nil)
+	e := NewEngine(tmp, tools.NewRegistry())
 	e.TranscriptPath = tp
 	e.WorkingTranscriptPath = wp
 	e.Messages = []openai.ChatCompletionMessageParamUnion{openai.UserMessage("old")}
@@ -117,7 +118,7 @@ func TestTrySlashLocalTurn_ResetClearsMessagesAndTranscript(t *testing.T) {
 }
 
 func TestTrySlashLocalTurn_ResetRejectsArgs(t *testing.T) {
-	e := NewEngine(t.TempDir(), nil)
+	e := NewEngine(t.TempDir(), tools.NewRegistry())
 	e.Messages = []openai.ChatCompletionMessageParamUnion{openai.UserMessage("keep")}
 	_, ok := e.trySlashLocalTurn(bus.InboundMessage{Content: "/reset all"})
 	if !ok {

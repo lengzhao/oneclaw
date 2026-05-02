@@ -40,7 +40,7 @@ type Engine struct {
 	System    string
 	MaxTokens int64
 	MaxSteps  int
-	// Messages is the live API history. After each successful RunTurn it is collapsed to
+	// Messages is the live API history. After each successful SubmitUser turn it is collapsed to
 	// user-visible rows only (loop.ToUserVisibleMessages): injections and tool rounds are dropped
 	// to save tokens; facts can be re-fetched with tools or instruction files.
 	Messages []openai.ChatCompletionMessageParamUnion
@@ -71,7 +71,7 @@ type Engine struct {
 	executionLogTurnID string
 	executionLogDay    string
 	executionLogRel    string // path under UserDataRoot when known (for hooks); else logical suffix
-	// TranscriptPath is where SaveTranscript writes after each successful loop.RunTurn. Empty disables auto-save.
+	// TranscriptPath is where SaveTranscript writes after each successful SubmitUser turn. Empty disables auto-save.
 	TranscriptPath string
 	// WorkingTranscriptPath persists Messages (already user-visible in memory after each turn).
 	WorkingTranscriptPath string
@@ -79,6 +79,9 @@ type Engine struct {
 	WorkingTranscriptMaxMessages int
 	// ChatTransport overrides default transport when non-empty (from unified config).
 	ChatTransport string
+	// EinoOpenAI* are used by the Eino executor path.
+	EinoOpenAIAPIKey  string
+	EinoOpenAIBaseURL string
 	// MCPSystemNote is optional; non-empty injects the MCP section in the main-thread system prompt.
 	MCPSystemNote string
 	// DisableMultimodalImage when true, image attachments use read_file hints only (no image_url API parts).
@@ -87,8 +90,12 @@ type Engine struct {
 	DisableMultimodalAudio bool
 	// Bridge is the IM bus for outbound publish and inbound message status. When nil, outbound/status calls return [clawbridge.ErrNotInitialized]. [cmd/oneclaw] / [MainEngineFactoryDeps] set this from [clawbridge.New]; tests set it from a noop bridge.
 	Bridge *clawbridge.Bridge
-	// BeforeModelStep is optional; when set, passed to [loop.RunTurn] to append mid-turn user lines (e.g. [TurnHub] insert policy).
+	// BeforeModelStep is optional; when set, passed to the runtime turn runner
+	// to append mid-turn user lines (e.g. [TurnHub] insert policy).
 	BeforeModelStep func(ctx context.Context, step int, msgs *[]openai.ChatCompletionMessageParamUnion) error
+	// TurnRunner is the runtime execution backend for one user turn.
+	// NewEngine defaults to eino TurnRunner; pass a non-nil Registry.
+	TurnRunner TurnRunner
 }
 
 // NewEngine builds an engine with sensible defaults.
@@ -105,6 +112,7 @@ func NewEngine(cwd string, reg *tools.Registry) *Engine {
 		RootAgentID: DefaultRootAgentID,
 		Notify:      notify.Multi{},
 	}
+	e.TurnRunner = defaultTurnRunner()
 	return e
 }
 
@@ -204,6 +212,8 @@ func (e *Engine) SubmitUser(ctx context.Context, in bus.InboundMessage) (err err
 		Budget:                  bg,
 		ChatTransport:           e.ChatTransport,
 		ChatCompletionExtraJSON: extraJSON,
+		EinoOpenAIAPIKey:        e.EinoOpenAIAPIKey,
+		EinoOpenAIBaseURL:       e.EinoOpenAIBaseURL,
 		ToolTrace:               traceSink,
 		OnToolLogged:            onToolLogged,
 		SlimTranscript: func(assistantText string) {
@@ -229,9 +239,19 @@ func (e *Engine) SubmitUser(ctx context.Context, in bus.InboundMessage) (err err
 
 	e.emitInstructionContextJournal(ctx, turnID, corrID, memOK, bundle)
 
+	runner := e.TurnRunner
+	if runner == nil {
+		runner = defaultTurnRunner()
+	}
+	runnerName := strings.TrimSpace(runner.Name())
+	if runnerName == "" {
+		runnerName = "unknown"
+	}
+
 	e.emitTurnStartHook(ctx, turnID, corrID, map[string]any{
 		"model":             e.Model,
 		"max_steps":         e.MaxSteps,
+		"runtime_runner":    runnerName,
 		"cwd":               e.CWD,
 		"user_line_preview": notify.Preview(userLine, notify.DefaultPreviewRunes),
 	})
@@ -240,12 +260,14 @@ func (e *Engine) SubmitUser(ctx context.Context, in bus.InboundMessage) (err err
 		"since_inbound_ms", time.Since(turnT0).Milliseconds(),
 		"live_messages", len(e.Messages),
 		"turn_id", turnID,
+		"runtime_runner", runnerName,
 	)
-	err = loop.RunTurn(ctx, cfg, in)
+	err = runner.RunTurn(ctx, cfg, in)
 	if err != nil {
 		e.emitTurnEndHook(ctx, turnID, corrID, false, map[string]any{
 			"code":                   notify.TurnErrorCode(err),
 			"message":                err.Error(),
+			"runtime_runner":         runnerName,
 			"truncated_by_max_steps": notify.TurnErrorCode(err) == "max_steps",
 		})
 		return err
@@ -256,6 +278,7 @@ func (e *Engine) SubmitUser(ctx context.Context, in bus.InboundMessage) (err err
 		toolCount = len(traceSink.Snapshot())
 	}
 	e.emitTurnEndHook(ctx, turnID, corrID, true, map[string]any{
+		"runtime_runner":          runnerName,
 		"tool_count":              toolCount,
 		"final_assistant_preview": notify.Preview(loop.LastAssistantDisplay(e.Messages), notify.DefaultPreviewRunes),
 		"truncated_by_max_steps":  false,

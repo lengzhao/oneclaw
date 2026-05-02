@@ -80,20 +80,12 @@ func (r *Resolved) PushRuntime() {
 	s.DisableMemory = featTrue(f.Features.DisableMemory)
 	s.DisableAutoMemory = featTrue(f.Features.DisableAutoMemory)
 
-	s.DisableUsageLedger = featTrue(f.Features.DisableUsageLedger)
-	s.UsageEstimateCost = featTrue(f.Features.UsageEstimateCost)
 	s.DisableBehaviorPolicyWrite = featTrue(f.Features.DisableBehaviorPolicyWrite)
 	s.DisableScheduledTasks = featTrue(f.Features.DisableScheduledTasks)
 	s.DisableSemanticCompact = featTrue(f.Features.DisableSemanticCompact)
 	s.DisableSkills = featTrue(f.Features.DisableSkills)
 	s.DisableTasks = featTrue(f.Features.DisableTasks)
 
-	if f.Usage.DefaultInputPerMtok > 0 {
-		s.UsageInputPerMtok = f.Usage.DefaultInputPerMtok
-	}
-	if f.Usage.DefaultOutputPerMtok > 0 {
-		s.UsageOutputPerMtok = f.Usage.DefaultOutputPerMtok
-	}
 	s.ScheduleMinSleep = parseDur(f.Schedule.MinSleep, s.ScheduleMinSleep)
 	s.ScheduleIdleSleep = parseDur(f.Schedule.IdleSleep, s.ScheduleIdleSleep)
 

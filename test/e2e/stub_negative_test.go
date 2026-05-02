@@ -7,12 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lengzhao/clawbridge/bus"
-	"github.com/lengzhao/oneclaw/loop"
 	"github.com/lengzhao/oneclaw/test/openaistub"
-	"github.com/lengzhao/oneclaw/toolctx"
-	"github.com/lengzhao/oneclaw/tools"
-	"github.com/openai/openai-go"
+	"github.com/lengzhao/oneclaw/tools/builtin"
 )
 
 // E2E-81 空用户输入被拒绝
@@ -20,7 +16,7 @@ func TestE2E_81_EmptyInboundRejected(t *testing.T) {
 	stub := openaistub.New(t)
 	e2eEnvMinimal(t, stub)
 	e := newStubEngine(t, stub, t.TempDir())
-	err := e.SubmitUser(context.Background(), bus.InboundMessage{Content: "   "})
+	err := e.SubmitUser(context.Background(), stubInbound("   "))
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -29,7 +25,7 @@ func TestE2E_81_EmptyInboundRejected(t *testing.T) {
 	}
 }
 
-// E2E-82 未注册工具名：返回 unknown tool，随后 assistant 仍可结束
+// E2E-82 模型返回未在 ADK 工具集中注册的工具名时，Eino 在工具节点失败（与旧 loop 将 unknown 写入 tool 行不同）。
 func TestE2E_82_UnknownToolName(t *testing.T) {
 	stub := openaistub.New(t)
 	stub.Enqueue(openaistub.CompletionToolCalls("", []map[string]any{
@@ -38,36 +34,12 @@ func TestE2E_82_UnknownToolName(t *testing.T) {
 	stub.Enqueue(openaistub.CompletionStop("", "done"))
 	e2eEnvMinimal(t, stub)
 
-	cwd := t.TempDir()
-	client := openai.NewClient(stubOpenAIOptions(stub)...)
-	msgs := []openai.ChatCompletionMessageParamUnion{}
-	err := loop.RunTurn(context.Background(), loop.Config{
-		Client:       &client,
-		Model:        "gpt-4o",
-		System:       "test",
-		MaxTokens:    256,
-		MaxSteps:     8,
-		Messages:     &msgs,
-		Registry:     tools.NewRegistry(),
-		ToolContext:  toolctx.New(cwd, context.Background()),
-		TurnMaxSteps: 8,
-	}, bus.InboundMessage{Content: "hi"})
-	if err != nil {
-		t.Fatal(err)
+	e := newStubEngineWithRegistry(t, stub, t.TempDir(), builtin.DefaultRegistry())
+	err := e.SubmitUser(context.Background(), stubInbound("hi"))
+	if err == nil {
+		t.Fatal("expected error when stub requests undefined tool name")
 	}
-	var toolBody string
-	for _, m := range msgs {
-		if m.OfTool != nil && m.OfTool.Content.OfString.Valid() {
-			toolBody = m.OfTool.Content.OfString.Value
-			break
-		}
-	}
-	if !strings.Contains(toolBody, "unknown tool") {
-		t.Fatalf("tool body %q", toolBody)
-	}
-	last := msgs[len(msgs)-1]
-	if last.OfAssistant == nil || !last.OfAssistant.Content.OfString.Valid() ||
-		last.OfAssistant.Content.OfString.Value != "done" {
-		t.Fatalf("last=%#v", last)
+	if !strings.Contains(err.Error(), "nonexistent_tool_xyz") && !strings.Contains(err.Error(), "not found") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }

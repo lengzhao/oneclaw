@@ -35,6 +35,8 @@ func TestSubmitUser_localSlashDoesNotPersistTranscript(t *testing.T) {
 		option.WithAPIKey("sk-test-stub"),
 		option.WithBaseURL(stub.BaseURL()),
 	)
+	eng.EinoOpenAIAPIKey = "sk-test-stub"
+	eng.EinoOpenAIBaseURL = stub.BaseURL()
 	eng.TranscriptPath = tp
 	eng.WorkingTranscriptPath = wp
 	var out string

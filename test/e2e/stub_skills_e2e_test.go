@@ -12,13 +12,9 @@ import (
 	"testing"
 
 	"github.com/lengzhao/clawbridge/bus"
-	"github.com/lengzhao/oneclaw/loop"
 	"github.com/lengzhao/oneclaw/rtopts"
 	"github.com/lengzhao/oneclaw/test/openaistub"
-	"github.com/lengzhao/oneclaw/toolctx"
-	"github.com/lengzhao/oneclaw/tools/builtin"
 	"github.com/lengzhao/oneclaw/workspace"
-	"github.com/openai/openai-go"
 )
 
 func writeSkill(t *testing.T, cwd, name, description, body string) {
@@ -78,38 +74,19 @@ func TestE2E_106_InvokeSkillToolAndRecentFile(t *testing.T) {
 	stub.Enqueue(openaistub.CompletionStop("", "after skill"))
 	e2eEnvMinimal(t, stub)
 
-	client := openai.NewClient(stubOpenAIOptions(stub)...)
-	msgs := []openai.ChatCompletionMessageParamUnion{}
-	err := loop.RunTurn(context.Background(), loop.Config{
-		Client:       &client,
-		Model:        "gpt-4o",
-		System:       "You may use tools.",
-		MaxTokens:    512,
-		MaxSteps:     8,
-		Messages:     &msgs,
-		Registry:     builtin.DefaultRegistry(),
-		ToolContext:  toolctx.New(cwd, context.Background()),
-		TurnMaxSteps: 8,
-	}, bus.InboundMessage{Content: "load the skill"})
-	if err != nil {
+	e := newStubEngine(t, stub, cwd)
+	if err := e.SubmitUser(context.Background(), stubInbound("load the skill")); err != nil {
 		t.Fatal(err)
 	}
-
-	var toolOut string
-	for _, m := range msgs {
-		if m.OfTool == nil {
-			continue
-		}
-		if m.OfTool.Content.OfString.Valid() {
-			toolOut = m.OfTool.Content.OfString.Value
-			break
-		}
+	var joined string
+	for _, b := range stub.ChatRequestBodies() {
+		joined += string(b)
 	}
-	if !strings.Contains(toolOut, "E2E106_BODY_MARKER") {
-		t.Fatalf("tool output missing body marker:\n%s", toolOut)
+	if !strings.Contains(joined, "E2E106_BODY_MARKER") {
+		t.Fatalf("completion traffic missing body marker")
 	}
-	if !strings.Contains(toolOut, "Base directory for this skill:") {
-		t.Fatalf("tool output missing base dir line:\n%s", toolOut)
+	if !strings.Contains(joined, "Base directory for this skill:") {
+		t.Fatalf("completion traffic missing base dir line")
 	}
 
 	recentPath := filepath.Join(cwd, workspace.DotDir, "skills-recent.json")

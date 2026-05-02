@@ -27,6 +27,10 @@
 | E2E-111～112 | `cron` 与 scheduled jobs 段 | `stub_schedule_e2e_test.go` |
 | E2E-113～118 | 本地斜杠、`Inbound` 元数据与附件 | `stub_inbound_orchestration_e2e_test.go` |
 | E2E-116 | Agent 目录与 `run_agent` | `stub_agents_catalog_e2e_test.go` |
+| E2E-130 | Eino 主路径：纯文本 `SubmitUser`（ADK → openaistub） | `TestE2E_StubEinoRuntime_SubmitUser` · `stub_eino_runtime_e2e_test.go` |
+| E2E-131 | Eino 主路径：工具闭环 `read_file`（对齐 E2E-03） | `TestE2E_StubEinoRuntime_ToolReadFile` · `stub_eino_runtime_e2e_test.go` |
+| E2E-132 | Eino 主路径：`run_agent` 嵌套（对齐 E2E-90） | `TestE2E_StubEinoRuntime_RunAgentNested` · `stub_eino_runtime_e2e_test.go` |
+| E2E-133 | Eino 主路径：`fork_context`（对齐 E2E-91） | `TestE2E_StubEinoRuntime_ForkContext` · `stub_eino_runtime_e2e_test.go` |
 
 ---
 

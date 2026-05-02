@@ -23,7 +23,7 @@ const toolTraceArgsMaxRunes = 120
 const toolTraceOutMaxRunes = 200
 const toolTraceErrMaxRunes = 400
 
-// ToolTraceSink collects ToolTraceEntry values from a single RunTurn (safe for concurrent tool batches).
+// ToolTraceSink collects ToolTraceEntry values from a single user turn (safe for concurrent tool batches).
 type ToolTraceSink struct {
 	mu sync.Mutex
 	e  []ToolTraceEntry

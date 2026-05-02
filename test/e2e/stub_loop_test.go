@@ -8,14 +8,10 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
-	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/oneclaw/loop"
 	"github.com/lengzhao/oneclaw/test/openaistub"
-	"github.com/lengzhao/oneclaw/toolctx"
-	"github.com/lengzhao/oneclaw/tools"
-	"github.com/lengzhao/oneclaw/tools/builtin"
-	"github.com/openai/openai-go"
 )
 
 // E2E-01 最小对话（纯文本）
@@ -25,32 +21,14 @@ func TestE2E_StubTextReply(t *testing.T) {
 	e2eEnvMinimal(t, stub)
 
 	cwd := t.TempDir()
-	client := openai.NewClient(stubOpenAIOptions(stub)...)
-	msgs := []openai.ChatCompletionMessageParamUnion{}
-	reg := tools.NewRegistry()
-	err := loop.RunTurn(context.Background(), loop.Config{
-		Client:       &client,
-		Model:        "gpt-4o",
-		System:       "You are a test assistant.",
-		MaxTokens:    256,
-		MaxSteps:     4,
-		Messages:     &msgs,
-		Registry:     reg,
-		ToolContext:  toolctx.New(cwd, context.Background()),
-		TurnMaxSteps: 4,
-	}, bus.InboundMessage{Content: "hi"})
-	if err != nil {
+	e := newStubEngine(t, stub, cwd)
+	if err := e.SubmitUser(context.Background(), stubInbound("hi")); err != nil {
 		t.Fatal(err)
 	}
-	if len(msgs) < 2 {
-		t.Fatalf("expected user+assistant, got %d messages", len(msgs))
-	}
-	last := msgs[len(msgs)-1]
-	if last.OfAssistant == nil {
-		t.Fatalf("last message not assistant: %#v", last)
-	}
-	if !last.OfAssistant.Content.OfString.Valid() || last.OfAssistant.Content.OfString.Value != "hello from stub" {
-		t.Fatalf("assistant content: %#v", last.OfAssistant.Content)
+	e2eWaitMinChatRequests(t, stub, 1, 2*time.Second)
+	got := loop.LastAssistantDisplay(e.Messages)
+	if got != "hello from stub" {
+		t.Fatalf("assistant reply %q want %q", got, "hello from stub")
 	}
 }
 
@@ -68,39 +46,14 @@ func TestE2E_StubToolThenText(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	client := openai.NewClient(stubOpenAIOptions(stub)...)
-	msgs := []openai.ChatCompletionMessageParamUnion{}
-	reg := builtin.DefaultRegistry()
-
-	err := loop.RunTurn(context.Background(), loop.Config{
-		Client:       &client,
-		Model:        "gpt-4o",
-		System:       "Use tools when needed.",
-		MaxTokens:    256,
-		MaxSteps:     8,
-		Messages:     &msgs,
-		Registry:     reg,
-		ToolContext:  toolctx.New(cwd, context.Background()),
-		TurnMaxSteps: 8,
-	}, bus.InboundMessage{Content: "read note.txt"})
-	if err != nil {
+	e := newStubEngine(t, stub, cwd)
+	if err := e.SubmitUser(context.Background(), stubInbound("read note.txt")); err != nil {
 		t.Fatal(err)
 	}
+	e2eWaitMinChatRequests(t, stub, 2, 3*time.Second)
 
-	var sawTool bool
-	for _, m := range msgs {
-		if m.OfTool != nil {
-			sawTool = true
-		}
-	}
-	if !sawTool {
-		t.Fatalf("expected a tool message in transcript, got %d msgs", len(msgs))
-	}
-	last := msgs[len(msgs)-1]
-	if last.OfAssistant == nil {
-		t.Fatalf("expected final assistant, got %#v", last)
-	}
-	if !last.OfAssistant.Content.OfString.Valid() || last.OfAssistant.Content.OfString.Value != "read ok" {
-		t.Fatalf("final assistant: %#v", last.OfAssistant.Content)
+	got := loop.LastAssistantDisplay(e.Messages)
+	if got != "read ok" {
+		t.Fatalf("final assistant %q want read ok", got)
 	}
 }

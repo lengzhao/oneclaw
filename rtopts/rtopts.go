@@ -21,11 +21,6 @@ type Snapshot struct {
 	DisableAutoMemory    bool
 	DisableContextBudget bool
 
-	DisableUsageLedger bool
-	UsageEstimateCost  bool
-	UsageInputPerMtok  float64
-	UsageOutputPerMtok float64
-
 	DisableBehaviorPolicyWrite bool
 
 	DisableScheduledTasks bool
@@ -51,11 +46,9 @@ var cur atomic.Pointer[Snapshot]
 // DefaultSnapshot returns the legacy baseline (empty YAML, no env).
 func DefaultSnapshot() Snapshot {
 	return Snapshot{
-		Budget:             budget.DefaultGlobal(),
-		UsageInputPerMtok:  5,
-		UsageOutputPerMtok: 15,
-		ScheduleMinSleep:   time.Second,
-		ScheduleIdleSleep:  time.Hour,
+		Budget:            budget.DefaultGlobal(),
+		ScheduleMinSleep:  time.Second,
+		ScheduleIdleSleep: time.Hour,
 	}
 }
 

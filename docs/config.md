@@ -41,7 +41,7 @@
 | 区域 | 主要 YAML 路径 | 说明 |
 |------|----------------|------|
 | 模型 | `model` | 默认聊天模型；空则代码内默认 |
-| 主会话循环 | `agent.max_steps`、`agent.max_tokens` | `max_steps`：每用户回合内模型调用步数（默认 **100**，范围 1–256）。`max_tokens`：每步 **`max_completion_tokens`**（默认 **32768**，范围 1024–131072；YAML 写 0 或不写则用默认）。`cmd/oneclaw` 经 `MainEngineFactory` 写入 `Engine.MaxTokens`。单次 chat completion 的 context 超时由 `model` 包默认 **2 分钟**（`model.Complete` / `CompleteWithTransport`），非 YAML 配置项。对 **context 超时**、**HTTP 5xx / 429 / 408**、**网络读超时** 等瞬时失败，同一 completion 会自动重试最多 **2 次**（共 **3** 次尝试），间隔约 **400ms / 800ms**（上限 2s），仍非 YAML 配置项。 |
+| 主会话循环 | `agent.runtime`（已废弃，忽略）、`agent.max_steps`、`agent.max_tokens` | 回合内核固定 **Eino ADK**；须配置 **`openai.api_key`**（缺省则模型回合失败，见 [`runtime-flow.md`](runtime-flow.md) §3.1）。`max_steps`：每用户回合内模型调用步数（默认 **100**，范围 1–256）。`max_tokens`：每步 **`max_completion_tokens`**（默认 **32768**，范围 1024–131072；YAML 写 0 或不写则用默认）。`cmd/oneclaw` 经 `MainEngineFactory` 写入 `Engine.MaxTokens`。单次 chat completion 的 context 超时由 `model` 包默认 **2 分钟**（`model.Complete` / `CompleteWithTransport`），非 YAML 配置项。对 **context 超时**、**HTTP 5xx / 429 / 408**、**网络读超时** 等瞬时失败，同一 completion 会自动重试最多 **2 次**（共 **3** 次尝试），间隔约 **400ms / 800ms**（上限 2s），仍非 YAML 配置项。 |
 | Chat Completions 额外参数 | `agent.completion_extra` | 任意与 **OpenAI Chat Completions** 请求体 JSON 对齐的嵌套键（对应 `openai.ChatCompletionNewParams`）。在 `PushRuntime` 时序列化为 JSON 注入 `rtopts`，每步模型调用先 **`json.Unmarshal` 到参数结构体**，再由运行时**强制覆盖** `model`、`messages`、`max_completion_tokens`、`stream_options`，以及有工具时的 `tools` / `parallel_tool_calls`。用于 `temperature`、`reasoning_effort`、`web_search_options`、服务商扩展字段等；**网关/模型不支持的键会导致 API 报错**。多层 YAML 合并时对嵌套 map **递归合并**。 |
 | 传输 | `chat.transport` | `auto`（先流式、失败再非流式）、`non_stream`、`stream`；兼容网关仅支持非流式时建议 `non_stream` |
 | OpenAI 兼容 | `openai.api_key`、`openai.base_url`、`openai.org_id`、`openai.project_id` | `base_url` 需含 `/v1/` 后缀（若网关要求） |
@@ -87,19 +87,6 @@
 | **dialog_history** | 成功回合后由 `workspace.AppendDialogHistoryPair` 写入；路径由 `workspace.Layout`（`workspace.LayoutForIMWorkspace` / `IMHostMaintainLayout` 等）解析，典型为 `<InstructionRoot>/memory/<日期>/<session_id>/dialog_history.json`（见 `workspace/dialog_history.go`） |
 
 **`sessions.worker_count`**：主进程用于处理入站回合的 **固定 worker 数**（默认 **8**，配置为 **0** 或未写时与 `<1` 同样走默认）。每个 session 按稳定哈希落到其中一个 worker，**同一 session 内消息在该 worker 上串行**；每条消息 **临时 `NewEngine`、落盘后丢弃**，避免无限增长的内存 map。worker 数不随会话数量增加。
-
-### LLM 用量（`usage/` 目录）
-
-每次成功的 chat completion（含工具多步）在 `ToolContext.CWD` 非空且返回非零 token 时落盘。路径为 **`<InstructionRoot>/usage/`**（IM 主进程在存在 `InstructionRoot` 时写入该目录；与 `Engine.CWD` 的 `workspace/` 分离）。
-
-| YAML（`usage.*`） | 说明 |
-|-------------------|------|
-| （无） | 写入由 `features.disable_usage_ledger` 控制 |
-| `default_input_per_mtok` / `default_output_per_mtok` | 与费用**估算**联用时的默认美元/百万 token |
-| `features.disable_usage_ledger` | 关闭写入 |
-| `features.usage_estimate_cost` | 响应无费用字段时用内置价目表估算 `cost_usd` |
-
-**路径**：`interactions.jsonl`、`daily/YYYY-MM-DD.json`、`users/<16-hex>.json`（详见实现与历史说明）。
 
 > **说明**：`maintain.*`、`memory.recall.*`、进程内定时 LLM 维护、**`-maintain-once`** 等键在 **`config.File` / `cmd/oneclaw` 当前实现中不存在**，写入合并 YAML 也会被忽略。
 

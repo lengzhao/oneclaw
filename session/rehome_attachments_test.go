@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/lengzhao/oneclaw/mediastore"
+	"github.com/lengzhao/oneclaw/tools"
 )
 
 func TestRehomeInboundAttachments_globalMediaToWorkspace(t *testing.T) {
@@ -23,7 +24,7 @@ func TestRehomeInboundAttachments_globalMediaToWorkspace(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	e := NewEngine(workspace, nil)
+	e := NewEngine(workspace, tools.NewRegistry())
 	e.MediaRoot = mediaRoot
 	atts := []Attachment{
 		{Name: origName, MIME: "text/markdown", Path: src},
@@ -54,7 +55,7 @@ func TestRehomeInboundAttachments_sameBasenameDistinctFiles(t *testing.T) {
 		if err := os.WriteFile(src, []byte("body"+string(rune('1'+i))), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		e := NewEngine(ws, nil)
+		e := NewEngine(ws, tools.NewRegistry())
 		e.MediaRoot = mediaRoot
 		atts := []Attachment{{Name: name, Path: src}}
 		if err := e.rehomeInboundAttachments(&atts); err != nil {
@@ -95,7 +96,7 @@ func TestRehomeInboundAttachments_skipsAlreadyUnderWorkspace(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	e := NewEngine(ws, nil)
+	e := NewEngine(ws, tools.NewRegistry())
 	atts := []Attachment{{Name: "x.md", Path: rel}}
 	before := rel
 	if err := e.rehomeInboundAttachments(&atts); err != nil {

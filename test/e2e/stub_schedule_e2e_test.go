@@ -10,12 +10,8 @@ import (
 	"testing"
 
 	"github.com/lengzhao/clawbridge/bus"
-	"github.com/lengzhao/oneclaw/loop"
 	"github.com/lengzhao/oneclaw/schedule"
 	"github.com/lengzhao/oneclaw/test/openaistub"
-	"github.com/lengzhao/oneclaw/toolctx"
-	"github.com/lengzhao/oneclaw/tools/builtin"
-	"github.com/openai/openai-go"
 )
 
 // E2E-111 cron 工具 add 写入 .oneclaw/scheduled_jobs.json
@@ -28,20 +24,10 @@ func TestE2E_111_CronToolWritesFile(t *testing.T) {
 	stub.Enqueue(openaistub.CompletionStop("", "done"))
 	e2eEnvMinimal(t, stub)
 
-	client := openai.NewClient(stubOpenAIOptions(stub)...)
-	msgs := []openai.ChatCompletionMessageParamUnion{}
-	err := loop.RunTurn(context.Background(), loop.Config{
-		Client:       &client,
-		Model:        "gpt-4o",
-		System:       "Use tools.",
-		MaxTokens:    512,
-		MaxSteps:     8,
-		Messages:     &msgs,
-		Registry:     builtin.DefaultRegistry(),
-		ToolContext:  toolctx.New(cwd, context.Background()),
-		TurnMaxSteps: 8,
-	}, bus.InboundMessage{Content: "schedule a job", ClientID: "cli"})
-	if err != nil {
+	in := stubInbound("schedule a job")
+	in.ClientID = "cli"
+	e := newStubEngine(t, stub, cwd)
+	if err := e.SubmitUser(context.Background(), in); err != nil {
 		t.Fatal(err)
 	}
 

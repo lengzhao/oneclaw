@@ -44,6 +44,9 @@ type Host struct {
 	HistoryBudget budget.Global
 	// ChatTransport overrides default transport when non-empty.
 	ChatTransport string
+	// EinoOpenAIAPIKey / EinoOpenAIBaseURL mirror main Engine for nested turns (same OpenAI-compatible backend).
+	EinoOpenAIAPIKey  string
+	EinoOpenAIBaseURL string
 	// Notify and parent correlation for nested loop lifecycle (optional).
 	Notify notify.Sink
 	// AppendExec writes structured execution rows to the parent turn's execution shard (optional).
@@ -52,6 +55,8 @@ type Host struct {
 	ParentTurnID        string
 	ParentCorrelationID string
 	OnNestedLifecycle   func(ctx context.Context, childTurnID, childRunID, nestedAgentID string, depth int) *loop.LifecycleCallbacks
+	// RunTurn executes one nested user turn (required). The session package sets this from the parent Engine's TurnRunner so nested turns use the same backend as the main thread.
+	RunTurn func(ctx context.Context, cfg loop.Config, in bus.InboundMessage) error
 }
 
 func (h *Host) maxInherited() int {
@@ -59,6 +64,13 @@ func (h *Host) maxInherited() int {
 		return 32
 	}
 	return h.MaxInheritedMessages
+}
+
+func (h *Host) runTurn(ctx context.Context, cfg loop.Config, in bus.InboundMessage) error {
+	if h == nil || h.RunTurn == nil {
+		return fmt.Errorf("subagent: Host.RunTurn is required")
+	}
+	return h.RunTurn(ctx, cfg, in)
 }
 
 func (h *Host) maxStepsForDef(def Definition) int {
@@ -85,6 +97,9 @@ func effectiveModel(h *Host, def Definition) string {
 func validateNestedHost(h *Host) error {
 	if h == nil || h.Client == nil || h.Registry == nil {
 		return fmt.Errorf("subagent: incomplete host")
+	}
+	if h.RunTurn == nil {
+		return fmt.Errorf("subagent: Host.RunTurn is required")
 	}
 	return nil
 }
@@ -186,10 +201,12 @@ func RunAgent(ctx context.Context, h *Host, parent *toolctx.Context, agentType, 
 		Budget:                  h.HistoryBudget,
 		ChatTransport:           h.ChatTransport,
 		ChatCompletionExtraJSON: extraJSON,
+		EinoOpenAIAPIKey:        h.EinoOpenAIAPIKey,
+		EinoOpenAIBaseURL:       h.EinoOpenAIBaseURL,
 		Lifecycle:               lc,
 		TurnMaxSteps:            maxSteps,
 	}
-	if err = loop.RunTurn(ctx, cfg, bus.InboundMessage{Content: task}); err != nil {
+	if err = h.runTurn(ctx, cfg, bus.InboundMessage{Content: task}); err != nil {
 		return "", err
 	}
 	msgs = loop.ToUserVisibleMessages(msgs)
@@ -271,10 +288,12 @@ func RunFork(ctx context.Context, h *Host, parent *toolctx.Context, task string,
 		Budget:                  h.HistoryBudget,
 		ChatTransport:           h.ChatTransport,
 		ChatCompletionExtraJSON: extraJSON,
+		EinoOpenAIAPIKey:        h.EinoOpenAIAPIKey,
+		EinoOpenAIBaseURL:       h.EinoOpenAIBaseURL,
 		Lifecycle:               lc,
 		TurnMaxSteps:            maxSteps,
 	}
-	if err = loop.RunTurn(ctx, cfg, bus.InboundMessage{Content: task}); err != nil {
+	if err = h.runTurn(ctx, cfg, bus.InboundMessage{Content: task}); err != nil {
 		return "", err
 	}
 	msgs = loop.ToUserVisibleMessages(msgs)

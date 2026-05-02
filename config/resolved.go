@@ -52,6 +52,22 @@ func (r *Resolved) apiKeyResolved() string {
 	return strings.TrimSpace(r.merged.OpenAI.APIKey)
 }
 
+// OpenAIAPIKey returns merged openai.api_key (trimmed).
+func (r *Resolved) OpenAIAPIKey() string {
+	if r == nil {
+		return ""
+	}
+	return strings.TrimSpace(r.merged.OpenAI.APIKey)
+}
+
+// OpenAIBaseURL returns merged openai.base_url (trimmed).
+func (r *Resolved) OpenAIBaseURL() string {
+	if r == nil {
+		return ""
+	}
+	return strings.TrimSpace(r.merged.OpenAI.BaseURL)
+}
+
 // OpenAIOptions returns client options from merged YAML (api_key, base_url, org, project).
 func (r *Resolved) OpenAIOptions() []option.RequestOption {
 	var opts []option.RequestOption

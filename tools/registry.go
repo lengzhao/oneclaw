@@ -1,10 +1,13 @@
 package tools
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"slices"
 	"sync"
 
+	"github.com/lengzhao/oneclaw/toolctx"
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/shared"
 )
@@ -13,6 +16,16 @@ import (
 type Registry struct {
 	mu    sync.RWMutex
 	items map[string]Tool
+}
+
+// Descriptor is a provider-neutral snapshot of a registered tool.
+// It is the primary bridge type for adapting oneclaw tools to other runtimes.
+type Descriptor struct {
+	Name            string
+	Description     string
+	Parameters      openai.FunctionParameters
+	ConcurrencySafe bool
+	Execute         func(ctx context.Context, input json.RawMessage, tctx *toolctx.Context) (string, error)
 }
 
 // NewRegistry returns an empty registry.
@@ -59,9 +72,8 @@ func (r *Registry) ToolNames() []string {
 	return names
 }
 
-// OpenAITools builds ChatCompletionToolParam slice for ChatCompletionNewParams.
-// Tool order is sorted by name so requests are stable across processes and runs.
-func (r *Registry) OpenAITools() []openai.ChatCompletionToolParam {
+// Descriptors returns stable-name-ordered provider-neutral tool descriptors.
+func (r *Registry) Descriptors() []Descriptor {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	names := make([]string, 0, len(r.items))
@@ -69,14 +81,31 @@ func (r *Registry) OpenAITools() []openai.ChatCompletionToolParam {
 		names = append(names, name)
 	}
 	slices.Sort(names)
-	out := make([]openai.ChatCompletionToolParam, 0, len(names))
+	out := make([]Descriptor, 0, len(names))
 	for _, name := range names {
 		t := r.items[name]
+		out = append(out, Descriptor{
+			Name:            t.Name(),
+			Description:     t.Description(),
+			Parameters:      t.Parameters(),
+			ConcurrencySafe: t.ConcurrencySafe(),
+			Execute:         t.Execute,
+		})
+	}
+	return out
+}
+
+// OpenAITools builds ChatCompletionToolParam slice for ChatCompletionNewParams.
+// Tool order is sorted by name so requests are stable across processes and runs.
+func (r *Registry) OpenAITools() []openai.ChatCompletionToolParam {
+	descs := r.Descriptors()
+	out := make([]openai.ChatCompletionToolParam, 0, len(descs))
+	for _, d := range descs {
 		out = append(out, openai.ChatCompletionToolParam{
 			Function: shared.FunctionDefinitionParam{
-				Name:        t.Name(),
-				Description: openai.String(t.Description()),
-				Parameters:  t.Parameters(),
+				Name:        d.Name,
+				Description: openai.String(d.Description),
+				Parameters:  d.Parameters,
 			},
 		})
 	}

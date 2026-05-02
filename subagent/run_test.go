@@ -1,12 +1,17 @@
 package subagent
 
 import (
+	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/lengzhao/clawbridge/bus"
+	"github.com/lengzhao/oneclaw/loop"
 	"github.com/lengzhao/oneclaw/toolctx"
+	"github.com/lengzhao/oneclaw/tools"
 	"github.com/openai/openai-go"
 )
 
@@ -142,5 +147,37 @@ func TestWriteSidechain_flatInstructionRoot(t *testing.T) {
 	}
 	if _, err := os.Stat(path); err != nil {
 		t.Fatalf("stat %q: %v", path, err)
+	}
+}
+
+func TestHostRunTurn_UsesOverride(t *testing.T) {
+	want := errors.New("override-runner")
+	h := &Host{
+		RunTurn: func(ctx context.Context, cfg loop.Config, in bus.InboundMessage) error {
+			return want
+		},
+	}
+	err := h.runTurn(context.Background(), loop.Config{}, bus.InboundMessage{Content: "x"})
+	if !errors.Is(err, want) {
+		t.Fatalf("runTurn error = %v, want %v", err, want)
+	}
+}
+
+func TestValidateNestedHost_requiresRunTurn(t *testing.T) {
+	c := openai.NewClient()
+	h := &Host{
+		Client:   &c,
+		Registry: tools.NewRegistry(),
+	}
+	if err := validateNestedHost(h); err == nil {
+		t.Fatal("expected error when RunTurn is nil")
+	}
+}
+
+func TestRunTurn_requiresHostCallback(t *testing.T) {
+	h := &Host{}
+	err := h.runTurn(context.Background(), loop.Config{}, bus.InboundMessage{})
+	if err == nil {
+		t.Fatal("expected error")
 	}
 }

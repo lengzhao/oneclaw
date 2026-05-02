@@ -11,14 +11,10 @@ import (
 	"testing"
 
 	"github.com/lengzhao/clawbridge/bus"
-	"github.com/lengzhao/oneclaw/loop"
 	"github.com/lengzhao/oneclaw/rtopts"
 	"github.com/lengzhao/oneclaw/tasks"
 	"github.com/lengzhao/oneclaw/test/openaistub"
-	"github.com/lengzhao/oneclaw/toolctx"
-	"github.com/lengzhao/oneclaw/tools/builtin"
 	"github.com/lengzhao/oneclaw/workspace"
-	"github.com/openai/openai-go"
 )
 
 // E2E-108 存在 tasks.json 时 system 含 Task list 与任务摘要。
@@ -63,20 +59,8 @@ func TestE2E_109_TaskToolsWriteFileAndDisableHidesBlock(t *testing.T) {
 	stub.Enqueue(openaistub.CompletionStop("", "done"))
 	e2eEnvMinimal(t, stub)
 
-	client := openai.NewClient(stubOpenAIOptions(stub)...)
-	msgs := []openai.ChatCompletionMessageParamUnion{}
-	err := loop.RunTurn(context.Background(), loop.Config{
-		Client:       &client,
-		Model:        "gpt-4o",
-		System:       "Use tools.",
-		MaxTokens:    512,
-		MaxSteps:     8,
-		Messages:     &msgs,
-		Registry:     builtin.DefaultRegistry(),
-		ToolContext:  toolctx.New(cwd, context.Background()),
-		TurnMaxSteps: 8,
-	}, bus.InboundMessage{Content: "create task"})
-	if err != nil {
+	e := newStubEngine(t, stub, cwd)
+	if err := e.SubmitUser(context.Background(), stubInbound("create task")); err != nil {
 		t.Fatal(err)
 	}
 
@@ -108,20 +92,9 @@ func TestE2E_109_TaskToolsWriteFileAndDisableHidesBlock(t *testing.T) {
 	}))
 	stub2.Enqueue(openaistub.CompletionStop("", "ok"))
 	e2eEnvMinimal(t, stub2)
-	client2 := openai.NewClient(stubOpenAIOptions(stub2)...)
-	msgs2 := []openai.ChatCompletionMessageParamUnion{}
-	err = loop.RunTurn(context.Background(), loop.Config{
-		Client:       &client2,
-		Model:        "gpt-4o",
-		System:       "Use tools.",
-		MaxTokens:    512,
-		MaxSteps:     8,
-		Messages:     &msgs2,
-		Registry:     builtin.DefaultRegistry(),
-		ToolContext:  toolctx.New(cwd, context.Background()),
-		TurnMaxSteps: 8,
-	}, bus.InboundMessage{Content: "complete it"})
-	if err != nil {
+
+	e2 := newStubEngine(t, stub2, cwd)
+	if err := e2.SubmitUser(context.Background(), stubInbound("complete it")); err != nil {
 		t.Fatal(err)
 	}
 	b, _ = os.ReadFile(path)
@@ -135,8 +108,8 @@ func TestE2E_109_TaskToolsWriteFileAndDisableHidesBlock(t *testing.T) {
 	s := rtopts.Current()
 	s.DisableTasks = true
 	rtopts.Set(&s)
-	e := newStubEngine(t, stub3, cwd)
-	if err := e.SubmitUser(context.Background(), bus.InboundMessage{Content: "ping"}); err != nil {
+	e3 := newStubEngine(t, stub3, cwd)
+	if err := e3.SubmitUser(context.Background(), bus.InboundMessage{Content: "ping"}); err != nil {
 		t.Fatal(err)
 	}
 	bodies := stub3.ChatRequestBodies()

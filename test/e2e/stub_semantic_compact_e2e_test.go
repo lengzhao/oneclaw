@@ -7,13 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/oneclaw/budget"
-	"github.com/lengzhao/oneclaw/loop"
 	"github.com/lengzhao/oneclaw/rtopts"
 	"github.com/lengzhao/oneclaw/test/openaistub"
-	"github.com/lengzhao/oneclaw/toolctx"
-	"github.com/lengzhao/oneclaw/tools/builtin"
 	"github.com/openai/openai-go"
 )
 
@@ -37,25 +33,14 @@ func TestE2E_103_SemanticCompactInChatRequest(t *testing.T) {
 
 	cwd := t.TempDir()
 	ctx := context.Background()
-	client := openai.NewClient(stubOpenAIOptions(stub)...)
 	msgs := make([]openai.ChatCompletionMessageParamUnion, 0, 160)
 	for range 150 {
 		msgs = append(msgs, openai.UserMessage(strings.Repeat("q", 920)))
 	}
 
-	err := loop.RunTurn(ctx, loop.Config{
-		Client:       &client,
-		Model:        "gpt-4o",
-		System:       strings.Repeat("z", 400),
-		MaxTokens:    128,
-		MaxSteps:     4,
-		Messages:     &msgs,
-		Registry:     builtin.DefaultRegistry(),
-		ToolContext:  toolctx.New(cwd, ctx),
-		Budget:       rtopts.Current().Budget,
-		TurnMaxSteps: 4,
-	}, bus.InboundMessage{Content: "E2E103_FINAL_USER"})
-	if err != nil {
+	e := newStubEngine(t, stub, cwd)
+	e.Messages = msgs
+	if err := e.SubmitUser(ctx, stubInbound("E2E103_FINAL_USER")); err != nil {
 		t.Fatal(err)
 	}
 
@@ -92,25 +77,14 @@ func TestE2E_104_SemanticCompactDisabledNoBoundaryTag(t *testing.T) {
 
 	cwd := t.TempDir()
 	ctx := context.Background()
-	client := openai.NewClient(stubOpenAIOptions(stub)...)
 	msgs := make([]openai.ChatCompletionMessageParamUnion, 0, 160)
 	for range 150 {
 		msgs = append(msgs, openai.UserMessage(strings.Repeat("r", 920)))
 	}
 
-	err := loop.RunTurn(ctx, loop.Config{
-		Client:       &client,
-		Model:        "gpt-4o",
-		System:       strings.Repeat("z", 400),
-		MaxTokens:    128,
-		MaxSteps:     4,
-		Messages:     &msgs,
-		Registry:     builtin.DefaultRegistry(),
-		ToolContext:  toolctx.New(cwd, ctx),
-		Budget:       rtopts.Current().Budget,
-		TurnMaxSteps: 4,
-	}, bus.InboundMessage{Content: "E2E104_FINAL_USER"})
-	if err != nil {
+	e := newStubEngine(t, stub, cwd)
+	e.Messages = msgs
+	if err := e.SubmitUser(ctx, stubInbound("E2E104_FINAL_USER")); err != nil {
 		t.Fatal(err)
 	}
 

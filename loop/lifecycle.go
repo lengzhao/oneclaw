@@ -8,7 +8,7 @@ import (
 
 // ModelStepEndInfo is passed to LifecycleCallbacks.OnModelStepEnd after each model API attempt.
 type ModelStepEndInfo struct {
-	Model string // cfg.Model for this RunTurn
+	Model string // cfg.Model for this model step
 	OK    bool
 	// AssistantVisible is user-visible assistant text for this step (content/refusal); empty if none or before response.
 	AssistantVisible string

@@ -35,6 +35,8 @@ func TestSubmitUser_publishesOutboundOnFailure(t *testing.T) {
 		option.WithAPIKey("sk-test-stub"),
 		option.WithBaseURL(stub.BaseURL()),
 	)
+	eng.EinoOpenAIAPIKey = "sk-test-stub"
+	eng.EinoOpenAIBaseURL = stub.BaseURL()
 
 	in := bus.InboundMessage{
 		ClientID:  "cli",
@@ -80,6 +82,8 @@ func TestSubmitUser_errorOutboundSkippedWithoutAddressing(t *testing.T) {
 		option.WithAPIKey("sk-test-stub"),
 		option.WithBaseURL(stub.BaseURL()),
 	)
+	eng.EinoOpenAIAPIKey = "sk-test-stub"
+	eng.EinoOpenAIBaseURL = stub.BaseURL()
 
 	err := eng.SubmitUser(context.Background(), bus.InboundMessage{Content: "hi"})
 	if err == nil {

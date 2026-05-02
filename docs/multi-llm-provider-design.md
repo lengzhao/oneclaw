@@ -84,8 +84,6 @@ Provider interface {
 
 - `loop.Config`：将 `Client *openai.Client` 替换为 `LLM llm.Provider`（或同时保留 Client 仅用于过渡期适配器）。  
 - `RunTurn` 内构建 `ChatRequest`，调用 `LLM.Chat`；工具执行仍用 `tools.Registry.OpenAITools()`，在 provider 边界转换为请求格式（OpenAI 兼容实现可为直通）。  
-- `usageledger`：继续依赖 response 中的 token 字段；若某 provider 不返回 usage，需定义占位或跳过策略。
-
 ### 3.4 `session.Engine` 与入口
 
 - 由 `cmd` / 装配层根据 `Resolved` 构造 `llm.Provider`，注入 `Engine`（或只注入 `loop.Config`）。  

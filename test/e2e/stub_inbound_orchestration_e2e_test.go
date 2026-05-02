@@ -167,7 +167,7 @@ func TestE2E_114_InboundMetaAndAttachmentInHistory(t *testing.T) {
 	if len(bodies) < 1 {
 		t.Fatal("expected chat request")
 	}
-	reqText, err := openaistub.ChatRequestUserTextConcat(bodies[0])
+	reqText, err := stubChatRequestPromptText(bodies[0])
 	if err != nil {
 		t.Fatal(err)
 	}

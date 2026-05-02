@@ -48,7 +48,7 @@ func loadLiveResolved(t *testing.T, cfgPath string, home string) *config.Resolve
 		t.Fatalf("config.Load: %v", err)
 	}
 	raw, _ := os.ReadFile(absCfg)
-	if bytes.Contains(raw, []byte("YOUR_API_KEY_HERE")) {
+	if strings.Contains(string(raw), "YOUR_API_KEY_HERE") {
 		t.Skip("replace YOUR_API_KEY_HERE in live_llm.config.yaml with a real key")
 	}
 	if !r.HasAPIKey() {
@@ -61,6 +61,8 @@ func newLiveEngine(t *testing.T, r *config.Resolved, cwd string) *session.Engine
 	t.Helper()
 	e := session.NewEngine(cwd, builtin.DefaultRegistry())
 	e.Client = openai.NewClient(r.OpenAIOptions()...)
+	e.EinoOpenAIAPIKey = r.OpenAIAPIKey()
+	e.EinoOpenAIBaseURL = r.OpenAIBaseURL()
 	if m := r.ChatModel(); m != "" {
 		e.Model = m
 	}

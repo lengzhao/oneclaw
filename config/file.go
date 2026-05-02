@@ -56,6 +56,8 @@ type File struct {
 	Model  string     `yaml:"model"`
 	// Agent configures the main session model loop (per inbound turn).
 	Agent struct {
+		// Deprecated: ignored at runtime (always Eino ADK + loop fallback). Kept for YAML merge compatibility.
+		Runtime string `yaml:"runtime"`
 		// MaxSteps is model calls per turn; the last call is sent without tools (earlier calls can use tools).
 		MaxSteps int `yaml:"max_steps"`
 		// MaxTokens is max_completion_tokens per model step (main thread / IM sessions). 0 = use Resolved default.
@@ -81,8 +83,6 @@ type File struct {
 		DisableMemory              *bool `yaml:"disable_memory"`
 		DisableAutoMemory          *bool `yaml:"disable_auto_memory"`
 		DisableContextBudget       *bool `yaml:"disable_context_budget"`
-		DisableUsageLedger         *bool `yaml:"disable_usage_ledger"`
-		UsageEstimateCost          *bool `yaml:"usage_estimate_cost"`
 		DisableBehaviorPolicyWrite *bool `yaml:"disable_behavior_policy_write"`
 		DisableScheduledTasks      *bool `yaml:"disable_scheduled_tasks"`
 		DisableSemanticCompact     *bool `yaml:"disable_semantic_compact"`
@@ -113,11 +113,6 @@ type File struct {
 	} `yaml:"log"`
 
 	SidechainMerge string `yaml:"sidechain_merge"`
-
-	Usage struct {
-		DefaultInputPerMtok  float64 `yaml:"default_input_per_mtok"`
-		DefaultOutputPerMtok float64 `yaml:"default_output_per_mtok"`
-	} `yaml:"usage"`
 
 	Schedule struct {
 		MinSleep  string `yaml:"min_sleep"`
@@ -189,6 +184,9 @@ func mergeFile(dst *File, src File) {
 	if src.Agent.MaxSteps != 0 {
 		dst.Agent.MaxSteps = src.Agent.MaxSteps
 	}
+	if src.Agent.Runtime != "" {
+		dst.Agent.Runtime = src.Agent.Runtime
+	}
 	if src.Agent.MaxTokens != 0 {
 		dst.Agent.MaxTokens = src.Agent.MaxTokens
 	}
@@ -214,8 +212,6 @@ func mergeFile(dst *File, src File) {
 	mergeBoolPtr(&dst.Features.DisableMemory, src.Features.DisableMemory)
 	mergeBoolPtr(&dst.Features.DisableAutoMemory, src.Features.DisableAutoMemory)
 	mergeBoolPtr(&dst.Features.DisableContextBudget, src.Features.DisableContextBudget)
-	mergeBoolPtr(&dst.Features.DisableUsageLedger, src.Features.DisableUsageLedger)
-	mergeBoolPtr(&dst.Features.UsageEstimateCost, src.Features.UsageEstimateCost)
 	mergeBoolPtr(&dst.Features.DisableBehaviorPolicyWrite, src.Features.DisableBehaviorPolicyWrite)
 	mergeBoolPtr(&dst.Features.DisableScheduledTasks, src.Features.DisableScheduledTasks)
 	mergeBoolPtr(&dst.Features.DisableSemanticCompact, src.Features.DisableSemanticCompact)
@@ -258,12 +254,6 @@ func mergeFile(dst *File, src File) {
 	}
 	if src.SidechainMerge != "" {
 		dst.SidechainMerge = src.SidechainMerge
-	}
-	if src.Usage.DefaultInputPerMtok > 0 {
-		dst.Usage.DefaultInputPerMtok = src.Usage.DefaultInputPerMtok
-	}
-	if src.Usage.DefaultOutputPerMtok > 0 {
-		dst.Usage.DefaultOutputPerMtok = src.Usage.DefaultOutputPerMtok
 	}
 	if src.Schedule.MinSleep != "" {
 		dst.Schedule.MinSleep = src.Schedule.MinSleep

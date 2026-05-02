@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/oneclaw/budget"
 	"github.com/lengzhao/oneclaw/loop"
 	"github.com/lengzhao/oneclaw/subagent"
@@ -49,6 +50,15 @@ func (r *subRunner) host(parent *toolctx.Context) *subagent.Host {
 		MaxInheritedMessages: r.bg.InheritedMessageCap(),
 		HistoryBudget:        r.bg,
 		ChatTransport:        r.eng.ChatTransport,
+		EinoOpenAIAPIKey:     r.eng.EinoOpenAIAPIKey,
+		EinoOpenAIBaseURL:    r.eng.EinoOpenAIBaseURL,
+	}
+	h.RunTurn = func(ctx context.Context, cfg loop.Config, in bus.InboundMessage) error {
+		runner := r.eng.TurnRunner
+		if runner == nil {
+			runner = defaultTurnRunner()
+		}
+		return runner.RunTurn(ctx, cfg, in)
 	}
 	if r.eng.execJournalWanted() {
 		h.AppendExec = r.eng.appendExecutionRecord

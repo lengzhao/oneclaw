@@ -10,7 +10,7 @@ import (
 // real user lines (attachments kept) and assistant prose. Drops per-turn injections (agentMd,
 // recall, routing meta), semantic-compact envelopes, tool rows, and assistants that only issued
 // tool calls. Assistant messages that mix visible text with tool_calls are kept as text-only.
-// Use after a successful RunTurn (or when persisting working transcript) to cut token cost; the
+// Use after a successful user turn (or when persisting working transcript) to cut token cost; the
 // model can re-invoke tools if facts are still needed (cf. file memory / recall).
 func ToUserVisibleMessages(msgs []openai.ChatCompletionMessageParamUnion) []openai.ChatCompletionMessageParamUnion {
 	if len(msgs) == 0 {

@@ -47,19 +47,22 @@ flowchart TB
   wp[session.WorkerPool]
   fac[MainEngineFactory]
   eng[Engine per job]
-  loop[loop.RunTurn]
+  tr[einoTurnRunner]
+  adk[Eino ADK]
   disk[transcript + dialog_history 落盘]
   drivers <--> bus
   bus -->|ConsumeInbound| wp
   wp --> fac
   fac --> eng
-  eng --> loop
-  loop --> eng
+  eng --> tr
+  tr --> adk
+  adk --> eng
   eng --> disk
   eng -->|publishOutbound| bus
 ```
 
 - **WorkerPool**：按 `hash(session_key) % N` 分片，**同一会话固定落在同一 worker**，每轮任务 **新建 Engine**（`factory`），执行完 `SubmitUser` 后丢弃，避免无界 Engine 映射。
+- **TurnRunner**：固定为 **`einoTurnRunner`**（`MainEngineFactory` / `NewEngine`）；须配置 **`openai.api_key`**（映射到 **`Engine.EinoOpenAIAPIKey`**），否则 **`SubmitUser` 报错**。见 **§3.1**。
 - **SessionHandle**：由入站的 `ClientID`（clawbridge client id）+ 会话键（`InboundSessionKey`：优先 `SessionID`，否则 `Peer.ID`）派生；**StableSessionID**（SHA256 截断）用于目录名、转写路径等。**Engine.CWD** 为 **`<UserDataRoot>/workspace`**（默认）或 **`<UserDataRoot>/sessions/<StableSessionID>/workspace`**（`sessions.isolate_workspace: true`），见 `session.MainEngineFactory` 与 [session-home-isolation-design.md](session-home-isolation-design.md)。
 
 ---
@@ -73,7 +76,7 @@ flowchart TB
   WP[WorkerPool: factory → SubmitUser] --> N1[prepareInbound / notify inbound]
   N1 --> N2[prepareSharedTurn：布局、bundle、system、budget、tctx]
   N2 --> N3[写 user 行到 transcript]
-  N3 --> RT[loop.RunTurn]
+  N3 --> RT[TurnRunner.RunTurn]
   RT --> OK{成功?}
   OK -->|否| ERR[返回 err]
   OK -->|是| N4[ToUserVisible + SaveTranscript / WorkingTranscript]
@@ -83,13 +86,20 @@ flowchart TB
 **要点**：
 
 - **prepareSharedTurn**：注入 `MEMORY.md`、预算、`ToolContext` 与入站路由字段合并（见入站设计文档 §2.1）。
-- **loop.RunTurn**：模型 ↔ 工具循环；工具轨迹可在 `ToolTraceSink` 中收集，供 notify 等使用。
+- **TurnRunner.RunTurn**（`session.TurnRunner`）：**Eino ADK** + `tools.Registry` 的 Eino 绑定；**无 API key 则失败**（不再调用 **`loop.RunTurn`**）。工具轨迹仍可在 `ToolTraceSink` 中收集，供 notify 等使用。
 - **成功后**：折叠可见消息、**`SaveTranscript` / `SaveWorkingTranscript`**，并 **`appendDialogHistoryIfComplete`**（`workspace.AppendDialogHistoryPair`）。
-- **本地 slash**（如 `/help`、`/status`、`/paths`、`/reset`、`/stop`；CLI 的 `/exit` 由终端处理）：走 `submitLocalSlashTurn`，**不**调用 `loop.RunTurn`（刻意设计）。`/stop` 在入站 goroutine 内还会先调用 `WorkerPool.CancelInflightTurn` 取消**当前已在执行**的该会话轮次（`context.WithCancel(root)`）。内置列表见 `session/slash_local.go` 与 `/help`。
+- **本地 slash**（如 `/help`、`/status`、`/paths`、`/reset`、`/stop`；CLI 的 `/exit` 由终端处理）：走 `submitLocalSlashTurn`，**不**调用模型回合（刻意设计）。`/stop` 在入站 goroutine 内还会先调用 `WorkerPool.CancelInflightTurn` 取消**当前已在执行**的该会话轮次（`context.WithCancel(root)`）。内置列表见 `session/slash_local.go` 与 `/help`。
+
+### 3.1 不再分支「双运行时」
+
+- **`agent.runtime`**：YAML 中仍可出现（合并兼容），**运行时忽略**，内核始终 **`einoTurnRunner`**。
+- **密钥**：必须配置 **`openai.api_key`**（以及按需 **`base_url`**），经 **`MainEngineFactory`** / **`Engine`** 写入 **`EinoOpenAIAPIKey` / `EinoOpenAIBaseURL`**；**缺密钥则 `SubmitUser` 失败**。单测须设置与 **`openai.Client`** 一致的 stub 密钥与 URL。
+- **嵌套子代理**（`run_agent` / `fork_context`）：**`subagent.Host.RunTurn`** 与主线程一致；嵌套 **`loop.Config`** 必须带 **`EinoOpenAI*`**，否则与父轮次同样报错。
+- **`session.NewEngine`**：默认 **`einoTurnRunner`**，须传入**非 nil** **`tools.Registry`**。
 
 ---
 
-## 4. `loop.RunTurn` 内部（概念）
+## 4. `loop.RunTurn` 内部（概念）：独立测试与循环语义
 
 ```mermaid
 flowchart TB
@@ -101,7 +111,9 @@ flowchart TB
   E --> F[OutboundText / SlimTranscript / Lifecycle notify]
 ```
 
-具体步数上限、流式传输、Abort 等由 `loop.Config` 与 `Engine` 字段决定。
+主会话 **`SubmitUser`** 走 **Eino ADK**，不沿用本节逐步展开图；本节目的是说明 **`loop` 包**内 Chat Completions ↔ 工具循环（仍可由 **`loop.RunTurn`** 直接调用，部分 E2E 使用）。
+
+具体步数上限、流式传输、Abort 等由 `loop.Config` 与 `Engine` 字段决定；ADK 侧由 `MaxIterations` / `TurnMaxSteps` 等映射。
 
 ---
 

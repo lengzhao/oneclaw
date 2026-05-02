@@ -10,7 +10,7 @@
 |------|------|
 | [`agent-runtime-golang-plan.md`](agent-runtime-golang-plan.md) | **立项摘要**：目标与边界、当前包职责、延伸阅读（与实现对齐） |
 | [`third-party/claude-code-vs-oneclaw.md`](third-party/claude-code-vs-oneclaw.md) | **与 Claude Code 异同**：对齐点、oneclaw 优化与运维差异、缺失/后置能力一览 |
-| [`runtime-flow.md`](runtime-flow.md) | **运行时主路径**：`main`、WorkerPool、`SubmitUser`、`loop.RunTurn`、转写/dialog、定时任务、出站与扩展装配 |
+| [`runtime-flow.md`](runtime-flow.md) | **运行时主路径**：`main`、WorkerPool、`SubmitUser`、`einoTurnRunner`（须配置 API key）、转写/dialog、定时任务、出站与扩展装配 |
 | [`config.md`](config.md) | 统一 YAML：合并顺序、`PushRuntime` / `rtopts`、密钥与功能开关 |
 
 ---

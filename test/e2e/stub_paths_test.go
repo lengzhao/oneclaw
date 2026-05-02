@@ -10,13 +10,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/oneclaw/loop"
 	"github.com/lengzhao/oneclaw/test/openaistub"
-	"github.com/lengzhao/oneclaw/toolctx"
-	"github.com/lengzhao/oneclaw/tools/builtin"
 	"github.com/lengzhao/oneclaw/workspace"
-	"github.com/openai/openai-go"
 )
 
 // E2E-40 write_file 仅依赖 cwd（无 memory 根时路径必须在 cwd 下）
@@ -30,20 +26,8 @@ func TestE2E_40_WriteFileUnderCwdOnly(t *testing.T) {
 	e2eEnvMinimal(t, stub)
 
 	cwd := t.TempDir()
-	client := openai.NewClient(stubOpenAIOptions(stub)...)
-	msgs := []openai.ChatCompletionMessageParamUnion{}
-	err := loop.RunTurn(context.Background(), loop.Config{
-		Client:       &client,
-		Model:        "gpt-4o",
-		System:       "test",
-		MaxTokens:    256,
-		MaxSteps:     8,
-		Messages:     &msgs,
-		Registry:     builtin.DefaultRegistry(),
-		ToolContext:  toolctx.New(cwd, context.Background()),
-		TurnMaxSteps: 8,
-	}, bus.InboundMessage{Content: "write"})
-	if err != nil {
+	e := newStubEngine(t, stub, cwd)
+	if err := e.SubmitUser(context.Background(), stubInbound("write")); err != nil {
 		t.Fatal(err)
 	}
 	b, err := os.ReadFile(filepath.Join(cwd, "onlycwd_marker.txt"))
@@ -70,24 +54,8 @@ func TestE2E_41_WriteFileUnderUserMemoryRoot(t *testing.T) {
 	e2eEnvWithMemory(t, stub)
 	e2eIsolateUserMemory(t, home)
 
-	lay := workspace.DefaultLayout(cwd, home)
-	tctx := toolctx.New(cwd, context.Background())
-	tctx.MemoryWriteRoots = lay.WriteRoots()
-
-	client := openai.NewClient(stubOpenAIOptions(stub)...)
-	msgs := []openai.ChatCompletionMessageParamUnion{}
-	err = loop.RunTurn(context.Background(), loop.Config{
-		Client:       &client,
-		Model:        "gpt-4o",
-		System:       "test",
-		MaxTokens:    256,
-		MaxSteps:     8,
-		Messages:     &msgs,
-		Registry:     builtin.DefaultRegistry(),
-		ToolContext:  tctx,
-		TurnMaxSteps: 8,
-	}, bus.InboundMessage{Content: "write to user memory"})
-	if err != nil {
+	e := newStubEngine(t, stub, cwd)
+	if err := e.SubmitUser(context.Background(), stubInbound("write to user memory")); err != nil {
 		t.Fatal(err)
 	}
 	b, err := os.ReadFile(memFile)
@@ -111,35 +79,14 @@ func TestE2E_42_WriteFileRejectedOutsideRoots(t *testing.T) {
 	e2eEnvWithMemory(t, stub)
 	e2eIsolateUserMemory(t, home)
 
-	lay := workspace.DefaultLayout(cwd, home)
-	tctx := toolctx.New(cwd, context.Background())
-	tctx.MemoryWriteRoots = lay.WriteRoots()
-
-	client := openai.NewClient(stubOpenAIOptions(stub)...)
-	msgs := []openai.ChatCompletionMessageParamUnion{}
-	err := loop.RunTurn(context.Background(), loop.Config{
-		Client:       &client,
-		Model:        "gpt-4o",
-		System:       "test",
-		MaxTokens:    256,
-		MaxSteps:     8,
-		Messages:     &msgs,
-		Registry:     builtin.DefaultRegistry(),
-		ToolContext:  tctx,
-		TurnMaxSteps: 8,
-	}, bus.InboundMessage{Content: "write"})
-	if err != nil {
-		t.Fatal(err)
+	e := newStubEngine(t, stub, cwd)
+	err := e.SubmitUser(context.Background(), stubInbound("write"))
+	if err == nil {
+		t.Fatal("expected error when write_file rejects path outside roots")
 	}
-	var toolOut string
-	for _, m := range msgs {
-		if m.OfTool != nil && m.OfTool.Content.OfString.Valid() {
-			toolOut = m.OfTool.Content.OfString.Value
-			break
-		}
-	}
-	if !strings.Contains(toolOut, "outside") && !strings.Contains(toolOut, "memory roots") && !strings.Contains(toolOut, "working directory") {
-		t.Fatalf("expected path error, got %q", toolOut)
+	errText := err.Error()
+	if !strings.Contains(errText, "outside") && !strings.Contains(errText, "memory roots") && !strings.Contains(errText, "working directory") {
+		t.Fatalf("expected path/root error, got: %v", err)
 	}
 	if _, err := os.Stat(outside); err == nil {
 		t.Fatal("forbidden file should not exist")
@@ -168,34 +115,18 @@ func TestE2E_43_GrepUnderProjectMemoryRoot(t *testing.T) {
 	e2eEnvWithMemory(t, stub)
 	e2eIsolateUserMemory(t, home)
 
-	lay := workspace.DefaultLayout(cwd, home)
-	tctx := toolctx.New(cwd, context.Background())
-	tctx.MemoryWriteRoots = lay.WriteRoots()
-
-	client := openai.NewClient(stubOpenAIOptions(stub)...)
-	msgs := []openai.ChatCompletionMessageParamUnion{}
-	err := loop.RunTurn(context.Background(), loop.Config{
-		Client:       &client,
-		Model:        "gpt-4o",
-		System:       "test",
-		MaxTokens:    256,
-		MaxSteps:     8,
-		Messages:     &msgs,
-		Registry:     builtin.DefaultRegistry(),
-		ToolContext:  tctx,
-		TurnMaxSteps: 8,
-	}, bus.InboundMessage{Content: "search"})
-	if err != nil {
+	e := newStubEngine(t, stub, cwd)
+	if err := e.SubmitUser(context.Background(), stubInbound("search")); err != nil {
 		t.Fatal(err)
 	}
-	var grepOut string
-	for _, m := range msgs {
-		if m.OfTool != nil && m.OfTool.Content.OfString.Valid() {
-			grepOut = m.OfTool.Content.OfString.Value
-			break
-		}
+	var joined string
+	for _, b := range stub.ChatRequestBodies() {
+		joined += string(b)
 	}
-	if !strings.Contains(grepOut, "GREP_UNIQUE_E2E_43") {
-		t.Fatalf("grep output: %q", grepOut)
+	if !strings.Contains(joined, "GREP_UNIQUE_E2E_43") {
+		t.Fatalf("grep marker missing from traffic")
+	}
+	if got := loop.LastAssistantDisplay(e.Messages); got != "found" {
+		t.Fatalf("assistant %q", got)
 	}
 }

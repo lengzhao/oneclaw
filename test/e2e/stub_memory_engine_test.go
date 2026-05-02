@@ -37,12 +37,12 @@ func TestE2E_10_UserAgentMdInjected(t *testing.T) {
 	if len(bodies) < 1 {
 		t.Fatal("expected chat request")
 	}
-	reqText, err := openaistub.ChatRequestUserTextConcat(bodies[0])
+	reqText, err := stubChatRequestPromptText(bodies[0])
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(reqText, "E2E10_USER_MARKER") {
-		t.Fatalf("first request user payload:\n%s", reqText)
+		t.Fatalf("first request prompt:\n%s", reqText)
 	}
 }
 
@@ -70,7 +70,7 @@ func TestE2E_11_ProjectOneclawAgentMd(t *testing.T) {
 	if len(bodies) < 1 {
 		t.Fatal("expected chat request")
 	}
-	reqText, err := openaistub.ChatRequestUserTextConcat(bodies[0])
+	reqText, err := stubChatRequestPromptText(bodies[0])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,7 +103,7 @@ func TestE2E_12_DotOneclawAgentMdOnly(t *testing.T) {
 	if len(bodies) < 1 {
 		t.Fatal("expected chat request")
 	}
-	reqText, err := openaistub.ChatRequestUserTextConcat(bodies[0])
+	reqText, err := stubChatRequestPromptText(bodies[0])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +136,7 @@ func TestE2E_13_DotOneclawRules(t *testing.T) {
 	if len(bodies) < 1 {
 		t.Fatal("expected chat request")
 	}
-	reqText, err := openaistub.ChatRequestUserTextConcat(bodies[0])
+	reqText, err := stubChatRequestPromptText(bodies[0])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -180,7 +180,7 @@ func TestE2E_14_WalkUpOrderChildAfterParent(t *testing.T) {
 	if len(bodies) < 1 {
 		t.Fatal("expected chat request")
 	}
-	text, err := openaistub.ChatRequestUserTextConcat(bodies[0])
+	text, err := stubChatRequestPromptText(bodies[0])
 	if err != nil {
 		t.Fatal(err)
 	}
