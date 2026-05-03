@@ -12,16 +12,18 @@ type File struct {
 
 // Job is one persisted schedule entry.
 type Job struct {
-	ID             string `json:"id"`
-	Name           string `json:"name,omitempty"`
-	Enabled        bool   `json:"enabled"`
-	Kind           string `json:"kind"` // "once" | "cron"
-	CronExpr       string `json:"cron_expr,omitempty"`
-	NextRunUnix    int64  `json:"next_run_unix"`
-	SessionSegment string `json:"session_segment"`
-	ClientID       string `json:"client_id,omitempty"`
-	Prompt         string `json:"prompt"`
-	AgentID        string `json:"agent_id,omitempty"`
+	ID          string `json:"id"`
+	Name        string `json:"name,omitempty"`
+	Enabled     bool   `json:"enabled"`
+	Kind        string `json:"kind"` // "once" | "cron"
+	CronExpr    string `json:"cron_expr,omitempty"`
+	NextRunUnix int64  `json:"next_run_unix"`
+	// SessionSegment is the raw channel session key (e.g. Weixin …@im.wechat). Persist as-is; sanitize only for paths.
+	SessionSegment string            `json:"session_segment"`
+	ClientID       string            `json:"client_id,omitempty"`
+	Prompt         string            `json:"prompt"`
+	AgentID        string            `json:"agent_id,omitempty"`
+	ReplyMeta      map[string]string `json:"reply_meta,omitempty"`
 }
 
 const (
@@ -42,4 +44,19 @@ func (j *Job) Normalize() {
 	j.AgentID = strings.TrimSpace(j.AgentID)
 	j.ClientID = strings.TrimSpace(j.ClientID)
 	j.CronExpr = strings.TrimSpace(j.CronExpr)
+	if len(j.ReplyMeta) > 0 {
+		out := make(map[string]string)
+		for k, v := range j.ReplyMeta {
+			kk := strings.TrimSpace(k)
+			vv := strings.TrimSpace(v)
+			if kk != "" && vv != "" {
+				out[kk] = vv
+			}
+		}
+		if len(out) == 0 {
+			j.ReplyMeta = nil
+		} else {
+			j.ReplyMeta = out
+		}
+	}
 }

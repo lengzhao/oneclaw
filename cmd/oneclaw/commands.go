@@ -16,7 +16,7 @@ func cmdSnapshot(ctx context.Context, g globalOpts, args []string) error {
 	return nil
 }
 
-func cmdVersion(ctx context.Context) error {
+func cmdVersion(_ context.Context) error {
 	_, err := fmt.Fprintf(os.Stdout, "%s\n", version)
 	return err
 }

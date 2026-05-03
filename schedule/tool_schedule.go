@@ -7,6 +7,8 @@ import (
 	"log/slog"
 	"strings"
 	"time"
+
+	"maps"
 )
 
 const maxScheduleJobs = 64
@@ -22,6 +24,7 @@ type ToolAddInput struct {
 	AtRFC3339      string
 	EverySeconds   int
 	CronExpr       string
+	ReplyMeta      map[string]string
 }
 
 func newScheduleJobID() string {
@@ -57,11 +60,14 @@ func mergeScheduleKinds(atSeconds int, atRFC3339 string, everySeconds int, cronE
 		n++
 	}
 	if n != 1 {
-		return "", 0, "", fmt.Errorf("set exactly one of at_seconds (>0), at_rfc3339, every_seconds (>0), or cron_expr")
+		return "", 0, "", fmt.Errorf("set exactly one of at_seconds (>=%d), at_rfc3339, every_seconds (>=%d), or cron_expr", MinGranularitySeconds, MinGranularitySeconds)
 	}
 	now := time.Now().UTC()
 	nowUnix := now.Unix()
 	if hasSec {
+		if int64(atSeconds) < MinGranularitySeconds {
+			return "", 0, "", fmt.Errorf("at_seconds must be >= %d", MinGranularitySeconds)
+		}
 		return KindOnce, now.Add(time.Duration(atSeconds) * time.Second).Unix(), "", nil
 	}
 	if hasAt {
@@ -69,14 +75,14 @@ func mergeScheduleKinds(atSeconds int, atRFC3339 string, everySeconds int, cronE
 		if err != nil {
 			return "", 0, "", fmt.Errorf("at_rfc3339: %w", err)
 		}
-		if !t.After(now.Add(-time.Second)) {
-			return "", 0, "", fmt.Errorf("at_rfc3339 must be in the future")
+		if t.UTC().Unix() < nowUnix+MinGranularitySeconds {
+			return "", 0, "", fmt.Errorf("at_rfc3339 must be at least %d seconds in the future", MinGranularitySeconds)
 		}
 		return KindOnce, t.UTC().Unix(), "", nil
 	}
 	if hasEvery {
-		if everySeconds < 1 {
-			return "", 0, "", fmt.Errorf("every_seconds must be >= 1")
+		if int64(everySeconds) < MinGranularitySeconds {
+			return "", 0, "", fmt.Errorf("every_seconds must be >= %d", MinGranularitySeconds)
 		}
 		expr := fmt.Sprintf("@every %ds", everySeconds)
 		sch, err := parseCronSchedule(expr)
@@ -132,6 +138,7 @@ func AddScheduleJob(path string, in ToolAddInput) (string, error) {
 			ClientID:       strings.TrimSpace(in.ClientID),
 			Prompt:         msg,
 			AgentID:        strings.TrimSpace(in.AgentID),
+			ReplyMeta:      maps.Clone(in.ReplyMeta),
 		}
 		job.Normalize()
 		f.Jobs = append(f.Jobs, job)
@@ -143,6 +150,7 @@ func AddScheduleJob(path string, in ToolAddInput) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	notifyScheduleWake()
 	return summary, nil
 }
 
@@ -177,6 +185,7 @@ func RemoveScheduleJob(path, jobID string, scope JobBindingScope) (string, error
 	if err != nil {
 		return "", err
 	}
+	notifyScheduleWake()
 	return summary, nil
 }
 
@@ -195,6 +204,7 @@ func ListScheduleJobsText(path string, scope JobBindingScope) (string, error) {
 		if err := Save(path, f); err != nil {
 			return "", err
 		}
+		notifyScheduleWake()
 	}
 	var b strings.Builder
 	n := 0

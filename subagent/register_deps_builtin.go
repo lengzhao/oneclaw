@@ -2,6 +2,7 @@ package subagent
 
 import (
 	"fmt"
+	"maps"
 	"strings"
 
 	"github.com/lengzhao/oneclaw/paths"
@@ -23,8 +24,9 @@ func RegisterDepsBoundBuiltin(out *tools.Registry, name string, deps *RunAgentDe
 		}
 		jobsPath := paths.ScheduledJobsPath(strings.TrimSpace(deps.UserDataRoot))
 		tool, err := builtin.InferCron(builtin.CronDeps{
-			JobsPath: jobsPath,
-			Scope:    scheduleScopeFromTurn(deps.Turn),
+			JobsPath:  jobsPath,
+			Scope:     scheduleScopeFromTurn(deps.Turn),
+			ReplyMeta: maps.Clone(deps.Turn.ReplyMeta),
 		})
 		if err != nil {
 			return true, err

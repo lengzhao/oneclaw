@@ -1,6 +1,6 @@
 // Serve loads merged YAML config (including clawbridge), starts the Bridge, TurnHub, inbound consumer, and optional schedule poller.
 // Turn path is identical for live drivers and schedule: clawbridge InboundMessage → [turnhub.Hub.Enqueue] → [runner.ExecuteTurn] → [clawbridge.Bridge.Reply].
-// Scheduled jobs are created only via the agent cron tool (no separate cron admin API on serve); the poller only delivers due rows from scheduled_jobs.json.
+// Scheduled jobs are created only via the agent cron tool (no separate cron admin API on serve); delivery uses next-run timer sleep + wake on job file changes (same idea as main branch host poller).
 package main
 
 import (
@@ -9,6 +9,7 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"maps"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -30,6 +31,12 @@ import (
 	"github.com/lengzhao/oneclaw/turnhub"
 )
 
+const (
+	turnhubTurnTimeout           = 30 * time.Minute
+	turnhubDiscardReplyTimeout   = 15 * time.Second
+	turnhubQueueDiscardUserText = "您的消息因处理队列已满已被丢弃，请稍后重试。"
+)
+
 func cmdServe(ctx context.Context, g globalOpts, args []string) error {
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -38,12 +45,9 @@ func cmdServe(ctx context.Context, g globalOpts, args []string) error {
 	buf := &strings.Builder{}
 	fs.SetOutput(buf)
 	mockLLM := fs.Bool("mock-llm", false, "use stub ChatModel for every turn")
-	scheduleTick := fs.Duration("schedule-interval", time.Minute, "poll scheduled_jobs.json at this interval (minimum 1m; 0 disables)")
+	noSchedule := fs.Bool("no-schedule", false, "disable scheduled_jobs.json delivery loop")
 	if err := fs.Parse(args); err != nil {
 		return fmt.Errorf("serve: %w\n%s", err, buf.String())
-	}
-	if *scheduleTick > 0 && *scheduleTick < time.Minute {
-		return fmt.Errorf("serve: --schedule-interval must be at least 1m when enabled (got %s)", *scheduleTick)
 	}
 
 	cfgPaths := []string{}
@@ -86,9 +90,14 @@ func cmdServe(ctx context.Context, g globalOpts, args []string) error {
 	}
 
 	b, err := clawbridge.New(cbCfg, clawbridge.WithOutboundSendNotify(func(_ context.Context, info clawbridge.OutboundSendNotifyInfo) {
-		if info.Err != nil {
-			slog.Warn("clawbridge outbound", "client_id", info.Message.ClientID, "err", info.Err)
+		if info.Err == nil {
+			return
 		}
+		cid := ""
+		if info.Message != nil {
+			cid = info.Message.ClientID
+		}
+		slog.Warn("clawbridge outbound", "client_id", cid, "err", info.Err)
 	}))
 	if err != nil {
 		return fmt.Errorf("clawbridge new: %w", err)
@@ -103,12 +112,20 @@ func cmdServe(ctx context.Context, g globalOpts, args []string) error {
 	}
 	defer shutdownBridge()
 
-	hub := turnhub.NewHub(ctx, newTurnProcessor(b, root, ocfg, cat, mf, mockLLM))
+	hub := turnhub.NewHub(ctx, newTurnProcessor(b, root, ocfg, cat, mf, mockLLM),
+		turnhub.WithTurnTimeout(turnhubTurnTimeout),
+		turnhub.WithOnDropped(func(_ context.Context, dropped clawbridge.InboundMessage) error {
+			replyCtx, cancel := context.WithTimeout(context.Background(), turnhubDiscardReplyTimeout)
+			defer cancel()
+			_, err := b.Reply(replyCtx, &dropped, turnhubQueueDiscardUserText, "")
+			return err
+		}),
+	)
 	go runConsumeInbound(ctx, b, hub)
 
 	schedPath := paths.ScheduledJobsPath(root)
 	var schedCancel context.CancelFunc
-	if *scheduleTick > 0 {
+	if !*noSchedule {
 		var schedCtx context.Context
 		schedCtx, schedCancel = context.WithCancel(ctx)
 		p := schedule.NewPoller(schedPath, func(c context.Context, j schedule.Job) error {
@@ -127,20 +144,7 @@ func cmdServe(ctx context.Context, g globalOpts, args []string) error {
 			}
 			return nil
 		})
-		go func() {
-			t := time.NewTicker(*scheduleTick)
-			defer t.Stop()
-			for {
-				select {
-				case <-schedCtx.Done():
-					return
-				case <-t.C:
-					if err := p.Tick(schedCtx); err != nil {
-						slog.Error("schedule tick", "err", err)
-					}
-				}
-			}
-		}()
+		go schedule.RunPollerLoop(schedCtx, p)
 	}
 	if schedCancel != nil {
 		defer schedCancel()
@@ -150,14 +154,16 @@ func cmdServe(ctx context.Context, g globalOpts, args []string) error {
 		return fmt.Errorf("clawbridge start: %w", err)
 	}
 
-	schedIV := "disabled"
-	if scheduleTick != nil && *scheduleTick > 0 {
-		schedIV = (*scheduleTick).String()
+	schedMode := "disabled"
+	if !*noSchedule {
+		schedMode = "wake_timer"
 	}
 	slog.Info("oneclaw serve",
 		"user_data_root", root,
 		"schedule", schedPath,
-		"schedule_interval", schedIV,
+		"schedule_delivery", schedMode,
+		"schedule_min_sleep", schedule.MinTimerSleep(),
+		"schedule_idle_sleep", schedule.IdleTimerSleep(),
 	)
 	<-ctx.Done()
 	return nil
@@ -201,7 +207,7 @@ func runConsumeInbound(ctx context.Context, b *clawbridge.Bridge, hub *turnhub.H
 func newTurnProcessor(b *clawbridge.Bridge, root string, ocfg *config.File, cat *catalog.Catalog, mf *catalog.Manifest, globalMock *bool) turnhub.Processor {
 	return func(c context.Context, msg clawbridge.InboundMessage) error {
 		msgCopy := msg
-		sess := turnhub.HandleFromInbound(&msgCopy).Session
+		sess := strings.TrimSpace(msgCopy.SessionID)
 		agent := strings.TrimSpace(msgCopy.Metadata[runner.InboundMetaAgent])
 		prof := strings.TrimSpace(msgCopy.Metadata[runner.InboundMetaProfile])
 		mock := *globalMock
@@ -211,6 +217,10 @@ func newTurnProcessor(b *clawbridge.Bridge, root string, ocfg *config.File, cat 
 		corr := strings.TrimSpace(msgCopy.Metadata[runner.InboundMetaCorrelation])
 		if corr == "" {
 			corr = subagent.NewCorrelationID()
+		}
+		var inboundMeta map[string]string
+		if msgCopy.Metadata != nil {
+			inboundMeta = maps.Clone(msgCopy.Metadata)
 		}
 		return runner.ExecuteTurn(runner.Params{
 			Ctx:             c,
@@ -226,6 +236,14 @@ func newTurnProcessor(b *clawbridge.Bridge, root string, ocfg *config.File, cat 
 			Stdout:          os.Stdout,
 			CorrelationID:   corr,
 			InboundClientID: strings.TrimSpace(msgCopy.ClientID),
+			InboundMeta:     inboundMeta,
+			RequiredOutboundMetadataKeysForSend: func(clientID string) []string {
+				keys, ok := b.RequiredOutboundMetadataKeysForSend(clientID)
+				if !ok {
+					return nil
+				}
+				return keys
+			},
 			PostAssistantRespond: func(ctx context.Context, assistant string) error {
 				_, err := b.Reply(ctx, &msgCopy, assistant, "")
 				if err != nil {

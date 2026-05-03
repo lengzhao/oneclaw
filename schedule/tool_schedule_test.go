@@ -11,6 +11,27 @@ func scopeS1() JobBindingScope {
 	return JobBindingScope{SessionSegment: "s1", ClientID: "", AgentID: ""}
 }
 
+func TestAddScheduleJob_rejectsBelowMinGranularity(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "scheduled_jobs.json")
+	_, err := AddScheduleJob(p, ToolAddInput{
+		Message:        "x",
+		SessionSegment: "s1",
+		AtSeconds:      9,
+	})
+	if err == nil || !strings.Contains(err.Error(), "at_seconds") {
+		t.Fatalf("want at_seconds error, got %v", err)
+	}
+	_, err = AddScheduleJob(p, ToolAddInput{
+		Message:        "x",
+		SessionSegment: "s1",
+		EverySeconds:   5,
+	})
+	if err == nil || !strings.Contains(err.Error(), "every_seconds") {
+		t.Fatalf("want every_seconds error, got %v", err)
+	}
+}
+
 func TestAddScheduleJob_onceThenListRemove(t *testing.T) {
 	dir := t.TempDir()
 	p := filepath.Join(dir, "scheduled_jobs.json")

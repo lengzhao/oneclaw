@@ -64,7 +64,7 @@ func runInteractive(ctx context.Context, g globalOpts, args []string) error {
 		return err
 	}
 
-	sessSeg := paths.SanitizeSessionPathSegment(*sessionID)
+	sessWire := strings.TrimSpace(*sessionID)
 
 	useMock := *mockLLM
 	prof, err := config.ResolveModelProfile(cfg, strings.TrimSpace(*profileID))
@@ -74,17 +74,17 @@ func runInteractive(ctx context.Context, g globalOpts, args []string) error {
 	useMock = useMock || strings.EqualFold(prof.Provider, "mock")
 
 	return runner.ExecuteTurn(runner.Params{
-		Ctx:             ctx,
-		UserDataRoot:    root,
-		Config:          cfg,
-		Catalog:         cat,
-		Manifest:        mf,
-		AgentID:         strings.TrimSpace(*agentID),
-		ProfileID:       strings.TrimSpace(*profileID),
-		SessionSegment:  sessSeg,
-		UserPrompt:      *prompt,
-		UseMock:         useMock,
-		Stdout:          os.Stdout,
-		CorrelationID:   subagent.NewCorrelationID(),
+		Ctx:            ctx,
+		UserDataRoot:   root,
+		Config:         cfg,
+		Catalog:        cat,
+		Manifest:       mf,
+		AgentID:        strings.TrimSpace(*agentID),
+		ProfileID:      strings.TrimSpace(*profileID),
+		SessionSegment: sessWire,
+		UserPrompt:     *prompt,
+		UseMock:        useMock,
+		Stdout:         os.Stdout,
+		CorrelationID:  subagent.NewCorrelationID(),
 	})
 }

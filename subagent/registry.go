@@ -124,7 +124,7 @@ func assembleRegistry(ws string, names []string, seed *tools.Registry, parent to
 	return out, nil
 }
 
-func copyOrRebindTool(parent toolhost.Registry, child *tools.Registry, childWS, name string, deps *RunAgentDeps) error {
+func copyOrRebindTool(parent toolhost.Registry, child *tools.Registry, _ string, name string, deps *RunAgentDeps) error {
 	if !containsToolName(parent.Names(), name) {
 		return fmt.Errorf("subagent: tool %q not on parent registry", name)
 	}

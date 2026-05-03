@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"maps"
 	"os"
 	"strings"
 	"time"
@@ -79,6 +80,7 @@ func ExecuteSubAgentTurn(ctx context.Context, deps *RunAgentDeps, sub *catalog.A
 			SessionSegment:  deps.Turn.SessionSegment,
 			InboundClientID: deps.Turn.InboundClientID,
 			AgentID:         sub.AgentType,
+			ReplyMeta:       maps.Clone(deps.Turn.ReplyMeta),
 		},
 		Catalog:         deps.Catalog,
 		Cfg:             deps.Cfg,

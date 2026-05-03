@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"maps"
 	"os"
 	"strings"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"github.com/lengzhao/oneclaw/catalog"
 	"github.com/lengzhao/oneclaw/config"
 	"github.com/lengzhao/oneclaw/engine"
+	"github.com/lengzhao/oneclaw/meta"
 	"github.com/lengzhao/oneclaw/observe"
 	"github.com/lengzhao/oneclaw/paths"
 	"github.com/lengzhao/oneclaw/preturn"
@@ -32,9 +34,10 @@ type Params struct {
 	Catalog      *catalog.Catalog
 	Manifest     *catalog.Manifest
 
-	AgentID        string // catalog agent id; empty uses manifest default_agent (see InboundMeta* for clawbridge Metadata)
-	ProfileID      string // empty uses config default profile resolution
-	SessionSegment string // sanitized session path segment (paths.SanitizeSessionPathSegment)
+	AgentID   string // catalog agent id; empty uses manifest default_agent (see InboundMeta* for clawbridge Metadata)
+	ProfileID string // empty uses config default profile resolution
+	// SessionSegment is the raw channel session id (e.g. Weixin …@im.wechat). Paths use SanitizeSessionPathSegment internally.
+	SessionSegment string
 	UserPrompt     string
 
 	UseMock bool
@@ -44,6 +47,10 @@ type Params struct {
 
 	// InboundClientID is set for multi-channel serve turns so scheduled jobs reply on the same client.
 	InboundClientID string
+	// InboundMeta is clawbridge inbound Metadata (serve); used to snapshot reply keys into cron jobs (e.g. Weixin context_token).
+	InboundMeta map[string]string
+	// RequiredOutboundMetadataKeysForSend resolves driver-specific Metadata keys to persist (see clawbridge Bridge.RequiredOutboundMetadataKeysForSend); optional.
+	RequiredOutboundMetadataKeysForSend func(clientID string) []string
 
 	PostAssistantRespond func(context.Context, string) error
 }
@@ -79,7 +86,8 @@ func ExecuteTurn(p Params) error {
 		return fmt.Errorf("unknown agent id %q (run init; check agents/)", at)
 	}
 
-	sessSeg := paths.SanitizeSessionPathSegment(p.SessionSegment)
+	sessWire := strings.TrimSpace(p.SessionSegment)
+	sessSeg := paths.SanitizeSessionPathSegment(sessWire)
 	sessionRoot := paths.SessionRoot(root, sessSeg)
 	instruction := paths.InstructionRoot(root, sessSeg, p.Config.IsolateInstructionOrDefault())
 	ws := paths.Workspace(instruction)
@@ -91,6 +99,22 @@ func ExecuteTurn(p Params) error {
 	}
 	if err := paths.SeedInstructionFiles(root, instruction); err != nil {
 		return err
+	}
+
+	prompt := strings.TrimSpace(p.UserPrompt)
+	if prompt == "/reset" {
+		if err := session.ResetConversation(sessionRoot); err != nil {
+			return fmt.Errorf("reset session: %w", err)
+		}
+		const ack = "已清除本会话的用户侧对话记录（transcript.jsonl）。runs/、subs/、MEMORY、工作区文件未改动；后续回合仍按单轮输入调用模型，不带历史 transcript。"
+		if p.PostAssistantRespond != nil {
+			if err := p.PostAssistantRespond(ctx, ack); err != nil {
+				return err
+			}
+		} else if p.Stdout != nil {
+			_, _ = fmt.Fprintln(p.Stdout, ack)
+		}
+		return nil
 	}
 
 	bundle, err := preturn.Build(root, instruction, ag, preturn.DefaultBudget(), nil)
@@ -108,11 +132,17 @@ func ExecuteTurn(p Params) error {
 	if corrID == "" {
 		corrID = subagent.NewCorrelationID()
 	}
+	var metaKeys []string
+	if p.RequiredOutboundMetadataKeysForSend != nil {
+		metaKeys = p.RequiredOutboundMetadataKeysForSend(strings.TrimSpace(p.InboundClientID))
+	}
+	replyMeta := maps.Clone(meta.FilterReplyMetaByKeys(p.InboundMeta, metaKeys))
 	deps := &subagent.RunAgentDeps{
 		Turn: subagent.TurnBinding{
-			SessionSegment:  sessSeg,
+			SessionSegment:  sessWire,
 			InboundClientID: strings.TrimSpace(p.InboundClientID),
 			AgentID:         at,
+			ReplyMeta:       replyMeta,
 		},
 		Catalog:         p.Catalog,
 		Cfg:             p.Config,
@@ -172,7 +202,6 @@ func ExecuteTurn(p Params) error {
 	}
 
 	now := time.Now().UTC()
-	prompt := strings.TrimSpace(p.UserPrompt)
 	if err := session.AppendTranscriptTurn(sessionRoot, session.TranscriptTurn{
 		Ts: now, Role: "user", Content: prompt,
 	}); err != nil {
@@ -182,16 +211,19 @@ func ExecuteTurn(p Params) error {
 		Ts: now, AgentType: ag.AgentType, Phase: "run_start",
 		Detail: map[string]any{
 			"mock_llm": useMock, "profile": prof.ID, "model": prof.DefaultModel,
-			"session_id": sessSeg, "correlation_id": corrID, "workflow": wfDoc.ID, "workflow_file": wfPath,
+			"session_id": sessWire, "session_path_segment": sessSeg, "correlation_id": corrID, "workflow": wfDoc.ID, "workflow_file": wfPath,
 		},
 	}); err != nil {
 		return err
 	}
 
 	rtx := &engine.RuntimeContext{
-		Turn:                 engine.TurnContext{AgentID: ag.AgentType},
+		Turn: engine.TurnContext{
+			AgentID:   ag.AgentType,
+			ReplyMeta: maps.Clone(replyMeta),
+		},
 		SessionRoot:          sessionRoot,
-		SessionSegment:       sessSeg,
+		SessionSegment:       sessWire,
 		Agent:                ag,
 		Bundle:               bundle,
 		UserPrompt:           prompt,
@@ -219,7 +251,7 @@ func ExecuteTurn(p Params) error {
 			"err", err,
 			"workflow", wfDoc.ID,
 			"workflow_file", wfPath,
-			"session_id", sessSeg,
+			"session_id", sessWire,
 			"correlation_id", corrID,
 			"agent", ag.AgentType,
 		)
@@ -236,6 +268,6 @@ func ExecuteTurn(p Params) error {
 	}
 	return session.AppendRunEvent(sessionRoot, ag.AgentType, session.RunEvent{
 		Ts: end, AgentType: ag.AgentType, Phase: "run_complete",
-		Detail: map[string]any{"assistant_len": len(rtx.Assistant), "session_id": sessSeg, "correlation_id": corrID, "workflow": wfDoc.ID},
+		Detail: map[string]any{"assistant_len": len(rtx.Assistant), "session_id": sessWire, "correlation_id": corrID, "workflow": wfDoc.ID},
 	})
 }

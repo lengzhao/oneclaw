@@ -2,6 +2,7 @@ package wfexec
 
 import (
 	"fmt"
+	"maps"
 	"strings"
 
 	"github.com/lengzhao/oneclaw/engine"
@@ -49,6 +50,7 @@ func handleAgent(rtx *engine.RuntimeContext) error {
 			SessionSegment:  rtx.EffectiveSessionSegment(),
 			InboundClientID: "",
 			AgentID:         agentID,
+			ReplyMeta:       maps.Clone(rtx.Turn.ReplyMeta),
 		},
 		Catalog:         rtx.Catalog,
 		Cfg:             rtx.Cfg,

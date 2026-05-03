@@ -16,7 +16,7 @@ Global options (FR-CFG-04):
 Commands:
   init       Bootstrap UserDataRoot (flags: --user-data; merges config keys if config.yaml exists)
   run, repl  Single-turn agent (flags: --mock-llm, --profile, --agent, --prompt, --session)
-  serve      clawbridge + WebChat + TurnHub + optional schedule (config.yaml clawbridge key; flags: --schedule-interval, --mock-llm)
+  serve      clawbridge + WebChat + TurnHub + optional schedule (flags: --no-schedule, --mock-llm); send /reset to clear transcript.jsonl only (runs/subs unchanged)
   channel    clawbridge driver onboarding: list-drivers | onboard <driver> (see -h)
   snapshot   Export session snapshot for backup/migration (stub)
   version    Print version
