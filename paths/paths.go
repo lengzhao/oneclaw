@@ -45,6 +45,11 @@ func Workspace(instructionRoot string) string {
 	return filepath.Join(instructionRoot, "workspace")
 }
 
+// SubSessionRoot is sessions/<parent>/subs/<sub_run_id>/ (appendix-data-layout §3.1).
+func SubSessionRoot(parentSessionRoot, subRunID string) string {
+	return filepath.Join(parentSessionRoot, "subs", subRunID)
+}
+
 // CatalogRoot is UserDataRoot: manifest.yaml, agents/, skills/, workflows/, prompts/ live here (no hidden subfolder).
 func CatalogRoot(userDataRoot string) string {
 	return userDataRoot

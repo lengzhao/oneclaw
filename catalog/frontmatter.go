@@ -36,6 +36,8 @@ type AgentFrontmatter struct {
 	Tools                     []string `yaml:"tools,omitempty"`
 	Model                     string   `yaml:"model,omitempty"`
 	MaxTurns                  int      `yaml:"max_turns,omitempty"`
+	Workspace                 string   `yaml:"workspace,omitempty"`
+	InheritParentMemory       bool     `yaml:"inherit_parent_memory,omitempty"`
 }
 
 // ParseAgentMarkdown extracts frontmatter + body. Catalog identity is always stem (filename without extension).
@@ -63,6 +65,8 @@ func ParseAgentMarkdown(stem string, raw []byte) (*Agent, error) {
 	a.Tools = fm.Tools
 	a.Model = fm.Model
 	a.MaxTurns = fm.MaxTurns
+	a.Workspace = strings.TrimSpace(fm.Workspace)
+	a.InheritParentMemory = fm.InheritParentMemory
 	if a.Name == "" {
 		a.Name = a.AgentType
 	}

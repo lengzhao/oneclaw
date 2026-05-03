@@ -1,58 +1,97 @@
 package tools
 
 import (
-	"context"
-	"fmt"
-	"os"
-	"path/filepath"
-	"strings"
-
-	"github.com/cloudwego/eino/components/tool/utils"
+	"github.com/cloudwego/eino/components/tool"
+	"github.com/lengzhao/oneclaw/config"
+	"github.com/lengzhao/oneclaw/tools/builtin"
 )
 
-type echoIn struct {
-	Message string `json:"message" jsonschema:"description=Text to echo back"`
+// IsBuiltinToolName reports whether name is a builtin handled by RegisterBuiltinsNamed when wiring sub-agents (workspace rebound).
+func IsBuiltinToolName(name string) bool {
+	return builtin.IsBuiltinName(name)
 }
 
-// RegisterBuiltins registers echo and read_file using registry.WorkspaceRoot as read boundary.
+func dedupeAllow(names []string) []string {
+	seen := make(map[string]bool)
+	var out []string
+	for _, n := range names {
+		if n == "" || seen[n] {
+			continue
+		}
+		seen[n] = true
+		out = append(out, n)
+	}
+	return out
+}
+
+// RegisterBuiltins registers all tools in [DefaultBuiltinIDs] (ignores config; for tests and narrow callers).
 func RegisterBuiltins(r *Registry) error {
-	echoT, err := utils.InferTool("echo", "Returns the input message unchanged.", func(ctx context.Context, in echoIn) (string, error) {
-		return in.Message, nil
-	})
-	if err != nil {
-		return err
+	return RegisterBuiltinsNamed(r, nil)
+}
+
+// RegisterBuiltinsForConfig registers builtins allowed by [config.File.BuiltinToolEnabled].
+// Nil cfg behaves like all tools enabled.
+func RegisterBuiltinsForConfig(r *Registry, cfg *config.File) error {
+	var names []string
+	for _, id := range DefaultBuiltinIDs {
+		if cfg.BuiltinToolEnabled(id) {
+			names = append(names, id)
+		}
 	}
-	if err := r.Register(echoT); err != nil {
-		return err
+	return RegisterBuiltinsNamed(r, names)
+}
+
+// RegisterBuiltinsNamed registers builtins by id. Empty names registers all [DefaultBuiltinIDs].
+func RegisterBuiltinsNamed(r *Registry, names []string) error {
+	want := make(map[string]bool)
+	var order []string
+	if len(names) == 0 {
+		order = DefaultBuiltinIDs
+		for _, id := range DefaultBuiltinIDs {
+			want[id] = true
+		}
+	} else {
+		order = dedupeAllow(names)
+		for _, id := range order {
+			if builtin.IsBuiltinName(id) {
+				want[id] = true
+			}
+		}
 	}
 
-	root := strings.TrimSpace(r.WorkspaceRoot())
-	if root == "" {
-		return fmt.Errorf("tools: workspace root required for read_file")
-	}
-	base := filepath.Clean(root)
-
-	type readIn struct {
-		Path string `json:"path" jsonschema:"description=File path relative to workspace"`
-	}
-	readT, err := utils.InferTool("read_file", "Read a UTF-8 text file under the workspace.", func(ctx context.Context, in readIn) (string, error) {
-		rel := filepath.ToSlash(strings.TrimSpace(in.Path))
-		if rel == "" || strings.Contains(rel, "..") {
-			return "", fmt.Errorf("invalid path")
+	ws := r.WorkspaceRoot()
+	for _, id := range order {
+		if !want[id] {
+			continue
 		}
-		full := filepath.Clean(filepath.Join(base, filepath.FromSlash(rel)))
-		relOut, err := filepath.Rel(base, full)
-		if err != nil || strings.HasPrefix(relOut, "..") {
-			return "", fmt.Errorf("path escapes workspace")
+		var t tool.InvokableTool
+		var err error
+		switch id {
+		case builtin.NameEcho:
+			t, err = builtin.InferEcho()
+		case builtin.NameReadFile:
+			t, err = builtin.InferReadFile(ws)
+		case builtin.NameListDir:
+			t, err = builtin.InferListDir(ws)
+		case builtin.NameGlob:
+			t, err = builtin.InferGlob(ws)
+		case builtin.NameWriteFile:
+			t, err = builtin.InferWriteFile(ws)
+		case builtin.NameEditFile:
+			t, err = builtin.InferEditFile(ws)
+		case builtin.NameAppendFile:
+			t, err = builtin.InferAppendFile(ws)
+		case builtin.NameExec:
+			t, err = builtin.InferExec(ws)
+		default:
+			continue
 		}
-		b, err := os.ReadFile(full)
 		if err != nil {
-			return "", err
+			return err
 		}
-		return string(b), nil
-	})
-	if err != nil {
-		return err
+		if err := r.Register(t); err != nil {
+			return err
+		}
 	}
-	return r.Register(readT)
+	return nil
 }

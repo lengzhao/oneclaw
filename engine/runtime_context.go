@@ -11,6 +11,7 @@ import (
 	"github.com/lengzhao/oneclaw/catalog"
 	"github.com/lengzhao/oneclaw/config"
 	"github.com/lengzhao/oneclaw/preturn"
+	"github.com/lengzhao/oneclaw/toolhost"
 )
 
 // RuntimeContext is mutable per-turn state shared by workflow nodes.
@@ -36,6 +37,7 @@ type RuntimeContext struct {
 	UserDataRoot    string
 	InstructionRoot string
 	WorkspacePath   string
+	ToolRegistry    toolhost.Registry // parent runtime tools (subset source for sub-agents / run_agent)
 	CurrentNodeID   string
 	CurrentParams   map[string]any
 	CurrentAsync    bool
@@ -46,11 +48,16 @@ type RuntimeContext struct {
 
 	Stdout           *os.File
 	OnAssistantChunk func(content string) // optional streaming hook
+	// OnSubAgentAssistantChunk streams nested agent output (optional).
+	OnSubAgentAssistantChunk func(correlationID, subRunID, agentType, chunk string)
 
 	RunStartedAt time.Time
 	UseMock      bool
 	ProfileID    string
 	ModelName    string
+
+	// CorrelationID ties one CLI/turn invocation to sub-agent logs (optional; wfexec may synthesize if empty).
+	CorrelationID string
 
 	SawOnRespond bool // transcript flush delegated to on_respond node
 }

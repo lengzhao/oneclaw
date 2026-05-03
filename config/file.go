@@ -21,6 +21,8 @@ type File struct {
 	DefaultModel string         `yaml:"default_model,omitempty"`
 	Models       []ModelProfile `yaml:"models,omitempty"`
 	Runtime      RuntimeOptions `yaml:"runtime,omitempty"`
+	// Tools toggles builtins (phase 4b); catalog tools: allowlist still applies per agent.
+	Tools map[string]ToolSwitch `yaml:"tools,omitempty"`
 }
 
 // Sessions mirrors appendix-data-layout isolation switches.
@@ -47,6 +49,8 @@ type ModelProfile struct {
 // RuntimeOptions holds cross-cutting execution limits (YAML key "runtime").
 type RuntimeOptions struct {
 	MaxAgentIterations int `yaml:"max_agent_iterations,omitempty"`
+	// MaxDelegationDepth caps nested run_agent depth (each increment runs one sub-agent). Zero applies default in ApplyDefaults.
+	MaxDelegationDepth int `yaml:"max_delegation_depth,omitempty"`
 }
 
 // IsolateInstructionOrDefault returns sessions.isolate_instruction_root with recommended default true.
@@ -84,6 +88,9 @@ func ApplyDefaults(f *File) {
 
 	if f.Runtime.MaxAgentIterations == 0 {
 		f.Runtime.MaxAgentIterations = 100
+	}
+	if f.Runtime.MaxDelegationDepth == 0 {
+		f.Runtime.MaxDelegationDepth = 3
 	}
 }
 

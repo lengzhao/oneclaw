@@ -11,3 +11,20 @@ models:
     default_model: gpt-5.4-nano
 runtime:
   max_agent_iterations: 100
+  max_delegation_depth: 3
+# Optional: turn off specific builtins (catalog tools: still controls per-agent allowlist).
+# tools:
+#   glob:
+#     enabled: false
+#   write_file:
+#     enabled: false
+#   edit_file:
+#     enabled: false
+# exec defaults OFF. Enable only with explicit allow prefixes (and optional deny substrings):
+#   exec:
+#     enabled: true
+#     allow:
+#       - "git "
+#       - "go "
+#     deny:
+#       - ";"

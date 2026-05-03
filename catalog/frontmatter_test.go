@@ -26,6 +26,23 @@ Hello **body**
 	}
 }
 
+func TestParseAgentMarkdown_workspaceAndMemoryInherit(t *testing.T) {
+	raw := []byte(`---
+name: Sub
+workspace: private
+inherit_parent_memory: true
+---
+body
+`)
+	a, err := ParseAgentMarkdown("sub1", raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.Workspace != "private" || !a.InheritParentMemory {
+		t.Fatalf("%+v", a)
+	}
+}
+
 func TestParseAgentMarkdown_noFrontmatterUsesStem(t *testing.T) {
 	a, err := ParseAgentMarkdown("stemmy", []byte("plain"))
 	if err != nil {

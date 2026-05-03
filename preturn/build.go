@@ -16,8 +16,14 @@ type Bundle struct {
 	ToolAllowlist []string // empty or nil => allow all registered tools
 }
 
+// BuildOpts tweaks PreTurn assembly for sub-agents (phase 4).
+type BuildOpts struct {
+	// OmitMemory skips MEMORY.md when true (default sub-agent behavior).
+	OmitMemory bool
+}
+
 // Build constructs system instruction from session AGENT.md, catalog body, MEMORY, and skills index.
-func Build(userDataRoot, instructionRoot string, agent *catalog.Agent, budget Budget) (*Bundle, error) {
+func Build(userDataRoot, instructionRoot string, agent *catalog.Agent, budget Budget, opts *BuildOpts) (*Bundle, error) {
 	if budget.MemoryMaxRunes == 0 && budget.SkillsMaxRunes == 0 {
 		budget = DefaultBudget()
 	}
@@ -30,10 +36,13 @@ func Build(userDataRoot, instructionRoot string, agent *catalog.Agent, budget Bu
 		parts = append(parts, strings.TrimSpace(agent.Body))
 	}
 
-	mem := readOptionalFile(filepath.Join(instructionRoot, "MEMORY.md"))
-	if mem != "" {
-		mem = truncateRunes(mem, budget.MemoryMaxRunes)
-		parts = append(parts, "## MEMORY snapshot\n"+mem)
+	omitMemory := opts != nil && opts.OmitMemory
+	if !omitMemory {
+		mem := readOptionalFile(filepath.Join(instructionRoot, "MEMORY.md"))
+		if mem != "" {
+			mem = truncateRunes(mem, budget.MemoryMaxRunes)
+			parts = append(parts, "## MEMORY snapshot\n"+mem)
+		}
 	}
 
 	skillsRoot := filepath.Join(paths.CatalogRoot(userDataRoot), "skills")

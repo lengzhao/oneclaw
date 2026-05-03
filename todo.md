@@ -53,9 +53,23 @@
 
 目标：**FR-AGT-02/03/06**、[docs/appendix-data-layout.md](docs/appendix-data-layout.md) §3.1。
 
-- [ ] **`tools`**：`run_agent`（或等价）委托；子 Agent 独立 messages；工具集为父 Registry 子集。
-- [ ] **`paths` / `preturn`**：`workspace: shared|private`；`inherit_parent_memory` 等显式开关（默认不继承主 MEMORY）。
-- [ ] **子会话目录**：`sessions/<parent>/subs/<sub_run>/` 或等价策略，日志带 `parent_session_id`、`sub_run_id`。
+- [x] **`subagent` + `tools`**：`run_agent` 委托（[`subagent`](subagent/)）；子 Agent 独立 messages；工具集为父 Registry 子集（[`BuildRegistryForAgent`](subagent/registry.go)）。**`run_agent` 须在 catalog `tools` 中显式列出**；根 Agent 空 `tools` = 非 meta builtins；**子 Agent 空 `tools` = [`DefaultSubagentToolTemplate`](subagent/template.go) 与父工具求交**（不继承父全集）。
+- [x] **`paths` / `preturn` / `catalog`**：`workspace: shared|private`；`inherit_parent_memory`（默认 false）；[`preturn.BuildOpts.OmitMemory`](preturn/build.go)。
+- [x] **子会话目录**：[`paths.SubSessionRoot`](paths/paths.go)；[`observe.WithAgentRunAttrs`](observe/agent_run.go) + runs `detail` 含 `parent_session_id`、`sub_run_id`。
+
+---
+
+## 阶段 4b（backlog）：内置 Tools 扩展
+
+阶段 1 仅交付最小 [`RegisterBuiltins`](tools/builtins.go)（`echo` / `read_file`）；本阶段扩展 builtins 与配置开关。可参考 **PicoClaw**（`config.json` 的 `tools.*` 分层、`pkg/tools` 目录能力）做**清单与配置形状**，但实现需对齐 [requirements.md](docs/requirements.md)、Workspace 边界及阶段 7 **Harness**（高风险工具默认关或包装）。
+
+建议优先级（可按 PR 拆分）：
+
+- [x] **FS（低风险）**：`list_dir` / `glob`；`write_file` / `append_file`；路径与 `read_file` 一致（workspace 净化、`..` 拒绝）。根注册走 [`RegisterBuiltinsForConfig`](tools/builtins.go) + [`config.File.Tools`](config/file.go)。
+- [x] **编辑类**：[`edit_file`](tools/builtin/edit_file.go)（`old_text` → `new_text`，必须唯一匹配一次；对齐 PicoClaw `edit_file`）。
+- [x] **配置开关**：根配置 `tools.<name>.enabled`（[`config/tools.go`](config/tools.go)）；`catalog` `tools:` 仍为 Agent 级 allowlist。
+- [x] **子 Agent 模板**：[`DefaultSubagentToolTemplate`](subagent/template.go) 仍为读向默认（`echo` / `read_file` / `list_dir`）；`glob` / 写类需父 registry 与 catalog 显式下放。
+- [x] **`exec`**：[`tools/builtin/exec.go`](tools/builtin/exec.go) + [`config.ExecCommandPermitted`](config/tools.go)；**默认关闭**（显式 `tools.exec.enabled: true` + `allow` 前缀白名单，`deny` 子串）；运行时策略读 [`config.Runtime`](config/runtime.go)。浏览器 / Web / MCP 挪到阶段 7。
 
 ---
 
@@ -79,10 +93,12 @@
 
 ---
 
-## 阶段 7（可选）：RAG + Harness
+## 阶段 7（可选）：RAG + Harness + 浏览器 / Web / MCP
 
 - [ ] **RAG**：按 FR-KNOW-* 与 eino-ext 装配 Embedder / Indexer / Retriever；知识库路径默认 `knowledge/sources/`（附录 §6）。
-- [ ] **`harness`**：SafeHarness、高风险工具包装（[docs/harness-governance-extensions.md](docs/harness-governance-extensions.md)）。
+- [ ] **`harness`**：SafeHarness、高风险工具包装（[docs/harness-governance-extensions.md](docs/harness-governance-extensions.md)）；与 **`exec` 配额 / 审计** 可增强衔接。
+- [ ] **浏览器 / Web fetch**：默认关闭或强约束；与 harness、配额、审计设计后再接线。
+- [ ] **MCP**：发现、搜索、桥接；与 [FR-FLOW-04](docs/requirements.md) 衔接。
 
 ---
 
@@ -94,7 +110,7 @@
 | `paths` | 数据根与会话布局 |
 | `catalog` | `agents/*.md` Catalog |
 | `workflow` / `wfexec` | YAML DAG → Eino Graph |
-| `adkhost` / `tools` | ADK + Registry + run_agent |
+| `adkhost` / `tools` | ADK + Registry + run_agent；内置扩展见 **阶段 4b** |
 | `preturn` / `memory` | 注入与记忆策略 |
 | `engine` / `turnhub` | 回合生命周期与排队 |
 | `channel` / `schedule` | 多通道与定时 |

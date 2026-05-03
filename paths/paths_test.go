@@ -33,3 +33,10 @@ func TestWorkspace(t *testing.T) {
 		t.Fatalf("got %q", got)
 	}
 }
+
+func TestSubSessionRoot(t *testing.T) {
+	parent := filepath.Join("/u", "sessions", "ses")
+	if got, want := SubSessionRoot(parent, "sub-abc"), filepath.Join(parent, "subs", "sub-abc"); got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+}

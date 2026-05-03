@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/cloudwego/eino/adk"
-	"github.com/cloudwego/eino/components/model"
 
 	"github.com/lengzhao/oneclaw/adkhost"
 	"github.com/lengzhao/oneclaw/catalog"
@@ -21,7 +20,7 @@ import (
 	"github.com/lengzhao/oneclaw/paths"
 	"github.com/lengzhao/oneclaw/preturn"
 	"github.com/lengzhao/oneclaw/session"
-	"github.com/lengzhao/oneclaw/tools"
+	"github.com/lengzhao/oneclaw/subagent"
 	"github.com/lengzhao/oneclaw/wfexec"
 	"github.com/lengzhao/oneclaw/workflow"
 )
@@ -98,27 +97,9 @@ func runInteractive(ctx context.Context, g globalOpts, args []string) error {
 		return err
 	}
 
-	bundle, err := preturn.Build(root, instruction, ag, preturn.DefaultBudget())
+	bundle, err := preturn.Build(root, instruction, ag, preturn.DefaultBudget(), nil)
 	if err != nil {
 		return err
-	}
-
-	baseReg := tools.NewRegistry(ws)
-	if err := tools.RegisterBuiltins(baseReg); err != nil {
-		return err
-	}
-	chosen := baseReg.All()
-	if len(bundle.ToolAllowlist) > 0 {
-		chosen, err = baseReg.FilterByNames(bundle.ToolAllowlist)
-		if err != nil {
-			return err
-		}
-	}
-	execReg := tools.NewRegistry(ws)
-	for _, t := range chosen {
-		if err := execReg.Register(t); err != nil {
-			return err
-		}
 	}
 
 	prof, err := config.ResolveModelProfile(cfg, *profileID)
@@ -126,17 +107,32 @@ func runInteractive(ctx context.Context, g globalOpts, args []string) error {
 		return err
 	}
 
-	var cm model.ToolCallingChatModel
 	useMock := *mockLLM || strings.EqualFold(prof.Provider, "mock")
+	corrID := subagent.NewCorrelationID()
+	deps := &subagent.RunAgentDeps{
+		Catalog:         cat,
+		Cfg:             cfg,
+		UserDataRoot:    root,
+		InstructionRoot: instruction,
+		SessionRoot:     sessionRoot,
+		SessionSegment:  sessSeg,
+		ParentWorkspace: ws,
+		ProfileID:       prof.ID,
+		UseMock:         useMock,
+		Stdout:          os.Stdout,
+		CorrelationID:   corrID,
+	}
+	execReg, err := subagent.BuildExecRegistry(ws, bundle.ToolAllowlist, deps)
+	if err != nil {
+		return err
+	}
+
 	if useMock {
-		cm = adkhost.NewStubChatModel("Hello from oneclaw stub model.")
 		slog.InfoContext(ctx, "using stub ChatModel", "profile", prof.ID, "provider", prof.Provider)
-	} else {
-		openaiCM, err := adkhost.NewOpenAIChatModel(ctx, prof)
-		if err != nil {
-			return fmt.Errorf("%w (use --mock-llm for offline)", err)
-		}
-		cm = openaiCM
+	}
+	cm, err := adkhost.NewToolCallingChatModel(ctx, prof, useMock)
+	if err != nil {
+		return fmt.Errorf("%w (use --mock-llm for offline)", err)
 	}
 
 	desc := ag.Description
@@ -147,7 +143,7 @@ func runInteractive(ctx context.Context, g globalOpts, args []string) error {
 		Name:          ag.AgentType,
 		Description:   desc,
 		Instruction:   bundle.Instruction,
-		MaxIterations: cfg.Runtime.MaxAgentIterations,
+		MaxIterations: adkhost.MaxAgentIterations(cfg),
 		Handlers:      []adk.ChatModelAgentMiddleware{observe.NewChatModelLogMiddleware()},
 	})
 	if err != nil {
@@ -180,7 +176,7 @@ func runInteractive(ctx context.Context, g globalOpts, args []string) error {
 		Ts: now, AgentType: ag.AgentType, Phase: "run_start",
 		Detail: map[string]any{
 			"mock_llm": useMock, "profile": prof.ID, "model": prof.DefaultModel,
-			"session_id": sessSeg, "workflow": wfDoc.ID, "workflow_file": wfPath,
+			"session_id": sessSeg, "correlation_id": corrID, "workflow": wfDoc.ID, "workflow_file": wfPath,
 		},
 	}); err != nil {
 		return err
@@ -202,12 +198,14 @@ func runInteractive(ctx context.Context, g globalOpts, args []string) error {
 		UserDataRoot:    root,
 		InstructionRoot: instruction,
 		WorkspacePath:   ws,
+		ToolRegistry:    execReg,
 		ChatAgent:       agent,
 		Stdout:          os.Stdout,
 		RunStartedAt:    now,
 		UseMock:         useMock,
 		ProfileID:       prof.ID,
 		ModelName:       prof.DefaultModel,
+		CorrelationID:   corrID,
 	}
 	if err := wfexec.Execute(ctx, wfDoc, reg, rtx); err != nil {
 		return err
@@ -223,6 +221,6 @@ func runInteractive(ctx context.Context, g globalOpts, args []string) error {
 	}
 	return session.AppendRunEvent(sessionRoot, ag.AgentType, session.RunEvent{
 		Ts: end, AgentType: ag.AgentType, Phase: "run_complete",
-		Detail: map[string]any{"assistant_len": len(rtx.Assistant), "session_id": sessSeg, "workflow": wfDoc.ID},
+		Detail: map[string]any{"assistant_len": len(rtx.Assistant), "session_id": sessSeg, "correlation_id": corrID, "workflow": wfDoc.ID},
 	})
 }

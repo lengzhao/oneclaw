@@ -23,12 +23,36 @@ func (m *ChatModelLogMiddleware) BeforeModelRewriteState(ctx context.Context, st
 	if mc != nil {
 		tools = len(mc.Tools)
 	}
-	slog.DebugContext(ctx, "adk.model_call", "phase", "before", "history_len", len(state.Messages), "tools", tools)
+	args := []any{"phase", "before", "history_len", len(state.Messages), "tools", tools}
+	if a, ok := AgentRunAttrsFromContext(ctx); ok {
+		if a.CorrelationID != "" {
+			args = append(args, "correlation_id", a.CorrelationID)
+		}
+		if a.ParentSessionID != "" {
+			args = append(args, "parent_session_id", a.ParentSessionID)
+		}
+		if a.SubRunID != "" {
+			args = append(args, "sub_run_id", a.SubRunID)
+		}
+	}
+	slog.DebugContext(ctx, "adk.model_call", args...)
 	return m.BaseChatModelAgentMiddleware.BeforeModelRewriteState(ctx, state, mc)
 }
 
 // AfterModelRewriteState implements adk.ChatModelAgentMiddleware.
 func (m *ChatModelLogMiddleware) AfterModelRewriteState(ctx context.Context, state *adk.ChatModelAgentState, mc *adk.ModelContext) (context.Context, *adk.ChatModelAgentState, error) {
-	slog.DebugContext(ctx, "adk.model_call", "phase", "after", "history_len", len(state.Messages))
+	args := []any{"phase", "after", "history_len", len(state.Messages)}
+	if a, ok := AgentRunAttrsFromContext(ctx); ok {
+		if a.CorrelationID != "" {
+			args = append(args, "correlation_id", a.CorrelationID)
+		}
+		if a.ParentSessionID != "" {
+			args = append(args, "parent_session_id", a.ParentSessionID)
+		}
+		if a.SubRunID != "" {
+			args = append(args, "sub_run_id", a.SubRunID)
+		}
+	}
+	slog.DebugContext(ctx, "adk.model_call", args...)
 	return m.BaseChatModelAgentMiddleware.AfterModelRewriteState(ctx, state, mc)
 }
