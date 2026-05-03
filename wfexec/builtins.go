@@ -8,6 +8,7 @@ import (
 	"github.com/cloudwego/eino/adk"
 	"github.com/cloudwego/eino/schema"
 
+	"github.com/lengzhao/oneclaw/engine"
 	"github.com/lengzhao/oneclaw/session"
 )
 
@@ -26,6 +27,7 @@ func RegisterPhase3Builtins(r *Registry) error {
 		{"filter_tools", handleFilterTools},
 		{"adk_main", handleADKMain},
 		{"on_respond", handleOnRespond},
+		{"agent", handleAgent},
 		{"noop", handleNoop},
 	} {
 		if err := r.Register(pair.use, pair.h); err != nil {
@@ -35,30 +37,30 @@ func RegisterPhase3Builtins(r *Registry) error {
 	return nil
 }
 
-func handleOnReceive(rtx *RuntimeContext) error {
-	if strings.TrimSpace(rtx.UserPrompt) == "" {
+func handleOnReceive(rtx *engine.RuntimeContext) error {
+	if strings.TrimSpace(rtx.EffectiveUserPrompt()) == "" {
 		return fmt.Errorf("wfexec: on_receive: empty user prompt")
 	}
 	return nil
 }
 
-func handleLoadPromptMD(*RuntimeContext) error {
+func handleLoadPromptMD(*engine.RuntimeContext) error {
 	// Instruction already assembled in preturn.Bundle before workflow (workflows-spec §6).
 	return nil
 }
 
-func handleLoadMemorySnapshot(*RuntimeContext) error { return nil }
+func handleLoadMemorySnapshot(*engine.RuntimeContext) error { return nil }
 
-func handleFilterTools(*RuntimeContext) error { return nil }
+func handleFilterTools(*engine.RuntimeContext) error { return nil }
 
-func handleNoop(*RuntimeContext) error { return nil }
+func handleNoop(*engine.RuntimeContext) error { return nil }
 
-func handleADKMain(rtx *RuntimeContext) error {
+func handleADKMain(rtx *engine.RuntimeContext) error {
 	if rtx.ChatAgent == nil {
 		return fmt.Errorf("wfexec: adk_main: ChatAgent not configured")
 	}
 	input := &adk.AgentInput{
-		Messages: []adk.Message{schema.UserMessage(rtx.UserPrompt)},
+		Messages: []adk.Message{schema.UserMessage(rtx.EffectiveUserPrompt())},
 	}
 	iter := rtx.ChatAgent.Run(rtx.GoCtx, input)
 	var chunks []string
@@ -89,12 +91,12 @@ func handleADKMain(rtx *RuntimeContext) error {
 	return nil
 }
 
-func handleOnRespond(rtx *RuntimeContext) error {
+func handleOnRespond(rtx *engine.RuntimeContext) error {
 	rtx.SawOnRespond = true
 	if strings.TrimSpace(rtx.Assistant) == "" {
 		return nil
 	}
-	return session.AppendTranscriptTurn(rtx.SessionRoot, session.TranscriptTurn{
+	return session.AppendTranscriptTurn(rtx.EffectiveSessionRoot(), session.TranscriptTurn{
 		Ts: time.Now().UTC(), Role: "assistant", Content: rtx.Assistant,
 	})
 }

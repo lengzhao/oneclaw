@@ -39,7 +39,7 @@
 - **上下文隔离**：子 Agent **默认**使用 **独立的 ADK 消息列表**；**不**把主会话完整 transcript 注入子循环；**不**注入主会话的 `MEMORY` / `memory/`（除非该 Agent 声明 **`inherit_parent_memory: true`** 等显式开关）。
 - **会话隔离**：子 Agent 若有独立落盘需求（子 transcript、子演进写入、**按 Agent 的执行记录**），使用 **派生命名空间**，例如 `sessions/<parent_session_id>/subs/<sub_run_id>/`（或以内存为主、仅在 handoff 时写回父会话摘要 —— 实现二选一，文档层约束「不得默认写进父 SessionRoot 同一 transcript 文件不打标签」）。
 - **Workspace（工具 cwd）**：子 Agent / PostTurn 管线 Agent **默认 `shared`** —— 与 **当前主 Agent 回合** 相同的工作目录（一般为会话 `<InstructionRoot>/workspace`）；若声明 **`workspace: private`**，使用独占子目录（常与 `subs/<sub_run>/workspace` 对齐），避免文件/exec 与主会话互相干扰。
-- **演进防递归**：承担 **记忆抽取** / **Skills 生成** 的 Agent 必须 **`suppress_post_turn_evolution: true`**，宿主 **不得**在其运行结束后再次调度这两项 PostTurn（见 [requirements.md](requirements.md) FR-FLOW-05）。
+- **演进编排**：记忆抽取 / Skills 生成 **在主会话 `workflows/*.yaml` 中**通过 **`on_respond` → `async` + `use: agent`**（约定节点 id **`memory_agent`** / **`skill_agent`**）调度；内置 **`memory_extractor` / `skill_generator`** 可被用户 agents 覆盖（见 [requirements.md](requirements.md) FR-FLOW-05、[workflows-spec.md](workflows-spec.md) §4.3）。
 
 可选放宽（均在 Agent frontmatter 或 manifest 中 **显式开启**）：`inherit_parent_memory`；合并摘要回父 transcript。
 
@@ -60,7 +60,7 @@
 | `sessions.isolate_workspace`、共享 vs 每会话 workspace | §2–§3 |
 | IM 转写路径 under `sessions/<id>/` | §2–§3 |
 | 子 Agent 默认隔离、Workspace 默认共享 | §3.1 |
-| 演进防递归 | §3.1 |
+| 演进编排（workflow；见 FR-FLOW-05） | §3.1 与上文「演进编排」小节 |
 
 ---
 

@@ -80,7 +80,7 @@
 - **调用方式**：主线程通过 **`run_agent`**（或路由层按渠道绑定默认 Agent）选中类型；子循环使用过滤后的工具集。
 - **子 Agent 默认（已定）**：**会话隔离 + 上下文隔离** —— 独立子 transcript/命名空间（见 [appendix-data-layout.md](appendix-data-layout.md) §3.1）、独立 messages，**不**默认注入主会话 MEMORY；若需共享需在 Agent 定义中 **显式**开启（如 `inherit_parent_memory`）。
 - **Workspace**：子 Agent / 后台管线 Agent 的工具工作目录 **默认与主 Agent 当前回合共享**（`workspace: shared`）；可选 **`private`** 独占目录，避免文件/exec 互扰（见 FR-AGT-06）。
-- **管线角色**：用户消息处理、记忆抽取、Skills 生成 **可为不同 `agent_type`**；**每次执行落盘记录**。记忆抽取与 Skills 生成 Agent **不得**再触发 PostTurn 演进（`suppress_post_turn_evolution`，见 FR-FLOW-05）。
+- **管线角色**：用户消息处理、记忆抽取、Skills 生成 **可为不同 `agent_type`**；**每次执行落盘记录**。是否在用户回复后继续跑演进由 **`workflows/*.yaml`**（**`async` 枝叶**，如 **`memory_agent`**）声明（FR-FLOW-05 与实现对齐见 [requirements.md](requirements.md)）。
 - **路由**：全局默认 Agent + 入站 **`Metadata`/会话** 绑定 `agent_id`（若产品需要多租户或多人格）。
 
 ---

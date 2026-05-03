@@ -23,7 +23,7 @@
 
 1. **语言与内核**：实现语言为 **Go**；模型↔工具主循环走 **Eino ADK**（与 `eino-ext` 等扩展对齐），Compose/Chain/Middleware 用于回合外与回合内扩展点。
 2. **多 Agent**：支持 **主 Agent + 子 Agent**（或对等 Agent）定义与调度；定义以 **`agents/*.md`（及 manifest）** 为主，运行时可按任务路由或显式委托。**用户消息处理、记忆抽取、Skills 生成** 可配置为 **不同 `agent_type`**（各自 Instruction / 工具白名单 / 模型），由 **workflow 图节点**分别拉起。
-3. **记忆与 Skills 演进**：能从对话与工具产物中 **抽取可复核事实**，写入约定记忆文件；在稳定重复模式上 **自动生成或更新 Skills**（含触发条件、边界与安全约束），形成 **自主演进** 闭环。**承担抽取 / 生成的 Agent 不得再触发同类 PostTurn 演进**（见 FR-FLOW-05），避免死循环。
+3. **记忆与 Skills 演进**：能从对话与工具产物中 **抽取可复核事实**，写入约定记忆文件；在稳定重复模式上 **自动生成或更新 Skills**（含触发条件、边界与安全约束），形成 **自主演进** 闭环。演进 **仅在 `workflows/*.yaml` 中声明**（典型：`on_respond` 之后 **`async: true`** 的 **`use: agent`** 枝；默认内置 **`memory_extractor` / `skill_generator`** Catalog 条目可被用户 **`agents/*.md` 覆盖**）。产品层面仍应避免病态闭环编排；**当前 oneclaw** **未**做演进专用的加载期闭环校验（见 FR-FLOW-05）。
 4. **框架优先、MD 驱动**：Go 代码 **仅实现框架能力**（加载、装配、执行、落盘、观测、扩展点）；**业务流程、提示词片段、工具白名单、Workflow（图）** 等由用户 **md/yaml** 提供，见 [eino-md-chain-architecture.md](eino-md-chain-architecture.md)。
 5. **默认傻瓜式**：`init` 后 **最小 YAML** 即可跑通（含默认模型占位说明、默认工具集、默认记忆/skills 目录）；高级项可选。
 6. **自主进化（默认开启或可一键开启）**：在默认配置下提供 **记忆提取** 与 **Skills 生成/修订** 的调度策略（如回合后异步、定时批处理或可配置触发），用户可通过 md **关闭或收紧** 行为。
@@ -67,7 +67,7 @@ flowchart LR
   end
 ```
 
-图中「事实提取」「Skills 草案生成」可由 **独立 `agent_type`** 执行；各自运行 **落盘执行记录**，且 **不再触发** 下一轮同类 PostTurn（FR-FLOW-05）。
+图中「事实提取」「Skills 草案生成」可由 **独立 `agent_type`** 执行；各自运行 **落盘执行记录**；是否调度由 **workflow 图**（含 **`async`** 枝叶）决定（编排约束见 FR-FLOW-05）。
 
 ---
 
@@ -110,7 +110,7 @@ flowchart LR
 | FR-FLOW-02 | **Workflow 定义**：回合前/后及异步任务等为 **声明式 DAG**（`workflows/*.yaml`，可选线性 `steps` 糖）；Go 提供 **节点注册表 + 图执行器** | 规格见 [workflows-spec.md](workflows-spec.md) |
 | FR-FLOW-03 | **Prompt 拼装**：分段 md 按顺序与预算拼接；支持按 agent 覆盖 | |
 | FR-FLOW-04 | **工具白名单**：声明为列表或 tag；解析后为 Registry filter | |
-| FR-FLOW-05 | **演进递归禁令**：标记为 **记忆抽取** 或 **Skills 生成** 用途的 Agent（ Catalog / manifest）必须 **`suppress_post_turn_evolution: true`**（或等价）；宿主在执行该类 Agent 的回合内 **不得**再次调度记忆抽取与 Skills 生成 PostTurn 节点。**主对话 Agent** 默认 `false`。实现须在 `TurnContext` 中带 **`evolution_suppressed`** / 深度计数，防止嵌套工具误触发 | 见 [eino-md-chain-architecture.md](eino-md-chain-architecture.md) §5.6 |
+| FR-FLOW-05 | **演进编排约定（与实现对齐）**：记忆抽取、Skills 生成 **只通过 workflow 编排**（见 [workflows-spec.md](workflows-spec.md) §4.3、§8）；默认内置 **`memory_extractor` / `skill_generator`**，用户 **`agents/`** 同名覆盖。**不设** Agent frontmatter 中的演进关闭布尔项。**当前实现** **未**做「演进专用 workflow 不得再挂同类 async 枝」的加载期校验，也 **未**在 **`TurnContext`** 上维护嵌套演进剖面；闭环防范依赖编排设计与后续可选扩展 | 见 [eino-md-chain-architecture.md](eino-md-chain-architecture.md) §5.6 |
 
 ### 3.5 知识与 RAG（可选模块）
 
@@ -227,3 +227,4 @@ flowchart LR
 |------|------|
 | （文档创建） | 首版：需求与主路径梳理 |
 | 2026-05-02 | **重写为项目目标 PRD**；增补知识与 RAG（FR-KNOW-* 等）；明确 **`github.com/lengzhao/clawbridge`** 为多渠道接入依赖；新增 **§8 增强与扩展** 与 [harness-governance-extensions.md](harness-governance-extensions.md)（修订记录顺延为 §9）；glossary / reference / README 同步；§5 锚定用户主目录与 `UserDataRoot/.agent/`；FR-AGT-02 默认隔离；架构参考更名为 [reference-architecture.md](reference-architecture.md)；FR-AGT-05/06、FR-FLOW-05、FR-OBS-04；§5 审计路径补充；§2.3 流程图说明；§6 指向 [eino-integration-surface.md](eino-integration-surface.md)；文首 / README / reference 指向 [architecture.md](architecture.md)；[workflows-spec.md](workflows-spec.md) 取代 chains-spec（DAG + workflow 命名）；FR-FLOW-01/02、§8 节前指引同步 |
+| 2026-05-03 | FR-FLOW-05、§2.1 / §2.3：**演进仅靠 `workflows/*.yaml`（`async` + `use: agent`）**；移除 Catalog **`suppress_post_turn_evolution`** 表述。**FR-FLOW-05 与实现对齐**：无演进专用加载期校验、无 `TurnContext` 演进嵌套字段；内置 `memory_extractor` / `skill_generator` + 默认 turn 模板 |

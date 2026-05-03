@@ -10,7 +10,7 @@
 |------|-----------|
 | 产品 / 架构 | 端到端流程、阶段划分、与渠道/数据的关系 |
 | 实现 | 与 TurnHub、Compose、ADK、链后继节点、落盘的对齐关系 |
-| 评审 | 演进防递归、子 Agent、Workspace 默认策略的可视化 |
+| 评审 | 演进枝叶（workflow）、子 Agent、Workspace 默认策略的可视化 |
 
 ---
 
@@ -65,7 +65,7 @@ flowchart TB
 仍需显式策略的两点（**与是否叫 PostTurn 无关**）：
 
 1. **异步**：用户应先收到 **OnRespond / Bus**，演进类节点 **后台执行** —— 在 YAML / manifest 用 **`async`、分叉边、队列** 等表达，由宿主解释（见 [eino-md-chain-architecture.md](eino-md-chain-architecture.md) §7）。
-2. **防递归（FR-FLOW-05）**：执行 **`suppress_post_turn_evolution: true`** 的 Agent 之后，调度器 **不得**再附加一层「记忆抽取 / Skills 生成」后继 —— 无论你把这些节点写在哪个 workflow 文件里。
+2. **编排**：主会话在 **`workflows/*.yaml`** 里用 **`memory_agent` / `skill_agent`** 等 **`use: agent` + `async: true`** 枝叶声明记忆抽取与 Skills（见 [workflows-spec.md](workflows-spec.md) §4.3、§8）；默认内置 Catalog 条目可被用户覆盖。**当前 oneclaw** **未**实现演进专用的加载期闭环校验，也 **未**在 **`TurnContext`** 上维护嵌套演进剖面。
 
 ---
 
@@ -100,7 +100,7 @@ sequenceDiagram
   O->>Bus: publishOutbound
   Bus->>Ch: 用户可见回复
   O->>PT: 触发编排后继<br/>（可与 O 同步或异步，由 workflow 定义）
-  Note over PT: 多为 workflows/*.yaml<br/>图中 respond 之后分枝；<br/>演进 Agent 须 suppress，防递归
+  Note over PT: workflows/*.yaml<br/>respond 后 async 枝<br/>（如 memory_agent）
 ```
 
 ---
@@ -124,7 +124,7 @@ flowchart LR
 **持久化触点**：
 
 - **OnReceive / OnRespond**：会话 transcript、本轮 **`runs/<agent_type>/`** 执行记录（见 FR-AGT-05 / FR-OBS-04）。
-- **链后继（原 PostTurn 语义）**：MEMORY / skills 写入（经 staging / policy）；**不得**对演进 Agent 再挂一层同类后继（FR-FLOW-05）。
+- **链后继（原 PostTurn 语义）**：MEMORY / skills 写入（经 staging / policy）；形状由 **YAML** 声明（**`async` 枝叶**）；与实现对齐见 [workflows-spec.md](workflows-spec.md) §6。
 
 ---
 
@@ -153,27 +153,24 @@ flowchart TD
 
 ## 6. 链后继演进生命周期（记忆 / Skills）
 
-以下逻辑 **完全可用 `workflows/*.yaml` 的 DAG 中若干 `agent` 节点表达**；图仍沿用「主回合之后」的语义。展示 **角色拆分** 与 **防递归**（[requirements.md](requirements.md) FR-FLOW-05）。
+以下逻辑 **完全可用 `workflows/*.yaml` 的 DAG 中若干 `agent` 节点表达**；图仍沿用「主回合之后」的语义。展示 **角色拆分**（**`async`**）；默认模板为线性串联两 async 节点，并行扇出需自行构图（见 [workflows-spec.md](workflows-spec.md)）。
 
 ```mermaid
 flowchart TD
-  MAIN([主对话回合结束]) --> C{suppress_post_turn_evolution<br/>或 evolution_depth>0?}
-  C -->|是| SKIP[跳过演进队列]
-  C -->|否| Q[调度 workflow 后继节点<br/>workflows/*.yaml]
-  Q --> M[记忆抽取 Agent<br/>独立 agent_type<br/>suppress=true]
-  Q --> S[Skills 生成 Agent<br/>独立 agent_type<br/>suppress=true]
+  MAIN([主对话 on_respond 完成]) --> Q[workflow 出边<br/>workflows/*.yaml]
+  Q --> M["memory_agent<br/>use: agent async: true<br/>agent_type: memory_extractor"]
+  Q --> S["skill_agent<br/>use: agent async: true<br/>agent_type: skill_generator"]
   M --> DISK1[(MEMORY / staging)]
   S --> DISK2[(skills / staging)]
   M --> LOG1[runs 落盘]
   S --> LOG2[runs 落盘]
-  SKIP --> DONE([结束])
-  DISK1 --> DONE
+  DISK1 --> DONE([结束])
   DISK2 --> DONE
   LOG1 --> DONE
   LOG2 --> DONE
 ```
 
-**硬性规则**：记忆抽取与 Skills 生成 **两次运行**均不得再触发下一轮同类后继；由 Catalog **`suppress_post_turn_evolution: true`** + 宿主调度器双重保证。
+**硬性规则**：记忆抽取与 Skills 生成 **不在 Catalog 上用布尔开关声明**；由 **YAML 枝叶** + **内置 / 可覆盖的 Catalog 条目** 表达。**当前** **无**演进专用的加载期闭环校验与 **`TurnContext` 演进剖面**（见 [requirements.md](requirements.md) FR-FLOW-05）。
 
 ---
 

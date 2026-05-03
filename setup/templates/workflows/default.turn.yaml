@@ -1,8 +1,18 @@
 workflow_spec_version: 1
 id: default.turn
-description: Linear receive → prompt → main ADK → respond (phase 3 baseline).
+description: Main turn plus default async memory/skill agents after respond (override agents/workflows as usual).
 steps:
   - use: on_receive
   - use: load_prompt_md
   - use: adk_main
   - use: on_respond
+  - id: memory_agent
+    use: agent
+    async: true
+    params:
+      agent_type: memory_extractor
+  - id: skill_agent
+    use: agent
+    async: true
+    params:
+      agent_type: skill_generator

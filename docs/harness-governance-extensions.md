@@ -17,7 +17,7 @@
 | **Workflow 节点注册表** | 用户 workflow 节点按「名称 → 工厂」注册；内置节点与未来将加的 `*_guard`、`*_verify` 同类扩展，不占硬编码分支。 |
 | **审计事件 schema** | 演进与工具副作用日志采用 **带版本字段** 的结构化记录（如 `audit_schema_version`）；字段只增不减，旧读者跳过未知字段。 |
 | **来源（Provenance）字段** | 记忆事实、RAG 块、Skills 草案从一期起预留 **来源引用**（turn id、片段 id、路径）；可为空，但字段位保留，便于接入下文 L1/L2 类过滤。 |
-| **演进单次触发** | PostTurn 调度与 **`suppress_post_turn_evolution`** 一致：抽取/生成类 Agent 运行内 **禁止**再次入队同类演进，防止死循环（与 [requirements.md](requirements.md) FR-FLOW-05、[eino-md-chain-architecture.md](eino-md-chain-architecture.md) §5.6 对齐）。 |
+| **演进编排** | 由 **`workflows/*.yaml`** 声明（见 FR-FLOW-05）；**当前 oneclaw** **未**强制加载期闭环校验、**未**用 **`TurnContext`** 剖面禁止同类 async 再入队——治理策略若需要应在 Harness / 后续校验层补齐。 |
 | **Eino 适配边界** | ADK / Compose / Middleware 的装配集中在 Facade；治理逻辑以 **可注入的 Hook** 形式挂接，避免与 Eino 类型深度耦合，便于跟上游 API 演进。 |
 
 ---
@@ -89,3 +89,4 @@ flowchart LR
 | 日期 | 说明 |
 |------|------|
 | 2026-05-02 | 首版：Harness 治理与 SafeHarness 映射、扩展 backlog、初期预留扩展性建议；§1 增补「演进单次触发」（对齐 FR-FLOW-05 / eino §5.6） |
+| 2026-05-03 | §1：与实现对齐——演进由 **workflow** 声明；**无**宿主层 `TurnContext` 演进剖面；移除 Catalog **`suppress_post_turn_evolution`** 相关叙述 |

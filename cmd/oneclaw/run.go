@@ -22,8 +22,8 @@ import (
 	"github.com/lengzhao/oneclaw/preturn"
 	"github.com/lengzhao/oneclaw/session"
 	"github.com/lengzhao/oneclaw/tools"
-	"github.com/lengzhao/oneclaw/workflow"
 	"github.com/lengzhao/oneclaw/wfexec"
+	"github.com/lengzhao/oneclaw/workflow"
 )
 
 func runInteractive(ctx context.Context, g globalOpts, args []string) error {
@@ -190,19 +190,24 @@ func runInteractive(ctx context.Context, g globalOpts, args []string) error {
 	if err := wfexec.RegisterPhase3Builtins(reg); err != nil {
 		return err
 	}
-	rtx := &wfexec.RuntimeContext{
-		Turn: engine.TurnContext{AgentID: ag.AgentType},
-		SessionRoot:    sessionRoot,
-		SessionSegment: sessSeg,
-		Agent:          ag,
-		Bundle:         bundle,
-		UserPrompt:     *prompt,
-		ChatAgent:      agent,
-		Stdout:         os.Stdout,
-		RunStartedAt:   now,
-		UseMock:        useMock,
-		ProfileID:      prof.ID,
-		ModelName:      prof.DefaultModel,
+	rtx := &engine.RuntimeContext{
+		Turn:            engine.TurnContext{AgentID: ag.AgentType},
+		SessionRoot:     sessionRoot,
+		SessionSegment:  sessSeg,
+		Agent:           ag,
+		Bundle:          bundle,
+		UserPrompt:      *prompt,
+		Catalog:         cat,
+		Cfg:             cfg,
+		UserDataRoot:    root,
+		InstructionRoot: instruction,
+		WorkspacePath:   ws,
+		ChatAgent:       agent,
+		Stdout:          os.Stdout,
+		RunStartedAt:    now,
+		UseMock:         useMock,
+		ProfileID:       prof.ID,
+		ModelName:       prof.DefaultModel,
 	}
 	if err := wfexec.Execute(ctx, wfDoc, reg, rtx); err != nil {
 		return err

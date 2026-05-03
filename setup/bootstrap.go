@@ -54,6 +54,8 @@ func Bootstrap(userDataRoot string) error {
 		{"templates/AGENT.md", filepath.Join(userDataRoot, "AGENT.md")},
 		{"templates/MEMORY.md", filepath.Join(userDataRoot, "MEMORY.md")},
 		{"templates/workflows/default.turn.yaml", filepath.Join(userDataRoot, "workflows", "default.turn.yaml")},
+		{"templates/workflows/memory_extractor.yaml", filepath.Join(userDataRoot, "workflows", "memory_extractor.yaml")},
+		{"templates/workflows/skill_generator.yaml", filepath.Join(userDataRoot, "workflows", "skill_generator.yaml")},
 		{"templates/agents/README.md", filepath.Join(userDataRoot, "agents", "README.md")},
 	}
 	for _, j := range jobs {

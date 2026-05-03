@@ -42,10 +42,10 @@
 目标：**FR-FLOW-02**、与 [docs/workflows-spec.md](docs/workflows-spec.md) 一致；Compose 编译为 Eino `Runnable`（[docs/eino-integration-surface.md](docs/eino-integration-surface.md) §6）。
 
 - [x] **`workflow`**：解析 `workflow_spec_version`、`graph` / `steps`（展开为链）、根 `defaults` 浅合并进节点；DAG / 可达性 / 白名单 `use` 校验；拓扑序执行（workflows-spec §3、§7、§11 子集）。
-- [x] **`wfexec`**：`ResolveWorkflowPath`（`workflows/<agent>.yaml` → manifest `workflows.default_turn`）；内置 `on_receive`、`load_prompt_md`、`load_memory_snapshot`、`filter_tools`、`adk_main`、`on_respond`、`noop`；**`async` / `use:if` / `agent` 等未实现**（加载期拒绝 `if`）。
+- [x] **`wfexec`**：`ResolveWorkflowPath`（`workflows/<agent>.yaml` → manifest `workflows.default_turn`）；内置 `on_receive`、`load_prompt_md`、`load_memory_snapshot`、`filter_tools`、`adk_main`、`on_respond`、`noop`、**`agent`**；**`async: true`**：handler **goroutine** 执行，DAG 立即视为成功，[`RecordAsyncHandlerEnd`](engine/async.go) / **`AsyncHandlerFinished`**；**`use:if`** 加载期拒绝。
 - [x] **`adkhost`**：`AgentOptions.Handlers`；[`observe.ChatModelLogMiddleware`](observe/adk_middleware.go)（`BeforeModelRewriteState` / `AfterModelRewriteState` + slog）。
-- [ ] **`engine` + Compose**：[`TurnContext`](engine/context.go) 已占位；**尚未**把 YAML 编译为 Eino `compose.Graph` / `Runnable`（当前为 Go 内拓扑执行器）。
-- [ ] **FR-FLOW-05**：演进抑制 / 深度与图上 `agent` 节点静态校验待后续（Catalog 已移除 `suppress_post_turn_evolution` 字段）。
+- [x] **`engine` + Compose**：[`TurnContext`](engine/context.go)、[`RuntimeContext`](engine/runtime_context.go)；YAML **真实 DAG** 经 [`wfexec.CompilePhase3Workflow`](wfexec/compose.go)（`AllPredecessor`、YAML 边、`START`/`END`、多汇 `_oneclaw_sink`）编译；[`wfexec.Execute`](wfexec/exec.go) `Runnable.Invoke`；[`ExecMu`](engine/runtime_context.go) 串行化 handler。
+- [x] **默认演进枝叶**：[`setup/templates/workflows/default.turn.yaml`](setup/templates/workflows/default.turn.yaml) 在 `on_respond` 后挂 **`memory_agent` / `skill_agent`**（`async`）；内置 Catalog [`catalog/builtin/*.md`](catalog/builtin/)（用户 `agents/` 覆盖）。**无**单独的演进加载期校验 / `TurnContext` 演进剖面；**`async`** handler 仍经 **`ExecMu`** 与同步节点串行；**`use:if`** 仍加载期拒绝。
 
 ---
 
@@ -71,9 +71,9 @@
 
 ## 阶段 6：记忆演进 + Skills（异步与 staging）
 
-目标：**FR-FLOW-05**、MEMORY/skills 流水线、[docs/eino-md-chain-architecture.md](docs/eino-md-chain-architecture.md) §3、[docs/appendix-data-layout.md](docs/appendix-data-layout.md) §6。
+目标：MEMORY/skills 流水线（workflow + 内置 / 可覆盖 agents）、[docs/eino-md-chain-architecture.md](docs/eino-md-chain-architecture.md) §3、[docs/appendix-data-layout.md](docs/appendix-data-layout.md) §6；演进闭环校验若需要单列 backlog。
 
-- [ ] **`memory`**：staging / `write_behavior_policy`、晋升；抽取类 Agent 标记 `suppress_post_turn_evolution`。
+- [ ] **`memory`**：staging / `write_behavior_policy`、晋升；与 **`workflows/*.yaml`** 中 **`memory_agent` async 枝**对接。
 - [ ] **`wfexec`**：主 ADK 之后链后继节点（记忆抽取、Skills 生成）；异步默认、可配置「reply 前 flush」。
 - [ ] **`catalog` / `workflow`**：演进类 `agent_type` 与 workflow 绑定及审计字段。
 

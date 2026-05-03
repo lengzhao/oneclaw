@@ -1,2 +1,3 @@
-// Package engine holds per-turn shared state (TurnContext). Workflow execution is wired via wfexec + workflow packages (phase 3).
+// Package engine holds per-turn shared state (TurnContext, RuntimeContext).
+// Phase-3 YAML workflows compile to Eino compose.Graph in wfexec and execute via compose.Runnable.Invoke.
 package engine

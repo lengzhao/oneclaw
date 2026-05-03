@@ -51,6 +51,66 @@ func TestValidate_rejectsCycle(t *testing.T) {
 	}
 }
 
+func TestValidate_reservedComposeNodeID(t *testing.T) {
+	w := &Workflow{
+		SpecVersion: 1,
+		ID:          "bad",
+		Graph: Graph{
+			Entry: "start",
+			Nodes: map[string]Node{"start": {Use: "noop"}},
+			Edges: []Edge{},
+		},
+	}
+	if err := Validate(w); err == nil || !strings.Contains(err.Error(), "reserved") {
+		t.Fatalf("expected reserved id error, got %v", err)
+	}
+}
+
+func TestValidate_agentRequiresAgentType(t *testing.T) {
+	w := &Workflow{
+		SpecVersion: 1,
+		ID:          "x",
+		Graph: Graph{
+			Entry: "a",
+			Nodes: map[string]Node{"a": {Use: "agent"}},
+			Edges: []Edge{},
+		},
+	}
+	if err := Validate(w); err == nil || !strings.Contains(err.Error(), "agent_type") {
+		t.Fatalf("expected agent_type error, got %v", err)
+	}
+}
+
+func TestValidate_postRespondAsyncAgents_defaultShape(t *testing.T) {
+	raw := []byte(`workflow_spec_version: 1
+id: default.turn
+steps:
+  - use: on_receive
+  - use: noop
+  - use: on_respond
+  - id: memory_agent
+    use: agent
+    async: true
+    params:
+      agent_type: memory_extractor
+  - id: skill_agent
+    use: agent
+    async: true
+    params:
+      agent_type: skill_generator
+`)
+	w, err := ParseBytes(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Validate(w); err != nil {
+		t.Fatal(err)
+	}
+	if !w.Graph.Nodes["memory_agent"].Async || !w.Graph.Nodes["skill_agent"].Async {
+		t.Fatal("expected async branches")
+	}
+}
+
 func TestValidate_unknownUse(t *testing.T) {
 	w := &Workflow{
 		SpecVersion: 1,

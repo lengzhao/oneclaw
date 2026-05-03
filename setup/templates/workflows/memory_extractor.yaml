@@ -1,0 +1,6 @@
+workflow_spec_version: 1
+id: memory_extractor.turn
+description: Minimal built-in turn for memory_extractor (override with workflows/memory_extractor.yaml).
+steps:
+  - use: on_receive
+  - use: noop

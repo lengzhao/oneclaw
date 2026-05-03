@@ -26,4 +26,4 @@
 | **write_behavior_policy** | Harness 策略：工具与演进写入允许的 **路径前缀、文件类型、大小、是否必须 staging、晋升条件**；与 FR-SKL-03、FR-MEM-03 及 [harness-governance-extensions.md](harness-governance-extensions.md) 的 policy 挂钩同一抽象。 |
 | **Agent 执行记录** | 单次 ADK 运行的磁盘可追溯条目（如 JSONL）：`agent_type`、`session_id`、`run_id`、时间与 transcript 锚点等；主对话、记忆抽取、Skills 生成 **各自落盘**。 |
 | **`workspace: shared` / `private`** | 工具默认 cwd：**shared** = 与当前主 Agent 回合同一工作目录；**private** = 独占目录，避免与主会话文件工具互扰。见 FR-AGT-06、[eino-md-chain-architecture.md](eino-md-chain-architecture.md) §5.2。 |
-| **`suppress_post_turn_evolution`** | 为 **true** 时本轮结束后 **不**再调度记忆抽取与 Skills 生成 PostTurn；**抽取/生成类 Agent 必须为 true**（FR-FLOW-05）。 |
+| **`memory_agent` / `skill_agent`（约定）** | Workflow **节点 id** 命名习惯：在 **`on_respond` 之后**挂 **`use: agent`** 且 **`async: true`**，默认 **`agent_type`** 为 **`memory_extractor`**、**`skill_generator`**（内置 Catalog，可被 **`agents/`** 覆盖）。见 [workflows-spec.md](workflows-spec.md) §4.3、§8。 |

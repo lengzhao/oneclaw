@@ -16,6 +16,7 @@ var Phase3Uses = map[string]struct{}{
 	"adk_main":             {},
 	"on_respond":           {},
 	"noop":                 {},
+	"agent":                {},
 }
 
 // Validate checks workflows-spec §11 baseline for phase 3 (no use:if runtime yet).
@@ -48,6 +49,12 @@ func Validate(w *Workflow) error {
 		}
 	}
 	for id, n := range g.Nodes {
+		if strings.HasPrefix(id, reservedComposeNodePrefix) {
+			return fmt.Errorf("workflow: node id %q uses reserved prefix %q", id, reservedComposeNodePrefix)
+		}
+		if lid := strings.ToLower(strings.TrimSpace(id)); lid == "start" || lid == "end" {
+			return fmt.Errorf("workflow: node id %q is reserved for compose START/END", id)
+		}
 		if strings.TrimSpace(n.Use) == "" {
 			return fmt.Errorf("workflow: node %q missing use", id)
 		}
@@ -57,11 +64,17 @@ func Validate(w *Workflow) error {
 		if _, ok := Phase3Uses[n.Use]; !ok {
 			return fmt.Errorf("workflow: unknown use %q on node %q (phase 3 whitelist)", n.Use, id)
 		}
+		if n.Use == "agent" && AgentTypeParam(n.Params) == "" {
+			return fmt.Errorf("workflow: node %q (use: agent) requires params.agent_type", id)
+		}
 	}
 	if err := validateDAG(g); err != nil {
 		return err
 	}
 	if err := validateReachable(g); err != nil {
+		return err
+	}
+	if err := ValidateComposeFanOut(g); err != nil {
 		return err
 	}
 	return nil

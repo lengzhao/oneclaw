@@ -1,0 +1,6 @@
+workflow_spec_version: 1
+id: skill_generator.turn
+description: Minimal built-in turn for skill_generator (override with workflows/skill_generator.yaml).
+steps:
+  - use: on_receive
+  - use: noop

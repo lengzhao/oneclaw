@@ -129,7 +129,7 @@ flowchart LR
 
 定义窄接口，由 manifest 驱动注册：
 
-- **内置节点**：`load_prompt_md`、`filter_tools`、`if`（条件分支 + 出边 `branch`）、`noop`、`agent`（`params.agent_type` 指向 Catalog）、`memory_extract_llm`、`skill_suggest_llm` 等；演进节点 **须遵守 `suppress_post_turn_evolution`**。
+- **内置节点**：`load_prompt_md`、`filter_tools`、`if`（条件分支 + 出边 `branch`）、`noop`、`agent`（`params.agent_type` 指向 Catalog）、`memory_extract_llm`、`skill_suggest_llm` 等；**回合后记忆/Skills** 典型用 **`use: agent`** + **`async: true`**（节点 id 约定见 [workflows-spec.md](workflows-spec.md) §4.3）。
 - **用户扩展**：manifest 里写节点名 + 参数；启动时 `RegisterPlugin(name, factory)`。
 - **重逻辑**：节点类型 `command` + manifest 中的 `argv`，由宿主统一 `exec`（需与主进程安全策略一致：路径、超时、资源上限）。
 
@@ -158,7 +158,6 @@ flowchart LR
 | `omit_memory_injection` | 为 true 时可跳过 **当前 InstructionRoot** 记忆块注入（探索类 Agent） |
 | `inherit_parent_memory` | 默认 **false**。子 Agent 为 **true** 时，PreTurn 可把 **父会话** MEMORY 摘要注入（仍受 budget 约束）；滥用会削弱隔离，建议仅协作型角色开启 |
 | `workspace` | 默认 **`shared`**：文件/exec 类工具的 cwd **与当前主 Agent 回合相同**（宿主解析，一般为会话 `<InstructionRoot>/workspace`）。**`private`**：使用该 Agent **独占**目录（如 `sessions/<...>/subs/<sub_run>/workspace`），避免与主会话互相读写干扰 |
-| `suppress_post_turn_evolution` | 默认 **false**。为 **true** 时，本轮结束后宿主 **跳过** PostTurn 中的记忆抽取与 Skills 生成调度。**记忆抽取 Agent、Skills 生成 Agent 必须为 true**（见 [requirements.md](requirements.md) FR-FLOW-05） |
 
 **正文**：该 Agent 的 **Instruction / system prompt**（注入 `ChatModelAgentConfig.Instruction` 或与全局 `prompts/system.md` 拼接，产品二选一）。
 
@@ -185,17 +184,16 @@ flowchart LR
 - **MVP**：每个用户回合仍是一个 **`NewChatModelAgent`**；换 Agent = 换 **Instruction + Tools + Model + Middleware 列表**。子 Agent **再起一行** ADK 实例（或独立子图），默认 **空上文 + 当前任务描述**。
 - **进阶**：多 Agent 协作可用 Eino Examples 中的 **host / supervisor / 多 Agent 图** 表达；`agents/` 仍是一条 md 一条配置，由 Facade 决定实例化单 Agent 还是子图。
 
-### 5.6 专用管线 Agent、执行记录与演进防递归
+### 5.6 专用管线 Agent、执行记录与演进编排
 
 **角色拆分**：主对话、PostTurn **记忆抽取**、PostTurn **Skills 生成** 可使用 **三个（或更多）不同 `agent_type`**，在 manifest / `workflows/*.yaml` 中写明；各自 **Instruction、`tools`、`model`** 独立。
 
 **执行记录落盘**：每一次 ADK 运行（含 PostTurn 异步任务）写入 **可追溯文件**（推荐 JSONL），字段至少含：`run_id`、`agent_type`、`session_id`、父 `run_id`（若有）、起止时间、与 transcript 的引用锚点。路径建议：`sessions/<session_id>/runs/<agent_type>/…` 或与 [requirements.md](requirements.md) §5「审计」目录合并 schema。
 
-**演进递归禁令**：
+**与 oneclaw 实现对齐（FR-FLOW-05 [requirements.md](requirements.md)）**：
 
-- Catalog 中 **记忆抽取** / **Skills 生成** profile 必须 **`suppress_post_turn_evolution: true`**。
-- 宿主在 **Enqueue PostTurn** 前检查：若 `TurnContext` 已标记 **本轮为演进子运行**（或当前 `agent_type` 的 suppress 为 true），则 **不得**追加记忆抽取 / Skills 生成节点。
-- 可选：**嵌套深度** `evolution_depth`，超过 0 时一律跳过 PostTurn 演进（防御性）。
+- **配置真源在 workflow**：主会话通过 **`workflows/*.yaml`** 在 **`on_respond` 之后**声明 **`async: true`** 的 **`use: agent`** 枝（常见节点名 **`memory_agent`**、**`skill_agent`**），`params.agent_type` 默认为 **`memory_extractor` / `skill_generator`**（**嵌入内置 Catalog**，用户 **`agents/`** 同名 md **覆盖**）。
+- **当前实现** **未**做「演进专用 workflow 不得再挂同类 async 枝」的加载期校验；**未**在 **`TurnContext`** 上维护演进嵌套剖面或深度阈值。**`handleAgent`** 与普通子 Agent 路径一致。
 
 ---
 
@@ -215,7 +213,7 @@ flowchart LR
 4. **用户 workflow 若含外部命令**：必须与主进程 `exec` 策略一致（沙箱、超时、审计）。
 5. **`agent_type` 唯一性**：**内置 Catalog 先加载，用户 `UserDataRoot/.agent/agents/` 后加载；同名则后者覆盖前者**（用户覆盖内置）。
 6. **Harness 治理扩展**：工具调用与状态写入宜预留 **统一 policy 挂钩**；Manifest 可为 `harness:` / `policy:` 等预留命名空间（未知子键忽略）。详见 [harness-governance-extensions.md](harness-governance-extensions.md)。
-7. **演进仅触发一层**：PostTurn 调度器必须遵守 **`suppress_post_turn_evolution`** 与 FR-FLOW-05，避免抽取 Agent 再触发抽取/Skills。
+7. **演进编排**：由 **`workflows/*.yaml`** 声明；病态闭环依赖设计与后续可选校验（见 FR-FLOW-05 条款现状）。
 
 ---
 
@@ -238,4 +236,5 @@ flowchart LR
 
 | 日期 | 说明 |
 |------|------|
-| 2026-05-02 | 增补 §8 Harness 治理交叉引用、§7 设计注意第 6–7 条、参考链接顺延；§3.4 `memory` 包草图；§2 树锚定 `UserDataRoot`；§5 `inherit_parent_memory`、`workspace`、`suppress_post_turn_evolution`；§5.4 Workspace；§5.5 Eino 侧；§5.6 多 Agent 管线、执行记录、演进防递归；§6 实现收口；§7 Catalog 顺序；交叉引用 [reference-architecture.md](reference-architecture.md)；§3.1/§4 PostTurn 与内置节点；套件位置与 §3.1 指向 [workflows-spec.md](workflows-spec.md)；Claw 侧 **workflow / DAG** 命名取代纯 chain |
+| 2026-05-02 | 增补 §8 Harness 治理交叉引用、§7 设计注意第 6–7 条、参考链接顺延；§3.4 `memory` 包草图；§2 树锚定 `UserDataRoot`；§5 `inherit_parent_memory`、`workspace` 等；§5.4 Workspace；§5.5 Eino 侧；§5.6 多 Agent 管线、执行记录、演进防递归；§6 实现收口；§7 Catalog 顺序；交叉引用 [reference-architecture.md](reference-architecture.md)；§3.1/§4 PostTurn 与内置节点；套件位置与 §3.1 指向 [workflows-spec.md](workflows-spec.md)；Claw 侧 **workflow / DAG** 命名取代纯 chain |
+| 2026-05-03 | §4 / §5.2 / §5.6 / §7：**演进仅靠 workflow（`async` + `use: agent`）**；删除 frontmatter **`suppress_post_turn_evolution`**。**与实现对齐**：内置 Catalog + 默认 turn；无演进专用加载期校验、无 `TurnContext` 演进剖面 |

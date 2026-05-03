@@ -1,9 +1,13 @@
 package wfexec
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/lengzhao/oneclaw/engine"
+)
 
 // Handler runs one node instance.
-type Handler func(rtx *RuntimeContext) error
+type Handler func(rtx *engine.RuntimeContext) error
 
 // Registry maps workflow use → implementation.
 type Registry struct {

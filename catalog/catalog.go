@@ -26,16 +26,43 @@ func (c *Catalog) Get(agentType string) *Agent {
 	return c.Agents[agentType]
 }
 
-// Load parses embedded defaults then user agents under agentDir (typically UserDataRoot/agents).
-func Load(agentDir string) (*Catalog, error) {
-	out := &Catalog{Agents: make(map[string]*Agent)}
-	raw, rerr := builtinFS.ReadFile("builtin/default.md")
-	if rerr == nil && len(raw) > 0 {
-		a, perr := ParseAgentMarkdown("default", raw)
-		if perr != nil {
-			return nil, fmt.Errorf("builtin default: %w", perr)
+func loadBuiltins(out *Catalog) error {
+	entries, err := builtinFS.ReadDir("builtin")
+	if err != nil {
+		return fmt.Errorf("catalog: builtin: %w", err)
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		if !strings.HasSuffix(strings.ToLower(name), ".md") {
+			continue
+		}
+		if skipAgentMarkdown(name) {
+			continue
+		}
+		stem := strings.TrimSuffix(name, filepath.Ext(name))
+		raw, err := builtinFS.ReadFile("builtin/" + name)
+		if err != nil {
+			return fmt.Errorf("catalog: builtin %s: %w", name, err)
+		}
+		a, err := ParseAgentMarkdown(stem, raw)
+		if err != nil {
+			return fmt.Errorf("catalog: builtin %s: %w", name, err)
 		}
 		out.Agents[a.AgentType] = a
+	}
+	return nil
+}
+
+// Load parses embedded defaults then user agents under agentDir (typically UserDataRoot/agents).
+// User files replace builtins by agent_type key (same stem).
+func Load(agentDir string) (*Catalog, error) {
+	out := &Catalog{Agents: make(map[string]*Agent)}
+	if err := loadBuiltins(out); err != nil {
+		return nil, err
 	}
 	if agentDir == "" {
 		return out, nil
