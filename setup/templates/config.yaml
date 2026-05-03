@@ -1,0 +1,13 @@
+sessions:
+  isolate_instruction_root: true
+default_model: gpt-5.4-nano
+models:
+  - id: default
+    priority: 0
+    provider: openai_compatible
+    base_url: https://api.openai.com/v1
+    # api_key_env is the *name* of an env var, not the secret. Moonshot host defaults to MOONSHOT_API_KEY.
+    api_key_env: OPENAI_API_KEY
+    default_model: gpt-5.4-nano
+runtime:
+  max_agent_iterations: 100

@@ -1,0 +1,8 @@
+workflow_spec_version: 1
+id: default.turn
+description: Linear receive → prompt → main ADK → respond (phase 3 baseline).
+steps:
+  - use: on_receive
+  - use: load_prompt_md
+  - use: adk_main
+  - use: on_respond
