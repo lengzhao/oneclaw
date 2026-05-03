@@ -12,6 +12,7 @@ import (
 func TestBuildExecRegistry_emptyAllow_noRunAgent(t *testing.T) {
 	ws := filepath.Join(t.TempDir(), "w")
 	deps := &RunAgentDeps{
+		Turn:    TurnBinding{SessionSegment: "test-session"},
 		Catalog: &catalog.Catalog{},
 		Cfg:     &config.File{},
 	}
@@ -23,11 +24,15 @@ func TestBuildExecRegistry_emptyAllow_noRunAgent(t *testing.T) {
 	if slices.Contains(names, "run_agent") {
 		t.Fatalf("run_agent should be opt-in: %v", names)
 	}
+	if !slices.Contains(names, "cron") {
+		t.Fatalf("want cron in default registry: %v", names)
+	}
 }
 
 func TestBuildExecRegistry_explicitRunAgent(t *testing.T) {
 	ws := filepath.Join(t.TempDir(), "w")
 	deps := &RunAgentDeps{
+		Turn:    TurnBinding{SessionSegment: "test-session"},
 		Catalog: &catalog.Catalog{},
 		Cfg:     &config.File{},
 	}

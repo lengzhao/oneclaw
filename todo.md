@@ -6,7 +6,7 @@
 
 ## 阶段 0：脚手架与约定
 
-- [x] **模块边界**：根目录包已与架构草案对齐（`config`、`paths`、`channel`、`turnhub`、`engine`、`workflow`、`wfexec`、`catalog`、`preturn`、`memory`、`tools`、`adkhost`、`schedule`、`observe`、`harness`）。
+- [x] **模块边界**：根目录包已与架构草案对齐（`config`、`paths`、`turnhub`、`engine`、`workflow`、`wfexec`、`catalog`、`preturn`、`memory`、`tools`、`adkhost`、`schedule`、`observe`、`harness`）；入站/出站形状直连 **`github.com/lengzhao/clawbridge`**。
 - [x] **`go test ./...` / CI**：`go vet ./...` + `go test ./...`；[`.github/workflows/ci.yml`](.github/workflows/ci.yml)。（golangci-lint 留待后续）
 - [x] **CLI 骨架**：`cmd/oneclaw` 子命令占位（`init`、`run`/`repl`、`snapshot`、`version`、`help`）；全局 `-config`、`-log-level`、`-log-format`（[`observe`](observe/log.go) + FR-CFG-04）。
 
@@ -77,9 +77,9 @@
 
 目标：统一入站形状、出站 Bus、[docs/reference-architecture.md](docs/reference-architecture.md) §2.3、§2.6。
 
-- [ ] **`turnhub`**：`SessionHandle`、mailbox、`serial` / `insert`（及文档约定的抢占策略若需要）。
-- [ ] **`channel`**：`InboundMessage` / `publishOutbound`；对接 **clawbridge**（可选）与 CLI/HTTP 最小驱动。
-- [ ] **`schedule`**：持久化 jobs、poller、合成 `InboundMessage` 走与用户需求相同主路径。
+- [x] **`turnhub`**：`SessionHandle`、mailbox、`serial` / `insert`（及文档约定的抢占策略若需要）。
+- [x] **入站/出站**：`InboundMessage` / Bus / `Reply` 等直接使用 **clawbridge**（含 **webchat**）；`serve` 消费总线 → TurnHub → `runner`，定时任务同路径。
+- [x] **`schedule`**：持久化 jobs、poller、合成 `InboundMessage` 走与用户需求相同主路径。
 
 ---
 
@@ -113,7 +113,7 @@
 | `adkhost` / `tools` | ADK + Registry + run_agent；内置扩展见 **阶段 4b** |
 | `preturn` / `memory` | 注入与记忆策略 |
 | `engine` / `turnhub` | 回合生命周期与排队 |
-| `channel` / `schedule` | 多通道与定时 |
+| clawbridge（依赖）/ `schedule` | 多通道与定时 |
 | `observe` | 日志与 execution 记录 |
 | `harness` | 治理扩展 |
 

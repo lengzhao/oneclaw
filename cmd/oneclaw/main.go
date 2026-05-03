@@ -89,6 +89,18 @@ func run(argv []string) int {
 			return 1
 		}
 		return 0
+	case "serve":
+		if err := cmdServe(ctx, g, cmdArgs); err != nil {
+			slog.Error("serve", "err", err)
+			return 1
+		}
+		return 0
+	case "channel":
+		if err := cmdChannel(ctx, g, cmdArgs); err != nil {
+			slog.Error("channel", "err", err)
+			return 1
+		}
+		return 0
 	default:
 		slog.Error("unknown command", "cmd", cmd)
 		writeUsage(os.Stderr, prog)

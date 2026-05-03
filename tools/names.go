@@ -12,6 +12,7 @@ const (
 	ToolEditFile   = builtin.NameEditFile
 	ToolAppendFile = builtin.NameAppendFile
 	ToolExec       = builtin.NameExec
+	ToolCron       = builtin.NameCron
 )
 
 // EssentialWorkspaceToolIDs lists builtins an agent needs to consume files under WorkspaceRoot.

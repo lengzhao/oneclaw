@@ -60,4 +60,7 @@ type RuntimeContext struct {
 	CorrelationID string
 
 	SawOnRespond bool // transcript flush delegated to on_respond node
+
+	// PostAssistantRespond runs after on_respond appends the assistant transcript (phase 5 outbound); optional.
+	PostAssistantRespond func(ctx context.Context, assistant string) error
 }

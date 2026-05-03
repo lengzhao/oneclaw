@@ -12,19 +12,33 @@ models:
 runtime:
   max_agent_iterations: 100
   max_delegation_depth: 3
-# Optional: turn off specific builtins (catalog tools: still controls per-agent allowlist).
-# tools:
-#   glob:
-#     enabled: false
-#   write_file:
-#     enabled: false
-#   edit_file:
-#     enabled: false
-# exec defaults OFF. Enable only with explicit allow prefixes (and optional deny substrings):
-#   exec:
-#     enabled: true
-#     allow:
-#       - "git "
-#       - "go "
-#     deny:
-#       - ";"
+
+# clawbridge：`oneclaw serve` 读此块；webchat 仅建议绑定 127.0.0.1（见 clawbridge 文档）。
+clawbridge:
+  media: {}
+  clients:
+    - id: webchat-1
+      driver: webchat
+      enabled: true
+      options:
+        display_name: You
+        listen: "127.0.0.1:8765"
+        path: /
+# 微信 iLink 等：扫码 onboarding 写入本块 — `oneclaw channel onboard weixin -client-id weixin-1`（见 clawbridge examples/weixin-onboard）。
+
+# 内置工具默认全开；catalog 的 tools: 仍是每 Agent 白名单。生产环境请收窄 exec（allow 前缀或去掉 "*"）。
+tools:
+  echo: { enabled: true }
+  read_file: { enabled: true }
+  list_dir: { enabled: true }
+  glob: { enabled: true }
+  write_file: { enabled: true }
+  edit_file: { enabled: true }
+  append_file: { enabled: true }
+  cron: { enabled: true }
+  exec:
+    enabled: true
+    allow:
+      - "*"
+    deny:
+      - ";"

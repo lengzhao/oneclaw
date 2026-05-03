@@ -40,3 +40,9 @@ func TestSubSessionRoot(t *testing.T) {
 		t.Fatalf("got %q want %q", got, want)
 	}
 }
+
+func TestScheduledJobsPath(t *testing.T) {
+	if got, want := ScheduledJobsPath("/home/u/.oneclaw"), filepath.Join("/home/u/.oneclaw", "scheduled_jobs.json"); got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+}

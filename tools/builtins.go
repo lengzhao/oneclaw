@@ -67,6 +67,8 @@ func RegisterBuiltinsNamed(r *Registry, names []string) error {
 		var t tool.InvokableTool
 		var err error
 		switch id {
+		case builtin.NameCron:
+			continue
 		case builtin.NameEcho:
 			t, err = builtin.InferEcho()
 		case builtin.NameReadFile:

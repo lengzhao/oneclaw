@@ -40,17 +40,25 @@ func handleAgent(rtx *engine.RuntimeContext) error {
 	if corr == "" {
 		corr = subagent.NewCorrelationID()
 	}
+	agentID := strings.TrimSpace(rtx.Turn.AgentID)
+	if agentID == "" && rtx.Agent != nil {
+		agentID = rtx.Agent.AgentType
+	}
 	deps := &subagent.RunAgentDeps{
-		Catalog:          rtx.Catalog,
-		Cfg:              rtx.Cfg,
-		UserDataRoot:     rtx.EffectiveUserDataRoot(),
-		InstructionRoot:  rtx.EffectiveInstructionRoot(),
-		SessionRoot:      rtx.EffectiveSessionRoot(),
-		SessionSegment:   rtx.EffectiveSessionSegment(),
-		ParentWorkspace:  rtx.EffectiveWorkspacePath(),
-		ProfileID:        rtx.EffectiveProfileID(),
-		UseMock:          rtx.EffectiveUseMock(),
-		Stdout:           rtx.Stdout,
+		Turn: subagent.TurnBinding{
+			SessionSegment:  rtx.EffectiveSessionSegment(),
+			InboundClientID: "",
+			AgentID:         agentID,
+		},
+		Catalog:         rtx.Catalog,
+		Cfg:             rtx.Cfg,
+		UserDataRoot:    rtx.EffectiveUserDataRoot(),
+		InstructionRoot: rtx.EffectiveInstructionRoot(),
+		SessionRoot:     rtx.EffectiveSessionRoot(),
+		ParentWorkspace: rtx.EffectiveWorkspacePath(),
+		ProfileID:       rtx.EffectiveProfileID(),
+		UseMock:         rtx.EffectiveUseMock(),
+		Stdout:          rtx.Stdout,
 		OnSubAgentChunk: rtx.OnSubAgentAssistantChunk,
 		CorrelationID:   corr,
 		ParentRegistry:  parentReg,

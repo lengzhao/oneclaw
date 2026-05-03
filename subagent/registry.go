@@ -3,8 +3,10 @@ package subagent
 import (
 	"fmt"
 
+	"github.com/lengzhao/oneclaw/config"
 	"github.com/lengzhao/oneclaw/toolhost"
 	"github.com/lengzhao/oneclaw/tools"
+	"github.com/lengzhao/oneclaw/tools/builtin"
 )
 
 // BuildRegistryForAgent builds a tool registry for the root agent (parent==nil) or a sub-agent.
@@ -35,7 +37,7 @@ func buildRootRegistry(ws string, allow []string, deps *RunAgentDeps) (*tools.Re
 	if err := tools.RegisterBuiltinsForConfig(seed, deps.Cfg); err != nil {
 		return nil, err
 	}
-	names := normalizeRootAllow(allow, seed)
+	names := normalizeRootAllow(allow, seed, deps.Cfg)
 	return assembleRegistry(ws, names, seed, nil, deps)
 }
 
@@ -51,7 +53,7 @@ func buildChildRegistry(parent toolhost.Registry, childWS string, allow []string
 	return assembleRegistry(childWS, names, nil, parent, deps)
 }
 
-func normalizeRootAllow(allow []string, seed *tools.Registry) []string {
+func normalizeRootAllow(allow []string, seed *tools.Registry, cfg *config.File) []string {
 	if len(allow) == 0 {
 		var out []string
 		for _, n := range seed.Names() {
@@ -59,7 +61,10 @@ func normalizeRootAllow(allow []string, seed *tools.Registry) []string {
 				out = append(out, n)
 			}
 		}
-		return out
+		if cfg == nil || cfg.BuiltinToolEnabled(builtin.NameCron) {
+			out = append(out, builtin.NameCron)
+		}
+		return dedupeAllow(out)
 	}
 	return dedupeAllow(allow)
 }
@@ -87,6 +92,13 @@ func assembleRegistry(ws string, names []string, seed *tools.Registry, parent to
 			}
 			continue
 		}
+		handled, err := RegisterDepsBoundBuiltin(out, n, deps)
+		if err != nil {
+			return nil, err
+		}
+		if handled {
+			continue
+		}
 		if seed != nil {
 			ts, err := seed.FilterByNames([]string{n})
 			if err != nil {
@@ -97,7 +109,7 @@ func assembleRegistry(ws string, names []string, seed *tools.Registry, parent to
 			}
 			continue
 		}
-		if err := copyOrRebindTool(parent, out, ws, n); err != nil {
+		if err := copyOrRebindTool(parent, out, ws, n, deps); err != nil {
 			return nil, err
 		}
 	}
@@ -112,9 +124,16 @@ func assembleRegistry(ws string, names []string, seed *tools.Registry, parent to
 	return out, nil
 }
 
-func copyOrRebindTool(parent toolhost.Registry, child *tools.Registry, childWS, name string) error {
+func copyOrRebindTool(parent toolhost.Registry, child *tools.Registry, childWS, name string, deps *RunAgentDeps) error {
 	if !containsToolName(parent.Names(), name) {
 		return fmt.Errorf("subagent: tool %q not on parent registry", name)
+	}
+	handled, err := RegisterDepsBoundBuiltin(child, name, deps)
+	if err != nil {
+		return err
+	}
+	if handled {
+		return nil
 	}
 	if tools.IsBuiltinToolName(name) {
 		return tools.RegisterBuiltinsNamed(child, []string{name})

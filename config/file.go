@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 
+	cbconfig "github.com/lengzhao/clawbridge/config"
 	"gopkg.in/yaml.v3"
 )
 
@@ -23,6 +24,8 @@ type File struct {
 	Runtime      RuntimeOptions `yaml:"runtime,omitempty"`
 	// Tools toggles builtins (phase 4b); catalog tools: allowlist still applies per agent.
 	Tools map[string]ToolSwitch `yaml:"tools,omitempty"`
+	// Clawbridge is the multi-channel bus (webchat, IM, …); used by `oneclaw serve` (github.com/lengzhao/clawbridge).
+	Clawbridge cbconfig.Config `yaml:"clawbridge,omitempty"`
 }
 
 // Sessions mirrors appendix-data-layout isolation switches.

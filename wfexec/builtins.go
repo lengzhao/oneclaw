@@ -1,6 +1,7 @@
 package wfexec
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -96,7 +97,17 @@ func handleOnRespond(rtx *engine.RuntimeContext) error {
 	if strings.TrimSpace(rtx.Assistant) == "" {
 		return nil
 	}
-	return session.AppendTranscriptTurn(rtx.EffectiveSessionRoot(), session.TranscriptTurn{
+	if err := session.AppendTranscriptTurn(rtx.EffectiveSessionRoot(), session.TranscriptTurn{
 		Ts: time.Now().UTC(), Role: "assistant", Content: rtx.Assistant,
-	})
+	}); err != nil {
+		return err
+	}
+	if rtx.PostAssistantRespond != nil {
+		c := rtx.GoCtx
+		if c == nil {
+			c = context.Background()
+		}
+		return rtx.PostAssistantRespond(c, rtx.Assistant)
+	}
+	return nil
 }

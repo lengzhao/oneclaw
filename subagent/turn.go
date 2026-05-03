@@ -75,19 +75,24 @@ func ExecuteSubAgentTurn(ctx context.Context, deps *RunAgentDeps, sub *catalog.A
 	}
 
 	runTmpl := &RunAgentDeps{
-		Catalog:          deps.Catalog,
-		Cfg:              deps.Cfg,
-		UserDataRoot:     deps.UserDataRoot,
-		InstructionRoot:  deps.InstructionRoot,
-		SessionRoot:      deps.SessionRoot,
-		SessionSegment:   deps.SessionSegment,
-		ParentWorkspace:  childWS,
-		ProfileID:        deps.ProfileID,
-		UseMock:          deps.UseMock,
-		Stdout:           deps.Stdout,
-		OnSubAgentChunk:  deps.OnSubAgentChunk,
-		CorrelationID:    deps.CorrelationID,
-		DelegationDepth:  deps.DelegationDepth + 1,
+		Turn: TurnBinding{
+			SessionSegment:  deps.Turn.SessionSegment,
+			InboundClientID: deps.Turn.InboundClientID,
+			AgentID:         sub.AgentType,
+		},
+		Catalog:         deps.Catalog,
+		Cfg:             deps.Cfg,
+		UserDataRoot:    deps.UserDataRoot,
+		InstructionRoot: deps.InstructionRoot,
+		SessionRoot:     deps.SessionRoot,
+		ParentWorkspace: childWS,
+		ProfileID:       deps.ProfileID,
+		UseMock:         deps.UseMock,
+		Stdout:          deps.Stdout,
+		OnSubAgentChunk: deps.OnSubAgentChunk,
+		CorrelationID:   deps.CorrelationID,
+		DelegationDepth: deps.DelegationDepth + 1,
+		ParentRegistry:  deps.ParentRegistry,
 	}
 	childReg, err := BuildRegistryForAgent(childWS, bundle.ToolAllowlist, deps.ParentRegistry, runTmpl)
 	if err != nil {
@@ -116,7 +121,7 @@ func ExecuteSubAgentTurn(ctx context.Context, deps *RunAgentDeps, sub *catalog.A
 
 	runCtx := observe.WithAgentRunAttrs(ctx, observe.AgentRunAttrs{
 		CorrelationID:   deps.CorrelationID,
-		ParentSessionID: deps.SessionSegment,
+		ParentSessionID: deps.Turn.SessionSegment,
 		SubRunID:        subRunID,
 	})
 
@@ -133,7 +138,7 @@ func ExecuteSubAgentTurn(ctx context.Context, deps *RunAgentDeps, sub *catalog.A
 
 	corrDetail := map[string]any{
 		"correlation_id":    deps.CorrelationID,
-		"parent_session_id": deps.SessionSegment,
+		"parent_session_id": deps.Turn.SessionSegment,
 		"sub_run_id":        subRunID,
 		"workspace_mode":    mode,
 	}
@@ -190,7 +195,7 @@ func ExecuteSubAgentTurn(ctx context.Context, deps *RunAgentDeps, sub *catalog.A
 	}
 	endDetail := map[string]any{
 		"correlation_id":    deps.CorrelationID,
-		"parent_session_id": deps.SessionSegment,
+		"parent_session_id": deps.Turn.SessionSegment,
 		"sub_run_id":        subRunID,
 		"reply_len":         len(reply),
 	}

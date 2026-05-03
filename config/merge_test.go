@@ -111,3 +111,27 @@ func TestValidate_duplicateID(t *testing.T) {
 		t.Fatal("want duplicate error")
 	}
 }
+
+func TestLoadMerged_clawbridgeSection(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	p := filepath.Join(dir, "c.yaml")
+	if err := os.WriteFile(p, []byte(`
+models:
+  - id: default
+clawbridge:
+  clients:
+    - id: w
+      driver: webchat
+      enabled: true
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	f, err := LoadMerged([]string{p})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(f.Clawbridge.Clients) != 1 || f.Clawbridge.Clients[0].ID != "w" || !f.Clawbridge.Clients[0].Enabled {
+		t.Fatalf("clawbridge clients: %+v", f.Clawbridge.Clients)
+	}
+}

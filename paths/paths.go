@@ -55,6 +55,11 @@ func CatalogRoot(userDataRoot string) string {
 	return userDataRoot
 }
 
+// ScheduledJobsPath is the persisted timer/cron job list (appendix-data-layout §2; reference-architecture §2.6).
+func ScheduledJobsPath(userDataRoot string) string {
+	return filepath.Join(userDataRoot, "scheduled_jobs.json")
+}
+
 // SeedInstructionFiles copies UserDataRoot/AGENT.md and MEMORY.md into InstructionRoot when missing there (session bootstrap).
 func SeedInstructionFiles(userDataRoot, instructionRoot string) error {
 	pairs := [][2]string{

@@ -7,6 +7,7 @@ const BuiltinToolExec = "exec"
 
 // ToolSwitch toggles a builtin tool (YAML under tools.<tool_name>).
 // Allow/Deny apply to [BuiltinToolExec] only (prefix allowlist / substring denials).
+// Allow entry "*" means any command (still blocked by Deny substrings).
 type ToolSwitch struct {
 	// Enabled defaults to true when omitted for normal tools; exec requires explicit enabled: true (see [File.BuiltinToolEnabled]).
 	Enabled *bool `yaml:"enabled,omitempty"`
@@ -67,6 +68,9 @@ func (f *File) ExecCommandPermitted(command string) bool {
 	}
 	for _, a := range sw.Allow {
 		ap := strings.TrimSpace(a)
+		if ap == "*" {
+			return true
+		}
 		if ap != "" && strings.HasPrefix(cmd, ap) {
 			return true
 		}

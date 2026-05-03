@@ -10,4 +10,5 @@ const (
 	NameEditFile   = "edit_file"
 	NameAppendFile = "append_file"
 	NameExec       = "exec"
+	NameCron       = "cron"
 )

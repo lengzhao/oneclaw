@@ -14,12 +14,14 @@ type SubAgentChunkFunc func(correlationID, subRunID, agentType, chunk string)
 // RunAgentDeps carries parent runtime state for run_agent and nested sub-agents.
 // Values are snapshotted when RegisterRunAgent binds a tool; pointer fields are shared read-only.
 type RunAgentDeps struct {
+	// Turn identifies channel/session/agent for this execution (tools, cron isolation).
+	Turn TurnBinding
+
 	Catalog         *catalog.Catalog
 	Cfg             *config.File
 	UserDataRoot    string
 	InstructionRoot string
 	SessionRoot     string
-	SessionSegment  string
 	ParentWorkspace string
 	ProfileID       string
 	UseMock         bool

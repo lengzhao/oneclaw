@@ -56,3 +56,22 @@ func TestFile_ExecCommandPermitted(t *testing.T) {
 		t.Fatal("disabled exec")
 	}
 }
+
+func TestFile_ExecCommandPermitted_wildcardAllow(t *testing.T) {
+	en := true
+	f := &File{
+		Tools: map[string]ToolSwitch{
+			BuiltinToolExec: {
+				Enabled: &en,
+				Allow:   []string{"*"},
+				Deny:    []string{";"},
+			},
+		},
+	}
+	if !f.ExecCommandPermitted("any-command here") {
+		t.Fatal("wildcard allow")
+	}
+	if f.ExecCommandPermitted("name; inj") {
+		t.Fatal("deny should still apply")
+	}
+}
