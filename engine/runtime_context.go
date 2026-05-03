@@ -7,12 +7,22 @@ import (
 	"time"
 
 	"github.com/cloudwego/eino/adk"
+	"github.com/cloudwego/eino/components/model"
 
 	"github.com/lengzhao/oneclaw/catalog"
 	"github.com/lengzhao/oneclaw/config"
 	"github.com/lengzhao/oneclaw/preturn"
+	"github.com/lengzhao/oneclaw/session"
 	"github.com/lengzhao/oneclaw/toolhost"
 )
+
+// AgentShellMeta holds ChatModelAgent fields needed to rebuild after mutating system instruction (e.g. load_memory_snapshot).
+type AgentShellMeta struct {
+	Name          string
+	Description   string
+	MaxIterations int
+	Handlers      []adk.ChatModelAgentMiddleware
+}
 
 // RuntimeContext is mutable per-turn state shared by workflow nodes.
 type RuntimeContext struct {
@@ -43,6 +53,9 @@ type RuntimeContext struct {
 	CurrentAsync    bool
 
 	ChatAgent *adk.ChatModelAgent
+	// ChatModel backs rebuilding ChatAgent after instruction mutation (workflow load_memory_snapshot).
+	ChatModel      model.ToolCallingChatModel
+	AgentShellMeta AgentShellMeta
 
 	Assistant string // last model message content (adk_main)
 
@@ -63,4 +76,10 @@ type RuntimeContext struct {
 
 	// PostAssistantRespond runs after on_respond appends the assistant transcript (phase 5 outbound); optional.
 	PostAssistantRespond func(ctx context.Context, assistant string) error
+
+	// PromptTemplateData holds workflow node outputs: SkillsIndex/Tasks merge into system prompt; MemoryRecall is attached as an optional user message in adk_main. Layout is embedded by default; optional agents/<agent_type>.prompt.tmpl overrides.
+	PromptTemplateData map[string]any
+
+	// TranscriptReplayTurns is set by workflow load_transcript from transcript.jsonl (trimmed). When nil, adk_main sends only EffectiveUserPrompt as one user message.
+	TranscriptReplayTurns []session.TranscriptTurn
 }

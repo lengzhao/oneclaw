@@ -16,6 +16,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"unicode/utf8"
 
 	clawbridge "github.com/lengzhao/clawbridge"
 	"github.com/lengzhao/clawbridge/bus"
@@ -24,6 +25,7 @@ import (
 
 	"github.com/lengzhao/oneclaw/catalog"
 	"github.com/lengzhao/oneclaw/config"
+	"github.com/lengzhao/oneclaw/meta"
 	"github.com/lengzhao/oneclaw/paths"
 	"github.com/lengzhao/oneclaw/runner"
 	"github.com/lengzhao/oneclaw/schedule"
@@ -32,9 +34,11 @@ import (
 )
 
 const (
-	turnhubTurnTimeout           = 30 * time.Minute
-	turnhubDiscardReplyTimeout   = 15 * time.Second
+	turnhubTurnTimeout          = 30 * time.Minute
+	turnhubDiscardReplyTimeout  = 15 * time.Second
 	turnhubQueueDiscardUserText = "您的消息因处理队列已满已被丢弃，请稍后重试。"
+	// inboundLogPreviewMaxRunes caps logged user text (full length still in content_len_runes).
+	inboundLogPreviewMaxRunes = 200
 )
 
 func cmdServe(ctx context.Context, g globalOpts, args []string) error {
@@ -142,6 +146,7 @@ func cmdServe(ctx context.Context, g globalOpts, args []string) error {
 				)
 				return err
 			}
+			slog.Info("inbound received", inboundReceivedAttrs(in)...)
 			return nil
 		})
 		go schedule.RunPollerLoop(schedCtx, p)
@@ -200,8 +205,53 @@ func runConsumeInbound(ctx context.Context, b *clawbridge.Bridge, hub *turnhub.H
 				}
 			}
 			slog.Error("turnhub Enqueue", args...)
+			continue
+		}
+		slog.Info("inbound received", inboundReceivedAttrs(in)...)
+	}
+}
+
+func inboundReceivedAttrs(in clawbridge.InboundMessage) []any {
+	content := strings.TrimSpace(in.Content)
+	preview := previewRunes(content, inboundLogPreviewMaxRunes)
+	args := []any{
+		"client_id", strings.TrimSpace(in.ClientID),
+		"session_id", strings.TrimSpace(in.SessionID),
+		"session_path_segment", paths.SanitizeSessionPathSegment(in.SessionID),
+		"message_id", strings.TrimSpace(in.MessageID),
+		"content_len_runes", utf8.RuneCountInString(content),
+		"content_preview", preview,
+		"sender_platform", strings.TrimSpace(in.Sender.Platform),
+		"sender_display", strings.TrimSpace(in.Sender.DisplayName),
+		"peer_kind", strings.TrimSpace(in.Peer.Kind),
+		"peer_id", strings.TrimSpace(in.Peer.ID),
+	}
+	if in.Metadata != nil {
+		if c := strings.TrimSpace(in.Metadata[runner.InboundMetaCorrelation]); c != "" {
+			args = append(args, "correlation_id", c)
+		}
+		if j := strings.TrimSpace(in.Metadata[runner.InboundMetaScheduleJob]); j != "" {
+			args = append(args, "schedule_job_id", j)
+		}
+		if a := strings.TrimSpace(in.Metadata[runner.InboundMetaAgent]); a != "" {
+			args = append(args, "inbound_agent_id", a)
+		}
+		if src := strings.TrimSpace(in.Metadata[meta.SourceKey]); src != "" {
+			args = append(args, "source", src)
 		}
 	}
+	return args
+}
+
+func previewRunes(s string, max int) string {
+	if max <= 0 {
+		return ""
+	}
+	r := []rune(s)
+	if len(r) <= max {
+		return s
+	}
+	return string(r[:max]) + "…"
 }
 
 func newTurnProcessor(b *clawbridge.Bridge, root string, ocfg *config.File, cat *catalog.Catalog, mf *catalog.Manifest, globalMock *bool) turnhub.Processor {

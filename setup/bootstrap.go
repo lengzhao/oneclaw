@@ -1,13 +1,20 @@
 package setup
 
 import (
+	"bytes"
 	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"text/template"
 
 	"github.com/lengzhao/oneclaw/config"
 )
+
+// AgentBootstrapVars is passed when rendering the embedded templates/agents/default.md during Bootstrap (Go text/template).
+type AgentBootstrapVars struct {
+	UserDataRoot string
+}
 
 // Bootstrap creates UserDataRoot layout and writes templates only when missing (FR-CFG-02).
 func Bootstrap(userDataRoot string) error {
@@ -63,7 +70,57 @@ func Bootstrap(userDataRoot string) error {
 			return err
 		}
 	}
-	return nil
+	if err := renderAgentMarkdownTemplateIfMissing(
+		"templates/agents/default.md",
+		filepath.Join(userDataRoot, "agents", "default.md"),
+		AgentBootstrapVars{UserDataRoot: userDataRoot},
+	); err != nil {
+		return err
+	}
+	return bootstrapSkillsFromTemplates(userDataRoot)
+}
+
+// bootstrapSkillsFromTemplates copies embedded templates/skills/** into UserDataRoot/skills/ when missing (never overwrites).
+func bootstrapSkillsFromTemplates(userDataRoot string) error {
+	const prefix = "templates/skills"
+	return fs.WalkDir(templates, prefix, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		rel, err := filepath.Rel(prefix, path)
+		if err != nil {
+			return err
+		}
+		dst := filepath.Join(userDataRoot, "skills", filepath.FromSlash(rel))
+		return copyTemplateIfMissing(path, dst)
+	})
+}
+
+func renderAgentMarkdownTemplateIfMissing(tmplPath, dst string, data AgentBootstrapVars) error {
+	if _, err := os.Stat(dst); err == nil {
+		return nil
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+	raw, err := templates.ReadFile(tmplPath)
+	if err != nil {
+		return fmt.Errorf("setup: read %s: %w", tmplPath, err)
+	}
+	t, err := template.New(filepath.Base(tmplPath)).Option("missingkey=error").Parse(string(raw))
+	if err != nil {
+		return fmt.Errorf("setup: parse %s: %w", tmplPath, err)
+	}
+	var buf bytes.Buffer
+	if err := t.Execute(&buf, data); err != nil {
+		return fmt.Errorf("setup: execute %s: %w", tmplPath, err)
+	}
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(dst, buf.Bytes(), 0o644)
 }
 
 func copyTemplateIfMissing(tmplPath, dst string) error {

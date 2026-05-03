@@ -74,7 +74,7 @@ func agentTurnUserContent(rtx *engine.RuntimeContext) string {
 	b.WriteString("Context for this agent run:\n\nUser message:\n")
 	b.WriteString(strings.TrimSpace(rtx.EffectiveUserPrompt()))
 	if a := strings.TrimSpace(rtx.Assistant); a != "" {
-		b.WriteString("\n\nMain agent assistant reply:\n")
+		b.WriteString("\n\nMain agent assistant reply (extract durable facts from both sides; quote assistant wording when it states identity, names, or commitments):\n")
 		b.WriteString(a)
 	}
 	return b.String()

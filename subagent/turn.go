@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"log/slog"
 	"maps"
 	"os"
 	"strings"
@@ -22,10 +23,31 @@ import (
 	"github.com/lengzhao/oneclaw/session"
 )
 
-func newSubRunID() string {
+// subRunAgentSegmentMaxRunes caps the agent_type portion of subs/<id>/ (filesystem-friendly segment length).
+const subRunAgentSegmentMaxRunes = 64
+
+func newSubRunID(agentType string) string {
 	var b [8]byte
 	_, _ = rand.Read(b[:])
-	return "sub-" + hex.EncodeToString(b[:])
+	suffix := hex.EncodeToString(b[:])
+	at := strings.TrimSpace(agentType)
+	if at == "" {
+		return "sub-" + suffix
+	}
+	seg := paths.SanitizeSessionPathSegment(at)
+	seg = truncateRunes(seg, subRunAgentSegmentMaxRunes)
+	return "sub-" + seg + "-" + suffix
+}
+
+func truncateRunes(s string, max int) string {
+	if max <= 0 {
+		return s
+	}
+	r := []rune(s)
+	if len(r) <= max {
+		return s
+	}
+	return string(r[:max])
 }
 
 // ExecuteSubAgentTurn runs a sub-agent with a fresh message list and optional subs layout (phase 4).
@@ -45,7 +67,7 @@ func ExecuteSubAgentTurn(ctx context.Context, deps *RunAgentDeps, sub *catalog.A
 		return "", fmt.Errorf("subagent: max delegation depth %d reached", maxD)
 	}
 
-	subRunID := newSubRunID()
+	subRunID := newSubRunID(sub.AgentType)
 	parentSessionRoot := deps.SessionRoot
 	subSessionRoot := paths.SubSessionRoot(parentSessionRoot, subRunID)
 	if err := os.MkdirAll(subSessionRoot, 0o755); err != nil {
@@ -119,7 +141,7 @@ func ExecuteSubAgentTurn(ctx context.Context, deps *RunAgentDeps, sub *catalog.A
 	if desc == "" {
 		desc = sub.Name
 	}
-	maxIt := adkhost.MaxAgentIterations(deps.Cfg)
+	maxIt := adkhost.MaxAgentIterationsOrCatalog(deps.Cfg, sub.MaxTurns)
 
 	runCtx := observe.WithAgentRunAttrs(ctx, observe.AgentRunAttrs{
 		CorrelationID:   deps.CorrelationID,
@@ -159,6 +181,26 @@ func ExecuteSubAgentTurn(ctx context.Context, deps *RunAgentDeps, sub *catalog.A
 
 	input := &adk.AgentInput{
 		Messages: []adk.Message{schema.UserMessage(strings.TrimSpace(userContent))},
+	}
+	forceInfo := os.Getenv("ONECLAW_VERBOSE_PROMPT") == "1"
+	if forceInfo || slog.Default().Enabled(runCtx, slog.LevelDebug) {
+		logFn := slog.DebugContext
+		if forceInfo {
+			logFn = slog.InfoContext
+		}
+		logFn(runCtx, "subagent.system_prompt",
+			"agent_type", sub.AgentType,
+			"sub_run_id", subRunID,
+			"chars", len(bundle.Instruction),
+			"text", bundle.Instruction,
+		)
+		u := strings.TrimSpace(userContent)
+		logFn(runCtx, "subagent.user_message",
+			"agent_type", sub.AgentType,
+			"sub_run_id", subRunID,
+			"chars", len(u),
+			"text", u,
+		)
 	}
 	var chunks []string
 	iter := agentRun.Run(runCtx, input)

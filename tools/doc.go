@@ -4,7 +4,7 @@
 //
 // **P0 — minimal kernel (current)**  
 //   - `read_file`: read UTF-8 text under [Registry.WorkspaceRoot] (required for workspace-bound agents).  
-//   - `echo`: smoke/tests and trivial round-trip (may be omitted from production agent allowlists).
+//   - `echo`: smoke/tests only — not in [DefaultBuiltinIDs]; register explicitly or list in agent `tools:` when needed.
 //
 // **P1 — filesystem (partial)**  
 //   - `list_dir` / `glob`: enumerate / match paths under workspace (caps + path rules align with `read_file`).  

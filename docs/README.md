@@ -24,6 +24,7 @@
 | [eino-md-chain-architecture.md](eino-md-chain-architecture.md) | Eino + 全 MD + `agents/` + **Workflow（Graph）** | **选 Go+Eino 时核心** |
 | [workflows-spec.md](workflows-spec.md) | **`workflows/*.yaml` Graph、`steps` 糖、manifest** | **实现编排必读** |
 | [eino-integration-surface.md](eino-integration-surface.md) | **Eino / eino-ext 接口与包清单**（实现对照） | **实现工程师必读** |
+| [memory-and-session.md](memory-and-session.md) | **Eino Session 示例 vs 检查点 vs `lengzhao/memory` vs oneclaw 文件 MEMORY** | **接记忆/会话持久化前读** |
 | [harness-governance-extensions.md](harness-governance-extensions.md) | Harness 治理、SafeHarness 映射、**扩展 backlog** 与初期预留扩展性 | **增强方向**；一期验收以 requirements 为准 |
 | [requirements.md](requirements.md) | **目标产品 PRD**（FR/NFR、验收要点） | **绿场核心**；若产品范围不同可删或替换 |
 
@@ -65,9 +66,10 @@ flowchart TB
 4. **[eino-md-chain-architecture.md](eino-md-chain-architecture.md)** — 若技术栈含 Go + Eino  
 5. **[workflows-spec.md](workflows-spec.md)** — `workflows/*.yaml`（DAG）与内置节点  
 6. **[eino-integration-surface.md](eino-integration-surface.md)** — Eino / eino-ext **包与接口清单**（实现对照）  
-7. **[appendix-data-layout.md](appendix-data-layout.md)** — 定目录与隔离策略时（含 **§6 其余推荐默认**）  
-8. **[requirements.md](requirements.md)** — PRD 与验收要点  
-9. **[harness-governance-extensions.md](harness-governance-extensions.md)** — 治理增强、扩展路线与初期预留扩展性（可选）  
+7. **[memory-and-session.md](memory-and-session.md)** — 对话持久化、`lengzhao/memory` 与文件 MEMORY 边界  
+8. **[appendix-data-layout.md](appendix-data-layout.md)** — 定目录与隔离策略时（含 **§6 其余推荐默认**）  
+9. **[requirements.md](requirements.md)** — PRD 与验收要点  
+10. **[harness-governance-extensions.md](harness-governance-extensions.md)** — 治理增强、扩展路线与初期预留扩展性（可选）  
 
 ---
 

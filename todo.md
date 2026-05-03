@@ -83,13 +83,23 @@
 
 ---
 
-## 阶段 6：记忆演进 + Skills（异步与 staging）
+## 阶段 6：记忆演进 + Skills（异步落盘）
 
-目标：MEMORY/skills 流水线（workflow + 内置 / 可覆盖 agents）、[docs/eino-md-chain-architecture.md](docs/eino-md-chain-architecture.md) §3、[docs/appendix-data-layout.md](docs/appendix-data-layout.md) §6；演进闭环校验若需要单列 backlog。
+目标：MEMORY/skills 流水线（workflow + 内置 / 可覆盖 agents）、[docs/eino-md-chain-architecture.md](docs/eino-md-chain-architecture.md) §3.4.1、[docs/appendix-data-layout.md](docs/appendix-data-layout.md) §6。
 
-- [ ] **`memory`**：staging / `write_behavior_policy`、晋升；与 **`workflows/*.yaml`** 中 **`memory_agent` async 枝**对接。
-- [ ] **`wfexec`**：主 ADK 之后链后继节点（记忆抽取、Skills 生成）；异步默认、可配置「reply 前 flush」。
-- [ ] **`catalog` / `workflow`**：演进类 `agent_type` 与 workflow 绑定及审计字段。
+**已定口径（见上文档；实现前以此为验收）**：
+
+- **`MEMORY.md`**（相对当前 `InstructionRoot`）：只保留规则与最重要摘要，**不超过 2048 字节**；超出时的截断/报错策略由实现定义并写在代码注释中。
+- **`memory_extractor`**：抽取内容写入 **`memory/yyyy-mm/*.md`**（`yyyy-mm` 为 **UTC** 历年月，实现固定时区并注释）。
+- **`skill_generator`**：可写入 **`UserDataRoot/skills/*`**（与 [`paths.CatalogRoot`](paths/paths.go) = `UserDataRoot` 下的全局 `skills/` 树一致）。
+- **`write_behavior_policy`**：阶段 6 **不做**（后续可与 Harness 对齐）。
+- **一致性**：默认 **异步** `memory_agent` / `skill_agent`；**不**等待异步节点结束，**不**做「reply 前 flush」或跨回合强一致。
+- **编排**：主 workflow 仅 **`use: agent`**；演进 Agent 若需独立 DAG，使用已有约定 **`workflows/<agent_type>.yaml`**（与类型同名），**不在 Catalog 增加 `workflow` 字段**。
+- **路径**：**不使用**任何 `.staging` 目录。
+
+- [x] **`memory` + `preturn`**：`MEMORY.md` 注入 **2048 字节**上限（`memory.TruncateMEMORYMDForInjection`）；路径校验 `memory/yyyy-mm/*.md`、`skills/**/*.md`。
+- [x] **`tools` / 内置 Agent**：deps 绑定 `write_memory_month` / `append_memory_month` / `read_memory_month`、`write_skill_file` / `append_skill_file`；内置 **`memory_extractor` / `skill_generator`** Catalog 显式 `tools` + `max_turns`。
+- [x] **`wfexec`**：仍为异步枝叶（无 flush）；本轮未改 compose。
 
 ---
 

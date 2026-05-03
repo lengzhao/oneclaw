@@ -64,6 +64,11 @@ func normalizeRootAllow(allow []string, seed *tools.Registry, cfg *config.File) 
 		if cfg == nil || cfg.BuiltinToolEnabled(builtin.NameCron) {
 			out = append(out, builtin.NameCron)
 		}
+		if cfg == nil || cfg.BuiltinToolEnabled(builtin.NameTodo) {
+			out = append(out, builtin.NameTodo)
+		}
+		// Recall lists paths under instruction root; read_file is workspace-only — expose month reads for the main agent.
+		out = append(out, builtin.NameReadMemoryMonth)
 		return dedupeAllow(out)
 	}
 	return dedupeAllow(allow)

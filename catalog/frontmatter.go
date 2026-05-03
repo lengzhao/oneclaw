@@ -31,13 +31,14 @@ func SplitYAMLFrontmatter(raw []byte) (frontYAML []byte, body string, err error)
 
 // AgentFrontmatter is the YAML block in agents/*.md.
 type AgentFrontmatter struct {
-	Name                      string   `yaml:"name,omitempty"`
-	Description               string   `yaml:"description,omitempty"`
-	Tools                     []string `yaml:"tools,omitempty"`
-	Model                     string   `yaml:"model,omitempty"`
-	MaxTurns                  int      `yaml:"max_turns,omitempty"`
-	Workspace                 string   `yaml:"workspace,omitempty"`
-	InheritParentMemory       bool     `yaml:"inherit_parent_memory,omitempty"`
+	Name                string   `yaml:"name,omitempty"`
+	Description         string   `yaml:"description,omitempty"`
+	Tools               []string `yaml:"tools,omitempty"`
+	Skills              []string `yaml:"skills,omitempty"`
+	Model               string   `yaml:"model,omitempty"`
+	MaxTurns            int      `yaml:"max_turns,omitempty"`
+	Workspace           string   `yaml:"workspace,omitempty"`
+	InheritParentMemory bool     `yaml:"inherit_parent_memory,omitempty"`
 }
 
 // ParseAgentMarkdown extracts frontmatter + body. Catalog identity is always stem (filename without extension).
@@ -63,6 +64,7 @@ func ParseAgentMarkdown(stem string, raw []byte) (*Agent, error) {
 	a.Name = fm.Name
 	a.Description = fm.Description
 	a.Tools = fm.Tools
+	a.ReferencedSkillIDs = dedupeSkillIDs(fm.Skills)
 	a.Model = fm.Model
 	a.MaxTurns = fm.MaxTurns
 	a.Workspace = strings.TrimSpace(fm.Workspace)
@@ -71,4 +73,18 @@ func ParseAgentMarkdown(stem string, raw []byte) (*Agent, error) {
 		a.Name = a.AgentType
 	}
 	return a, nil
+}
+
+func dedupeSkillIDs(in []string) []string {
+	seen := make(map[string]bool)
+	var out []string
+	for _, s := range in {
+		s = strings.TrimSpace(s)
+		if s == "" || seen[s] {
+			continue
+		}
+		seen[s] = true
+		out = append(out, s)
+	}
+	return out
 }

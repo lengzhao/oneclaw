@@ -32,6 +32,14 @@ func MaxAgentIterations(cfg *config.File) int {
 	return n
 }
 
+// MaxAgentIterationsOrCatalog uses catalogMaxTurns when > 0; otherwise [MaxAgentIterations].
+func MaxAgentIterationsOrCatalog(cfg *config.File, catalogMaxTurns int) int {
+	if catalogMaxTurns > 0 {
+		return catalogMaxTurns
+	}
+	return MaxAgentIterations(cfg)
+}
+
 // MaxDelegationDepth returns the configured max nested run_agent depth (>= 1).
 func MaxDelegationDepth(cfg *config.File) int {
 	if cfg == nil {

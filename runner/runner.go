@@ -106,7 +106,7 @@ func ExecuteTurn(p Params) error {
 		if err := session.ResetConversation(sessionRoot); err != nil {
 			return fmt.Errorf("reset session: %w", err)
 		}
-		const ack = "已清除本会话的用户侧对话记录（transcript.jsonl）。runs/、subs/、MEMORY、工作区文件未改动；后续回合仍按单轮输入调用模型，不带历史 transcript。"
+		const ack = "已清除本会话的用户侧对话记录（transcript.jsonl）。runs/、subs/、MEMORY、工作区文件未改动；后续主 Agent 将不再回放此前的对话消息历史。"
 		if p.PostAssistantRespond != nil {
 			if err := p.PostAssistantRespond(ctx, ack); err != nil {
 				return err
@@ -117,7 +117,8 @@ func ExecuteTurn(p Params) error {
 		return nil
 	}
 
-	bundle, err := preturn.Build(root, instruction, ag, preturn.DefaultBudget(), nil)
+	buildOpts := &preturn.BuildOpts{OmitFileBackedPromptBlocks: true}
+	bundle, err := preturn.Build(root, instruction, ag, preturn.DefaultBudget(), buildOpts)
 	if err != nil {
 		return err
 	}
@@ -173,11 +174,15 @@ func ExecuteTurn(p Params) error {
 	if desc == "" {
 		desc = ag.Name
 	}
+	initialInstr := bundle.Instruction
+	if strings.TrimSpace(initialInstr) == "" {
+		initialInstr = " "
+	}
 	agent, err := adkhost.NewChatModelAgent(ctx, cm, execReg, adkhost.AgentOptions{
 		Name:          ag.AgentType,
 		Description:   desc,
-		Instruction:   bundle.Instruction,
-		MaxIterations: adkhost.MaxAgentIterations(p.Config),
+		Instruction:   initialInstr,
+		MaxIterations: adkhost.MaxAgentIterationsOrCatalog(p.Config, ag.MaxTurns),
 		Handlers:      []adk.ChatModelAgentMiddleware{observe.NewChatModelLogMiddleware()},
 	})
 	if err != nil {
@@ -202,11 +207,8 @@ func ExecuteTurn(p Params) error {
 	}
 
 	now := time.Now().UTC()
-	if err := session.AppendTranscriptTurn(sessionRoot, session.TranscriptTurn{
-		Ts: now, Role: "user", Content: prompt,
-	}); err != nil {
-		return err
-	}
+	// User transcript is appended in wfexec adk_main so load_transcript sees prior turns only;
+	// the model receives history messages plus the current prompt as the final user message.
 	if err := session.AppendRunEvent(sessionRoot, ag.AgentType, session.RunEvent{
 		Ts: now, AgentType: ag.AgentType, Phase: "run_start",
 		Detail: map[string]any{
@@ -222,18 +224,26 @@ func ExecuteTurn(p Params) error {
 			AgentID:   ag.AgentType,
 			ReplyMeta: maps.Clone(replyMeta),
 		},
-		SessionRoot:          sessionRoot,
-		SessionSegment:       sessWire,
-		Agent:                ag,
-		Bundle:               bundle,
-		UserPrompt:           prompt,
-		Catalog:              p.Catalog,
-		Cfg:                  p.Config,
-		UserDataRoot:         root,
-		InstructionRoot:      instruction,
-		WorkspacePath:        ws,
-		ToolRegistry:         execReg,
-		ChatAgent:            agent,
+		SessionRoot:        sessionRoot,
+		SessionSegment:     sessWire,
+		Agent:              ag,
+		Bundle:             bundle,
+		PromptTemplateData: make(map[string]any),
+		UserPrompt:         prompt,
+		Catalog:            p.Catalog,
+		Cfg:                p.Config,
+		UserDataRoot:       root,
+		InstructionRoot:    instruction,
+		WorkspacePath:      ws,
+		ToolRegistry:       execReg,
+		ChatAgent:          agent,
+		ChatModel:          cm,
+		AgentShellMeta: engine.AgentShellMeta{
+			Name:          ag.AgentType,
+			Description:   desc,
+			MaxIterations: adkhost.MaxAgentIterationsOrCatalog(p.Config, ag.MaxTurns),
+			Handlers:      []adk.ChatModelAgentMiddleware{observe.NewChatModelLogMiddleware()},
+		},
 		Stdout:               p.Stdout,
 		RunStartedAt:         now,
 		UseMock:              useMock,

@@ -1,9 +1,13 @@
 workflow_spec_version: 1
 id: default.turn
-description: Main turn plus default async memory/skill agents after respond (override agents/workflows as usual).
+description: Main turn with load_memory_snapshot before adk_main; async memory/skill agents after respond (override as usual).
 steps:
   - use: on_receive
   - use: load_prompt_md
+  - use: load_memory_snapshot
+  - use: list_skills
+  - use: list_tasks
+  - use: load_transcript
   - use: adk_main
   - use: on_respond
   - id: memory_agent

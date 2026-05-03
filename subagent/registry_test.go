@@ -10,11 +10,13 @@ import (
 )
 
 func TestBuildExecRegistry_emptyAllow_noRunAgent(t *testing.T) {
-	ws := filepath.Join(t.TempDir(), "w")
+	tmp := t.TempDir()
+	ws := filepath.Join(tmp, "w")
 	deps := &RunAgentDeps{
-		Turn:    TurnBinding{SessionSegment: "test-session"},
-		Catalog: &catalog.Catalog{},
-		Cfg:     &config.File{},
+		Turn:            TurnBinding{SessionSegment: "test-session"},
+		Catalog:         &catalog.Catalog{},
+		Cfg:             &config.File{},
+		InstructionRoot: filepath.Join(tmp, "instructions"),
 	}
 	reg, err := BuildExecRegistry(ws, nil, deps)
 	if err != nil {
@@ -27,16 +29,24 @@ func TestBuildExecRegistry_emptyAllow_noRunAgent(t *testing.T) {
 	if !slices.Contains(names, "cron") {
 		t.Fatalf("want cron in default registry: %v", names)
 	}
+	if !slices.Contains(names, "todo") {
+		t.Fatalf("want todo in default registry: %v", names)
+	}
+	if !slices.Contains(names, "read_memory_month") {
+		t.Fatalf("want read_memory_month in default registry: %v", names)
+	}
 }
 
 func TestBuildExecRegistry_explicitRunAgent(t *testing.T) {
-	ws := filepath.Join(t.TempDir(), "w")
+	tmp := t.TempDir()
+	ws := filepath.Join(tmp, "w")
 	deps := &RunAgentDeps{
-		Turn:    TurnBinding{SessionSegment: "test-session"},
-		Catalog: &catalog.Catalog{},
-		Cfg:     &config.File{},
+		Turn:            TurnBinding{SessionSegment: "test-session"},
+		Catalog:         &catalog.Catalog{},
+		Cfg:             &config.File{},
+		InstructionRoot: filepath.Join(tmp, "instructions"),
 	}
-	reg, err := BuildExecRegistry(ws, []string{"echo", "run_agent"}, deps)
+	reg, err := BuildExecRegistry(ws, []string{"read_file", "run_agent"}, deps)
 	if err != nil {
 		t.Fatal(err)
 	}

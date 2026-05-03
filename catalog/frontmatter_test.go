@@ -26,6 +26,22 @@ Hello **body**
 	}
 }
 
+func TestParseAgentMarkdown_skillsRefs(t *testing.T) {
+	raw := []byte(`---
+skills:
+  - skill-creator
+---
+body
+`)
+	a, err := ParseAgentMarkdown("x", raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(a.ReferencedSkillIDs) != 1 || a.ReferencedSkillIDs[0] != "skill-creator" {
+		t.Fatalf("%v", a.ReferencedSkillIDs)
+	}
+}
+
 func TestParseAgentMarkdown_workspaceAndMemoryInherit(t *testing.T) {
 	raw := []byte(`---
 name: Sub

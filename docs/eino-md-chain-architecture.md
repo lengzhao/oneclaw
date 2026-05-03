@@ -55,7 +55,7 @@
 
 - **叙述与规范 prose** 放 md；**列表 / 顺序 / 开关** 放 yaml（或 md 的 `---` frontmatter）。
 - **Tool 允许集**：解析成 `[]string` 或 tag → 装配层对 `tools.Registry` 做 `Filter`；主路径仍是 `adk.NewChatModelAgent` + 绑定工具列表。
-- **多 Agent**：所有**业务 Agent 的配置集中在 `UserDataRoot/.agent/agents/`**（或 manifest 声明的路径），不在代码里硬编码角色；宿主 **先加载内置条目，再加载用户目录；同名则用户覆盖内置**（与 FR-AGT-04 一致）。
+- **多 Agent**：所有**业务 Agent 的配置集中在 `UserDataRoot/agents/`**（或 manifest 声明的路径），不在代码里硬编码角色；宿主 **先加载内置条目，再加载用户目录；同名则用户覆盖内置**（与 FR-AGT-04 一致）。
 
 ---
 
@@ -98,6 +98,8 @@ flowchart LR
 
 ### 3.4 `memory` 包：窄接口与 Session（实现草图）
 
+**与 Eino / `lengzhao/memory` 的区分**（必读细化）：官方第三章「Memory / Session」是 **对话历史的业务层存盘示例**；`CheckPointStore` 是 **中断恢复**；**`github.com/lengzhao/memory`** 是 **可选 SQLite 结构化记忆库**。与 oneclaw **文件型真源**如何并排或替换，见 **[memory-and-session.md](memory-and-session.md)**。
+
 **定位**：承载 [requirements.md](requirements.md) 里的 **MEMORY / 抽取事实**（文件或等价存储真源），与 Eino ADK 的 **会话消息列表、History、Middleware** 互补 —— **不把「演进事实库」与「模型 messages」混成同一类型**；前者偏 **可审计、可合并的陈述**，后者偏 **对话轨迹**（可按预算裁剪或摘要）。
 
 **Session / 根路径解析**（与 [appendix-data-layout.md](appendix-data-layout.md) 一致）：
@@ -122,6 +124,20 @@ flowchart LR
 其中 `ExtractPatch` 含事实条目、`provenance`（回合 id、消息或工具调用 id）、可选 **置信度/需复核** 标记；`WritePolicy` 对应 PRD 中的全自动 vs 仅草案 vs 路径白名单等。
 
 **与 Eino 的接点**：PreTurn/PostTurn **Lambda 或 ChatModel 节点**内调用上述接口；ADK **Session** 仍负责本轮执行内的消息与事件 —— **仅在需要时将 MemorySnapshot 拼成 system 后缀或 user 前缀消息**，避免在 `memory` 包内 `NewChatModelAgent`。
+
+#### 3.4.1 oneclaw 阶段 6 已定布局（实现口径）
+
+下列条款优先于本节上文泛化「staging / WritePolicy」草图（后者保留作日后 Harness / 策略扩展参考）：
+
+| 事项 | 约定 |
+|------|------|
+| **`MEMORY.md`** | 相对当前 **`InstructionRoot`**；仅 **规则与最重要摘要**；硬上限 **2048 字节**（超出时截断或报错由实现选定，须在代码中注明）。 |
+| **抽取事实落盘** | **`InstructionRoot/memory/yyyy-mm/*.md`**；目录名 **`yyyy-mm`** 使用 **UTC** 历年月，实现须固定时区并注释。 |
+| **Skills 落盘** | **`UserDataRoot/skills/*`**（全局 skills 树，与 [`paths.CatalogRoot`](../paths/paths.go) = `UserDataRoot` 一致）。 |
+| **`write_behavior_policy`** | **阶段 6 不实现**；路径与安全边界由工具与工作目录规则先行约束。 |
+| **异步与一致性** | PostTurn 演进 **默认异步**；**不**阻塞用户回复；**不**实现「reply 前 flush」或跨回合强一致。 |
+| **编排与 Workflow** | 主 turn 的 YAML **仅通过 `use: agent`** 指向演进类型；**不在 Catalog 增加**专用于演进的 **`workflow` 字段**。演进 Agent 若需 **独立 DAG**，使用 **`workflows/<agent_type>.yaml`**（与 Catalog **`agent_type` 同名**，沿用既有解析规则）。 |
+| **staging** | **不使用**任何 **`.staging`** 路径；演进写入直达上表约定位置。 |
 
 ---
 
@@ -165,7 +181,7 @@ flowchart LR
 
 - **默认 Agent**：`manifest.yaml` 中 `default_agent: <agent_type>`；无则退回内置 `general-purpose` 等价物。
 - **按渠道/会话切换**：入站 `Metadata`（或会话首次绑定）写入 **`agent_id`**，PreTurn 节点根据 id 从 Catalog 取 Definition，再 **`FilterRegistry`** + 拼 Instruction。
-- **Per-agent Workflow（推荐约定）**：若存在 **`workflows/<agent_type>.yaml`**（与当前 Catalog 的 **类型 id** 同名），宿主 **自动选用**；否则回落 manifest 的 **`default_turn`**。若需 **共用非同名文件** 或临时覆盖，再在 frontmatter 写 **`workflow: <id>`**（可选别名 **`chain:`**，见 [workflows-spec.md](workflows-spec.md) §3）。
+- **Per-agent Workflow（推荐约定）**：若存在 **`workflows/<agent_type>.yaml`**（与当前 Catalog 的 **类型 id** 同名），宿主 **自动选用**；否则回落 manifest 的 **`default_turn`**。若需 **共用非同名文件** 或临时覆盖，再在 frontmatter 写 **`workflow: <id>`**（可选别名 **`chain:`**，见 [workflows-spec.md](workflows-spec.md) §3）。**演进管线 Agent**（如 `memory_extractor` / `skill_generator`）不要求 Catalog 额外字段即可挂上 **同名** `workflows/<agent_type>.yaml`（见 §3.4.1）。
 - **嵌套**：子 Agent 仍可声明自己的 `tools`；避免在子定义里放开 `run_agent` / `fork_context` 除非明确需要（防深度爆炸）。
 
 ### 5.4 子 Agent 默认：**会话隔离 + 上下文隔离**（已定）
@@ -211,7 +227,7 @@ flowchart LR
 2. **与 ADK 步进的关系**：多轮 tool 间插入新 user 内容，使用 **`BeforeModelRewriteState`** 改写本轮 `messages`（见 §3.2）。
 3. **工具白名单**：全局 Manifest + **每 Agent `tools`** 取交集（或 Agent 覆盖）；skill 是「说明」，invoke 后仍受 allowlist 约束。
 4. **用户 workflow 若含外部命令**：必须与主进程 `exec` 策略一致（沙箱、超时、审计）。
-5. **`agent_type` 唯一性**：**内置 Catalog 先加载，用户 `UserDataRoot/.agent/agents/` 后加载；同名则后者覆盖前者**（用户覆盖内置）。
+5. **`agent_type` 唯一性**：**内置 Catalog 先加载，用户 `UserDataRoot/agents/` 后加载；同名则后者覆盖前者**（用户覆盖内置）。
 6. **Harness 治理扩展**：工具调用与状态写入宜预留 **统一 policy 挂钩**；Manifest 可为 `harness:` / `policy:` 等预留命名空间（未知子键忽略）。详见 [harness-governance-extensions.md](harness-governance-extensions.md)。
 7. **演进编排**：由 **`workflows/*.yaml`** 声明；病态闭环依赖设计与后续可选校验（见 FR-FLOW-05 条款现状）。
 
@@ -237,4 +253,4 @@ flowchart LR
 | 日期 | 说明 |
 |------|------|
 | 2026-05-02 | 增补 §8 Harness 治理交叉引用、§7 设计注意第 6–7 条、参考链接顺延；§3.4 `memory` 包草图；§2 树锚定 `UserDataRoot`；§5 `inherit_parent_memory`、`workspace` 等；§5.4 Workspace；§5.5 Eino 侧；§5.6 多 Agent 管线、执行记录、演进防递归；§6 实现收口；§7 Catalog 顺序；交叉引用 [reference-architecture.md](reference-architecture.md)；§3.1/§4 PostTurn 与内置节点；套件位置与 §3.1 指向 [workflows-spec.md](workflows-spec.md)；Claw 侧 **workflow / DAG** 命名取代纯 chain |
-| 2026-05-03 | §4 / §5.2 / §5.6 / §7：**演进仅靠 workflow（`async` + `use: agent`）**；删除 frontmatter **`suppress_post_turn_evolution`**。**与实现对齐**：内置 Catalog + 默认 turn；无演进专用加载期校验、无 `TurnContext` 演进剖面 |
+| 2026-05-03 | §4 / §5.2 / §5.6 / §7：**演进仅靠 workflow（`async` + `use: agent`）**；删除 **`suppress_post_turn_evolution`**。**§3.4.1 / §5.3**：阶段 6 已定路径；**§3.4** 交叉引用 [memory-and-session.md](memory-and-session.md)。与实现对齐：内置 Catalog + 默认 turn；无演进专用加载期校验、无 `TurnContext` 演进剖面 |

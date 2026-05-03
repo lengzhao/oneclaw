@@ -106,5 +106,8 @@ func skipAgentMarkdown(name string) bool {
 	if lower == "readme.md" {
 		return true
 	}
+	if strings.HasSuffix(lower, ".tmpl") {
+		return true
+	}
 	return strings.HasSuffix(lower, ".readme.md")
 }

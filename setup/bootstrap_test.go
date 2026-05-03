@@ -3,6 +3,7 @@ package setup
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"gopkg.in/yaml.v3"
@@ -27,5 +28,17 @@ func TestBootstrap_idempotent(t *testing.T) {
 	}
 	if _, ok := m["models"]; !ok {
 		t.Fatal("missing models")
+	}
+	sk := filepath.Join(root, "skills", "skill-creator", "SKILL.md")
+	if _, err := os.Stat(sk); err != nil {
+		t.Fatalf("expected builtin skill-creator template: %v", err)
+	}
+	def := filepath.Join(root, "agents", "default.md")
+	b, err := os.ReadFile(def)
+	if err != nil {
+		t.Fatalf("default.md: %v", err)
+	}
+	if !strings.Contains(string(b), root) {
+		t.Fatalf("default.md should contain rendered UserDataRoot")
 	}
 }

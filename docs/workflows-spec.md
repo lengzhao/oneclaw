@@ -167,8 +167,8 @@ workflows:
 | `if` | **条件分支**：求值后 **只沿一条出边** 继续调度 | 见 §6.1（如 **`expr`**；表达式语言由宿主定义，须沙箱化） |
 | `noop` | **空节点**：立即完成，无副用 | 常用于 `if` 的假枝收口 |
 | `agent` | **独立一次 ADK 运行**（子 Agent、**回合后**记忆/Skills 演进、其它后台管线）。**后台记忆/Skills**：在该节点上设 **`async: true`**，并典型命名为 **`memory_agent` / `skill_agent`**（仅为 id 约定，参见 §4.3） | **`agent_type`**（必填，Catalog id）, `workspace`, … |
-| `memory_extract_llm` | 事实抽取（可用 **`use: agent` + `async`** 等价替代；本节点为可选捷径） | `staging_only: true` |
-| `skill_suggest_llm` | Skills 草案（同上） | `staging_only: true` |
+| `memory_extract_llm` | 事实抽取（可用 **`use: agent` + `async`** 等价替代；本节点为可选捷径） | `staging_only: true`（**oneclaw**：默认 **无** `.staging`，落盘布局见 [eino-md-chain-architecture.md](eino-md-chain-architecture.md) §3.4.1） |
+| `skill_suggest_llm` | Skills 草案（同上） | `staging_only: true`（**oneclaw**：同上） |
 | `on_respond` | 裁剪、transcript、`runs`、Bus | `stream: true` |
 | `retrieve_context` | （可选 RAG） | `backend_ref`, `top_k` |
 | `command` | 外部命令（policy） | `argv`, `timeout_sec` |

@@ -124,7 +124,7 @@ flowchart LR
 **持久化触点**：
 
 - **OnReceive / OnRespond**：会话 transcript、本轮 **`runs/<agent_type>/`** 执行记录（见 FR-AGT-05 / FR-OBS-04）。
-- **链后继（原 PostTurn 语义）**：MEMORY / skills 写入（经 staging / policy）；形状由 **YAML** 声明（**`async` 枝叶**）；与实现对齐见 [workflows-spec.md](workflows-spec.md) §6。
+- **链后继（原 PostTurn 语义）**：MEMORY / skills 写入路径与字节上限见 [eino-md-chain-architecture.md](eino-md-chain-architecture.md) §3.4.1、[appendix-data-layout.md](appendix-data-layout.md) §6；形状由 **YAML** 声明（**`async` 枝叶**）；与实现对齐见 [workflows-spec.md](workflows-spec.md) §6。
 
 ---
 
@@ -160,8 +160,8 @@ flowchart TD
   MAIN([主对话 on_respond 完成]) --> Q[workflow 出边<br/>workflows/*.yaml]
   Q --> M["memory_agent<br/>use: agent async: true<br/>agent_type: memory_extractor"]
   Q --> S["skill_agent<br/>use: agent async: true<br/>agent_type: skill_generator"]
-  M --> DISK1[(MEMORY / staging)]
-  S --> DISK2[(skills / staging)]
+  M --> DISK1[("memory/yyyy-mm/*.md<br/>+ MEMORY.md ≤2KiB")]
+  S --> DISK2[("UserDataRoot/skills/*")]
   M --> LOG1[runs 落盘]
   S --> LOG2[runs 落盘]
   DISK1 --> DONE([结束])

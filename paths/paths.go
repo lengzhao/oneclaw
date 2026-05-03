@@ -46,6 +46,7 @@ func Workspace(instructionRoot string) string {
 }
 
 // SubSessionRoot is sessions/<parent>/subs/<sub_run_id>/ (appendix-data-layout §3.1).
+// Convention: sub_run_id is sub-<sanitized_agent_type>-<hex> (see subagent), or sub-<hex> if agent type is empty.
 func SubSessionRoot(parentSessionRoot, subRunID string) string {
 	return filepath.Join(parentSessionRoot, "subs", subRunID)
 }

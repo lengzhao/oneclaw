@@ -9,7 +9,8 @@ import (
 
 // ResetConversation removes only the user-visible chat transcript (transcript.jsonl) under sessionRoot.
 // It does not delete runs/ (execution journal), subs/ (delegated runs), MEMORY.md, or workspace files —
-// those stay as factual / audit state; the main agent turn already uses a single-turn prompt (no transcript replay).
+// those stay as factual / audit state. The main ChatModelAgent replays transcript turns from this file (bounded);
+// clearing it removes chat history from model context while keeping MEMORY.md / memory/ recall in the system prompt.
 func ResetConversation(sessionRoot string) error {
 	root := strings.TrimSpace(sessionRoot)
 	if root == "" {
