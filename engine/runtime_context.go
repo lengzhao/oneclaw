@@ -24,14 +24,21 @@ type AgentShellMeta struct {
 	Handlers      []adk.ChatModelAgentMiddleware
 }
 
-// RuntimeContext is mutable per-turn state shared by workflow nodes.
-type RuntimeContext struct {
+// WorkflowExec holds mutexes and per-node execution scratch for the compose driver.
+type WorkflowExec struct {
 	// ExecMu serializes handler bodies (sync nodes and async goroutines contend fairly).
 	ExecMu sync.Mutex
 
 	asyncMu    sync.Mutex
 	asyncSlots map[string]*asyncHandlerSlot // lazy: async handler completion
 
+	CurrentNodeID string
+	CurrentParams map[string]any
+	CurrentAsync  bool
+}
+
+// TurnInputs is host-injected per-turn state (mostly stable during the workflow run).
+type TurnInputs struct {
 	GoCtx context.Context
 	Turn  TurnContext
 
@@ -41,27 +48,16 @@ type RuntimeContext struct {
 	Bundle         *preturn.Bundle
 	UserPrompt     string
 
-	// Catalog / config / roots for workflow nodes that spawn other agents (use: agent).
-	Catalog         *catalog.Catalog
-	Cfg             *config.File
-	Manifest        *catalog.Manifest // workflows.default_turn resolution for nested use: agent (optional)
-	UserDataRoot    string
+	Catalog      *catalog.Catalog
+	Cfg          *config.File
+	Manifest     *catalog.Manifest // workflows.default_turn resolution for nested use: agent (optional)
+	UserDataRoot string
+	// InstructionRoot is the resolved instructions directory for this agent/run.
 	InstructionRoot string
 	WorkspacePath   string
 	ToolRegistry    toolhost.Registry // parent runtime tools (subset source for sub-agents / run_agent)
-	CurrentNodeID   string
-	CurrentParams   map[string]any
-	CurrentAsync    bool
 
-	// DelegationDepth is nested sub-agent depth (root turn 0); wfexec handleAgent passes it into RunAgentDeps.
 	DelegationDepth int
-
-	ChatAgent *adk.ChatModelAgent
-	// ChatModel backs rebuilding ChatAgent after instruction mutation (workflow load_memory_snapshot).
-	ChatModel      model.ToolCallingChatModel
-	AgentShellMeta AgentShellMeta
-
-	Assistant string // last model message content (adk_main)
 
 	Stdout           *os.File
 	OnAssistantChunk func(content string) // optional streaming hook
@@ -73,20 +69,43 @@ type RuntimeContext struct {
 	ProfileID    string
 	ModelName    string
 
-	// CorrelationID ties one CLI/turn invocation to sub-agent logs (optional; wfexec may synthesize if empty).
-	CorrelationID string
-
-	SawOnRespond bool // transcript flush delegated to on_respond node
+	CorrelationID string // ties one CLI/turn invocation to sub-agent logs (optional; wfexec may synthesize if empty)
 
 	// PostAssistantRespond runs after on_respond appends the assistant transcript (phase 5 outbound); optional.
 	PostAssistantRespond func(ctx context.Context, assistant string) error
+}
 
+// ADKRuntime holds the main chat agent and last assistant output for the turn workflow.
+type ADKRuntime struct {
+	ChatAgent      *adk.ChatModelAgent
+	ChatModel      model.ToolCallingChatModel
+	AgentShellMeta AgentShellMeta
+
+	Assistant string // last model message content (adk_main)
+
+	SawOnRespond bool // transcript flush delegated to on_respond node
+}
+
+// PromptScratch holds mutable prompt assembly state (PreparePrompt phase nodes).
+type PromptScratch struct {
 	// PromptTemplateData holds workflow node outputs: SkillsIndex/Tasks merge into system prompt; MemoryRecall is attached as an optional user message in adk_main. Layout is embedded by default; optional agents/<agent_type>.prompt.tmpl overrides.
 	PromptTemplateData map[string]any
 
 	// TranscriptReplayTurns is set by workflow load_transcript from transcript.jsonl (trimmed). When nil, adk_main sends only EffectiveUserPrompt as one user message.
 	TranscriptReplayTurns []session.TranscriptTurn
+}
 
-	// WorkflowNodeOutputs maps workflow graph node id → structured fields for params.context workflow_node refs (see EmitNodeOutput; adk_main / on_respond builtins write here).
+// NodeScratch holds structured outputs keyed by workflow graph node id (params.context workflow_node refs; see EmitNodeOutput).
+type NodeScratch struct {
 	WorkflowNodeOutputs map[string]map[string]any
+}
+
+// RuntimeContext is mutable per-turn state shared by workflow nodes.
+// It composes embedded sub-structs by concern; promoted fields keep existing rtx.Field access stable across packages.
+type RuntimeContext struct {
+	WorkflowExec
+	TurnInputs
+	ADKRuntime
+	PromptScratch
+	NodeScratch
 }

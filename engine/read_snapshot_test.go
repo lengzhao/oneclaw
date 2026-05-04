@@ -16,7 +16,7 @@ func TestReadSnapshot_roundTripContext(t *testing.T) {
 }
 
 func TestEffectiveUserPrompt_fromGoCtxSnapshot(t *testing.T) {
-	rtx := &RuntimeContext{UserPrompt: "live"}
+	rtx := &RuntimeContext{TurnInputs: TurnInputs{UserPrompt: "live"}}
 	ctx := WithReadSnapshot(context.Background(), ReadSnapshot{UserPrompt: "frozen"})
 	rtx.GoCtx = ctx
 	if rtx.EffectiveUserPrompt() != "frozen" {

@@ -7,7 +7,7 @@ import (
 )
 
 func TestCoalesceRTX(t *testing.T) {
-	rtx := &engine.RuntimeContext{UserPrompt: "z"}
+	rtx := &engine.RuntimeContext{TurnInputs: engine.TurnInputs{UserPrompt: "z"}}
 	got, err := coalesceRTX(map[string]any{"b": rtx, "c": (*engine.RuntimeContext)(nil)})
 	if err != nil {
 		t.Fatal(err)

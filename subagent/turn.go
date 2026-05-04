@@ -220,42 +220,40 @@ func ExecuteSubAgentTurn(ctx context.Context, deps *RunAgentDeps, sub *catalog.A
 		}
 	}
 
-	childRTX := &engine.RuntimeContext{
+	childRTX := engine.ForkSubAgentRuntime(engine.SubAgentRuntimeOpts{
 		Turn: engine.TurnContext{
 			AgentID:   sub.AgentType,
 			ReplyMeta: maps.Clone(deps.Turn.ReplyMeta),
 		},
-		DelegationDepth:     deps.DelegationDepth + 1,
-		Manifest:            deps.Manifest,
-		WorkflowNodeOutputs: make(map[string]map[string]any),
-		SessionRoot:         subSessionRoot,
-		SessionSegment:      deps.Turn.SessionSegment,
-		Agent:               sub,
-		Bundle:              bundle,
-		PromptTemplateData:  make(map[string]any),
-		UserPrompt:          strings.TrimSpace(userContent),
-		Catalog:             deps.Catalog,
-		Cfg:                 deps.Cfg,
-		UserDataRoot:        deps.UserDataRoot,
-		InstructionRoot:     deps.InstructionRoot,
-		WorkspacePath:       childWS,
-		ToolRegistry:        childReg,
-		ChatAgent:           agentRun,
-		ChatModel:           cm,
+		DelegationDepth: deps.DelegationDepth + 1,
+		Manifest:        deps.Manifest,
+		SubSessionRoot:  subSessionRoot,
+		SessionSegment:  deps.Turn.SessionSegment,
+		Agent:           sub,
+		Bundle:          bundle,
+		UserPrompt:      strings.TrimSpace(userContent),
+		Catalog:         deps.Catalog,
+		Cfg:             deps.Cfg,
+		UserDataRoot:    deps.UserDataRoot,
+		InstructionRoot: deps.InstructionRoot,
+		WorkspacePath:   childWS,
+		ToolRegistry:    childReg,
+		ChatAgent:       agentRun,
+		ChatModel:       cm,
 		AgentShellMeta: engine.AgentShellMeta{
 			Name:          sub.AgentType,
 			Description:   desc,
 			MaxIterations: maxIt,
 			Handlers:      []adk.ChatModelAgentMiddleware{observe.NewChatModelLogMiddleware()},
 		},
-		Stdout:                   stdoutFile,
-		RunStartedAt:             now,
-		UseMock:                  useMock,
-		ProfileID:                prof.ID,
-		ModelName:                prof.DefaultModel,
-		CorrelationID:            deps.CorrelationID,
-		OnSubAgentAssistantChunk: deps.OnSubAgentChunk,
-	}
+		Stdout:          stdoutFile,
+		RunStartedAt:    now,
+		UseMock:         useMock,
+		ProfileID:       prof.ID,
+		ModelName:       prof.DefaultModel,
+		CorrelationID:   deps.CorrelationID,
+		OnSubAgentChunk: deps.OnSubAgentChunk,
+	})
 	if onAssistantChunk != nil {
 		childRTX.OnAssistantChunk = onAssistantChunk
 	}

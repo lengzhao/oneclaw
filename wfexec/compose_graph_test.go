@@ -40,7 +40,7 @@ func TestCompilePhase3Workflow_diamondJoin(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rtx := &engine.RuntimeContext{UserPrompt: "hi"}
+	rtx := &engine.RuntimeContext{TurnInputs: engine.TurnInputs{UserPrompt: "hi"}}
 	out, err := run.Invoke(ctx, rtx)
 	if err != nil {
 		t.Fatal(err)
@@ -79,7 +79,7 @@ func TestCompilePhase3Workflow_forkTwoSinks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rtx := &engine.RuntimeContext{UserPrompt: "hi"}
+	rtx := &engine.RuntimeContext{TurnInputs: engine.TurnInputs{UserPrompt: "hi"}}
 	out, err := run.Invoke(ctx, rtx)
 	if err != nil {
 		t.Fatal(err)
@@ -112,7 +112,7 @@ steps:
 	if err != nil {
 		t.Fatal(err)
 	}
-	rtx := &engine.RuntimeContext{UserPrompt: "x"}
+	rtx := &engine.RuntimeContext{TurnInputs: engine.TurnInputs{UserPrompt: "x"}}
 	if _, err := run.Invoke(ctx, rtx); err != nil {
 		t.Fatal(err)
 	}

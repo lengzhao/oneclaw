@@ -12,7 +12,7 @@ import (
 )
 
 func TestAdkMessagesForMain_withoutLoadTranscriptUsesPromptOnly(t *testing.T) {
-	rtx := &engine.RuntimeContext{UserPrompt: "hello"}
+	rtx := &engine.RuntimeContext{TurnInputs: engine.TurnInputs{UserPrompt: "hello"}}
 	msgs, err := adkMessagesForMain(rtx)
 	if err != nil {
 		t.Fatal(err)
@@ -28,10 +28,12 @@ func TestAdkMessagesForMain_withoutLoadTranscriptUsesPromptOnly(t *testing.T) {
 
 func TestAdkMessagesForMain_withLoadTranscriptReplay(t *testing.T) {
 	rtx := &engine.RuntimeContext{
-		UserPrompt: "current-turn",
-		TranscriptReplayTurns: []session.TranscriptTurn{
-			{Ts: time.Now(), Role: "user", Content: "u1"},
-			{Ts: time.Now(), Role: "assistant", Content: "a1"},
+		TurnInputs: engine.TurnInputs{UserPrompt: "current-turn"},
+		PromptScratch: engine.PromptScratch{
+			TranscriptReplayTurns: []session.TranscriptTurn{
+				{Ts: time.Now(), Role: "user", Content: "u1"},
+				{Ts: time.Now(), Role: "assistant", Content: "a1"},
+			},
 		},
 	}
 	msgs, err := adkMessagesForMain(rtx)
@@ -49,12 +51,14 @@ func TestAdkMessagesForMain_withLoadTranscriptReplay(t *testing.T) {
 
 func TestAdkMessagesForMain_recallBetweenHistoryAndCurrent(t *testing.T) {
 	rtx := &engine.RuntimeContext{
-		UserPrompt: "fix-it",
-		PromptTemplateData: map[string]any{
-			"MemoryRecall": "## Memory recall (instruction root)\n\n- note from memory/",
-		},
-		TranscriptReplayTurns: []session.TranscriptTurn{
-			{Ts: time.Now(), Role: "user", Content: "prior"},
+		TurnInputs: engine.TurnInputs{UserPrompt: "fix-it"},
+		PromptScratch: engine.PromptScratch{
+			PromptTemplateData: map[string]any{
+				"MemoryRecall": "## Memory recall (instruction root)\n\n- note from memory/",
+			},
+			TranscriptReplayTurns: []session.TranscriptTurn{
+				{Ts: time.Now(), Role: "user", Content: "prior"},
+			},
 		},
 	}
 	msgs, err := adkMessagesForMain(rtx)

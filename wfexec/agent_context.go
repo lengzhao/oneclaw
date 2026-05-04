@@ -152,12 +152,12 @@ func materializeWorkflowNode(rtx *engine.RuntimeContext, header string, a workfl
 	if nodeID == "" {
 		return "", fmt.Errorf("wfexec: workflow_node select.node_id required")
 	}
-	if rtx.WorkflowNodeOutputs == nil {
+	payload := rtx.WorkflowNodeOutputCopy(nodeID)
+	if payload == nil {
+		if rtx.HasWorkflowNodeOutputStore() {
+			return "", fmt.Errorf("wfexec: empty workflow output for node %q", nodeID)
+		}
 		return "", fmt.Errorf("wfexec: no workflow node outputs for %q", nodeID)
-	}
-	payload := rtx.WorkflowNodeOutputs[nodeID]
-	if len(payload) == 0 {
-		return "", fmt.Errorf("wfexec: empty workflow output for node %q", nodeID)
 	}
 
 	fieldsRaw := sel["fields"]

@@ -22,3 +22,26 @@ func (rtx *RuntimeContext) EmitNodeOutput(payload map[string]any) {
 		rtx.WorkflowNodeOutputs[id][k] = v
 	}
 }
+
+// HasWorkflowNodeOutputStore reports whether WorkflowNodeOutputs was initialized (may still be empty).
+func (rtx *RuntimeContext) HasWorkflowNodeOutputStore() bool {
+	return rtx != nil && rtx.WorkflowNodeOutputs != nil
+}
+
+// WorkflowNodeOutputCopy returns a shallow copy of stored fields for nodeID, or nil if rtx/nodeID
+// is invalid, the outputs map is nil, or the node has no rows yet.
+func (rtx *RuntimeContext) WorkflowNodeOutputCopy(nodeID string) map[string]any {
+	id := strings.TrimSpace(nodeID)
+	if rtx == nil || id == "" || rtx.WorkflowNodeOutputs == nil {
+		return nil
+	}
+	src := rtx.WorkflowNodeOutputs[id]
+	if len(src) == 0 {
+		return nil
+	}
+	out := make(map[string]any, len(src))
+	for k, v := range src {
+		out[k] = v
+	}
+	return out
+}

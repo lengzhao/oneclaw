@@ -22,17 +22,20 @@ func TestBuildSubagentUserPrompt_runJournalPathMetadata(t *testing.T) {
 		t.Fatal(err)
 	}
 	rtx := &engine.RuntimeContext{
-		SessionRoot: tmp,
-		Turn:        engine.TurnContext{AgentID: host},
-		Agent:       nil,
-		CorrelationID: "c1",
-		CurrentParams: map[string]any{
-			"context": []any{
-				map[string]any{
-					"ref": "run_journal", "scope": "current_turn",
-					"as": "path_metadata", "label": "Run record",
+		WorkflowExec: engine.WorkflowExec{
+			CurrentParams: map[string]any{
+				"context": []any{
+					map[string]any{
+						"ref": "run_journal", "scope": "current_turn",
+						"as": "path_metadata", "label": "Run record",
+					},
 				},
 			},
+		},
+		TurnInputs: engine.TurnInputs{
+			SessionRoot:   tmp,
+			Turn:          engine.TurnContext{AgentID: host},
+			CorrelationID: "c1",
 		},
 	}
 	s, err := BuildSubagentUserPrompt(rtx)
@@ -46,9 +49,9 @@ func TestBuildSubagentUserPrompt_runJournalPathMetadata(t *testing.T) {
 
 func TestBuildSubagentUserPrompt_defaultTurnPair(t *testing.T) {
 	rtx := &engine.RuntimeContext{
-		UserPrompt:    "hi",
-		Assistant:     "hello",
-		CurrentParams: map[string]any{},
+		WorkflowExec: engine.WorkflowExec{CurrentParams: map[string]any{}},
+		TurnInputs:   engine.TurnInputs{UserPrompt: "hi"},
+		ADKRuntime:   engine.ADKRuntime{Assistant: "hello"},
 	}
 	s, err := BuildSubagentUserPrompt(rtx)
 	if err != nil {

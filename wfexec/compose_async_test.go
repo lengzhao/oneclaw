@@ -52,7 +52,7 @@ func TestCompilePhase3Workflow_asyncContinuesBeforeHandlerDone(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rtx := &engine.RuntimeContext{UserPrompt: "hi"}
+	rtx := &engine.RuntimeContext{TurnInputs: engine.TurnInputs{UserPrompt: "hi"}}
 
 	errCh := make(chan error, 1)
 	go func() {
@@ -131,7 +131,7 @@ func TestCompilePhase3Workflow_asyncRecordsFailure(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rtx := &engine.RuntimeContext{UserPrompt: "hi"}
+	rtx := &engine.RuntimeContext{TurnInputs: engine.TurnInputs{UserPrompt: "hi"}}
 	if _, err := run.Invoke(ctx, rtx); err != nil {
 		t.Fatal(err)
 	}
@@ -206,7 +206,7 @@ func TestCompilePhase3Workflow_asyncEffectiveUserPromptUsesForkSnapshot(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	rtx := &engine.RuntimeContext{UserPrompt: "original"}
+	rtx := &engine.RuntimeContext{TurnInputs: engine.TurnInputs{UserPrompt: "original"}}
 
 	if _, err := run.Invoke(ctx, rtx); err != nil {
 		t.Fatal(err)

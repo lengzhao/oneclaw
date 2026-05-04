@@ -31,7 +31,7 @@ steps:
 	if err != nil {
 		t.Fatal(err)
 	}
-	rtx := &engine.RuntimeContext{UserPrompt: "hi"}
+	rtx := &engine.RuntimeContext{TurnInputs: engine.TurnInputs{UserPrompt: "hi"}}
 	out, err := run.Invoke(ctx, rtx)
 	if err != nil {
 		t.Fatal(err)

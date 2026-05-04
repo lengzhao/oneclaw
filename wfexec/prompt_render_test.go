@@ -23,10 +23,12 @@ func TestRenderMainAgentPrompt_includesNowUTCFromRunStartedAt(t *testing.T) {
 	}
 	fixed := time.Date(2026, 5, 3, 12, 0, 0, 0, time.UTC)
 	rtx := &engine.RuntimeContext{
-		InstructionRoot: ir,
-		UserDataRoot:    ud,
-		RunStartedAt:    fixed,
-		Agent:           &catalog.Agent{AgentType: "default"},
+		TurnInputs: engine.TurnInputs{
+			InstructionRoot: ir,
+			UserDataRoot:    ud,
+			RunStartedAt:    fixed,
+			Agent:           &catalog.Agent{AgentType: "default"},
+		},
 	}
 	out, err := RenderMainAgentPrompt(rtx)
 	if err != nil {

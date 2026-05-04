@@ -70,7 +70,7 @@ func handleLoadMemorySnapshot(rtx *engine.RuntimeContext) error {
 	}
 	budget := preturn.CoalesceBudget(preturn.DefaultBudget())
 	block := preturn.MemoryRecallSection(rtx.EffectiveInstructionRoot(), budget)
-	ensurePromptData(rtx)["MemoryRecall"] = block
+	rtx.SetPromptTemplateEntry("MemoryRecall", block)
 	return nil
 }
 
@@ -90,7 +90,7 @@ func handleListSkills(rtx *engine.RuntimeContext) error {
 	if strings.TrimSpace(s) == "" {
 		s = "(no skills under user-data skills/ yet)"
 	}
-	ensurePromptData(rtx)["SkillsIndex"] = s
+	rtx.SetPromptTemplateEntry("SkillsIndex", s)
 	return nil
 }
 
@@ -102,12 +102,12 @@ func handleListTasks(rtx *engine.RuntimeContext) error {
 	b, err := os.ReadFile(p)
 	if err != nil {
 		if os.IsNotExist(err) {
-			ensurePromptData(rtx)["Tasks"] = "(no todo.json — use the `todo` tool with action=list after adding tasks)"
+			rtx.SetPromptTemplateEntry("Tasks", "(no todo.json — use the `todo` tool with action=list after adding tasks)")
 			return nil
 		}
 		return fmt.Errorf("wfexec: list_tasks: %w", err)
 	}
-	ensurePromptData(rtx)["Tasks"] = strings.TrimSpace(string(b))
+	rtx.SetPromptTemplateEntry("Tasks", strings.TrimSpace(string(b)))
 	return nil
 }
 
@@ -120,15 +120,8 @@ func handleLoadTranscript(rtx *engine.RuntimeContext) error {
 		return fmt.Errorf("wfexec: load_transcript: %w", err)
 	}
 	turns = session.TrimTranscriptTail(turns, session.DefaultTranscriptTurnLimit)
-	rtx.TranscriptReplayTurns = turns
+	rtx.SetTranscriptReplayTurns(turns)
 	return nil
-}
-
-func ensurePromptData(rtx *engine.RuntimeContext) map[string]any {
-	if rtx.PromptTemplateData == nil {
-		rtx.PromptTemplateData = make(map[string]any)
-	}
-	return rtx.PromptTemplateData
 }
 
 func handleFilterTools(*engine.RuntimeContext) error { return nil }
@@ -200,9 +193,9 @@ func handleADKMain(rtx *engine.RuntimeContext) error {
 	}
 	// Join assistant MessageOutputs (intermediate model text included). Tool result outputs (Role tool) are omitted.
 	if len(chunks) == 0 {
-		rtx.Assistant = ""
+		rtx.SetAssistant("")
 	} else {
-		rtx.Assistant = strings.TrimSpace(strings.Join(chunks, "\n"))
+		rtx.SetAssistant(strings.TrimSpace(strings.Join(chunks, "\n")))
 	}
 	rtx.EmitNodeOutput(map[string]any{
 		"use":            "adk_main",
@@ -232,10 +225,10 @@ func adkMessagesForMain(rtx *engine.RuntimeContext) ([]adk.Message, error) {
 }
 
 func recallUserMessageFromPromptData(rtx *engine.RuntimeContext) adk.Message {
-	if rtx == nil || rtx.PromptTemplateData == nil {
+	if rtx == nil {
 		return nil
 	}
-	raw, ok := rtx.PromptTemplateData["MemoryRecall"]
+	raw, ok := rtx.PromptTemplateRaw("MemoryRecall")
 	if !ok || raw == nil {
 		return nil
 	}
@@ -326,7 +319,7 @@ func transcriptTurnsToADKMessages(turns []session.TranscriptTurn) []adk.Message 
 }
 
 func handleOnRespond(rtx *engine.RuntimeContext) error {
-	rtx.SawOnRespond = true
+	rtx.SetSawOnRespond(true)
 	if strings.TrimSpace(rtx.Assistant) == "" {
 		return nil
 	}

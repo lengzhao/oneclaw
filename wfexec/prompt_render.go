@@ -78,12 +78,7 @@ func RenderMainAgentPrompt(rtx *engine.RuntimeContext) (string, error) {
 		memStr = strings.TrimSpace(string(raw))
 	}
 
-	data := map[string]any{}
-	if rtx.PromptTemplateData != nil {
-		for k, v := range rtx.PromptTemplateData {
-			data[k] = v
-		}
-	}
+	data := rtx.PromptTemplateDataCopy()
 	// Host-controlled fields win over workflow-provided keys.
 	data["AGENT_MD"] = agentMd
 	data["MEMORY_MD"] = memStr
@@ -169,6 +164,6 @@ func rebuildChatAgentForInstruction(rtx *engine.RuntimeContext, instruction stri
 	if err != nil {
 		return err
 	}
-	rtx.ChatAgent = agent
+	rtx.SetChatAgent(agent)
 	return nil
 }
