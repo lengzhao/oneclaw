@@ -1,4 +1,4 @@
-package wfexec
+package workflow
 
 import (
 	"os"

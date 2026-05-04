@@ -93,6 +93,10 @@ steps:
     async: true
     params:
       agent_type: memory_extractor
+      context:
+        - ref: run_journal
+          scope: current_turn
+          as: user_message
   - id: skill_agent
     use: agent
     async: true

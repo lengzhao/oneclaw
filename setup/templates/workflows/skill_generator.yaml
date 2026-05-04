@@ -1,6 +1,11 @@
 workflow_spec_version: 1
 id: skill_generator.turn
-description: Minimal built-in turn for skill_generator (override with workflows/skill_generator.yaml).
+description: Sub-agent workflow for skill_generator (runs under subs/); override .agent/workflows/skill_generator.yaml.
 steps:
   - use: on_receive
-  - use: noop
+  - use: load_prompt_md
+  # - use: load_memory_snapshot
+  - id: adk_main
+    use: adk_main
+  - id: on_respond
+    use: on_respond

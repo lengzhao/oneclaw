@@ -44,6 +44,7 @@ type RuntimeContext struct {
 	// Catalog / config / roots for workflow nodes that spawn other agents (use: agent).
 	Catalog         *catalog.Catalog
 	Cfg             *config.File
+	Manifest        *catalog.Manifest // workflows.default_turn resolution for nested use: agent (optional)
 	UserDataRoot    string
 	InstructionRoot string
 	WorkspacePath   string
@@ -51,6 +52,9 @@ type RuntimeContext struct {
 	CurrentNodeID   string
 	CurrentParams   map[string]any
 	CurrentAsync    bool
+
+	// DelegationDepth is nested sub-agent depth (root turn 0); wfexec handleAgent passes it into RunAgentDeps.
+	DelegationDepth int
 
 	ChatAgent *adk.ChatModelAgent
 	// ChatModel backs rebuilding ChatAgent after instruction mutation (workflow load_memory_snapshot).
@@ -82,4 +86,7 @@ type RuntimeContext struct {
 
 	// TranscriptReplayTurns is set by workflow load_transcript from transcript.jsonl (trimmed). When nil, adk_main sends only EffectiveUserPrompt as one user message.
 	TranscriptReplayTurns []session.TranscriptTurn
+
+	// WorkflowNodeOutputs maps workflow graph node id → structured fields for params.context workflow_node refs (see EmitNodeOutput; adk_main / on_respond builtins write here).
+	WorkflowNodeOutputs map[string]map[string]any
 }

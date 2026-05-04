@@ -160,18 +160,22 @@ workflows:
 | `use` | 职责 | 典型 `params` |
 |-------|------|----------------|
 | `on_receive` | 校验、脱敏、附件、TurnContext | `max_attachment_mb` |
-| `load_prompt_md` | 装载分段 md | `fragments: [...]` |
+| `load_prompt_md` | 装载分段 md（**oneclaw**：默认 turn 上多为 **扩展位 / 兼容槽**，实际拼接在 **`adk_main`**） | `fragments: [...]` |
 | `load_memory_snapshot` | memory 包 `LoadSnapshot` | `respect_omit_memory_injection: true` |
-| `filter_tools` | Registry 过滤 | `allowlist_ref: ...` |
-| `adk_main` | 主对话 ADK | `agent_from_context: true` 或 `agent_type` |
+| `filter_tools` | Registry 过滤（**oneclaw**：内置 **no-op**，可作 **插件 / 策略钩子**） | `allowlist_ref: ...` |
+| `adk_main` | 主对话 ADK | `agent_from_context: true` 或 `agent_type`；可选 **`stream: true`**（**oneclaw**：与 `on_respond.params.stream` 任一为真则向渠道增量下发助手片段，见 [workflow-architecture-review.md](workflow-architecture-review.md) §4.1） |
 | `if` | **条件分支**：求值后 **只沿一条出边** 继续调度 | 见 §6.1（如 **`expr`**；表达式语言由宿主定义，须沙箱化） |
 | `noop` | **空节点**：立即完成，无副用 | 常用于 `if` 的假枝收口 |
 | `agent` | **独立一次 ADK 运行**（子 Agent、**回合后**记忆/Skills 演进、其它后台管线）。**后台记忆/Skills**：在该节点上设 **`async: true`**，并典型命名为 **`memory_agent` / `skill_agent`**（仅为 id 约定，参见 §4.3） | **`agent_type`**（必填，Catalog id）, `workspace`, … |
 | `memory_extract_llm` | 事实抽取（可用 **`use: agent` + `async`** 等价替代；本节点为可选捷径） | `staging_only: true`（**oneclaw**：默认 **无** `.staging`，落盘布局见 [eino-md-chain-architecture.md](eino-md-chain-architecture.md) §3.4.1） |
 | `skill_suggest_llm` | Skills 草案（同上） | `staging_only: true`（**oneclaw**：同上） |
-| `on_respond` | 裁剪、transcript、`runs`、Bus | `stream: true` |
+| `on_respond` | 裁剪、transcript、`runs`、Bus | 可选 **`stream: true`**（**oneclaw `serve`**：`Reply` + `EditMessage`；默认关闭） |
 | `retrieve_context` | （可选 RAG） | `backend_ref`, `top_k` |
 | `command` | 外部命令（policy） | `argv`, `timeout_sec` |
+
+> **oneclaw Phase3（实现对齐）**：`workflow/validate.go` **拒绝** `use: if` 节点。需要「条件编排」时，请使用 **多条 workflow 文件**、**manifest / 配置切换** 或 **应用层开关**，勿在 YAML 中写 `if`。下文 **§6.1** 描述的是 **通用 workflow 规范**（Future / 其它宿主）；详见 [workflow-architecture-review.md](workflow-architecture-review.md) §4.6。
+
+**维护约定（oneclaw / `params.context`）**：子 Agent 的 **`params.context[]`** 支持矩阵与 **`workflow_node`** 可读字段以 **[workflow-architecture-review.md](workflow-architecture-review.md) §4.3** 为真源。新增 **`ref` / `as`** 或向 **`WorkflowNodeOutputs`** 写入新键时，须 **先更新该矩阵** 再改实现（宿主通过 **`RuntimeContext.EmitNodeOutput`** 写入节点产出）。
 
 ### 6.1 内置 `if` 分支（v1）
 
@@ -303,3 +307,4 @@ graph:
 |------|------|
 | 2026-05-02 | 初版：workflow + **graph 主模型**、`steps` 糖、manifest `workflows`、`workflow` frontmatter；取代原 `chains-spec`/`.agent/chains` 命名；§1/§3：**解析优先级**（frontmatter → `workflows/<agent_type>.yaml` → `default_turn`）；推荐 **`id` 与 `agent_type` 一致**；§6/§7：内置 **`agent`** 节点；**`on_respond` 后异步枝** 需 `graph`；§4.2/§6.1：内置 **`if`** + 边 **`branch`**，**`noop`**；§11：`if` 静态校验 |
 | 2026-05-03 | §4.3 / §6 / §8：**记忆抽取与 Skills 仅通过 workflow（`async` + `use: agent`）声明**；移除 Catalog 演进开关叙述；`if` 示例表达式不再引用 `evolution_suppressed`。**§6 / §11 与实现对齐**：内置 Catalog（`memory_extractor` / `skill_generator`）+ 默认 turn 模板；**无**演进专用加载期闭环校验、**无** `TurnContext` 演进嵌套剖面；`wfexec.Execute` 每次编译 DAG，`async` 节点 goroutine 触发且 handler 仍经 `ExecMu` 串行 |
+| 2026-05-04 | §6：**`load_prompt_md` / `filter_tools`** 标明 **oneclaw** no-op / 扩展位语义；**维护约定**（`params.context` 矩阵真源、`EmitNodeOutput`） |

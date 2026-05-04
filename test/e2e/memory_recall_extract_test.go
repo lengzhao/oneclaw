@@ -49,6 +49,7 @@ func TestE2E_memory_extractor_builtin_hasMonthTools(t *testing.T) {
 		t.Fatal("missing builtin memory_extractor")
 	}
 	want := map[string]bool{
+		builtin.NameReadRunJournal:    false,
 		builtin.NameWriteMemoryMonth:  false,
 		builtin.NameAppendMemoryMonth: false,
 		builtin.NameReadMemoryMonth:   false,
@@ -62,5 +63,26 @@ func TestE2E_memory_extractor_builtin_hasMonthTools(t *testing.T) {
 		if !v {
 			t.Fatalf("memory_extractor agent missing tool %q (have %v)", k, ag.Tools)
 		}
+	}
+}
+
+func TestE2E_skill_generator_builtin_hasRunJournalTool(t *testing.T) {
+	cat, err := catalog.Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ag := cat.Get("skill_generator")
+	if ag == nil {
+		t.Fatal("missing builtin skill_generator")
+	}
+	found := false
+	for _, n := range ag.Tools {
+		if n == builtin.NameReadRunJournal {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("skill_generator agent missing tool %q (have %v)", builtin.NameReadRunJournal, ag.Tools)
 	}
 }

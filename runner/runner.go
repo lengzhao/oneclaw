@@ -53,6 +53,11 @@ type Params struct {
 	RequiredOutboundMetadataKeysForSend func(clientID string) []string
 
 	PostAssistantRespond func(context.Context, string) error
+
+	// PostAssistantChunk is called during adk_main for each non-empty assistant text chunk when
+	// workflow.ReplyStreamEnabled(workflow) is true (on_respond.params.stream or adk_main.params.stream).
+	// fragment is the latest slice; accumulated joins fragments with newlines (same as final rtx.Assistant).
+	PostAssistantChunk func(ctx context.Context, fragment string, accumulated string) error
 }
 
 // ExecuteTurn runs catalog → preturn → workflow → ADK for one inbound user message.
@@ -147,6 +152,7 @@ func ExecuteTurn(p Params) error {
 		},
 		Catalog:         p.Catalog,
 		Cfg:             p.Config,
+		Manifest:        mf,
 		UserDataRoot:    root,
 		InstructionRoot: instruction,
 		SessionRoot:     sessionRoot,
@@ -190,7 +196,7 @@ func ExecuteTurn(p Params) error {
 	}
 
 	catRoot := paths.CatalogRoot(root)
-	wfPath, err := wfexec.ResolveWorkflowPath(catRoot, ag.AgentType, mf)
+	wfPath, err := workflow.ResolveWorkflowPath(catRoot, ag.AgentType, mf)
 	if err != nil {
 		return err
 	}
@@ -204,6 +210,25 @@ func ExecuteTurn(p Params) error {
 	}
 	if err := workflow.Validate(wfDoc); err != nil {
 		return fmt.Errorf("workflow %s: %w", wfPath, err)
+	}
+
+	streamReply := workflow.ReplyStreamEnabled(wfDoc)
+	var onAssistantChunk func(string)
+	if streamReply && p.PostAssistantChunk != nil {
+		var acc strings.Builder
+		onAssistantChunk = func(chunk string) {
+			chunk = strings.TrimSpace(chunk)
+			if chunk == "" {
+				return
+			}
+			if acc.Len() > 0 {
+				acc.WriteByte('\n')
+			}
+			acc.WriteString(chunk)
+			if err := p.PostAssistantChunk(ctx, chunk, acc.String()); err != nil {
+				slog.WarnContext(ctx, "runner: PostAssistantChunk failed", "err", err)
+			}
+		}
 	}
 
 	now := time.Now().UTC()
@@ -224,20 +249,23 @@ func ExecuteTurn(p Params) error {
 			AgentID:   ag.AgentType,
 			ReplyMeta: maps.Clone(replyMeta),
 		},
-		SessionRoot:        sessionRoot,
-		SessionSegment:     sessWire,
-		Agent:              ag,
-		Bundle:             bundle,
-		PromptTemplateData: make(map[string]any),
-		UserPrompt:         prompt,
-		Catalog:            p.Catalog,
-		Cfg:                p.Config,
-		UserDataRoot:       root,
-		InstructionRoot:    instruction,
-		WorkspacePath:      ws,
-		ToolRegistry:       execReg,
-		ChatAgent:          agent,
-		ChatModel:          cm,
+		Manifest:            mf,
+		DelegationDepth:     0,
+		WorkflowNodeOutputs: make(map[string]map[string]any),
+		SessionRoot:         sessionRoot,
+		SessionSegment:      sessWire,
+		Agent:               ag,
+		Bundle:              bundle,
+		PromptTemplateData:  make(map[string]any),
+		UserPrompt:          prompt,
+		Catalog:             p.Catalog,
+		Cfg:                 p.Config,
+		UserDataRoot:        root,
+		InstructionRoot:     instruction,
+		WorkspacePath:       ws,
+		ToolRegistry:        execReg,
+		ChatAgent:           agent,
+		ChatModel:           cm,
 		AgentShellMeta: engine.AgentShellMeta{
 			Name:          ag.AgentType,
 			Description:   desc,
@@ -251,6 +279,10 @@ func ExecuteTurn(p Params) error {
 		ModelName:            prof.DefaultModel,
 		CorrelationID:        corrID,
 		PostAssistantRespond: p.PostAssistantRespond,
+		OnAssistantChunk:     nil,
+	}
+	if onAssistantChunk != nil {
+		rtx.OnAssistantChunk = onAssistantChunk
 	}
 	reg := wfexec.NewRegistry()
 	if err := wfexec.RegisterPhase3Builtins(reg); err != nil {

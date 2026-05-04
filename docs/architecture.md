@@ -62,6 +62,10 @@ flowchart TB
 
 文档里的 **PostTurn** 仅是 **阶段别名**：指「**主对话 ADK 跑完之后**，在同一回合编排里 **排在后面的那一段链**」。实现上就是 **YAML 里 ADK 节点之后的若干节点**。
 
+**Workflow 实现侧**的复杂度评审、优化优先级与路线图见 **[workflow-architecture-review.md](workflow-architecture-review.md)**（与本文互补：规格仍以 [workflows-spec.md](workflows-spec.md) 为准）。
+
+读默认 **`default.turn`** 时可用 **四阶段** 对齐节点区间：**PreparePrompt**（`on_receive` … `load_transcript`）→ **RunMainADK**（`adk_main`）→ **Respond**（`on_respond`）→ **PostTurnAsync**（`memory_agent` / `skill_agent` 等 `async: true` 的 `agent`）。细节与可选 **`stream`** 见该文档 **§4.1**。
+
 仍需显式策略的两点（**与是否叫 PostTurn 无关**）：
 
 1. **异步**：用户应先收到 **OnRespond / Bus**，演进类节点 **后台执行** —— 在 YAML / manifest 用 **`async`、分叉边、队列** 等表达，由宿主解释（见 [eino-md-chain-architecture.md](eino-md-chain-architecture.md) §7）。

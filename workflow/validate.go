@@ -7,21 +7,6 @@ import (
 
 const supportedSpecVersion = 1
 
-// Phase3Uses are built-in node kinds wfexec implements today.
-var Phase3Uses = map[string]struct{}{
-	"on_receive":           {},
-	"load_prompt_md":       {},
-	"load_memory_snapshot": {},
-	"list_skills":          {},
-	"list_tasks":           {},
-	"load_transcript":      {},
-	"filter_tools":         {},
-	"adk_main":             {},
-	"on_respond":           {},
-	"noop":                 {},
-	"agent":                {},
-}
-
 // Validate checks workflows-spec §11 baseline for phase 3 (no use:if runtime yet).
 func Validate(w *Workflow) error {
 	if w == nil {

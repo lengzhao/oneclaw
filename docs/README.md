@@ -21,6 +21,7 @@
 | [appendix-data-layout.md](appendix-data-layout.md) | UserDataRoot / InstructionRoot / 隔离策略摘要 | **建议保留**（落地路径设计时对照） |
 | [reference-architecture.md](reference-architecture.md) | 架构原则 + 场景化 PRD 条目 + 落地顺序 | **建议保留** |
 | [architecture.md](architecture.md) | **主流程 + 各子系统生命周期**（Mermaid） | **建议保留** |
+| [workflow-architecture-review.md](workflow-architecture-review.md) | **oneclaw workflow 实现侧**复杂度、路线图；默认回合可读 **四阶段**（PreparePrompt → RunMainADK → Respond → PostTurnAsync），示例模板见仓库 **`setup/templates/workflows/default.turn.yaml`** | **实现/评审 oneclaw 时建议保留** |
 | [eino-md-chain-architecture.md](eino-md-chain-architecture.md) | Eino + 全 MD + `agents/` + **Workflow（Graph）** | **选 Go+Eino 时核心** |
 | [workflows-spec.md](workflows-spec.md) | **`workflows/*.yaml` Graph、`steps` 糖、manifest** | **实现编排必读** |
 | [eino-integration-surface.md](eino-integration-surface.md) | **Eino / eino-ext 接口与包清单**（实现对照） | **实现工程师必读** |

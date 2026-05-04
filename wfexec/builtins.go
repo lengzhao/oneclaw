@@ -16,30 +16,33 @@ import (
 	"github.com/lengzhao/oneclaw/paths"
 	"github.com/lengzhao/oneclaw/preturn"
 	"github.com/lengzhao/oneclaw/session"
+	"github.com/lengzhao/oneclaw/workflow"
 )
 
-// RegisterPhase3Builtins wires handlers for workflow.Phase3Uses.
+// RegisterPhase3Builtins registers handlers for each entry in workflow.Phase3BuiltinUses.
 func RegisterPhase3Builtins(r *Registry) error {
 	if r == nil {
 		return fmt.Errorf("wfexec: nil registry")
 	}
-	for _, pair := range []struct {
-		use string
-		h   Handler
-	}{
-		{"on_receive", handleOnReceive},
-		{"load_prompt_md", handleLoadPromptMD},
-		{"load_memory_snapshot", handleLoadMemorySnapshot},
-		{"list_skills", handleListSkills},
-		{"list_tasks", handleListTasks},
-		{"load_transcript", handleLoadTranscript},
-		{"filter_tools", handleFilterTools},
-		{"adk_main", handleADKMain},
-		{"on_respond", handleOnRespond},
-		{"agent", handleAgent},
-		{"noop", handleNoop},
-	} {
-		if err := r.Register(pair.use, pair.h); err != nil {
+	byUse := map[string]Handler{
+		"on_receive":           handleOnReceive,
+		"load_prompt_md":       handleLoadPromptMD,
+		"load_memory_snapshot": handleLoadMemorySnapshot,
+		"list_skills":          handleListSkills,
+		"list_tasks":           handleListTasks,
+		"load_transcript":      handleLoadTranscript,
+		"filter_tools":         handleFilterTools,
+		"adk_main":             handleADKMain,
+		"on_respond":           handleOnRespond,
+		"agent":                handleAgent,
+		"noop":                 handleNoop,
+	}
+	for _, use := range workflow.Phase3BuiltinUses {
+		h, ok := byUse[use]
+		if !ok {
+			return fmt.Errorf("wfexec: missing builtin handler for %q (sync with workflow.Phase3BuiltinUses)", use)
+		}
+		if err := r.Register(use, h); err != nil {
 			return err
 		}
 	}
@@ -187,7 +190,7 @@ func handleADKMain(rtx *engine.RuntimeContext) error {
 				continue
 			}
 			chunks = append(chunks, c)
-			if rtx.Stdout != nil {
+			if rtx.Stdout != nil && rtx.OnAssistantChunk == nil {
 				fmt.Fprintln(rtx.Stdout, c)
 			}
 			if rtx.OnAssistantChunk != nil {
@@ -201,6 +204,11 @@ func handleADKMain(rtx *engine.RuntimeContext) error {
 	} else {
 		rtx.Assistant = strings.TrimSpace(strings.Join(chunks, "\n"))
 	}
+	rtx.EmitNodeOutput(map[string]any{
+		"use":            "adk_main",
+		"assistant_text": rtx.Assistant,
+		"user_prompt":    rtx.UserPrompt,
+	})
 	return nil
 }
 
@@ -332,7 +340,14 @@ func handleOnRespond(rtx *engine.RuntimeContext) error {
 		if c == nil {
 			c = context.Background()
 		}
-		return rtx.PostAssistantRespond(c, rtx.Assistant)
+		if err := rtx.PostAssistantRespond(c, rtx.Assistant); err != nil {
+			return err
+		}
 	}
+	rtx.EmitNodeOutput(map[string]any{
+		"use":              "on_respond",
+		"assistant_text":   rtx.Assistant,
+		"transcript_flush": true,
+	})
 	return nil
 }

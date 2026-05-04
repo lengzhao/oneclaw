@@ -87,6 +87,20 @@ func RegisterDepsBoundBuiltin(out *tools.Registry, name string, deps *RunAgentDe
 			return true, err
 		}
 		return true, out.Register(tool)
+	case builtin.NameReadRunJournal:
+		if deps == nil {
+			return true, fmt.Errorf("subagent: %s requires RunAgentDeps", name)
+		}
+		sr := strings.TrimSpace(deps.SessionRoot)
+		if sr == "" {
+			return true, fmt.Errorf("subagent: %s requires SessionRoot", name)
+		}
+		host := strings.TrimSpace(deps.HostAgentID)
+		tool, err := builtin.InferReadRunJournal(sr, host, strings.TrimSpace(deps.CorrelationID))
+		if err != nil {
+			return true, err
+		}
+		return true, out.Register(tool)
 	case builtin.NameWriteSkillFile:
 		if deps == nil {
 			return true, fmt.Errorf("subagent: %s requires RunAgentDeps", name)

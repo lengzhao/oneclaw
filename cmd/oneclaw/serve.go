@@ -257,6 +257,7 @@ func previewRunes(s string, max int) string {
 func newTurnProcessor(b *clawbridge.Bridge, root string, ocfg *config.File, cat *catalog.Catalog, mf *catalog.Manifest, globalMock *bool) turnhub.Processor {
 	return func(c context.Context, msg clawbridge.InboundMessage) error {
 		msgCopy := msg
+		var streamStarted bool
 		sess := strings.TrimSpace(msgCopy.SessionID)
 		agent := strings.TrimSpace(msgCopy.Metadata[runner.InboundMetaAgent])
 		prof := strings.TrimSpace(msgCopy.Metadata[runner.InboundMetaProfile])
@@ -294,8 +295,54 @@ func newTurnProcessor(b *clawbridge.Bridge, root string, ocfg *config.File, cat 
 				}
 				return keys
 			},
+			PostAssistantChunk: func(ctx context.Context, _, accumulated string) error {
+				if strings.TrimSpace(accumulated) == "" {
+					return nil
+				}
+				var err error
+				if !streamStarted {
+					_, err = b.Reply(ctx, &msgCopy, accumulated, "")
+					streamStarted = true
+				} else {
+					editOut := &clawbridge.OutboundMessage{
+						ClientID:  msgCopy.ClientID,
+						To:        clawbridge.Recipient{SessionID: msgCopy.SessionID, Kind: msgCopy.Peer.Kind},
+						Text:      accumulated,
+						ReplyToID: msgCopy.MessageID,
+					}
+					err = b.EditMessage(ctx, editOut)
+					if err != nil && errors.Is(err, clawbridge.ErrCapabilityUnsupported) {
+						slog.Warn("clawbridge EditMessage (stream) unsupported",
+							"client_id", msgCopy.ClientID, "session_id", sess)
+						return nil
+					}
+				}
+				if err != nil {
+					args := []any{"err", err, "client_id", msgCopy.ClientID, "session_id", sess, "correlation_id", corr, "phase", "stream_chunk"}
+					slog.Error("clawbridge stream chunk", args...)
+				}
+				return err
+			},
 			PostAssistantRespond: func(ctx context.Context, assistant string) error {
-				_, err := b.Reply(ctx, &msgCopy, assistant, "")
+				a := strings.TrimSpace(assistant)
+				if a == "" {
+					return nil
+				}
+				var err error
+				if !streamStarted {
+					_, err = b.Reply(ctx, &msgCopy, a, "")
+				} else {
+					editOut := &clawbridge.OutboundMessage{
+						ClientID:  msgCopy.ClientID,
+						To:        clawbridge.Recipient{SessionID: msgCopy.SessionID, Kind: msgCopy.Peer.Kind},
+						Text:      a,
+						ReplyToID: msgCopy.MessageID,
+					}
+					err = b.EditMessage(ctx, editOut)
+					if err != nil && errors.Is(err, clawbridge.ErrCapabilityUnsupported) {
+						_, err = b.Reply(ctx, &msgCopy, a, "")
+					}
+				}
 				if err != nil {
 					args := []any{"err", err, "client_id", msgCopy.ClientID, "session_id", sess, "correlation_id", corr}
 					if msgCopy.Metadata != nil {

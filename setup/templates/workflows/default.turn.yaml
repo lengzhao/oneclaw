@@ -1,22 +1,38 @@
 workflow_spec_version: 1
 id: default.turn
 description: Main turn with load_memory_snapshot before adk_main; async memory/skill agents after respond (override as usual).
+# Phases (read map): PreparePrompt -> steps through load_transcript | RunMainADK -> adk_main | Respond -> on_respond | PostTurnAsync -> async agent nodes.
+# Optional Prepare hooks omitted here: filter_tools (no-op in oneclaw; plugin/tool-policy extension point — see workflows-spec §6).
 steps:
   - use: on_receive
+  # Extension hook / compat slot: oneclaw merges prompt fragments at adk_main (RenderMainAgentPrompt); this node is a no-op here.
   - use: load_prompt_md
   - use: load_memory_snapshot
   - use: list_skills
   - use: list_tasks
   - use: load_transcript
-  - use: adk_main
-  - use: on_respond
+  - id: adk_main
+    use: adk_main
+  - id: on_respond
+    use: on_respond
+    # Optional: stream: true — serve sends assistant text incrementally (Reply then EditMessage); drivers need MessageEditor (e.g. webchat SSE). Default off.
   - id: memory_agent
     use: agent
     async: true
     params:
       agent_type: memory_extractor
+      context:
+        - ref: run_journal
+          scope: current_turn
+          as: path_metadata
+          label: Main agent run (this turn)
   - id: skill_agent
     use: agent
     async: true
     params:
       agent_type: skill_generator
+      context:
+        - ref: run_journal
+          scope: current_turn
+          as: user_message
+          label: Main agent run (this turn)

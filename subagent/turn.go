@@ -12,15 +12,16 @@ import (
 	"time"
 
 	"github.com/cloudwego/eino/adk"
-	"github.com/cloudwego/eino/schema"
 
 	"github.com/lengzhao/oneclaw/adkhost"
 	"github.com/lengzhao/oneclaw/catalog"
 	"github.com/lengzhao/oneclaw/config"
+	"github.com/lengzhao/oneclaw/engine"
 	"github.com/lengzhao/oneclaw/observe"
 	"github.com/lengzhao/oneclaw/paths"
 	"github.com/lengzhao/oneclaw/preturn"
 	"github.com/lengzhao/oneclaw/session"
+	"github.com/lengzhao/oneclaw/workflow"
 )
 
 // subRunAgentSegmentMaxRunes caps the agent_type portion of subs/<id>/ (filesystem-friendly segment length).
@@ -50,7 +51,7 @@ func truncateRunes(s string, max int) string {
 	return string(r[:max])
 }
 
-// ExecuteSubAgentTurn runs a sub-agent with a fresh message list and optional subs layout (phase 4).
+// ExecuteSubAgentTurn runs a sub-agent: ResolveWorkflowPath(agent_type) → wfexec.Execute (registered via RegisterPhase3WorkflowExecutor).
 func ExecuteSubAgentTurn(ctx context.Context, deps *RunAgentDeps, sub *catalog.Agent, userContent string) (string, error) {
 	if deps == nil || sub == nil {
 		return "", fmt.Errorf("subagent: ExecuteSubAgentTurn: nil deps or agent")
@@ -88,7 +89,7 @@ func ExecuteSubAgentTurn(ctx context.Context, deps *RunAgentDeps, sub *catalog.A
 			return "", err
 		}
 	default:
-		return "", fmt.Errorf("invalid workspace mode %q (want shared or private)", sub.Workspace)
+		return "", fmt.Errorf("invalid workspace mode %q (want shared or private)", mode)
 	}
 
 	memOpts := &preturn.BuildOpts{OmitMemory: !sub.InheritParentMemory}
@@ -104,6 +105,7 @@ func ExecuteSubAgentTurn(ctx context.Context, deps *RunAgentDeps, sub *catalog.A
 			AgentID:         sub.AgentType,
 			ReplyMeta:       maps.Clone(deps.Turn.ReplyMeta),
 		},
+		HostAgentID:     deps.HostAgentID,
 		Catalog:         deps.Catalog,
 		Cfg:             deps.Cfg,
 		UserDataRoot:    deps.UserDataRoot,
@@ -117,6 +119,7 @@ func ExecuteSubAgentTurn(ctx context.Context, deps *RunAgentDeps, sub *catalog.A
 		CorrelationID:   deps.CorrelationID,
 		DelegationDepth: deps.DelegationDepth + 1,
 		ParentRegistry:  deps.ParentRegistry,
+		Manifest:        deps.Manifest,
 	}
 	childReg, err := BuildRegistryForAgent(childWS, bundle.ToolAllowlist, deps.ParentRegistry, runTmpl)
 	if err != nil {
@@ -143,6 +146,11 @@ func ExecuteSubAgentTurn(ctx context.Context, deps *RunAgentDeps, sub *catalog.A
 	}
 	maxIt := adkhost.MaxAgentIterationsOrCatalog(deps.Cfg, sub.MaxTurns)
 
+	initialInstr := strings.TrimSpace(bundle.Instruction)
+	if initialInstr == "" {
+		initialInstr = " "
+	}
+
 	runCtx := observe.WithAgentRunAttrs(ctx, observe.AgentRunAttrs{
 		CorrelationID:   deps.CorrelationID,
 		ParentSessionID: deps.Turn.SessionSegment,
@@ -152,7 +160,7 @@ func ExecuteSubAgentTurn(ctx context.Context, deps *RunAgentDeps, sub *catalog.A
 	agentRun, err := adkhost.NewChatModelAgent(runCtx, cm, childReg, adkhost.AgentOptions{
 		Name:          sub.AgentType,
 		Description:   desc,
-		Instruction:   bundle.Instruction,
+		Instruction:   initialInstr,
 		MaxIterations: maxIt,
 		Handlers:      []adk.ChatModelAgentMiddleware{observe.NewChatModelLogMiddleware()},
 	})
@@ -160,11 +168,30 @@ func ExecuteSubAgentTurn(ctx context.Context, deps *RunAgentDeps, sub *catalog.A
 		return "", err
 	}
 
+	catRoot := paths.CatalogRoot(deps.UserDataRoot)
+	wfPath, err := workflow.ResolveWorkflowPath(catRoot, sub.AgentType, deps.Manifest)
+	if err != nil {
+		return "", fmt.Errorf("sub-agent %q: %w", sub.AgentType, err)
+	}
+	wfRaw, err := os.ReadFile(wfPath)
+	if err != nil {
+		return "", fmt.Errorf("sub-agent %q read workflow %s: %w", sub.AgentType, wfPath, err)
+	}
+	wfDoc, err := workflow.ParseBytes(wfRaw)
+	if err != nil {
+		return "", fmt.Errorf("sub-agent %q parse workflow %s: %w", sub.AgentType, wfPath, err)
+	}
+	if err := workflow.Validate(wfDoc); err != nil {
+		return "", fmt.Errorf("sub-agent %q workflow %s: %w", sub.AgentType, wfPath, err)
+	}
+
 	corrDetail := map[string]any{
 		"correlation_id":    deps.CorrelationID,
 		"parent_session_id": deps.Turn.SessionSegment,
 		"sub_run_id":        subRunID,
 		"workspace_mode":    mode,
+		"workflow":          wfDoc.ID,
+		"workflow_file":     wfPath,
 	}
 	now := time.Now().UTC()
 	if err := session.AppendRunEvent(subSessionRoot, sub.AgentType, session.RunEvent{
@@ -173,15 +200,66 @@ func ExecuteSubAgentTurn(ctx context.Context, deps *RunAgentDeps, sub *catalog.A
 	}); err != nil {
 		return "", err
 	}
-	if err := session.AppendTranscriptTurn(subSessionRoot, session.TranscriptTurn{
-		Ts: now, Role: "user", Content: strings.TrimSpace(userContent),
-	}); err != nil {
-		return "", err
+
+	streamReply := workflow.ReplyStreamEnabled(wfDoc)
+	var onAssistantChunk func(string)
+	if streamReply && deps.OnSubAgentChunk != nil {
+		onAssistantChunk = func(chunk string) {
+			chunk = strings.TrimSpace(chunk)
+			if chunk == "" {
+				return
+			}
+			deps.OnSubAgentChunk(deps.CorrelationID, subRunID, sub.AgentType, chunk)
+		}
 	}
 
-	input := &adk.AgentInput{
-		Messages: []adk.Message{schema.UserMessage(strings.TrimSpace(userContent))},
+	var stdoutFile *os.File
+	if deps.Stdout != nil {
+		if f, ok := deps.Stdout.(*os.File); ok {
+			stdoutFile = f
+		}
 	}
+
+	childRTX := &engine.RuntimeContext{
+		Turn: engine.TurnContext{
+			AgentID:   sub.AgentType,
+			ReplyMeta: maps.Clone(deps.Turn.ReplyMeta),
+		},
+		DelegationDepth:     deps.DelegationDepth + 1,
+		Manifest:            deps.Manifest,
+		WorkflowNodeOutputs: make(map[string]map[string]any),
+		SessionRoot:         subSessionRoot,
+		SessionSegment:      deps.Turn.SessionSegment,
+		Agent:               sub,
+		Bundle:              bundle,
+		PromptTemplateData:  make(map[string]any),
+		UserPrompt:          strings.TrimSpace(userContent),
+		Catalog:             deps.Catalog,
+		Cfg:                 deps.Cfg,
+		UserDataRoot:        deps.UserDataRoot,
+		InstructionRoot:     deps.InstructionRoot,
+		WorkspacePath:       childWS,
+		ToolRegistry:        childReg,
+		ChatAgent:           agentRun,
+		ChatModel:           cm,
+		AgentShellMeta: engine.AgentShellMeta{
+			Name:          sub.AgentType,
+			Description:   desc,
+			MaxIterations: maxIt,
+			Handlers:      []adk.ChatModelAgentMiddleware{observe.NewChatModelLogMiddleware()},
+		},
+		Stdout:                   stdoutFile,
+		RunStartedAt:             now,
+		UseMock:                  useMock,
+		ProfileID:                prof.ID,
+		ModelName:                prof.DefaultModel,
+		CorrelationID:            deps.CorrelationID,
+		OnSubAgentAssistantChunk: deps.OnSubAgentChunk,
+	}
+	if onAssistantChunk != nil {
+		childRTX.OnAssistantChunk = onAssistantChunk
+	}
+
 	forceInfo := os.Getenv("ONECLAW_VERBOSE_PROMPT") == "1"
 	if forceInfo || slog.Default().Enabled(runCtx, slog.LevelDebug) {
 		logFn := slog.DebugContext
@@ -201,36 +279,21 @@ func ExecuteSubAgentTurn(ctx context.Context, deps *RunAgentDeps, sub *catalog.A
 			"chars", len(u),
 			"text", u,
 		)
+		logFn(runCtx, "subagent.workflow",
+			"agent_type", sub.AgentType,
+			"workflow_id", wfDoc.ID,
+			"path", wfPath,
+		)
 	}
-	var chunks []string
-	iter := agentRun.Run(runCtx, input)
-	for {
-		ev, ok := iter.Next()
-		if !ok {
-			break
-		}
-		if ev.Err != nil {
-			return "", ev.Err
-		}
-		if ev.Output != nil && ev.Output.MessageOutput != nil && ev.Output.MessageOutput.Message != nil {
-			msg := ev.Output.MessageOutput.Message
-			c := strings.TrimSpace(msg.Content)
-			if c == "" {
-				continue
-			}
-			chunks = append(chunks, c)
-			if deps.OnSubAgentChunk != nil {
-				deps.OnSubAgentChunk(deps.CorrelationID, subRunID, sub.AgentType, c)
-			}
-			if deps.Stdout != nil {
-				_, _ = fmt.Fprintln(deps.Stdout, c)
-			}
-		}
+
+	if err := runPhase3Workflow(runCtx, wfDoc, childRTX); err != nil {
+		return "", err
 	}
-	reply := strings.TrimSpace(strings.Join(chunks, "\n"))
+
+	reply := strings.TrimSpace(childRTX.Assistant)
 
 	end := time.Now().UTC()
-	if reply != "" {
+	if !childRTX.SawOnRespond && reply != "" {
 		if err := session.AppendTranscriptTurn(subSessionRoot, session.TranscriptTurn{
 			Ts: end, Role: "assistant", Content: reply,
 		}); err != nil {
@@ -242,6 +305,7 @@ func ExecuteSubAgentTurn(ctx context.Context, deps *RunAgentDeps, sub *catalog.A
 		"parent_session_id": deps.Turn.SessionSegment,
 		"sub_run_id":        subRunID,
 		"reply_len":         len(reply),
+		"workflow":          wfDoc.ID,
 	}
 	if err := session.AppendRunEvent(subSessionRoot, sub.AgentType, session.RunEvent{
 		Ts: end, AgentType: sub.AgentType, Phase: "sub_agent_complete",

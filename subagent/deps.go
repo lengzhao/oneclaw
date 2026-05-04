@@ -17,8 +17,10 @@ type RunAgentDeps struct {
 	// Turn identifies channel/session/agent for this execution (tools, cron isolation).
 	Turn TurnBinding
 
-	Catalog         *catalog.Catalog
-	Cfg             *config.File
+	Catalog *catalog.Catalog
+	Cfg     *config.File
+	// Manifest resolves workflows.default_turn when workflows/<agent_type>.yaml is absent (nil → built-in defaults).
+	Manifest        *catalog.Manifest
 	UserDataRoot    string
 	InstructionRoot string
 	SessionRoot     string
@@ -35,4 +37,7 @@ type RunAgentDeps struct {
 
 	// ParentRegistry is the registry that hosts run_agent; RegisterRunAgent sets this to that registry.
 	ParentRegistry toolhost.Registry
+
+	// HostAgentID is the catalog agent id for the parent turn (runs/<HostAgentID>/runs.jsonl). Populated when wfexec spawns a sub-agent; copied through nested ExecuteSubAgentTurn.
+	HostAgentID string
 }

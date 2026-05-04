@@ -1,4 +1,4 @@
-package wfexec
+package workflow
 
 import (
 	"fmt"
@@ -19,7 +19,7 @@ func ResolveWorkflowPath(catalogRoot, agentID string, mf *catalog.Manifest) (str
 		for _, ext := range []string{".yaml", ".yml"} {
 			p := base + ext
 			if st, err := os.Stat(p); err == nil && !st.IsDir() {
-				return ensureUnderRoot(root, p)
+				return ensureUnderWorkflowRoot(root, p)
 			}
 		}
 		return "", os.ErrNotExist
@@ -31,25 +31,26 @@ func ResolveWorkflowPath(catalogRoot, agentID string, mf *catalog.Manifest) (str
 			return p, nil
 		}
 	}
-	dt := "default.turn"
-	if mf != nil {
-		dt = mf.ResolvedDefaultTurn()
+	dt := mf.ResolvedDefaultTurn()
+	dt = strings.TrimSpace(dt)
+	if dt == "" {
+		dt = "default.turn"
 	}
-	p, err := try(filepath.Join(root, "workflows", strings.TrimSpace(dt)))
+	p, err := try(filepath.Join(root, "workflows", dt))
 	if err == nil {
 		return p, nil
 	}
-	return "", fmt.Errorf("wfexec: no workflow for agent %q and default_turn %q under %s", agentID, dt, filepath.Join(root, "workflows"))
+	return "", fmt.Errorf("workflow: no workflow for agent %q and default_turn %q under %s", agentID, dt, filepath.Join(root, "workflows"))
 }
 
-func ensureUnderRoot(rootAbs, filePath string) (string, error) {
+func ensureUnderWorkflowRoot(rootAbs, filePath string) (string, error) {
 	target, err := filepath.Abs(filePath)
 	if err != nil {
 		return "", err
 	}
 	rel, err := filepath.Rel(rootAbs, target)
 	if err != nil || strings.HasPrefix(rel, "..") {
-		return "", fmt.Errorf("wfexec: workflow path %q escapes catalog root", filePath)
+		return "", fmt.Errorf("workflow: workflow path %q escapes catalog root", filePath)
 	}
 	return target, nil
 }

@@ -2,6 +2,7 @@
 name: Memory extractor
 description: Extracts durable memory from the turn (built-in default; override with agents/memory_extractor.md).
 tools:
+  - read_run_journal
   - read_memory_month
   - write_memory_month
   - append_memory_month
@@ -10,7 +11,13 @@ tools:
 max_turns: 16
 ---
 
-You extract stable facts and preferences from the **user message** and **main assistant reply** in the task text.
+When the task gives only **`run_journal_path`** and **`size_bytes`** (path-metadata mode), decide how to load the journal yourself — typically call **`read_run_journal`** (`scope` **current_turn** when `workflow_scope_hint` is `current_turn`, or **`full`** when appropriate). You cannot rely on **`read_file`** for that path (journal is outside the workspace).
+
+When the task includes embedded **`run_journal` JSONL** (fenced block), extract from every line — do not skip.
+
+When the task asks you to call **`read_run_journal`** without embedded JSONL, call it first and base extraction on the **full tool output**.
+
+Otherwise extract stable facts from the **user message** and **main assistant reply** in the task text.
 
 When the assistant states how it should be addressed (name, persona) or contradicts earlier memory, include a **short verbatim quote** from the assistant reply in your bullets so future turns can audit what was actually said — do not only paraphrase.
 
