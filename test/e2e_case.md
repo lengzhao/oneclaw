@@ -131,7 +131,8 @@ flowchart LR
 
 ## 10. 后续自动化建议
 
-- **仓库实现**：`go test ./test/e2e/...` — `runner.ExecuteTurn` + `--mock-llm` 等价路径；`bootstrap` 后替换为 **无异步子 agent** 的 `default.turn.yaml`，避免与 `t.TempDir` 清理竞态。工具写入见 `tools_contract_test.go`。
+- **仓库实现**：`go test ./test/e2e/...` — `runner.ExecuteTurn` + `--mock-llm` 等价路径；`bootstrap` 后替换为 **无异步子 agent** 的 `default.turn.yaml`，避免与 `t.TempDir` 清理竞态。工具写入见 `tools_contract_test.go`。mock 补充：`TestE2E_MockTurn_secondTurn_transcriptReplayInChatLog`、`TestE2E_MockTurn_runJournal_hasRunComplete`。**记忆**：`memory_recall_extract_test.go`（`MemoryRecallSection` 树、`memory_extractor` 工具集）、`tools_contract` 中 `write_memory_month`→`read_memory_month`。**Skills**：`skills_merge_rank_test.go`（frontmatter `skills:` 去重、`SkillsDigestMarkdown` 热度与并列规则、allowlist、`write_skill_file`→digest+`_usage.jsonl`）。说明：仓库暂无「语义相似 skills 自动合并」runtime；并列时可测行为为 **usage 聚合排序 + catalog id 去重**。
+- **真实 LLM（全套）**：设置 `ONECLAW_E2E_LIVE_LLM=1` 且**不要**使用 `go test -short`，所有调用 `executeTurn` 的用例会合并 `liveLLMConfigPatchYAML` 并 `UseMock=false`（15m/回合超时）。凭证见 `test/e2e/.env.example`、`.env` 与 `live_mode_helpers_test.go`。专用冒烟：`go test ./test/e2e -run TestLiveLLM ...`。纯 mock 配置用例 `TestE2E_MockTurn_configProviderMockWithoutFlag` 在 Live 模式下 Skip。工具/排序类测试（`tools_contract`、`skills_merge_rank`、`memory_recall_extract`、`dotenv`）仍不调用模型。
 - 使用 **临时目录** + `ONECLAW_USER_DATA_ROOT`（或项目约定的 root 环境变量）初始化最小 userdata，再调用 `oneclaw run` **子进程**，断言退出码与文件内容。
 - CI 中仅依赖 **mock_llm**，不注入 `OPENAI_API_KEY` 等密钥，确保测试失败即暴露「误连真实模型」。
 - `E2E-07` 若难以构造 metadata，可通过内部测试桩调用 `runner.ExecuteTurn` 并注入 `Params{UseMock: true/false}` 做组件级补充，与本文档中的「serve 单条」语义对齐即可。

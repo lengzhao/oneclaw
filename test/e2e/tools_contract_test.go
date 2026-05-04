@@ -8,8 +8,6 @@ import (
 	"testing"
 	"time"
 
-	einotool "github.com/cloudwego/eino/components/tool"
-
 	"github.com/lengzhao/oneclaw/memory"
 	"github.com/lengzhao/oneclaw/tools/builtin"
 )
@@ -32,7 +30,7 @@ func TestE2E_contract_writeMemoryMonth(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	out, err := tool.(einotool.InvokableTool).InvokableRun(ctx, string(args))
+	out, err := tool.InvokableRun(ctx, string(args))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,7 +62,7 @@ func TestE2E_contract_writeSkillFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := tool.(einotool.InvokableTool).InvokableRun(ctx, string(args)); err != nil {
+	if _, err := tool.InvokableRun(ctx, string(args)); err != nil {
 		t.Fatal(err)
 	}
 	b, err := os.ReadFile(filepath.Join(root, "skills", "e2e-contract-skill", "SKILL.md"))
@@ -73,5 +71,45 @@ func TestE2E_contract_writeSkillFile(t *testing.T) {
 	}
 	if len(b) < 10 {
 		t.Fatalf("unexpected SKILL.md: %q", b)
+	}
+}
+
+func TestE2E_contract_memoryMonth_writeThenReadRoundTrip(t *testing.T) {
+	ctx := context.Background()
+	tmp := t.TempDir()
+	instr := filepath.Join(tmp, "instruction")
+	if err := os.MkdirAll(instr, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	mm := memory.MonthUTC(time.Now().UTC())
+	rel := "memory/" + mm + "/roundtrip.md"
+	body := "extract TOKEN_MEM_R91\n"
+
+	wtool, err := builtin.InferWriteMemoryMonth(instr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wargs, err := json.Marshal(map[string]string{"path": rel, "content": body})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := wtool.InvokableRun(ctx, string(wargs)); err != nil {
+		t.Fatal(err)
+	}
+
+	rtool, err := builtin.InferReadMemoryMonth(instr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rargs, err := json.Marshal(map[string]string{"path": rel})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := rtool.InvokableRun(ctx, string(rargs))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != body {
+		t.Fatalf("read_memory_month: want %q got %q", body, got)
 	}
 }

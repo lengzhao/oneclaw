@@ -6,7 +6,6 @@ import (
 	"context"
 	"encoding/json"
 	"io"
-	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -113,12 +112,15 @@ func pipeStdout(t *testing.T) (w *os.File, capture func() string) {
 	}
 }
 
-func executeTurn(t *testing.T, root string, cfg *config.File, sess, prompt string, useMock bool, agentID string) (stdout string, err error) {
+func executeTurnCtx(t *testing.T, ctx context.Context, root string, cfg *config.File, sess, prompt string, useMock bool, agentID string) (stdout string, err error) {
 	t.Helper()
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	w, capture := pipeStdout(t)
 	defer func() { stdout = capture() }()
 	p := runner.Params{
-		Ctx:            context.Background(),
+		Ctx:            ctx,
 		UserDataRoot:   root,
 		Config:         cfg,
 		Catalog:        loadCatalog(t, root),
@@ -132,6 +134,17 @@ func executeTurn(t *testing.T, root string, cfg *config.File, sess, prompt strin
 	}
 	err = runner.ExecuteTurn(p)
 	return stdout, err
+}
+
+func executeTurn(t *testing.T, root string, cfg *config.File, sess, prompt string, useMock bool, agentID string) (stdout string, err error) {
+	t.Helper()
+	ctx := context.Background()
+	var cancel context.CancelFunc
+	if !useMock {
+		ctx, cancel = context.WithTimeout(context.Background(), 15*time.Minute)
+		defer cancel()
+	}
+	return executeTurnCtx(t, ctx, root, cfg, sess, prompt, useMock, agentID)
 }
 
 func readRunEvents(t *testing.T, sessionRoot, agentType string) []session.RunEvent {
@@ -199,28 +212,42 @@ func transcriptLines(t *testing.T, sessionRoot string) int {
 
 func TestE2E_MockTurn_stdoutAndRunJournal(t *testing.T) {
 	root := bootstrapUserData(t)
-	cfg := loadRunEnv(t, root, "")
+	cfg := loadRunEnv(t, root, cfgPatchForE2E(t))
+	mock := useMockLLM(t)
 
-	out, err := executeTurn(t, root, cfg, "e2e-basic", "ping", true, "")
+	out, err := executeTurn(t, root, cfg, "e2e-basic", "ping", mock, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out, stubReply()) {
-		t.Fatalf("stdout missing stub reply: %q", out)
-	}
-
 	sessRoot := paths.SessionRoot(root, "e2e-basic")
 	d := lastRunStartDetail(t, sessRoot, "default")
-	if v, ok := d["mock_llm"].(bool); !ok || !v {
-		t.Fatalf("run_start mock_llm: %#v", d["mock_llm"])
+	if mock {
+		if !strings.Contains(out, stubReply()) {
+			t.Fatalf("stdout missing stub reply: %q", out)
+		}
+		if v, ok := d["mock_llm"].(bool); !ok || !v {
+			t.Fatalf("run_start mock_llm: %#v", d["mock_llm"])
+		}
+		assertRunJournalHasPhase(t, sessRoot, "default", "run_complete")
+	} else {
+		if len(strings.TrimSpace(out)) < 4 {
+			t.Fatalf("expected non-empty assistant stdout: %q", out)
+		}
+		if strings.Contains(out, stubReply()) {
+			t.Fatalf("stdout still looks like stub while live mode: %q", out)
+		}
+		if v, ok := d["mock_llm"].(bool); ok && v {
+			t.Fatalf("run_start should not be mock in live mode: %#v", d)
+		}
+		assertRunJournalHasPhase(t, sessRoot, "default", "run_complete")
 	}
 }
 
 func TestE2E_MockTurn_emptyPromptFails(t *testing.T) {
 	root := bootstrapUserData(t)
-	cfg := loadRunEnv(t, root, "")
+	cfg := loadRunEnv(t, root, cfgPatchForE2E(t))
 
-	_, err := executeTurn(t, root, cfg, "e2e-empty", "", true, "")
+	_, err := executeTurn(t, root, cfg, "e2e-empty", "", useMockLLM(t), "")
 	if err == nil {
 		t.Fatal("expected error for empty prompt")
 	}
@@ -231,10 +258,11 @@ func TestE2E_MockTurn_emptyPromptFails(t *testing.T) {
 
 func TestE2E_MockTurn_resetClearsTranscript(t *testing.T) {
 	root := bootstrapUserData(t)
-	cfg := loadRunEnv(t, root, "")
+	cfg := loadRunEnv(t, root, cfgPatchForE2E(t))
 	sess := "e2e-reset"
+	mock := useMockLLM(t)
 
-	_, err := executeTurn(t, root, cfg, sess, "first message", true, "")
+	_, err := executeTurn(t, root, cfg, sess, "first message", mock, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -243,7 +271,7 @@ func TestE2E_MockTurn_resetClearsTranscript(t *testing.T) {
 		t.Fatalf("want at least user+assistant lines after first turn, got %d", n)
 	}
 
-	out, err := executeTurn(t, root, cfg, sess, "/reset", true, "")
+	out, err := executeTurn(t, root, cfg, sess, "/reset", mock, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -254,21 +282,31 @@ func TestE2E_MockTurn_resetClearsTranscript(t *testing.T) {
 		t.Fatal("transcript should be cleared after /reset")
 	}
 
-	_, err = executeTurn(t, root, cfg, sess, "after reset", true, "")
+	_, err = executeTurn(t, root, cfg, sess, "after reset", mock, "")
 	if err != nil {
 		t.Fatal(err)
+	}
+	if n := transcriptLines(t, sessRoot); n < 2 {
+		t.Fatalf("after post-reset turn want ≥2 transcript lines (user+assistant), got %d", n)
 	}
 }
 
 func TestE2E_MockTurn_sessionIsolation(t *testing.T) {
 	root := bootstrapUserData(t)
-	cfg := loadRunEnv(t, root, "")
+	cfg := loadRunEnv(t, root, cfgPatchForE2E(t))
+	mock := useMockLLM(t)
 
-	if _, err := executeTurn(t, root, cfg, "sess-A", "hello A", true, ""); err != nil {
+	if _, err := executeTurn(t, root, cfg, "sess-A", "hello A", mock, ""); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := executeTurn(t, root, cfg, "sess-B", "hello B", true, ""); err != nil {
+	if _, err := executeTurn(t, root, cfg, "sess-B", "hello B", mock, ""); err != nil {
 		t.Fatal(err)
+	}
+	if n := transcriptLines(t, paths.SessionRoot(root, "sess-A")); n < 2 {
+		t.Fatalf("sess-A transcript want ≥2 lines, got %d", n)
+	}
+	if n := transcriptLines(t, paths.SessionRoot(root, "sess-B")); n < 2 {
+		t.Fatalf("sess-B transcript want ≥2 lines, got %d", n)
 	}
 
 	aPath := filepath.Join(paths.SessionRoot(root, "sess-A"), "transcript.jsonl")
@@ -281,6 +319,9 @@ func TestE2E_MockTurn_sessionIsolation(t *testing.T) {
 }
 
 func TestE2E_MockTurn_configProviderMockWithoutFlag(t *testing.T) {
+	if liveLLMEnabled() && !testing.Short() {
+		t.Skip("uses YAML provider: mock; skip when ONECLAW_E2E_LIVE_LLM=1")
+	}
 	root := bootstrapUserData(t)
 	patch := `
 models:
@@ -306,14 +347,12 @@ models:
 
 func TestE2E_MockTurn_memoryRecallLogged(t *testing.T) {
 	root := bootstrapUserData(t)
-	cfg := loadRunEnv(t, root, "")
+	cfg := loadRunEnv(t, root, cfgPatchForE2E(t))
 	sess := "e2e-mem"
+	mock := useMockLLM(t)
 
-	var logBuf strings.Builder
-	prev := slog.Default()
-	slog.SetDefault(slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{Level: slog.LevelInfo})))
-	defer slog.SetDefault(prev)
-	t.Setenv("ONECLAW_VERBOSE_PROMPT", "1")
+	logBuf, restore := captureVerboseJSONLogs(t)
+	defer restore()
 
 	sessRoot := paths.SessionRoot(root, sess)
 	mm := memory.MonthUTC(time.Now().UTC())
@@ -325,18 +364,38 @@ func TestE2E_MockTurn_memoryRecallLogged(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := executeTurn(t, root, cfg, sess, "ping", true, ""); err != nil {
+	if _, err := executeTurn(t, root, cfg, sess, "ping", mock, ""); err != nil {
 		t.Fatal(err)
 	}
-	logs := logBuf.String()
-	if !strings.Contains(logs, "e2e-recall.md") && !strings.Contains(logs, "## Memory recall") {
-		t.Fatalf("expected memory recall in verbose logs; logs snippet:\n%s", truncate(logs, 4000))
+	recs := parseSlogJSONRecords(t, logBuf.Bytes())
+	sysText, chatText, ok := lastADKMainPair(recs)
+	if !ok {
+		t.Fatal("missing adk_main log pair")
 	}
+	if !strings.Contains(chatText, "## Memory recall") || !strings.Contains(chatText, "e2e-recall.md") {
+		t.Fatalf("chat_messages missing memory recall:\n%s", truncate(chatText, 4000))
+	}
+	// Recall 走单独 user 消息（wfexec.adkMessagesForMain），不应塞进 system 指令文本。
+	if strings.Contains(sysText, "## Memory recall") {
+		t.Fatalf("system_prompt must not embed MemoryRecall block; snippet:\n%s", truncate(sysText, 2000))
+	}
+	segs := splitChatMessageSections(chatText)
+	var recallSeg string
+	for _, seg := range segs {
+		if strings.Contains(seg, "## Memory recall") {
+			recallSeg = seg
+			break
+		}
+	}
+	if recallSeg == "" || messageRolePrefix(recallSeg) != "user" {
+		t.Fatalf("Memory recall must be a user-role message segment; got recallSeg=%q segs=%d", truncate(recallSeg, 300), len(segs))
+	}
+	assertRunJournalHasPhase(t, sessRoot, "default", "run_complete")
 }
 
 func TestE2E_MockTurn_skillsReferencedInPromptLog(t *testing.T) {
 	root := bootstrapUserData(t)
-	cfg := loadRunEnv(t, root, "")
+	cfg := loadRunEnv(t, root, cfgPatchForE2E(t))
 
 	const skillID = "e2e-skill"
 	skillDir := filepath.Join(root, "skills", skillID)
@@ -361,19 +420,24 @@ Test agent body.
 		t.Fatal(err)
 	}
 
-	var logBuf strings.Builder
-	prev := slog.Default()
-	slog.SetDefault(slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{Level: slog.LevelInfo})))
-	defer slog.SetDefault(prev)
-	t.Setenv("ONECLAW_VERBOSE_PROMPT", "1")
+	logBuf, restore := captureVerboseJSONLogs(t)
+	defer restore()
 
-	if _, err := executeTurn(t, root, cfg, "e2e-skill-sess", "ping", true, "skill_e2e"); err != nil {
+	if _, err := executeTurn(t, root, cfg, "e2e-skill-sess", "ping", useMockLLM(t), "skill_e2e"); err != nil {
 		t.Fatal(err)
 	}
-	logs := logBuf.String()
-	if !strings.Contains(logs, skillID) {
-		t.Fatalf("expected skill id in verbose prompt logs; snippet:\n%s", truncate(logs, 4000))
+	recs := parseSlogJSONRecords(t, logBuf.Bytes())
+	sysText, chatText, ok := lastADKMainPair(recs)
+	if !ok {
+		t.Fatal("missing adk_main log pair")
 	}
+	if !strings.Contains(sysText, skillID) {
+		t.Fatalf("referenced skill id should appear in system_prompt (catalog injection / digest); snippet:\n%s", truncate(sysText, 6000))
+	}
+	if !strings.Contains(chatText, "ping") {
+		t.Fatalf("chat_messages should contain current user text only path test; got:\n%s", truncate(chatText, 2000))
+	}
+	assertRunJournalHasPhase(t, paths.SessionRoot(root, "e2e-skill-sess"), "skill_e2e", "run_complete")
 }
 
 func truncate(s string, max int) string {
@@ -381,4 +445,85 @@ func truncate(s string, max int) string {
 		return s
 	}
 	return s[:max] + "…"
+}
+
+func TestE2E_MockTurn_secondTurn_transcriptReplayInChatLog(t *testing.T) {
+	root := bootstrapUserData(t)
+	cfg := loadRunEnv(t, root, cfgPatchForE2E(t))
+	sess := "e2e-2stub"
+	mock := useMockLLM(t)
+
+	if _, err := executeTurn(t, root, cfg, sess, "first-stub-msg-xx", mock, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	logBuf, restore := captureVerboseJSONLogs(t)
+	defer restore()
+
+	if _, err := executeTurn(t, root, cfg, sess, "second-stub-msg-yy", mock, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	recs := parseSlogJSONRecords(t, logBuf.Bytes())
+	_, chatText, ok := lastADKMainPair(recs)
+	if !ok {
+		t.Fatal("missing adk_main log pair on second turn")
+	}
+	if !strings.Contains(chatText, "first-stub-msg-xx") {
+		t.Fatalf("missing prior user turn in chat_messages:\n%s", truncate(chatText, 6000))
+	}
+	if mock {
+		if !strings.Contains(chatText, stubReply()) {
+			t.Fatalf("missing prior assistant (stub) in chat_messages:\n%s", truncate(chatText, 6000))
+		}
+	} else {
+		segs := splitChatMessageSections(chatText)
+		if len(segs) < 3 || messageRolePrefix(segs[1]) != "assistant" {
+			t.Fatalf("want transcript assistant in chat_messages:\n%s", truncate(chatText, 6000))
+		}
+		rest := strings.TrimSpace(segs[1])
+		const ap = "assistant: "
+		if !strings.HasPrefix(rest, ap) {
+			t.Fatalf("seg[1] format: %s", truncate(rest, 200))
+		}
+		body := strings.TrimSpace(strings.TrimPrefix(rest, ap))
+		if len(body) < 8 {
+			t.Fatalf("expected non-trivial assistant replay, got %q", truncate(body, 400))
+		}
+	}
+	if !strings.Contains(chatText, "second-stub-msg-yy") {
+		t.Fatalf("missing current user turn:\n%s", truncate(chatText, 6000))
+	}
+	assertRunJournalHasPhase(t, paths.SessionRoot(root, sess), "default", "run_complete")
+}
+
+func TestE2E_MockTurn_runJournal_hasRunComplete(t *testing.T) {
+	root := bootstrapUserData(t)
+	cfg := loadRunEnv(t, root, cfgPatchForE2E(t))
+	sess := "e2e-runcomplete"
+
+	if _, err := executeTurn(t, root, cfg, sess, "ping run journal", useMockLLM(t), ""); err != nil {
+		t.Fatal(err)
+	}
+
+	assertRunJournalHasPhase(t, paths.SessionRoot(root, sess), "default", "run_complete")
+}
+
+func phaseList(evs []session.RunEvent) []string {
+	var out []string
+	for _, e := range evs {
+		out = append(out, e.Phase)
+	}
+	return out
+}
+
+func assertRunJournalHasPhase(t *testing.T, sessionRoot, agentType, phase string) {
+	t.Helper()
+	evs := readRunEvents(t, sessionRoot, agentType)
+	for _, e := range evs {
+		if e.Phase == phase {
+			return
+		}
+	}
+	t.Fatalf("runs.jsonl missing phase %q; phases=%v", phase, phaseList(evs))
 }
