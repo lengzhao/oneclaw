@@ -19,8 +19,6 @@ type RunAgentDeps struct {
 
 	Catalog *catalog.Catalog
 	Cfg     *config.File
-	// Manifest resolves workflows.default_turn when workflows/<agent_type>.yaml is absent (nil → built-in defaults).
-	Manifest        *catalog.Manifest
 	UserDataRoot    string
 	InstructionRoot string
 	SessionRoot     string

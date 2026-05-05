@@ -6,7 +6,7 @@
 |------|------|
 | **Claw** | 产品线/范式：Agent 运行时 + 工具 + 渠道，把用户意图做成可重复自动化（对话或集成界面交付结果）。 |
 | **clawbridge** | 多渠道入站/出站 **Go 模块** [`github.com/lengzhao/clawbridge`](https://github.com/lengzhao/clawbridge)：`InboundMessage`、Bus、drivers 等与运行时对接。 |
-| **UserDataRoot** | 用户数据根目录（**oneclaw** 默认 **`~/.oneclaw`**，或 `config.user_data_root` / 环境变量 `ONECLAW_USER_DATA_ROOT` 覆盖）：配置、转写索引、定时任务文件；**Catalog（`manifest.yaml`、`agents/`、`workflows/` 等）与 CatalogRoot 同根**，见 [workflows-spec.md](workflows-spec.md) §8。 |
+| **UserDataRoot** | 用户数据根目录（**oneclaw** 默认 **`~/.oneclaw`**，或 `config.user_data_root` / 环境变量 `ONECLAW_USER_DATA_ROOT` 覆盖）：**`config.yaml`**（含 **`catalog:`** 默认 Agent / 默认 turn）、转写索引、定时任务等；**`agents/`、`workflows/` 等与 CatalogRoot 同根**，见 [workflows-spec.md](workflows-spec.md) §8。 |
 | **InstructionRoot** | `AGENT.md` 与记忆入口（`MEMORY.md` 或 `memory/` 分片）**同一套根路径**；是否与会话目录重合由「会话隔离」策略决定（见 [appendix-data-layout.md](appendix-data-layout.md)）。 |
 | **SessionHandle** | 区分并发会话的键：通常 = 渠道实例 ID + 会话键（线程/话题 ID 等）。 |
 | **`session_id`** | 持久化与会话目录命名用到的稳定 id（如 `SessionRoot` 段）；与 SessionHandle 的映射关系由宿主定义（需在 TurnContext / 落盘路径中一致）。 |
@@ -18,7 +18,7 @@
 | **PushRuntime** | 配置合并后写入进程内快照（如 `rtopts`），避免配置包与循环/预算包循环依赖。 |
 | **ToolContext / TurnInbound** | 每回合注入工具可见的会话与入站元数据（正文通常单独走 messages，不合并进 TurnInbound 全文）。 |
 | **Catalog（agents）** | 从 `agents/*.md` 加载的多 Agent 定义表：`agent_type` → frontmatter + system 正文。 |
-| **Workflow（回合级）** | 用户声明的 **DAG**（`workflows/*.yaml`），编译为 Eino **compose.Workflow**；线性 `steps` 仅为语法糖。**选用规则**：**`workflows/<agent_type>.yaml|.yml`** 优先，否则 **`workflows/<manifest.default_turn>.yaml|.yml`**；**当前实现不支持** Agent frontmatter 的 **`workflow:` / `chain:`** 覆盖。见 [workflows-spec.md](workflows-spec.md) §8。 |
+| **Workflow（回合级）** | 用户声明的 **DAG**（`workflows/*.yaml`），编译为 Eino **compose.Workflow**；线性 `steps` 仅为语法糖。**选用规则**：**`workflows/<agent_type>.yaml|.yml`** 优先，否则 **`workflows/<config.catalog.workflows.default_turn>.yaml|.yml`**；**当前实现不支持** Agent frontmatter 的 **`workflow:` / `chain:`** 覆盖。见 [workflows-spec.md](workflows-spec.md) §8。 |
 | **Registry（tools）** | 工具名 → 实现 + schema；可对子 Agent **过滤**得到子集。 |
 | **Harness（执行束具）** | 模型外的运行时层：上下文拼装、工具编排、状态与预算、校验与审计等；扩展与治理见 [harness-governance-extensions.md](harness-governance-extensions.md)。 |
 | **合成入站** | 定时器等非人类来源构造与人工消息同形的 Inbound，走同一 Submit 路径。 |

@@ -17,6 +17,7 @@ var EnvVarNameRE = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 // File is the root YAML shape for oneclaw (phase 1 subset).
 type File struct {
 	UserDataRoot string   `yaml:"user_data_root,omitempty"`
+	Catalog      CatalogConfig `yaml:"catalog,omitempty"`
 	Sessions     Sessions `yaml:"sessions,omitempty"`
 	// DefaultModel is optional root-level model id applied to any profile whose default_model is empty before built-in fallback.
 	DefaultModel string         `yaml:"default_model,omitempty"`

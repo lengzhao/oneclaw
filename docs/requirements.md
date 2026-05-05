@@ -22,7 +22,7 @@
 ### 2.1 价值主张（与用户目标对齐）
 
 1. **语言与内核**：实现语言为 **Go**；模型↔工具主循环走 **Eino ADK**（与 `eino-ext` 等扩展对齐），Compose/Chain/Middleware 用于回合外与回合内扩展点。
-2. **多 Agent**：支持 **主 Agent + 子 Agent**（或对等 Agent）定义与调度；定义以 **`agents/*.md`（及 manifest）** 为主，运行时可按任务路由或显式委托。**用户消息处理、记忆抽取、Skills 生成** 可配置为 **不同 `agent_type`**（各自 Instruction / 工具白名单 / 模型），由 **workflow 图节点**分别拉起。
+2. **多 Agent**：支持 **主 Agent + 子 Agent**（或对等 Agent）定义与调度；定义以 **`agents/*.md`** 与 **`config.yaml`（`catalog:` 等）** 为主，运行时可按任务路由或显式委托。**用户消息处理、记忆抽取、Skills 生成** 可配置为 **不同 `agent_type`**（各自 Instruction / 工具白名单 / 模型），由 **workflow 图节点**分别拉起。
 3. **记忆与 Skills 演进**：能从对话与工具产物中 **抽取可复核事实**，写入约定记忆文件；在稳定重复模式上 **自动生成或更新 Skills**（含触发条件、边界与安全约束），形成 **自主演进** 闭环。演进 **仅在 `workflows/*.yaml` 中声明**（典型：`on_respond` 之后 **`async: true`** 的 **`use: agent_task`** 枝；默认内置 **`memory_extractor` / `skill_generator`** Catalog 条目可被用户 **`agents/*.md` 覆盖**）。产品层面仍应避免病态闭环编排；**当前 oneclaw** **未**做演进专用的加载期闭环校验（见 FR-FLOW-05）。
 4. **框架优先、MD 驱动**：Go 代码 **仅实现框架能力**（加载、装配、执行、落盘、观测、扩展点）；**业务流程、提示词片段、工具白名单、Workflow（图）** 等由用户 **md/yaml** 提供，见 [eino-md-chain-architecture.md](eino-md-chain-architecture.md)。
 5. **默认傻瓜式**：`init` 后 **最小 YAML** 即可跑通（含默认模型占位说明、默认工具集、默认记忆/skills 目录）；高级项可选。
@@ -36,7 +36,7 @@
 | 记忆维护 | 依赖模型/用户显式写文件 | **框架提供抽取流水线**，产出结构化事实与引用，写入约定路径 |
 | Skills | 手工维护 `SKILL.md` | **草案生成 + 人工或策略确认**（可配置全自动仅限低风险模板） |
 | 领域文档 | 仅靠 grep/read_file | **可选向量索引 + Retriever**（Eino 组件化 RAG），与下面「记忆」区分 |
-| 编排 | 代码内固定较多 | **manifest + workflows/*.yaml（DAG）+ md** 为主 |
+| 编排 | 代码内固定较多 | **`config.yaml` + workflows/*.yaml（DAG）+ md** 为主 |
 
 **MEMORY vs 知识库**：**MEMORY / 抽取事实** 偏 **会话与任务沉淀**（短、随任务演进）；**知识库** 偏 **用户提供的静态/半静态文档**（手册、规范、笔记）。二者可同时在 prompt 中占不同预算块，检索结果须 **带来源或片段 id** 便于核对。
 
@@ -78,7 +78,7 @@ flowchart LR
 | ID | 需求描述 | 备注 |
 |----|-----------|------|
 | FR-CFG-01 | 提供 **合并后的单一配置真源**（如 YAML）；敏感项（API Key）允许环境变量 **仅作注入**，与业务默认值文档一致即可 | 与实现选型一致即可 |
-| FR-CFG-02 | **`init`/`bootstrap`**：生成目录骨架、`config` 模板、`AGENT.md` / `MEMORY` 占位、`agents/`、`skills/`、`workflows/` 或等价 manifest | 已有配置时 **补全缺失键、不静默覆盖用户自定义** |
+| FR-CFG-02 | **`init`/`bootstrap`**：生成目录骨架、`config` 模板（含 **`catalog:`**）、`AGENT.md` / `MEMORY` 占位、`agents/`、`skills/`、`workflows/` | 已有配置时 **补全缺失键、不静默覆盖用户自定义** |
 | FR-CFG-03 | **默认 profile**：单文件配置即可启动 REPL 或 HTTP demo；文档注明唯一必填项（通常为模型密钥与 endpoint） | 「傻瓜式」验收标准 |
 | FR-CFG-04 | CLI：**日志级别/格式**、**配置路径**、导出会话快照（便于备份/迁移） | 与 NFR 可追溯 |
 
@@ -95,22 +95,22 @@ flowchart LR
 
 | ID | 需求描述 | 备注 |
 |----|-----------|------|
-| FR-AGT-01 | **Agent 目录**：从 `agents/*.md`（或 manifest 指定路径）加载；frontmatter 含 `name`、`description`、`tools`、`max_turns`、`model` 覆盖等 | 术语见 [glossary.md](glossary.md) Catalog |
+| FR-AGT-01 | **Agent 目录**：从 `agents/*.md` 加载；frontmatter 含 `name`、`description`、`tools`、`max_turns`、`model` 覆盖等 | 术语见 [glossary.md](glossary.md) Catalog |
 | FR-AGT-02 | **多 Agent 调度**：支持 **显式委托**（工具或内部调用）与 **可选路由策略**（由 md/yaml 配置规则，而非硬编码业务）；**子 Agent 默认会话隔离 + 上下文隔离**，放宽须配置或 Agent frontmatter 显式开启 | 见 [appendix-data-layout.md](appendix-data-layout.md) §3.1、[eino-md-chain-architecture.md](eino-md-chain-architecture.md) §5.4 |
 | FR-AGT-03 | **工具隔离**：子 Agent 使用 **父 Registry 的子集**；元工具与安全敏感工具默认对子 Agent 收缩 | |
 | FR-AGT-04 | **用户定义优先**：内置示例 agent 与用户文件同名时 **用户覆盖** | |
-| FR-AGT-05 | **管线角色**：manifest / workflow 可将 **主对话**、**记忆抽取**、**Skills 生成** 绑定到 **不同 Catalog 条目**；每一次 Agent 执行（含上述后台管线）须落 **可追溯的磁盘执行记录**（结构化日志或 JSONL，含 `agent_type`、父 `session_id`、时间范围、provenance） | 与 FR-OBS、§5「审计」路径一致；细节见 [eino-md-chain-architecture.md](eino-md-chain-architecture.md) §5.6 |
+| FR-AGT-05 | **管线角色**：**`workflows/*.yaml`** 可将 **主对话**、**记忆抽取**、**Skills 生成** 绑定到 **不同 Catalog 条目**；每一次 Agent 执行（含上述后台管线）须落 **可追溯的磁盘执行记录**（结构化日志或 JSONL，含 `agent_type`、父 `session_id`、时间范围、provenance） | 与 FR-OBS、§5「审计」路径一致；细节见 [eino-md-chain-architecture.md](eino-md-chain-architecture.md) §5.6 |
 | FR-AGT-06 | **Workspace（工具工作目录）**：子 Agent / 后台 Agent **默认 `shared`** —— 与 **当前主 Agent 回合** 使用同一工作目录（宿主解析后的 cwd，通常为会话 `workspace/`）；可选 **`private`**（独立目录）以防文件/exec 工具与主会话互扰 | frontmatter 见 [eino-md-chain-architecture.md](eino-md-chain-architecture.md) §5.2、[appendix-data-layout.md](appendix-data-layout.md) §3.1 |
 
 ### 3.4 MD/YAML 驱动的流程（框架职责边界）
 
 | ID | 需求描述 | 备注 |
 |----|-----------|------|
-| FR-FLOW-01 | **Manifest**：入口描述默认 agent、引用的 system/memory 片段、**workflow** 引用、工具白名单路径 | 目录约定见 [eino-md-chain-architecture.md](eino-md-chain-architecture.md) §2 |
+| FR-FLOW-01 | **`config.yaml` / `catalog:`**：默认 agent、默认 workflow 回落 stem；工具白名单路径等 | 见 [workflows-spec.md](workflows-spec.md) §8、[eino-md-chain-architecture.md](eino-md-chain-architecture.md) §2 |
 | FR-FLOW-02 | **Workflow 定义**：回合前/后及异步任务等为 **声明式 DAG**（`workflows/*.yaml`，可选线性 `steps` 糖）；Go 提供 **节点注册表 + 图执行器** | 规格见 [workflows-spec.md](workflows-spec.md) |
 | FR-FLOW-03 | **Prompt 拼装**：分段 md 按顺序与预算拼接；支持按 agent 覆盖 | |
 | FR-FLOW-04 | **工具白名单**：声明为列表或 tag；解析后为 Registry filter | |
-| FR-FLOW-05 | **演进编排约定（与实现对齐）**：记忆抽取、Skills 生成 **只通过 workflow 编排**（推荐模板与节点约定见 [workflows-spec.md](workflows-spec.md) §5；manifest / 文件选用见 **§8**）；默认内置 **`memory_extractor` / `skill_generator`**，用户 **`agents/`** 同名覆盖。**不设** Agent frontmatter 中的演进关闭布尔项。**当前实现** **未**做「演进专用 workflow 不得再挂同类 async 枝」的加载期校验，也 **未**在 **`TurnContext`** 上维护嵌套演进剖面；闭环防范依赖编排设计与后续可选扩展 | 见 [eino-md-chain-architecture.md](eino-md-chain-architecture.md) §5.6 |
+| FR-FLOW-05 | **演进编排约定（与实现对齐）**：记忆抽取、Skills 生成 **只通过 workflow 编排**（推荐模板与节点约定见 [workflows-spec.md](workflows-spec.md) §5；`config.catalog` / 文件选用见 **§8**）；默认内置 **`memory_extractor` / `skill_generator`**，用户 **`agents/`** 同名覆盖。**不设** Agent frontmatter 中的演进关闭布尔项。**当前实现** **未**做「演进专用 workflow 不得再挂同类 async 枝」的加载期校验，也 **未**在 **`TurnContext`** 上维护嵌套演进剖面；闭环防范依赖编排设计与后续可选扩展 | 见 [eino-md-chain-architecture.md](eino-md-chain-architecture.md) §5.6 |
 
 ### 3.5 知识与 RAG（可选模块）
 
@@ -179,14 +179,14 @@ flowchart LR
 | 概念 | 说明 |
 |------|------|
 | 用户数据根 | **默认在用户主目录** `~/.<app>`（可配置）；含 config、会话、workspace；**不以当前 shell 工作目录为默认真源** |
-| Manifest | **`UserDataRoot/manifest.yaml`**（**oneclaw**：[`paths.CatalogRoot`](../paths/paths.go) = `UserDataRoot`，与 `agents/`、`workflows/` 平铺；非 oneclaw 的泛化产品仍可选用 `.agent/` 等其它布局） |
+| Catalog 默认值 | **`config.yaml` → `catalog:`**（`default_agent`、`workflows.default_turn`）；**oneclaw** 下 [`paths.CatalogRoot`](../paths/paths.go) = `UserDataRoot`，与 `agents/`、`workflows/` 平铺 |
 | Agents | `agents/*.md` |
 | Skills | `skills/<id>/SKILL.md` + 可选 staging |
 | Workflows | `workflows/*.yaml`（DAG；可选线性 `steps` 糖） |
 | 记忆 | `MEMORY.md` 或 `memory/*.md` + 抽取元数据（如 sidecar json/yaml） |
-| 知识库原文 | 如 `knowledge/sources/` 或 manifest 声明的项目路径（**真源**） |
-| 向量索引 | 由所选后端托管（Redis/ES 等）；本地可有 **索引版本/manifest** 便于重建 |
-| 审计 | `execution/` 或等价目录：回合与演进操作流水；**按 Agent 运行**可细分（如 `sessions/<id>/runs/<agent_type>/` 或 manifest 声明） |
+| 知识库原文 | 如 `knowledge/sources/` 或配置声明的项目路径（**真源**） |
+| 向量索引 | 由所选后端托管（Redis/ES 等）；本地可有 **索引版本清单** 便于重建 |
+| 审计 | `execution/` 或等价目录：回合与演进操作流水；**按 Agent 运行**可细分（如 `sessions/<id>/runs/<agent_type>/`） |
 
 细节与 InstructionRoot / 会话隔离见 [appendix-data-layout.md](appendix-data-layout.md)；新项目可扩展列但保持 **「文件为真源」**。
 
@@ -213,7 +213,7 @@ flowchart LR
 
 ## 8. 增强与扩展（Harness 治理，非验收基线）
 
-以下 **不** 作为本文 §7 验收的必达项，用于指导 **增强路线** 与 **初期架构预留**（统一 policy 挂钩、Manifest 预留键、审计 schema 版本化、SafeHarness 类生命周期防御等）：
+以下 **不** 作为本文 §7 验收的必达项，用于指导 **增强路线** 与 **初期架构预留**（统一 policy 挂钩、**`config.yaml`** 预留键、审计 schema 版本化、SafeHarness 类生命周期防御等）：
 
 - 详见 **[harness-governance-extensions.md](harness-governance-extensions.md)**。
 
@@ -228,4 +228,4 @@ flowchart LR
 | （文档创建） | 首版：需求与主路径梳理 |
 | 2026-05-02 | **重写为项目目标 PRD**；增补知识与 RAG（FR-KNOW-* 等）；明确 **`github.com/lengzhao/clawbridge`** 为多渠道接入依赖；新增 **§8 增强与扩展** 与 [harness-governance-extensions.md](harness-governance-extensions.md)（修订记录顺延为 §9）；glossary / reference / README 同步；§5 锚定用户主目录与 Catalog 布局；FR-AGT-02 默认隔离；架构参考更名为 [reference-architecture.md](reference-architecture.md)；FR-AGT-05/06、FR-FLOW-05、FR-OBS-04；§5 审计路径补充；§2.3 流程图说明；§6 指向 [eino-integration-surface.md](eino-integration-surface.md)；文首 / README / reference 指向 [architecture.md](architecture.md)；[workflows-spec.md](workflows-spec.md) 取代 chains-spec（DAG + workflow 命名）；FR-FLOW-01/02、§8 节前指引同步 |
 | 2026-05-03 | FR-FLOW-05、§2.1 / §2.3：**演进仅靠 `workflows/*.yaml`（`async` + `use: agent_task`）**；移除 Catalog **`suppress_post_turn_evolution`** 表述。**FR-FLOW-05 与实现对齐**：无演进专用加载期校验、无 `TurnContext` 演进嵌套字段；内置 `memory_extractor` / `skill_generator` + 默认 turn 模板 |
-| 2026-05-05 | §5 Manifest 与 **oneclaw** 对齐：`UserDataRoot/manifest.yaml` 平铺；FR-FLOW-05 交叉引用 [workflows-spec.md](workflows-spec.md) §5 / §8（修正旧 §4.3 / §8 节号） |
+| 2026-05-05 | §5 与 **oneclaw** 对齐：**删除独立 `manifest.yaml`**，Catalog 默认项并入 **`config.yaml` → `catalog:`**（无向后兼容）；FR-FLOW-05 交叉引用 [workflows-spec.md](workflows-spec.md) §5 / §8 |

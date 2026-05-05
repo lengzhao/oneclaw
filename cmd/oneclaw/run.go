@@ -21,7 +21,7 @@ func runInteractive(ctx context.Context, g globalOpts, args []string) error {
 	fs.SetOutput(buf)
 	mockLLM := fs.Bool("mock-llm", false, "use stub ChatModel (no external API)")
 	profileID := fs.String("profile", "", "model profile id (see config models[]; default: highest priority)")
-	agentID := fs.String("agent", "", "catalog agent id: *.md filename stem (default: manifest default_agent)")
+	agentID := fs.String("agent", "", "catalog agent id: *.md filename stem (default: config catalog.default_agent)")
 	prompt := fs.String("prompt", "Say hello in one short sentence.", "single-turn user message")
 	sessionID := fs.String("session", "cli-default", "session id for layout under UserDataRoot (unsafe chars replaced)")
 	if err := fs.Parse(args); err != nil {
@@ -55,10 +55,6 @@ func runInteractive(ctx context.Context, g globalOpts, args []string) error {
 	}
 
 	catRoot := paths.CatalogRoot(root)
-	mf, err := catalog.LoadManifest(catRoot)
-	if err != nil {
-		return err
-	}
 	cat, err := catalog.Load(filepath.Join(catRoot, "agents"))
 	if err != nil {
 		return err
@@ -77,9 +73,8 @@ func runInteractive(ctx context.Context, g globalOpts, args []string) error {
 		Ctx:            ctx,
 		UserDataRoot:   root,
 		Config:         cfg,
-		Catalog:        cat,
-		Manifest:       mf,
-		AgentID:        strings.TrimSpace(*agentID),
+		Catalog: cat,
+		AgentID: strings.TrimSpace(*agentID),
 		ProfileID:      strings.TrimSpace(*profileID),
 		SessionSegment: sessWire,
 		UserPrompt:     *prompt,

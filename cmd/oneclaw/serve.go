@@ -79,10 +79,6 @@ func cmdServe(ctx context.Context, g globalOpts, args []string) error {
 		return err
 	}
 	catRoot := paths.CatalogRoot(root)
-	mf, err := catalog.LoadManifest(catRoot)
-	if err != nil {
-		return err
-	}
 	cat, err := catalog.Load(filepath.Join(catRoot, "agents"))
 	if err != nil {
 		return err
@@ -116,7 +112,7 @@ func cmdServe(ctx context.Context, g globalOpts, args []string) error {
 	}
 	defer shutdownBridge()
 
-	hub := turnhub.NewHub(ctx, newTurnProcessor(b, root, ocfg, cat, mf, mockLLM),
+	hub := turnhub.NewHub(ctx, newTurnProcessor(b, root, ocfg, cat, mockLLM),
 		turnhub.WithTurnTimeout(turnhubTurnTimeout),
 		turnhub.WithOnDropped(func(_ context.Context, dropped clawbridge.InboundMessage) error {
 			replyCtx, cancel := context.WithTimeout(context.Background(), turnhubDiscardReplyTimeout)
@@ -254,7 +250,7 @@ func previewRunes(s string, max int) string {
 	return string(r[:max]) + "…"
 }
 
-func newTurnProcessor(b *clawbridge.Bridge, root string, ocfg *config.File, cat *catalog.Catalog, mf *catalog.Manifest, globalMock *bool) turnhub.Processor {
+func newTurnProcessor(b *clawbridge.Bridge, root string, ocfg *config.File, cat *catalog.Catalog, globalMock *bool) turnhub.Processor {
 	return func(c context.Context, msg clawbridge.InboundMessage) error {
 		msgCopy := msg
 		var streamStarted bool
@@ -277,9 +273,8 @@ func newTurnProcessor(b *clawbridge.Bridge, root string, ocfg *config.File, cat 
 			Ctx:             c,
 			UserDataRoot:    root,
 			Config:          ocfg,
-			Catalog:         cat,
-			Manifest:        mf,
-			AgentID:         agent,
+			Catalog: cat,
+			AgentID: agent,
 			ProfileID:       prof,
 			SessionSegment:  sess,
 			UserPrompt:      strings.TrimSpace(msgCopy.Content),

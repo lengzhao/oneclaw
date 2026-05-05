@@ -51,7 +51,7 @@ func SubSessionRoot(parentSessionRoot, subRunID string) string {
 	return filepath.Join(parentSessionRoot, "subs", subRunID)
 }
 
-// CatalogRoot is UserDataRoot: manifest.yaml, agents/, skills/, workflows/, prompts/ live here (no hidden subfolder).
+// CatalogRoot is UserDataRoot: agents/, skills/, workflows/, prompts/ live here (no hidden subfolder). Catalog defaults live in config.yaml (catalog:).
 func CatalogRoot(userDataRoot string) string {
 	return userDataRoot
 }

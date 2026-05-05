@@ -31,10 +31,9 @@ type Params struct {
 
 	UserDataRoot string
 	Config       *config.File
-	Catalog      *catalog.Catalog
-	Manifest     *catalog.Manifest
+	Catalog *catalog.Catalog
 
-	AgentID   string // catalog agent id; empty uses manifest default_agent (see InboundMeta* for clawbridge Metadata)
+	AgentID string // catalog agent id; empty uses config catalog.default_agent (see InboundMeta* for clawbridge Metadata)
 	ProfileID string // empty uses config default profile resolution
 	// SessionSegment is the raw channel session id (e.g. Weixin …@im.wechat). Paths use SanitizeSessionPathSegment internally.
 	SessionSegment string
@@ -72,11 +71,6 @@ func ExecuteTurn(p Params) error {
 	if p.Catalog == nil {
 		return fmt.Errorf("runner: nil catalog")
 	}
-	mf := p.Manifest
-	if mf == nil {
-		mf = &catalog.Manifest{DefaultAgent: "default"}
-	}
-
 	root := strings.TrimSpace(p.UserDataRoot)
 	if root == "" {
 		return fmt.Errorf("runner: empty user data root")
@@ -84,7 +78,7 @@ func ExecuteTurn(p Params) error {
 
 	at := strings.TrimSpace(p.AgentID)
 	if at == "" {
-		at = mf.DefaultAgent
+		at = p.Config.ResolvedDefaultAgent()
 	}
 	ag := p.Catalog.Get(at)
 	if ag == nil {
@@ -152,7 +146,6 @@ func ExecuteTurn(p Params) error {
 		},
 		Catalog:         p.Catalog,
 		Cfg:             p.Config,
-		Manifest:        mf,
 		UserDataRoot:    root,
 		InstructionRoot: instruction,
 		SessionRoot:     sessionRoot,
@@ -196,7 +189,7 @@ func ExecuteTurn(p Params) error {
 	}
 
 	catRoot := paths.CatalogRoot(root)
-	wfPath, err := workflow.ResolveWorkflowPath(catRoot, ag.AgentType, mf)
+	wfPath, err := workflow.ResolveWorkflowPath(catRoot, ag.AgentType, p.Config)
 	if err != nil {
 		return err
 	}
@@ -250,7 +243,6 @@ func ExecuteTurn(p Params) error {
 				AgentID:   ag.AgentType,
 				ReplyMeta: maps.Clone(replyMeta),
 			},
-			Manifest:             mf,
 			DelegationDepth:      0,
 			SessionRoot:          sessionRoot,
 			SessionSegment:       sessWire,

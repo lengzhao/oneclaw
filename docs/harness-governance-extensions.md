@@ -2,7 +2,7 @@
 
 本文档收集 **执行 Harness** 相关的工业实践与学术架构，作为本项目的 **增强与扩展 backlog**；**不**改变 [requirements.md](requirements.md) 中一期验收的必达范围。架构挂钩方式与 [eino-md-chain-architecture.md](eino-md-chain-architecture.md) 中的 **Workflow（Compose Graph）** / Middleware / 插件契约对齐。
 
-**Harness**：包住模型的运行时层——上下文拼装、工具编排、状态持久化、预算与停止条件、校验与审计等；模型仅是其中一个组件。本项目中的 Manifest、`workflows/*.yaml`、工具白名单、子 Agent 工具子集、记忆/Skills 写入策略与观测，均属 harness 范畴。
+**Harness**：包住模型的运行时层——上下文拼装、工具编排、状态持久化、预算与停止条件、校验与审计等；模型仅是其中一个组件。本项目中的 **`config.yaml`（含 `catalog:`）**、`workflows/*.yaml`、工具白名单、子 Agent 工具子集、记忆/Skills 写入策略与观测，均属 harness 范畴。
 
 ---
 
@@ -13,7 +13,7 @@
 | 方向 | 建议 |
 |------|------|
 | **统一策略执行点** | 工具调用与文件/记忆写入尽量经过同一套 **policy 接口**（实现可先为规则 + allowlist）；日后可替换为分层校验、外部 judge，而调用方不变。 |
-| **Manifest 命名空间** | 在 `manifest.yaml`（或等价）中为治理预留顶层键（如 `harness:` / `policy:`），**未识别的子键忽略而非报错**，便于向后追加字段。 |
+| **配置命名空间** | 在 **`config.yaml`**（或等价合并层）为治理预留键（如 `harness:` / `policy:`），**未识别的子键忽略而非报错**，便于向后追加字段。 |
 | **Workflow 节点注册表** | 用户 workflow 节点按「名称 → 工厂」注册；内置节点与未来将加的 `*_guard`、`*_verify` 同类扩展，不占硬编码分支。 |
 | **审计事件 schema** | 演进与工具副作用日志采用 **带版本字段** 的结构化记录（如 `audit_schema_version`）；字段只增不减，旧读者跳过未知字段。 |
 | **来源（Provenance）字段** | 记忆事实、RAG 块、Skills 草案从一期起预留 **来源引用**（turn id、片段 id、路径）；可为空，但字段位保留，便于接入下文 L1/L2 类过滤。 |

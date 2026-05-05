@@ -85,15 +85,6 @@ func loadCatalog(t *testing.T, root string) *catalog.Catalog {
 	return cat
 }
 
-func loadManifest(t *testing.T, root string) *catalog.Manifest {
-	t.Helper()
-	mf, err := catalog.LoadManifest(paths.CatalogRoot(root))
-	if err != nil {
-		t.Fatal(err)
-	}
-	return mf
-}
-
 func pipeStdout(t *testing.T) (w *os.File, capture func() string) {
 	t.Helper()
 	r, w, err := os.Pipe()
@@ -125,9 +116,8 @@ func executeTurnCtx(t *testing.T, ctx context.Context, root string, cfg *config.
 		Ctx:            ctx,
 		UserDataRoot:   root,
 		Config:         cfg,
-		Catalog:        loadCatalog(t, root),
-		Manifest:       loadManifest(t, root),
-		AgentID:        agentID,
+		Catalog: loadCatalog(t, root),
+		AgentID: agentID,
 		SessionSegment: sess,
 		UserPrompt:     prompt,
 		UseMock:        useMock,

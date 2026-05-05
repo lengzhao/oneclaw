@@ -6,11 +6,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/lengzhao/oneclaw/catalog"
+	"github.com/lengzhao/oneclaw/config"
 )
 
-// ResolveWorkflowPath picks workflows/<agent>.yaml|.yml then manifest default_turn (docs/workflows-spec.md §8).
-func ResolveWorkflowPath(catalogRoot, agentID string, mf *catalog.Manifest) (string, error) {
+// ResolveWorkflowPath picks workflows/<agent>.yaml|.yml then config catalog.workflows.default_turn (docs/workflows-spec.md §8).
+func ResolveWorkflowPath(catalogRoot, agentID string, cfg *config.File) (string, error) {
 	root, err := filepath.Abs(catalogRoot)
 	if err != nil {
 		return "", err
@@ -31,7 +31,12 @@ func ResolveWorkflowPath(catalogRoot, agentID string, mf *catalog.Manifest) (str
 			return p, nil
 		}
 	}
-	dt := mf.ResolvedDefaultTurn()
+	var dt string
+	if cfg == nil {
+		dt = "default.turn"
+	} else {
+		dt = cfg.ResolvedDefaultTurn()
+	}
 	dt = strings.TrimSpace(dt)
 	if dt == "" {
 		dt = "default.turn"

@@ -17,7 +17,6 @@ import (
 type SubAgentRuntimeOpts struct {
 	Turn              TurnContext
 	DelegationDepth   int
-	Manifest          *catalog.Manifest
 	SubSessionRoot    string
 	SessionSegment    string
 	Agent             *catalog.Agent
@@ -49,7 +48,6 @@ func ForkSubAgentRuntime(opts SubAgentRuntimeOpts) *RuntimeContext {
 		TurnInputs: TurnInputs{
 			Turn:                     opts.Turn,
 			DelegationDepth:          opts.DelegationDepth,
-			Manifest:                 opts.Manifest,
 			SessionRoot:              opts.SubSessionRoot,
 			SessionSegment:           opts.SessionSegment,
 			Agent:                    opts.Agent,

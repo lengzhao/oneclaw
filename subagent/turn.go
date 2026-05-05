@@ -118,8 +118,7 @@ func ExecuteSubAgentTurn(ctx context.Context, deps *RunAgentDeps, sub *catalog.A
 		OnSubAgentChunk: deps.OnSubAgentChunk,
 		CorrelationID:   deps.CorrelationID,
 		DelegationDepth: deps.DelegationDepth + 1,
-		ParentRegistry:  deps.ParentRegistry,
-		Manifest:        deps.Manifest,
+		ParentRegistry: deps.ParentRegistry,
 	}
 	childReg, err := BuildRegistryForAgent(childWS, bundle.ToolAllowlist, deps.ParentRegistry, runTmpl)
 	if err != nil {
@@ -169,7 +168,7 @@ func ExecuteSubAgentTurn(ctx context.Context, deps *RunAgentDeps, sub *catalog.A
 	}
 
 	catRoot := paths.CatalogRoot(deps.UserDataRoot)
-	wfPath, err := workflow.ResolveWorkflowPath(catRoot, sub.AgentType, deps.Manifest)
+	wfPath, err := workflow.ResolveWorkflowPath(catRoot, sub.AgentType, deps.Cfg)
 	if err != nil {
 		return "", fmt.Errorf("sub-agent %q: %w", sub.AgentType, err)
 	}
@@ -226,7 +225,6 @@ func ExecuteSubAgentTurn(ctx context.Context, deps *RunAgentDeps, sub *catalog.A
 			ReplyMeta: maps.Clone(deps.Turn.ReplyMeta),
 		},
 		DelegationDepth: deps.DelegationDepth + 1,
-		Manifest:        deps.Manifest,
 		SubSessionRoot:  subSessionRoot,
 		SessionSegment:  deps.Turn.SessionSegment,
 		Agent:           sub,

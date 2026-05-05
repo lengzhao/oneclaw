@@ -24,7 +24,7 @@
 | [simplicity-roadmap.md](simplicity-roadmap.md) | **oneclaw 优缺点评估 + 简单易用改进路线** | **产品化 / 收敛默认体验时建议保留** |
 | [workflow-architecture-review.md](workflow-architecture-review.md) | **oneclaw workflow 实现侧**复杂度、路线图；默认回合可读 **四阶段**（Receive → RunMainADK → Respond → PostTurnAsync），上下文由 Agent **`context_profile`** 控制，示例模板见仓库 **`setup/templates/workflows/default.turn.yaml`** | **实现/评审 oneclaw 时建议保留** |
 | [eino-md-chain-architecture.md](eino-md-chain-architecture.md) | Eino + 全 MD + `agents/` + **Workflow v2** | **选 Go+Eino 时核心** |
-| [workflows-spec.md](workflows-spec.md) | **`workflows/*.yaml`（nodes/depends_on）与 `steps` 糖；§8 为 manifest 路径与文件选用** | **实现编排必读** |
+| [workflows-spec.md](workflows-spec.md) | **`workflows/*.yaml`（nodes/depends_on）与 `steps` 糖；§8 为 `config.catalog` 与文件选用** | **实现编排必读** |
 | [eino-integration-surface.md](eino-integration-surface.md) | **Eino / eino-ext 接口与包清单**（实现对照） | **实现工程师必读** |
 | [memory-and-session.md](memory-and-session.md) | **Eino Session 示例 vs 检查点 vs `lengzhao/memory` vs oneclaw 文件 MEMORY** | **接记忆/会话持久化前读** |
 | [harness-governance-extensions.md](harness-governance-extensions.md) | Harness 治理、SafeHarness 映射、**扩展 backlog** 与初期预留扩展性 | **增强方向**；一期验收以 requirements 为准 |

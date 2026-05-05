@@ -23,14 +23,14 @@
 
 - **InstructionRoot = UserDataRoot**。
 - 典型包含：`config.yaml`、`AGENT.md`、`MEMORY.md`（或 `memory/` 分片）、`rules/`、`workspace/`、`sessions/<id>/transcript*.json`、`scheduled_jobs.json`（位置以实现为准）。
-- **与 PRD §5 对齐时**，同一用户数据根下还常有 **`manifest.yaml`、`agents/`、`skills/`、`workflows/`**（**oneclaw**：与 `UserDataRoot` 平铺，**无** `.agent/` 包裹层，见 [workflows-spec.md](workflows-spec.md) §8）；完整列见 [requirements.md](requirements.md) §5，此处仅强调与 InstructionRoot 共位的「说明 + 记忆入口」。
+- **与 PRD §5 对齐时**，同一用户数据根下还常有 **`config.yaml`（含 `catalog:`）、`agents/`、`skills/`、`workflows/`**（**oneclaw**：与 `UserDataRoot` 平铺，**无** `.agent/` 包裹层，见 [workflows-spec.md](workflows-spec.md) §8）；完整列见 [requirements.md](requirements.md) §5，此处仅强调与 InstructionRoot 共位的「说明 + 记忆入口」。
 
 ---
 
 ## 3. 开启会话隔离（**主会话推荐默认**）
 
 - **InstructionRoot = SessionRoot**（`UserDataRoot/sessions/<session_id>/`），其下仍应有配对的 `AGENT.md`、记忆入口（`MEMORY.md` 或 `memory/`）与同构的 `workspace/`。
-- 全局 `UserDataRoot` 仍保留 **全局** `config.yaml`、**全局** `manifest.yaml`、`agents/`、`skills/`、`workflows/`（**oneclaw** 下与数据根同目录，见上）——**角色定义与 workflow 定义共享**；**每会话可变的是 InstructionRoot 内的说明、记忆与工作区**。
+- 全局 `UserDataRoot` 仍保留 **全局** `config.yaml`（**`catalog:`** 默认 Agent / 默认 turn）、**全局** `agents/`、`skills/`、`workflows/`（**oneclaw** 下与数据根同目录，见上）——**角色定义与 workflow 定义共享**；**每会话可变的是 InstructionRoot 内的说明、记忆与工作区**。
 
 ### 3.1 子 Agent（**默认：会话隔离 + 上下文隔离**）
 
@@ -41,7 +41,7 @@
 - **Workspace（工具 cwd）**：子 Agent / PostTurn 管线 Agent **默认 `shared`** —— 与 **当前主 Agent 回合** 相同的工作目录（一般为会话 `<InstructionRoot>/workspace`）；若声明 **`workspace: private`**，使用独占子目录（常与 `subs/<sub_run>/workspace` 对齐），避免文件/exec 与主会话互相干扰。
 - **演进编排**：记忆抽取 / Skills 生成 **在主会话 `workflows/*.yaml` 中**通过 **`on_respond` → `async` + `use: agent_task`**（约定节点 id **`memory_agent`** / **`skill_agent`**）调度；内置 **`memory_extractor` / `skill_generator`** 可被用户 agents 覆盖（见 [requirements.md](requirements.md) FR-FLOW-05、[workflows-spec.md](workflows-spec.md)）。**落盘路径、异步语义、`MEMORY.md` 上限** 以 §6 与 [eino-md-chain-architecture.md](eino-md-chain-architecture.md) §3.4.1 为准。
 
-可选放宽（均在 Agent frontmatter 或 manifest 中 **显式开启**）：`inherit_parent_memory`；合并摘要回父 transcript。
+可选放宽（均在 Agent frontmatter 或后续 **config** 扩展中 **显式开启**）：`inherit_parent_memory`；合并摘要回父 transcript。
 
 ---
 
@@ -74,7 +74,7 @@
 | **PostTurn 演进** | **默认异步**；**不**阻塞用户回复；**不**实现「reply 前 flush」或跨回合强一致。下一回合 PreTurn **best-effort** 读取已落盘文件（若未到盘则仅用当期上文）。 |
 | **演进写入（oneclaw 阶段 6）** | **`MEMORY.md`**（`InstructionRoot`）：仅规则与最重要摘要，**≤ 2048 字节**（超出策略由实现定义）。**抽取事实**：**`memory/yyyy-mm/*.md`**（`yyyy-mm` = **UTC** 历年月）。**Skills**：**`UserDataRoot/skills/*`**。**不使用** `.staging`；**`write_behavior_policy`** 暂缓（见 [eino-md-chain-architecture.md](eino-md-chain-architecture.md) §3.4.1）。 |
 | **Catalog 加载顺序** | **内置 agents → 用户 `UserDataRoot/agents/`**（与 [`paths.CatalogRoot`](../paths/paths.go) 布局一致）；同名 **用户覆盖** |
-| **知识库原文** | 默认放在 **`UserDataRoot/knowledge/sources/`**（或 manifest 声明的绝对/相对 **UserDataRoot** 路径），与向量索引（可重建）分离；**`oneclaw init` 预建该目录**，便于开箱后直接放入知识库原文 |
+| **知识库原文** | 默认放在 **`UserDataRoot/knowledge/sources/`**（或配置 / 后续扩展中声明的相对 **UserDataRoot** 路径），与向量索引（可重建）分离；**`oneclaw init` 预建该目录**，便于开箱后直接放入知识库原文 |
 | **可观测** | 子 Agent subsession 的日志/trace **带 `parent_session_id` + `sub_run_id`**；**每个 `agent_type` 的执行记录**单独落盘（见 FR-AGT-05） |
 
 **与 Eino / SQLite 记忆库的分层**（对话 JSONL、`CheckPointStore`、`github.com/lengzhao/memory`）见 [memory-and-session.md](memory-and-session.md)。

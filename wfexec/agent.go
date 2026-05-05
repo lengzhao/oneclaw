@@ -75,7 +75,6 @@ func executeAgentTask(rtx *engine.RuntimeContext, subType string, prompt string)
 		HostAgentID:     agentID,
 		Catalog:         rtx.Catalog,
 		Cfg:             rtx.Cfg,
-		Manifest:        rtx.Manifest,
 		UserDataRoot:    rtx.EffectiveUserDataRoot(),
 		InstructionRoot: rtx.EffectiveInstructionRoot(),
 		SessionRoot:     rtx.EffectiveSessionRoot(),

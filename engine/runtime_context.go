@@ -51,7 +51,6 @@ type TurnInputs struct {
 
 	Catalog      *catalog.Catalog
 	Cfg          *config.File
-	Manifest     *catalog.Manifest // workflows.default_turn resolution for nested use: agent (optional)
 	UserDataRoot string
 	// InstructionRoot is the resolved instructions directory for this agent/run.
 	InstructionRoot string

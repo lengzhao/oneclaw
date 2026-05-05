@@ -27,7 +27,7 @@
 
 ## 2. 「全 MD」建议：目录 + 机器可读清单
 
-仅靠散落 md，代码里会到处是路径拼接。要保持 **代码简洁**，建议 **以用户主目录 `UserDataRoot`（默认 `~/.<app>`）为锚点** 固定布局 + **一个入口 manifest**（YAML 或带 frontmatter 的 md）。下列树 relative to **`UserDataRoot`**（与 [appendix-data-layout.md](appendix-data-layout.md) 一致）：
+仅靠散落 md，代码里会到处是路径拼接。要保持 **代码简洁**，建议 **以用户主目录 `UserDataRoot`（默认 `~/.<app>`）为锚点** 固定布局 + **合并配置**（如单一 `config.yaml`）声明运行时默认值。下列树 relative to **`UserDataRoot`**（与 [appendix-data-layout.md](appendix-data-layout.md) 一致；泛化示例仍可出现独立 manifest 文件）：
 
 ```text
 ~/.<app>/                          # UserDataRoot（默认可配置）
@@ -51,13 +51,13 @@
     transcript*.json               # 位置以实现为准
 ```
 
-**oneclaw 当前实现（与上树差异）**：**无** `.agent/` 包裹层；**`manifest.yaml`、`agents/`、`skills/`、`workflows/`、`prompts/`** 等与 **`config.yaml` 同层**落在 **`UserDataRoot`**（[`paths.CatalogRoot`](../paths/paths.go) = `UserDataRoot`）。选用 workflow 文件的规则见 [workflows-spec.md](workflows-spec.md) §8。
+**oneclaw 当前实现（与上树差异）**：**无** `.agent/` 包裹层；**`agents/`、`skills/`、`workflows/`、`prompts/`** 等与 **`config.yaml` 同层**落在 **`UserDataRoot`**（[`paths.CatalogRoot`](../paths/paths.go) = `UserDataRoot`）。**默认 Agent 与默认 workflow 回落 stem** 写在 **`config.yaml` → `catalog:`**（见 [workflows-spec.md](workflows-spec.md) §8）。
 
 **原则**：
 
 - **叙述与规范 prose** 放 md；**列表 / 顺序 / 开关** 放 yaml（或 md 的 `---` frontmatter）。
 - **Tool 允许集**：解析成 `[]string` 或 tag → 装配层对 `tools.Registry` 做 `Filter`；主路径仍是 `adk.NewChatModelAgent` + 绑定工具列表。
-- **多 Agent**：所有**业务 Agent 的配置集中在 `UserDataRoot/agents/`**（或 manifest 声明的路径），不在代码里硬编码角色；宿主 **先加载内置条目，再加载用户目录；同名则用户覆盖内置**（与 FR-AGT-04 一致）。
+- **多 Agent**：所有**业务 Agent 的配置集中在 `UserDataRoot/agents/`**，不在代码里硬编码角色；宿主 **先加载内置条目，再加载用户目录；同名则用户覆盖内置**（与 FR-AGT-04 一致）。
 
 ---
 
@@ -86,7 +86,7 @@ flowchart LR
 - **PostTurn**：记忆提取、skill 候选生成 —— 通常各绑定 **独立 `agent_type`**（与主对话区分），以 **`NewChatModelAgent` + 收窄工具集** 运行；每次运行 **落盘执行记录**。**不得**在「抽取 / 生成」类 Agent 完成后再次调度 PostTurn 演进（见 §5.6）。
 - **OnRespond**：格式化、裁剪、写 transcript、触发 bus。
 
-用户定义的 workflow = **一张 DAG（或线性 `steps` 糖）上的命名节点**；每个节点在 Go 里仅为薄适配器（读 manifest 参数 + 调接口）。**YAML 字段、内置 `use`** 见 [workflows-spec.md](workflows-spec.md)；**manifest 路径与 workflow 文件选用** 见同文档 **§8**。
+用户定义的 workflow = **一张 DAG（或线性 `steps` 糖）上的命名节点**；每个节点在 Go 里仅为薄适配器（读配置 / 节点参数 + 调接口）。**YAML 字段、内置 `use`** 见 [workflows-spec.md](workflows-spec.md)；**`config.catalog` 与 workflow 文件选用** 见同文档 **§8**。
 
 ### 3.2 回合内：ADK ChatModelAgentMiddleware
 
@@ -185,9 +185,9 @@ flowchart LR
 
 ### 5.3 与 Workflow、工具、路由的关系
 
-- **默认 Agent**：`manifest.yaml` 中 `default_agent: <id>`（与 **`agents/<id>.md`** stem 一致）；缺省或空时按 **`default`**（与 [`catalog.LoadManifest`](../catalog/manifest.go) 及内置模板一致）。
+- **默认 Agent**：**`config.yaml` → `catalog.default_agent`**（与 **`agents/<id>.md`** stem 一致）；缺省或空时按 **`default`**（见 [`config.File.ResolvedDefaultAgent`](../config/catalog.go) 与模板）。
 - **按渠道/会话切换**：入站 `Metadata`（或会话首次绑定）写入 **`agent_id`**，PreTurn 节点根据 id 从 Catalog 取 Definition，再 **`FilterRegistry`** + 拼 Instruction。
-- **Per-agent Workflow（oneclaw 实现）**：若存在 **`workflows/<agent_type>.yaml|.yml`**（**`<agent_type>` = 文件名 stem**），宿主 **自动选用**；否则回落 manifest 的 **`workflows.default_turn`**（或兼容顶层 **`default_turn`**），默认可解析为 **`default.turn`**。详见 [workflows-spec.md](workflows-spec.md) §8。**当前未实现** frontmatter **`workflow:` / `chain:`** 覆盖。**演进管线 Agent**（如 `memory_extractor` / `skill_generator`）不要求 Catalog 额外字段即可挂上 **同名** `workflows/<agent_type>.yaml`（见 §3.4.1）。
+- **Per-agent Workflow（oneclaw 实现）**：若存在 **`workflows/<agent_type>.yaml|.yml`**（**`<agent_type>` = 文件名 stem**），宿主 **自动选用**；否则回落 **`config.catalog.workflows.default_turn`**，默认可解析为 **`default.turn`**。详见 [workflows-spec.md](workflows-spec.md) §8。**当前未实现** frontmatter **`workflow:` / `chain:`** 覆盖。**演进管线 Agent**（如 `memory_extractor` / `skill_generator`）不要求 Catalog 额外字段即可挂上 **同名** `workflows/<agent_type>.yaml`（见 §3.4.1）。
 - **嵌套**：子 Agent 仍可声明自己的 `tools`；避免在子定义里放开 `run_agent` / `fork_context` 除非明确需要（防深度爆炸）。
 
 ### 5.4 子 Agent 默认：**会话隔离 + 上下文隔离**（已定）
@@ -208,7 +208,7 @@ flowchart LR
 
 ### 5.6 专用管线 Agent、执行记录与演进编排
 
-**角色拆分**：主对话、PostTurn **记忆抽取**、PostTurn **Skills 生成** 可使用 **三个（或更多）不同 `agent_type`**，在 manifest / `workflows/*.yaml` 中写明；各自 **Instruction、`tools`、`model`** 独立。
+**角色拆分**：主对话、PostTurn **记忆抽取**、PostTurn **Skills 生成** 可使用 **三个（或更多）不同 `agent_type`**，在 **`workflows/*.yaml`**（及 **`agents/*.md`**）中写明；各自 **Instruction、`tools`、`model`** 独立。
 
 **执行记录落盘**：每一次 ADK 运行（含 PostTurn 异步任务）写入 **可追溯文件**（推荐 JSONL），字段至少含：`run_id`、`agent_type`、`session_id`、父 `run_id`（若有）、起止时间、与 transcript 的引用锚点。路径建议：`sessions/<session_id>/runs/<agent_type>/…` 或与 [requirements.md](requirements.md) §5「审计」目录合并 schema。
 
@@ -260,4 +260,4 @@ flowchart LR
 |------|------|
 | 2026-05-02 | 增补 §8 Harness 治理交叉引用、§7 设计注意第 6–7 条、参考链接顺延；§3.4 `memory` 包草图；§2 树锚定 `UserDataRoot`；§5 `inherit_parent_memory`、`workspace` 等；§5.4 Workspace；§5.5 Eino 侧；§5.6 多 Agent 管线、执行记录、演进防递归；§6 实现收口；§7 Catalog 顺序；交叉引用 [reference-architecture.md](reference-architecture.md)；§3.1/§4 PostTurn 与内置节点；套件位置与 §3.1 指向 [workflows-spec.md](workflows-spec.md)；Claw 侧 **workflow / DAG** 命名取代纯 chain |
 | 2026-05-03 | §4 / §5.2 / §5.6 / §7：**演进仅靠 workflow（`async` + `use: agent_task`）**；删除 **`suppress_post_turn_evolution`**。**§3.4.1 / §5.3**：阶段 6 已定路径；**§3.4** 交叉引用 [memory-and-session.md](memory-and-session.md)。与实现对齐：内置 Catalog + 默认 turn；无演进专用加载期校验、无 `TurnContext` 演进剖面 |
-| 2026-05-05 | §2 **oneclaw CatalogRoot 平铺**；§3.1 流程图 **O 在 Q 前**；§3.4 `context_profile.disable` 取代 `omit_memory_injection`；§5.1/§5.2 **stem 为 id**、`skills`/`context_profile`；§5.3 **default** 默认 agent、workflow 选用链路与 **§8** 对齐，删除未实现的 frontmatter `workflow` |
+| 2026-05-05 | §2 **oneclaw CatalogRoot 平铺**；§3.1 流程图 **O 在 Q 前**；§3.4 `context_profile.disable` 取代 `omit_memory_injection`；§5.1/§5.2 **stem 为 id**、`skills`/`context_profile`；§5.3 **default** 默认 agent、workflow 选用链路与 **§8** 对齐，删除未实现的 frontmatter `workflow`；**独立 `manifest.yaml` 删除**，`default_agent` / `workflows.default_turn` 迁入 **`config.yaml` → `catalog:`** |

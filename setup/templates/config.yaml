@@ -1,3 +1,8 @@
+catalog:
+  default_agent: default
+  workflows:
+    default_turn: default.turn
+
 sessions:
   isolate_instruction_root: true
 default_model: gpt-5.4-nano

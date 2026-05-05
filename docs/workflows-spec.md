@@ -96,23 +96,22 @@ end: respond
 
 不再返回节点输出索引（`nodes`）。
 
-## 8. `manifest.yaml` 与 workflow 文件解析（oneclaw）
+## 8. `config.yaml` 的 `catalog` 块与 workflow 文件解析（oneclaw）
 
-与 [`paths.CatalogRoot`](../paths/paths.go) 一致：**CatalogRoot = UserDataRoot**（默认 `~/.oneclaw`，可用 `config.user_data_root` 或环境变量 `ONECLAW_USER_DATA_ROOT` 覆盖）。**不存在**隐藏的 `.agent/` 子目录承载 manifest；**`manifest.yaml` 与 `agents/`、`workflows/`、`skills/` 平铺在 CatalogRoot 下**。
+与 [`paths.CatalogRoot`](../paths/paths.go) 一致：**CatalogRoot = UserDataRoot**（默认 `~/.oneclaw`，可用 `config.user_data_root` 或环境变量 `ONECLAW_USER_DATA_ROOT` 覆盖）。**`agents/`、`workflows/`、`skills/` 等声明式资产平铺在 CatalogRoot**；**默认 Agent 与默认 turn 回落 stem 写在 `UserDataRoot/config.yaml` 的 `catalog:` 下**（见 [`config.File`](../config/file.go)、[`config.CatalogConfig`](../config/catalog.go)）。
 
-**`manifest.yaml`（子集）**：
+**`catalog:`（子集）**：
 
-- `default_agent`：默认主会话 Agent 的 **Catalog id**（与 `agents/<id>.md` 的**文件名 stem** 一致）。缺省或空串时，加载逻辑按 **`default`** 处理（与内置 / 模板一致）。
-- `workflows.default_turn`：当 **不存在** `workflows/<agent_type>.yaml|.yml` 时，回落使用的 workflow **文件 stem**（不含扩展名），默认 **`default.turn`**。
-- 兼容旧键：顶层 **`default_turn`** 与 `workflows.default_turn` 等价，**后者优先**（见 [`catalog.Manifest.ResolvedDefaultTurn`](../catalog/manifest.go)）。
+- `default_agent`：默认主会话 Agent 的 **Catalog id**（与 `agents/<id>.md` 的**文件名 stem** 一致）。缺省或空串时按 **`default`**（见 [`File.ResolvedDefaultAgent`](../config/catalog.go)）。
+- `workflows.default_turn`：当 **不存在** `workflows/<agent_type>.yaml|.yml` 时，回落使用的 workflow **文件 stem**（不含扩展名），默认 **`default.turn`**（见 [`File.ResolvedDefaultTurn`](../config/catalog.go)）。
 
-**选用哪个 YAML 文件**（[`workflow.ResolveWorkflowPath`](../workflow/resolve.go)）：
+**选用哪个 workflow YAML**（[`workflow.ResolveWorkflowPath`](../workflow/resolve.go)）：
 
-1. 若存在 **`CatalogRoot/workflows/<agent_type>.yaml`** 或 **`.yml`**，则使用该文件（`<agent_type>` 为当前回合 Catalog 条目的 id，即 md **文件名 stem**）。
-2. 否则使用 **`CatalogRoot/workflows/<default_turn>.yaml|.yml`**，其中 `<default_turn>` 来自 manifest（见上），默认可解析为模板 **`default.turn.yaml`**。
+1. 若存在 **`CatalogRoot/workflows/<agent_type>.yaml`** 或 **`.yml`**，则使用该文件（`<agent_type>` 为当前 Catalog 条目的 id，即 md **文件名 stem**）。
+2. 否则使用 **`CatalogRoot/workflows/<default_turn>.yaml|.yml`**，其中 `<default_turn>` 来自 **`config.catalog.workflows.default_turn`**，默认可解析为模板 **`default.turn.yaml`**。
 
 **未实现**：Agent frontmatter 中的 **`workflow:` / `chain:`** 别名覆盖；若将来加入，需同步更新解析与本文。
 
 ## 9. 修订记录
 
-- 2026-05-05：切换到 v2（nodes/depends_on/string-flow），移除 v1 `graph.edges` 主模型；新增 §8（`manifest.yaml` 平铺、`ResolveWorkflowPath`、与实现对齐），原修订记录顺延为 §9。
+- 2026-05-05：切换到 v2（nodes/depends_on/string-flow），移除 v1 `graph.edges` 主模型；新增 §8（`ResolveWorkflowPath`、`config.catalog`、与实现对齐），原修订记录顺延为 §9；**独立 `manifest.yaml` 已删除**，默认 Agent / 默认 turn 回落并入 **`config.yaml` → `catalog:`**。

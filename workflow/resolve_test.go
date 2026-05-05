@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/lengzhao/oneclaw/catalog"
+	"github.com/lengzhao/oneclaw/config"
 )
 
 func TestResolveWorkflowPath_agentFilePreferred(t *testing.T) {
@@ -19,8 +19,8 @@ func TestResolveWorkflowPath_agentFilePreferred(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "workflows", "default.turn.yaml"), []byte("y"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	mf := &catalog.Manifest{}
-	p, err := ResolveWorkflowPath(root, "custom", mf)
+	cfg := &config.File{}
+	p, err := ResolveWorkflowPath(root, "custom", cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,8 +37,8 @@ func TestResolveWorkflowPath_fallbackDefaultTurn(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "workflows", "default.turn.yaml"), []byte("y"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	mf := &catalog.Manifest{}
-	p, err := ResolveWorkflowPath(root, "missing-agent", mf)
+	cfg := &config.File{}
+	p, err := ResolveWorkflowPath(root, "missing-agent", cfg)
 	if err != nil {
 		t.Fatal(err)
 	}

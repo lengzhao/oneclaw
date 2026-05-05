@@ -6,8 +6,7 @@
 
 | 路径 | 说明 |
 |------|------|
-| `config.yaml` | 模型、工具、`clawbridge` 等 |
-| `manifest.yaml` | `default_agent`、`workflows.default_turn` |
+| `config.yaml` | 模型、工具、`clawbridge`、`catalog.default_agent` / `catalog.workflows.default_turn` 等 |
 | `AGENT.md` / `MEMORY.md` | 会话说明与记忆占位 |
 | `workflows/*.yaml` | 主回合与子 Agent（`memory_extractor` / `skill_generator`）workflow |
 | `agents/default.md` | 默认主 Agent（**Go `text/template`** 渲染 `UserDataRoot`） |
