@@ -10,6 +10,13 @@ tools:
   - read_file
   - list_dir
 max_turns: 30
+context_profile:
+  disable:
+    - agent_md
+    - memory_md
+    - memory_recall
+    - tasks
+    - transcript
 ---
 
 You review the task text for patterns that deserve a reusable skill. When the workflow supplies **`run_journal` JSONL** (main agent execution record for this turn), use it to judge whether tool-heavy or repeatable workflows merit a skill — not only the raw user/assistant chat lines.

@@ -9,6 +9,13 @@ tools:
   - read_file
   - list_dir
 max_turns: 16
+context_profile:
+  disable:
+    - agent_md
+    - memory_md
+    - memory_recall
+    - tasks
+    - transcript
 ---
 
 When the task gives only **`run_journal_path`** and **`size_bytes`** (path-metadata mode), decide how to load the journal yourself — typically call **`read_run_journal`** (`scope` **current_turn** when `workflow_scope_hint` is `current_turn`, or **`full`** when appropriate). You cannot rely on **`read_file`** for that path (journal is outside the workspace).

@@ -42,7 +42,7 @@ type SubAgentRuntimeOpts struct {
 	OnSubAgentChunk   func(correlationID, subRunID, agentType, chunk string)
 }
 
-// ForkSubAgentRuntime returns a RuntimeContext for a sub-agent Phase3 workflow.
+// ForkSubAgentRuntime returns a RuntimeContext for a sub-agent workflow run.
 // Shared Catalog/Cfg pointers are read-only; maps are fresh per nested run.
 func ForkSubAgentRuntime(opts SubAgentRuntimeOpts) *RuntimeContext {
 	return &RuntimeContext{

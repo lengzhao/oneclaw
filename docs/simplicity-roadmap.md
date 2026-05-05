@@ -150,7 +150,7 @@ oneclaw workflow explain default.turn
 
 - `oneclaw init` 在**不牺牲能力固化**的前提下控制噪音：**`//go:embed templates` 嵌入 `setup/templates/` 整树**，`Bootstrap` 遍历拷到 UserDataRoot（缺才写；**`config.yaml`** 仍单独合并；**`agents/default.md`** 仍模板渲染）；**预建** `prompts/`、`knowledge/sources/`；**`tools.exec` 默认保持开启**（仍应在生产环境收窄 allow/deny）。仓库 **`examples/skills/`** 等与嵌入树对齐，便于浏览与文档引用。
 - `oneclaw run` 在 mock 与真实模型两种模式下都给出清晰提示。
-- 默认 workflow 只保留真正有行为或必须保留的节点。
+- 默认 workflow 只保留生命周期节点：`on_receive`、`llm`、`on_respond` 与回复后的 async `agent_task`；上下文装配由 `llm` 按 Agent 的 `context_profile` 自动完成。
 - 占位 / 扩展位 workflow 移到 example 或高级文档。
 
 ### 5.2 P1：增强 explain 与诊断

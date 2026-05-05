@@ -42,7 +42,7 @@ func (rtx *RuntimeContext) PromptTemplateDataCopy() map[string]any {
 	return out
 }
 
-// SetTranscriptReplayTurns replaces transcript replay messages for adk_main (load_transcript node).
+// SetTranscriptReplayTurns replaces transcript replay messages for adk_main context prep.
 func (rtx *RuntimeContext) SetTranscriptReplayTurns(turns []session.TranscriptTurn) {
 	if rtx == nil {
 		return

@@ -1,11 +1,12 @@
-workflow_spec_version: 1
+workflow_spec_version: 2
 id: skill_generator.turn
 description: Sub-agent workflow for skill_generator (runs under subs/); override .agent/workflows/skill_generator.yaml.
 steps:
   - use: on_receive
-  - use: load_prompt_md
-  # - use: load_memory_snapshot
-  - id: adk_main
-    use: adk_main
-  - id: on_respond
+  - id: main
+    use: llm
+    prompt: $start.user_prompt
+  - id: respond
     use: on_respond
+    input: $nodes.main
+end: respond

@@ -3,7 +3,7 @@ package workflow
 import "testing"
 
 func TestReplyStreamEnabled(t *testing.T) {
-	raw := []byte(`workflow_spec_version: 1
+	raw := []byte(`workflow_spec_version: 2
 id: t
 steps:
   - use: noop
@@ -21,29 +21,25 @@ steps:
 	}
 }
 
-func TestReplyStreamEnabled_adkMainParam(t *testing.T) {
+func TestReplyStreamEnabled_llmParam(t *testing.T) {
 	w := &Workflow{
-		SpecVersion: 1,
+		SpecVersion: 2,
 		ID:          "x",
-		Graph: Graph{
-			Entry: "a",
-			Nodes: map[string]Node{
-				"a": {Use: "noop"},
-				"b": {Use: "adk_main", Params: map[string]any{"stream": true}},
-			},
-			Edges: []Edge{{From: "a", To: "b"}},
+		Nodes: map[string]Node{
+			"a": {Use: "noop"},
+			"b": {Use: "llm", Params: map[string]any{"stream": true}, DependsOn: []string{"a"}},
 		},
 	}
 	if err := Validate(w); err != nil {
 		t.Fatal(err)
 	}
 	if !ReplyStreamEnabled(w) {
-		t.Fatal("expected stream from adk_main")
+		t.Fatal("expected stream from llm")
 	}
 }
 
 func TestReplyStreamEnabled_offByDefault(t *testing.T) {
-	raw := []byte(`workflow_spec_version: 1
+	raw := []byte(`workflow_spec_version: 2
 id: t
 steps:
   - use: noop

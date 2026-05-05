@@ -1,38 +1,28 @@
-workflow_spec_version: 1
+workflow_spec_version: 2
 id: default.turn
-description: Main turn with load_memory_snapshot before adk_main; async memory/skill agents after respond (override as usual).
-# Phases (read map): PreparePrompt -> steps through load_transcript | RunMainADK -> adk_main | Respond -> on_respond | PostTurnAsync -> async agent nodes.
-# Optional Prepare hooks omitted here: filter_tools (no-op in oneclaw; plugin/tool-policy extension point — see workflows-spec §6).
-steps:
-  - use: on_receive
-  # Extension hook / compat slot: oneclaw merges prompt fragments at adk_main (RenderMainAgentPrompt); this node is a no-op here.
-  - use: load_prompt_md
-  - use: load_memory_snapshot
-  - use: list_skills
-  - use: list_tasks
-  - use: load_transcript
-  - id: adk_main
-    use: adk_main
-  - id: on_respond
+description: Main turn v2 workflow.
+nodes:
+  receive:
+    use: on_receive
+    input: $start.user_prompt
+  main:
+    use: llm
+    prompt: $start.user_prompt
+  respond:
     use: on_respond
-    # Optional: stream: true — serve sends assistant text incrementally (Reply then EditMessage); drivers need MessageEditor (e.g. webchat SSE). Default off.
-  - id: memory_agent
-    use: agent
+    input: $nodes.main
+  memory_agent:
+    use: agent_task
     async: true
-    params:
-      agent_type: memory_extractor
-      context:
-        - ref: run_journal
-          scope: current_turn
-          as: path_metadata
-          label: Main agent run (this turn)
-  - id: skill_agent
-    use: agent
+    agent_type: memory_extractor
+    input: $runtime.run_journal.current_turn_metadata
+    depends_on:
+      - respond
+  skill_agent:
+    use: agent_task
     async: true
-    params:
-      agent_type: skill_generator
-      context:
-        - ref: run_journal
-          scope: current_turn
-          as: user_message
-          label: Main agent run (this turn)
+    agent_type: skill_generator
+    input: $runtime.run_journal.current_turn_metadata
+    depends_on:
+      - respond
+end: respond

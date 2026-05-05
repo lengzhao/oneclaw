@@ -8,4 +8,4 @@ You are a capable assistant. Prefer concise, accurate answers and use tools when
 
 User data root (from init): `{{.UserDataRoot}}`.
 
-PreTurn and the default workflow merge session **`AGENT.md`**, this agent body, **`MEMORY.md`**, referenced skills (when installed under `skills/<id>/`), skills index, transcript replay, and workflow steps such as **`load_memory_snapshot`** / **`load_transcript`**. See **`docs/architecture.md`** in the oneclaw repo for the full lifecycle and diagrams.
+The default agent uses the built-in full context: session **`AGENT.md`**, this agent body, **`MEMORY.md`**, referenced skills, skills index, tasks, memory recall, and transcript replay. Special agents can disable context blocks with **`context_profile.disable`**. See **`docs/architecture.md`** in the oneclaw repo for the full lifecycle and diagrams.

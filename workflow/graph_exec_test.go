@@ -5,74 +5,52 @@ import (
 	"testing"
 )
 
-func TestComposeIndegree_entryGetsStart(t *testing.T) {
-	g := &Graph{
-		Entry: "a",
-		Nodes: map[string]Node{"a": {Use: "noop"}, "b": {Use: "noop"}},
-		Edges: []Edge{{From: "a", To: "b"}},
-	}
-	if ComposeIndegree(g, "a") != 1 {
-		t.Fatalf("entry compose indegree want 1 got %d", ComposeIndegree(g, "a"))
-	}
-	if ComposeIndegree(g, "b") != 1 {
-		t.Fatalf("b compose indegree want 1 got %d", ComposeIndegree(g, "b"))
-	}
-}
-
-func TestComposeIndegree_join(t *testing.T) {
-	g := &Graph{
-		Entry: "a",
+func TestComposeIndegree_dependsOnCount(t *testing.T) {
+	w := &Workflow{
+		SpecVersion: 2,
+		ID:          "t",
 		Nodes: map[string]Node{
 			"a": {Use: "noop"},
-			"b": {Use: "noop"},
-			"c": {Use: "noop"},
-			"d": {Use: "noop"},
-		},
-		Edges: []Edge{
-			{From: "a", To: "b"},
-			{From: "a", To: "c"},
-			{From: "b", To: "d"},
-			{From: "c", To: "d"},
+			"b": {Use: "noop", DependsOn: []string{"a"}},
+			"c": {Use: "noop", DependsOn: []string{"a", "b"}},
 		},
 	}
-	if ComposeIndegree(g, "d") != 2 {
-		t.Fatalf("join indegree want 2 got %d", ComposeIndegree(g, "d"))
+	if ComposeIndegree(w, "a") != 0 {
+		t.Fatalf("a indegree want 0 got %d", ComposeIndegree(w, "a"))
+	}
+	if ComposeIndegree(w, "c") != 2 {
+		t.Fatalf("c indegree want 2 got %d", ComposeIndegree(w, "c"))
 	}
 }
 
 func TestSinkNodes_fork(t *testing.T) {
-	g := &Graph{
-		Entry: "a",
+	w := &Workflow{
+		SpecVersion: 2,
+		ID:          "fork",
 		Nodes: map[string]Node{
 			"a": {Use: "noop"},
-			"b": {Use: "noop"},
-			"c": {Use: "noop"},
+			"b": {Use: "noop", DependsOn: []string{"a"}},
+			"c": {Use: "noop", DependsOn: []string{"a"}},
 		},
-		Edges: []Edge{{From: "a", To: "b"}, {From: "a", To: "c"}},
 	}
-	s := SinkNodes(g)
+	s := SinkNodes(w)
 	if len(s) != 2 || s[0] != "b" || s[1] != "c" {
 		t.Fatalf("sinks %v", s)
 	}
 }
 
 func TestValidateComposeFanOut_rejectsMixed(t *testing.T) {
-	g := &Graph{
-		Entry: "a",
+	w := &Workflow{
+		SpecVersion: 2,
+		ID:          "mixed",
 		Nodes: map[string]Node{
 			"a": {Use: "noop"},
-			"b": {Use: "noop"},
-			"c": {Use: "noop"},
-			"d": {Use: "noop"},
-		},
-		Edges: []Edge{
-			{From: "a", To: "b"},
-			{From: "a", To: "c"},
-			{From: "a", To: "d"},
-			{From: "c", To: "d"},
+			"b": {Use: "noop", DependsOn: []string{"a"}},
+			"c": {Use: "noop", DependsOn: []string{"a"}},
+			"d": {Use: "noop", DependsOn: []string{"a", "c"}},
 		},
 	}
-	err := ValidateComposeFanOut(g)
+	err := ValidateComposeFanOut(w)
 	if err == nil || !strings.Contains(err.Error(), "fans out") {
 		t.Fatalf("expected fan-out error, got %v", err)
 	}
@@ -80,13 +58,9 @@ func TestValidateComposeFanOut_rejectsMixed(t *testing.T) {
 
 func TestValidate_reservedOneclawNodeID(t *testing.T) {
 	w := &Workflow{
-		SpecVersion: 1,
+		SpecVersion: 2,
 		ID:          "x",
-		Graph: Graph{
-			Entry: "_oneclaw_bad",
-			Nodes: map[string]Node{"_oneclaw_bad": {Use: "noop"}},
-			Edges: []Edge{},
-		},
+		Nodes:       map[string]Node{"_oneclaw_bad": {Use: "noop"}},
 	}
 	if err := Validate(w); err == nil || !strings.Contains(err.Error(), "reserved") {
 		t.Fatalf("expected reserved prefix error, got %v", err)

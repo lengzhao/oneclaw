@@ -39,7 +39,7 @@
 - **上下文隔离**：子 Agent **默认**使用 **独立的 ADK 消息列表**；**不**把主会话完整 transcript 注入子循环；**不**注入主会话的 `MEMORY` / `memory/`（除非该 Agent 声明 **`inherit_parent_memory: true`** 等显式开关）。
 - **会话隔离**：子 Agent 若有独立落盘需求（子 transcript、子演进写入、**按 Agent 的执行记录**），使用 **派生命名空间**，例如 `sessions/<parent_session_id>/subs/<sub_run_id>/`（或以内存为主、仅在 handoff 时写回父会话摘要 —— 实现二选一，文档层约束「不得默认写进父 SessionRoot 同一 transcript 文件不打标签」）。
 - **Workspace（工具 cwd）**：子 Agent / PostTurn 管线 Agent **默认 `shared`** —— 与 **当前主 Agent 回合** 相同的工作目录（一般为会话 `<InstructionRoot>/workspace`）；若声明 **`workspace: private`**，使用独占子目录（常与 `subs/<sub_run>/workspace` 对齐），避免文件/exec 与主会话互相干扰。
-- **演进编排**：记忆抽取 / Skills 生成 **在主会话 `workflows/*.yaml` 中**通过 **`on_respond` → `async` + `use: agent`**（约定节点 id **`memory_agent`** / **`skill_agent`**）调度；内置 **`memory_extractor` / `skill_generator`** 可被用户 agents 覆盖（见 [requirements.md](requirements.md) FR-FLOW-05、[workflows-spec.md](workflows-spec.md) §4.3）。**落盘路径、异步语义、`MEMORY.md` 上限** 以 §6 与 [eino-md-chain-architecture.md](eino-md-chain-architecture.md) §3.4.1 为准。
+- **演进编排**：记忆抽取 / Skills 生成 **在主会话 `workflows/*.yaml` 中**通过 **`on_respond` → `async` + `use: agent_task`**（约定节点 id **`memory_agent`** / **`skill_agent`**）调度；内置 **`memory_extractor` / `skill_generator`** 可被用户 agents 覆盖（见 [requirements.md](requirements.md) FR-FLOW-05、[workflows-spec.md](workflows-spec.md)）。**落盘路径、异步语义、`MEMORY.md` 上限** 以 §6 与 [eino-md-chain-architecture.md](eino-md-chain-architecture.md) §3.4.1 为准。
 
 可选放宽（均在 Agent frontmatter 或 manifest 中 **显式开启**）：`inherit_parent_memory`；合并摘要回父 transcript。
 

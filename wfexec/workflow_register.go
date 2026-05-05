@@ -9,9 +9,9 @@ import (
 )
 
 func init() {
-	subagent.RegisterPhase3WorkflowExecutor(func(ctx context.Context, wf *workflow.Workflow, rtx *engine.RuntimeContext) error {
+	subagent.RegisterWorkflowExecutor(func(ctx context.Context, wf *workflow.Workflow, rtx *engine.RuntimeContext) error {
 		reg := NewRegistry()
-		if err := RegisterPhase3Builtins(reg); err != nil {
+		if err := RegisterBuiltins(reg); err != nil {
 			return err
 		}
 		return Execute(ctx, wf, reg, rtx)

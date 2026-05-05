@@ -28,18 +28,20 @@ func stubReply() string {
 
 // default.turn from bootstrap ends with async memory_extractor / skill_generator goroutines; they race with t.TempDir()
 // cleanup in short integration tests. For e2e we use the same steps minus async tails (see test/e2e_case.md E2E-09 note).
-const e2eSyncDefaultTurn = `workflow_spec_version: 1
+const e2eSyncDefaultTurn = `workflow_spec_version: 2
 id: default.turn
 description: E2E sync-only default.turn (no async child agents).
-steps:
-  - use: on_receive
-  - use: load_prompt_md
-  - use: load_memory_snapshot
-  - use: list_skills
-  - use: list_tasks
-  - use: load_transcript
-  - use: adk_main
-  - use: on_respond
+nodes:
+  receive:
+    use: on_receive
+    input: $start.user_prompt
+  main:
+    use: llm
+    prompt: $start.user_prompt
+  respond:
+    use: on_respond
+    input: $nodes.main
+end: respond
 `
 
 func bootstrapUserData(t *testing.T) string {

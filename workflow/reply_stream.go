@@ -5,13 +5,13 @@ import (
 )
 
 // ReplyStreamEnabled reports whether outbound streaming is requested for this workflow document.
-// True when any node with use "on_respond" or "adk_main" has params.stream truthy (after defaults merge).
+// True when any node with use "on_respond" or "llm" has params.stream truthy (after defaults merge).
 func ReplyStreamEnabled(w *Workflow) bool {
 	if w == nil {
 		return false
 	}
-	for _, n := range w.Graph.Nodes {
-		if n.Use != "on_respond" && n.Use != "adk_main" {
+	for _, n := range w.Nodes {
+		if n.Use != "on_respond" && n.Use != "llm" {
 			continue
 		}
 		if paramsTruthy(n.Params, "stream") {

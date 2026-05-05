@@ -10,53 +10,47 @@ import (
 	"github.com/lengzhao/oneclaw/workflow"
 )
 
-func TestCompilePhase3Workflow_asyncContinuesBeforeHandlerDone(t *testing.T) {
-	workflow.Phase3Uses["stall"] = struct{}{}
-	t.Cleanup(func() { delete(workflow.Phase3Uses, "stall") })
+func TestCompileEinoWorkflow_asyncContinuesBeforeHandlerDone(t *testing.T) {
+	workflow.AllowedUses["stall"] = struct{}{}
+	t.Cleanup(func() { delete(workflow.AllowedUses, "stall") })
 
 	ctx := context.Background()
 	entered := make(chan struct{}, 1)
 	reg := NewRegistry()
-	if err := RegisterPhase3Builtins(reg); err != nil {
+	if err := RegisterBuiltins(reg); err != nil {
 		t.Fatal(err)
 	}
-	if err := reg.Register("stall", func(*engine.RuntimeContext) error {
+	if err := reg.Register("stall", func(_ context.Context, _ NodeInput, _ NodeEnv) (workflow.WorkflowNodeResult, error) {
 		entered <- struct{}{}
 		time.Sleep(400 * time.Millisecond)
-		return nil
+		return workflow.WorkflowNodeResult{}, nil
 	}); err != nil {
 		t.Fatal(err)
 	}
 
 	wf := &workflow.Workflow{
-		SpecVersion: 1,
+		SpecVersion: 2,
 		ID:          "async-chain",
-		Graph: workflow.Graph{
-			Entry: "a",
-			Nodes: map[string]workflow.Node{
-				"a": {Use: "on_receive"},
-				"b": {Use: "stall", Async: true},
-				"c": {Use: "noop"},
-			},
-			Edges: []workflow.Edge{
-				{From: "a", To: "b"},
-				{From: "b", To: "c"},
-			},
+		Nodes: map[string]workflow.Node{
+			"a": {Use: "on_receive"},
+			"b": {Use: "stall", Async: true, DependsOn: []string{"a"}},
+			"c": {Use: "noop", DependsOn: []string{"b"}},
 		},
+		End: "c",
 	}
 	if err := workflow.Validate(wf); err != nil {
 		t.Fatal(err)
 	}
 
-	run, err := CompilePhase3Workflow(ctx, wf, reg)
+	rtx := &engine.RuntimeContext{TurnInputs: engine.TurnInputs{UserPrompt: "hi"}}
+	run, err := CompileEinoWorkflow(ctx, wf, reg, rtx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	rtx := &engine.RuntimeContext{TurnInputs: engine.TurnInputs{UserPrompt: "hi"}}
 
 	errCh := make(chan error, 1)
 	go func() {
-		_, err := run.Invoke(ctx, rtx)
+		_, err := run.Invoke(ctx, TurnWorkflowInput{UserPrompt: "hi", Runtime: rtx})
 		errCh <- err
 	}()
 
@@ -93,46 +87,40 @@ func TestCompilePhase3Workflow_asyncContinuesBeforeHandlerDone(t *testing.T) {
 	t.Fatal("async handler never recorded completion")
 }
 
-func TestCompilePhase3Workflow_asyncRecordsFailure(t *testing.T) {
-	workflow.Phase3Uses["boom"] = struct{}{}
-	t.Cleanup(func() { delete(workflow.Phase3Uses, "boom") })
+func TestCompileEinoWorkflow_asyncRecordsFailure(t *testing.T) {
+	workflow.AllowedUses["boom"] = struct{}{}
+	t.Cleanup(func() { delete(workflow.AllowedUses, "boom") })
 
 	ctx := context.Background()
 	reg := NewRegistry()
-	if err := RegisterPhase3Builtins(reg); err != nil {
+	if err := RegisterBuiltins(reg); err != nil {
 		t.Fatal(err)
 	}
-	if err := reg.Register("boom", func(*engine.RuntimeContext) error {
-		return context.Canceled
+	if err := reg.Register("boom", func(_ context.Context, _ NodeInput, _ NodeEnv) (workflow.WorkflowNodeResult, error) {
+		return workflow.WorkflowNodeResult{}, context.Canceled
 	}); err != nil {
 		t.Fatal(err)
 	}
 
 	wf := &workflow.Workflow{
-		SpecVersion: 1,
+		SpecVersion: 2,
 		ID:          "async-fail",
-		Graph: workflow.Graph{
-			Entry: "a",
-			Nodes: map[string]workflow.Node{
-				"a": {Use: "on_receive"},
-				"b": {Use: "boom", Async: true},
-				"c": {Use: "noop"},
-			},
-			Edges: []workflow.Edge{
-				{From: "a", To: "b"},
-				{From: "b", To: "c"},
-			},
+		Nodes: map[string]workflow.Node{
+			"a": {Use: "on_receive"},
+			"b": {Use: "boom", Async: true, DependsOn: []string{"a"}},
+			"c": {Use: "noop", DependsOn: []string{"b"}},
 		},
+		End: "c",
 	}
 	if err := workflow.Validate(wf); err != nil {
 		t.Fatal(err)
 	}
-	run, err := CompilePhase3Workflow(ctx, wf, reg)
+	rtx := &engine.RuntimeContext{TurnInputs: engine.TurnInputs{UserPrompt: "hi"}}
+	run, err := CompileEinoWorkflow(ctx, wf, reg, rtx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	rtx := &engine.RuntimeContext{TurnInputs: engine.TurnInputs{UserPrompt: "hi"}}
-	if _, err := run.Invoke(ctx, rtx); err != nil {
+	if _, err := run.Invoke(ctx, TurnWorkflowInput{UserPrompt: "hi", Runtime: rtx}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -153,62 +141,58 @@ func TestCompilePhase3Workflow_asyncRecordsFailure(t *testing.T) {
 	t.Fatal("async handler never finished")
 }
 
-func TestCompilePhase3Workflow_asyncEffectiveUserPromptUsesForkSnapshot(t *testing.T) {
+func TestCompileEinoWorkflow_asyncEffectiveUserPromptUsesForkSnapshot(t *testing.T) {
 	for _, u := range []string{"mutate_prompt", "effective_prompt_check"} {
-		workflow.Phase3Uses[u] = struct{}{}
+		workflow.AllowedUses[u] = struct{}{}
 	}
 	t.Cleanup(func() {
-		delete(workflow.Phase3Uses, "mutate_prompt")
-		delete(workflow.Phase3Uses, "effective_prompt_check")
+		delete(workflow.AllowedUses, "mutate_prompt")
+		delete(workflow.AllowedUses, "effective_prompt_check")
 	})
 
 	var effectiveSeen string
 	done := make(chan struct{})
 	ctx := context.Background()
 	reg := NewRegistry()
-	if err := RegisterPhase3Builtins(reg); err != nil {
+	if err := RegisterBuiltins(reg); err != nil {
 		t.Fatal(err)
 	}
-	if err := reg.Register("mutate_prompt", func(rtx *engine.RuntimeContext) error {
+	if err := reg.Register("mutate_prompt", func(_ context.Context, _ NodeInput, env NodeEnv) (workflow.WorkflowNodeResult, error) {
+		rtx := env.Runtime
 		rtx.UserPrompt = "mutated-after-async-scheduled"
-		return nil
+		return workflow.WorkflowNodeResult{}, nil
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := reg.Register("effective_prompt_check", func(rtx *engine.RuntimeContext) error {
+	if err := reg.Register("effective_prompt_check", func(_ context.Context, _ NodeInput, env NodeEnv) (workflow.WorkflowNodeResult, error) {
+		rtx := env.Runtime
 		effectiveSeen = rtx.EffectiveUserPrompt()
 		close(done)
-		return nil
+		return workflow.WorkflowNodeResult{}, nil
 	}); err != nil {
 		t.Fatal(err)
 	}
 
 	wf := &workflow.Workflow{
-		SpecVersion: 1,
+		SpecVersion: 2,
 		ID:          "async-snapshot-prompt",
-		Graph: workflow.Graph{
-			Entry: "a",
-			Nodes: map[string]workflow.Node{
-				"a": {Use: "on_receive"},
-				"b": {Use: "effective_prompt_check", Async: true},
-				"c": {Use: "mutate_prompt"},
-			},
-			Edges: []workflow.Edge{
-				{From: "a", To: "b"},
-				{From: "b", To: "c"},
-			},
+		Nodes: map[string]workflow.Node{
+			"a": {Use: "on_receive"},
+			"b": {Use: "effective_prompt_check", Async: true, DependsOn: []string{"a"}},
+			"c": {Use: "mutate_prompt", DependsOn: []string{"b"}},
 		},
+		End: "c",
 	}
 	if err := workflow.Validate(wf); err != nil {
 		t.Fatal(err)
 	}
-	run, err := CompilePhase3Workflow(ctx, wf, reg)
+	rtx := &engine.RuntimeContext{TurnInputs: engine.TurnInputs{UserPrompt: "original"}}
+	run, err := CompileEinoWorkflow(ctx, wf, reg, rtx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	rtx := &engine.RuntimeContext{TurnInputs: engine.TurnInputs{UserPrompt: "original"}}
 
-	if _, err := run.Invoke(ctx, rtx); err != nil {
+	if _, err := run.Invoke(ctx, TurnWorkflowInput{UserPrompt: "original", Runtime: rtx}); err != nil {
 		t.Fatal(err)
 	}
 

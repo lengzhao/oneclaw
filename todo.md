@@ -10,7 +10,7 @@
 
 - [x] **梳理 `init` 默认产物**：**`//go:embed templates`** 嵌入 **`setup/templates/`** 整树，`Bootstrap` 遍历拷到 UserDataRoot（缺才写）；**`config.yaml`** 仍单独合并；**`agents/default.md`** 仍 Go 模板渲染 **`UserDataRoot`**；**`sessions/`**、**`prompts/`**、**`knowledge/sources/`** 空目录保留；**`examples/skills/`** 与模板对齐供浏览；**`tools.exec` 默认保持开启（配置里 deny 基础危险分隔符）**（见 `setup/bootstrap.go`、`setup/embed.go`）。
 - [ ] **补充 5 分钟上手文档**：新增面向普通用户的入口文档，覆盖 `init`、配置模型、`run`、常见失败。
-- [ ] **统一最短路径验收**：增加或整理烟测命令，覆盖 mock 模型与真实 OpenAI compatible 配置两种路径。
+- [ ] **统一最短路径验收**：增加或整理烟测命令，覆盖 mock 模型与真实 OpenAI compatible 配置两种路径；默认 workflow 已收缩为生命周期节点，上下文由 `context_profile` 控制。
 
 ---
 
@@ -22,7 +22,7 @@
 - [ ] **`oneclaw agent list`**：展示内置与用户 Agent、工具白名单、模型覆盖、workspace / memory 策略。
 - [ ] **`oneclaw agent new <name>`**：生成最小 `agents/<name>.md`，降低新 Agent 创建成本。
 - [ ] **`oneclaw agent run <name> <prompt>`**：提供不改 workflow 的直接 Agent 运行入口。
-- [ ] **`oneclaw workflow explain <name>`**：把 `workflows/*.yaml` 翻译成阶段化说明，例如 PreparePrompt → RunMainADK → Respond → PostTurnAsync。
+- [ ] **`oneclaw workflow explain <name>`**：把 `workflows/*.yaml` 翻译成阶段化说明，例如 Receive → RunMainADK → Respond → PostTurnAsync。
 - [ ] **错误提示分层**：配置缺失、模型 endpoint、workflow 校验、工具不存在、workspace 不可写、异步节点失败等错误都包含「发生了什么 / 为什么失败 / 怎么修 / 相关路径」。
 
 ---

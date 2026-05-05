@@ -6,24 +6,29 @@ import (
 )
 
 // TopoSort returns nodes in Kahn order (stable tie-break by node id ascending).
-func TopoSort(g *Graph) ([]string, error) {
+func TopoSort(w *Workflow) ([]string, error) {
 	indeg := map[string]int{}
 	succ := map[string][]string{}
-	for id := range g.Nodes {
+	for id := range w.Nodes {
 		indeg[id] = 0
 	}
-	for _, e := range g.Edges {
-		indeg[e.To]++
-		succ[e.From] = append(succ[e.From], e.To)
+	for id, n := range w.Nodes {
+		for _, dep := range nodeDeps(n) {
+			indeg[id]++
+			succ[dep] = append(succ[dep], id)
+		}
 	}
 	for _, outs := range succ {
 		sort.Strings(outs)
 	}
 
-	q := []string{g.Entry}
-	if indeg[g.Entry] != 0 {
-		return nil, fmt.Errorf("workflow: cycle or bad entry indegree")
+	var q []string
+	for id, d := range indeg {
+		if d == 0 {
+			q = append(q, id)
+		}
 	}
+	sort.Strings(q)
 	var out []string
 	for len(q) > 0 {
 		id := q[0]
@@ -37,7 +42,7 @@ func TopoSort(g *Graph) ([]string, error) {
 			}
 		}
 	}
-	if len(out) != len(g.Nodes) {
+	if len(out) != len(w.Nodes) {
 		return nil, fmt.Errorf("workflow: graph has a cycle or disconnected subgraph")
 	}
 	return out, nil

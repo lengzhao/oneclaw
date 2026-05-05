@@ -17,7 +17,7 @@ import (
 
 // slog JSON 记录解析：区分 adk_main 三条语义边界（与 wfexec.handleADKMain / debugLogADKMainModelInput 一致）：
 // 1) system_prompt — RenderMainAgentPrompt：含 SkillsIndex、MEMORY.md 注入、技能正文等，不含本轮「对话消息」列表。
-// 2) chat_messages — 送给 ChatModelAgent 的 []Message：顺序为 [load_transcript 回放] + [可选 MemoryRecall 伪 user 条] + [当前用户句]。
+// 2) chat_messages — 送给 ChatModelAgent 的 []Message：顺序为 [transcript replay] + [可选 MemoryRecall 伪 user 条] + [当前用户句]。
 // 3) stub 模型不产生 tool 轨迹；chat_messages 里不应出现 role 为 tool 的段（若出现则说明误把工具链送进本集成路径）。
 
 func captureVerboseJSONLogs(t *testing.T) (buf *bytes.Buffer, restore func()) {

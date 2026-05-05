@@ -7,34 +7,31 @@ import (
 
 const reservedComposeNodePrefix = "_oneclaw_"
 
-// ComposeIndegree counts predecessors for Eino compose: YAML incoming edges plus START when node is graph.entry.
-func ComposeIndegree(g *Graph, nodeID string) int {
-	if g == nil {
+// ComposeIndegree counts direct dependencies for a node.
+func ComposeIndegree(w *Workflow, nodeID string) int {
+	if w == nil {
 		return 0
 	}
-	n := 0
-	if nodeID == g.Entry {
-		n++
+	n, ok := w.Nodes[nodeID]
+	if !ok {
+		return 0
 	}
-	for _, e := range g.Edges {
-		if e.To == nodeID {
-			n++
-		}
-	}
-	return n
+	return len(nodeDeps(n))
 }
 
-// SinkNodes returns node ids with no outgoing YAML edges, sorted ascending.
-func SinkNodes(g *Graph) []string {
-	if g == nil {
+// SinkNodes returns node ids that no other node depends on.
+func SinkNodes(w *Workflow) []string {
+	if w == nil {
 		return nil
 	}
 	outgoing := map[string]bool{}
-	for _, e := range g.Edges {
-		outgoing[e.From] = true
+	for _, n := range w.Nodes {
+		for _, dep := range nodeDeps(n) {
+			outgoing[dep] = true
+		}
 	}
 	var sinks []string
-	for id := range g.Nodes {
+	for id := range w.Nodes {
 		if !outgoing[id] {
 			sinks = append(sinks, id)
 		}
@@ -43,14 +40,16 @@ func SinkNodes(g *Graph) []string {
 	return sinks
 }
 
-// OutgoingMap groups YAML edges by source node id.
-func OutgoingMap(g *Graph) map[string][]string {
+// OutgoingMap groups dependency edges by source node id.
+func OutgoingMap(w *Workflow) map[string][]string {
 	m := map[string][]string{}
-	if g == nil {
+	if w == nil {
 		return m
 	}
-	for _, e := range g.Edges {
-		m[e.From] = append(m[e.From], e.To)
+	for id, n := range w.Nodes {
+		for _, dep := range nodeDeps(n) {
+			m[dep] = append(m[dep], id)
+		}
 	}
 	for k := range m {
 		sort.Strings(m[k])
@@ -58,17 +57,16 @@ func OutgoingMap(g *Graph) map[string][]string {
 	return m
 }
 
-// ValidateComposeFanOut rejects fan-out patterns Eino cannot express without per-edge keys:
-// one source must not link to both a single-predecessor target and a multi-predecessor target.
-func ValidateComposeFanOut(g *Graph) error {
-	if g == nil {
+// ValidateComposeFanOut keeps prior guardrails to avoid mixed fan-out complexity.
+func ValidateComposeFanOut(w *Workflow) error {
+	if w == nil {
 		return nil
 	}
-	out := OutgoingMap(g)
+	out := OutgoingMap(w)
 	for from, tos := range out {
 		var low, high bool
 		for _, to := range tos {
-			c := ComposeIndegree(g, to)
+			c := ComposeIndegree(w, to)
 			if c >= 2 {
 				high = true
 			}

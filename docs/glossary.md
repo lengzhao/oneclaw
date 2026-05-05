@@ -18,7 +18,7 @@
 | **PushRuntime** | 配置合并后写入进程内快照（如 `rtopts`），避免配置包与循环/预算包循环依赖。 |
 | **ToolContext / TurnInbound** | 每回合注入工具可见的会话与入站元数据（正文通常单独走 messages，不合并进 TurnInbound 全文）。 |
 | **Catalog（agents）** | 从 `agents/*.md` 加载的多 Agent 定义表：`agent_type` → frontmatter + system 正文。 |
-| **Workflow（回合级）** | 用户声明的 **DAG**（`workflows/*.yaml`），编译为 Eino **Compose Graph**；线性 `steps` 仅为语法糖。**默认**：存在 **`workflows/<agent_type>.yaml`** 则该 Agent 使用之，否则用 manifest **`default_turn`**；frontmatter **`workflow:`** 可显式覆盖。见 [workflows-spec.md](workflows-spec.md) §3。 |
+| **Workflow（回合级）** | 用户声明的 **DAG**（`workflows/*.yaml`），编译为 Eino **compose.Workflow**；线性 `steps` 仅为语法糖。**默认**：存在 **`workflows/<agent_type>.yaml`** 则该 Agent 使用之，否则用 manifest **`default_turn`**；frontmatter **`workflow:`** 可显式覆盖。见 [workflows-spec.md](workflows-spec.md) §3。 |
 | **Registry（tools）** | 工具名 → 实现 + schema；可对子 Agent **过滤**得到子集。 |
 | **Harness（执行束具）** | 模型外的运行时层：上下文拼装、工具编排、状态与预算、校验与审计等；扩展与治理见 [harness-governance-extensions.md](harness-governance-extensions.md)。 |
 | **合成入站** | 定时器等非人类来源构造与人工消息同形的 Inbound，走同一 Submit 路径。 |
@@ -26,4 +26,4 @@
 | **write_behavior_policy** | Harness 策略：工具与演进写入允许的 **路径前缀、文件类型、大小、是否必须 staging、晋升条件**；与 FR-SKL-03、FR-MEM-03 及 [harness-governance-extensions.md](harness-governance-extensions.md) 的 policy 挂钩同一抽象。 |
 | **Agent 执行记录** | 单次 ADK 运行的磁盘可追溯条目（如 JSONL）：`agent_type`、`session_id`、`run_id`、时间与 transcript 锚点等；主对话、记忆抽取、Skills 生成 **各自落盘**。 |
 | **`workspace: shared` / `private`** | 工具默认 cwd：**shared** = 与当前主 Agent 回合同一工作目录；**private** = 独占目录，避免与主会话文件工具互扰。见 FR-AGT-06、[eino-md-chain-architecture.md](eino-md-chain-architecture.md) §5.2。 |
-| **`memory_agent` / `skill_agent`（约定）** | Workflow **节点 id** 命名习惯：在 **`on_respond` 之后**挂 **`use: agent`** 且 **`async: true`**，默认 **`agent_type`** 为 **`memory_extractor`**、**`skill_generator`**（内置 Catalog，可被 **`agents/`** 覆盖）。见 [workflows-spec.md](workflows-spec.md) §4.3、§8。 |
+| **`memory_agent` / `skill_agent`（约定）** | Workflow **节点 id** 命名习惯：在 **`on_respond` 之后**挂 **`use: agent_task`** 且 **`async: true`**，默认 **`agent_type`** 为 **`memory_extractor`**、**`skill_generator`**（内置 Catalog，可被 **`agents/`** 覆盖）。见 [workflows-spec.md](workflows-spec.md)。 |

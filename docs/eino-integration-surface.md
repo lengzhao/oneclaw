@@ -151,7 +151,7 @@ Claw **主对话内核**仍以 **ADK `ChatModelAgent`** 为主；Compose 更多�
 | Claw 能力 | 主要 Eino 落点 |
 |-----------|----------------|
 | 主会话模型 + 工具循环 | `adk.NewChatModelAgent` + `ToolCallingChatModel` + `ToolsConfig` |
-| PreTurn / PostTurn 确定性步骤 | `compose.Graph` / Chain + `AddLambdaNode` + 可选 `AddChatModelNode` |
+| PreTurn / PostTurn 确定性步骤 | `compose.Workflow` + `AddLambdaNode` + 可选 `AddChatModelNode` |
 | 动态消息与多轮插入 | `ChatModelAgentMiddleware.BeforeModelRewriteState`（等） |
 | 流式回复 / 取消 | `Runnable.Stream`、`ChatModel.Stream`、ADK 事件流（按官方 API） |
 | 观测与审计 | `callbacks` + `compose.WithCallbacks`；工具回调 Helper（可选） |

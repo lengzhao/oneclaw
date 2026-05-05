@@ -64,12 +64,12 @@ flowchart TB
 
 **Workflow 实现侧**的复杂度评审、优化优先级与路线图见 **[workflow-architecture-review.md](workflow-architecture-review.md)**（与本文互补：规格仍以 [workflows-spec.md](workflows-spec.md) 为准）。
 
-读默认 **`default.turn`** 时可用 **四阶段** 对齐节点区间：**PreparePrompt**（`on_receive` … `load_transcript`）→ **RunMainADK**（`adk_main`）→ **Respond**（`on_respond`）→ **PostTurnAsync**（`memory_agent` / `skill_agent` 等 `async: true` 的 `agent`）。细节与可选 **`stream`** 见该文档 **§4.1**。
+读默认 **`default.turn`** 时可用 **四阶段** 对齐：**Receive**（`on_receive`）→ **RunMainADK**（`llm`，按 Agent 的 **`context_profile`** 自动准备默认 full context）→ **Respond**（`on_respond`）→ **PostTurnAsync**（`memory_agent` / `skill_agent` 等 `async: true` 的 `agent_task`）。细节与可选 **`stream`** 见该文档 **§4.1**。
 
 仍需显式策略的两点（**与是否叫 PostTurn 无关**）：
 
 1. **异步**：用户应先收到 **OnRespond / Bus**，演进类节点 **后台执行** —— 在 YAML / manifest 用 **`async`、分叉边、队列** 等表达，由宿主解释（见 [eino-md-chain-architecture.md](eino-md-chain-architecture.md) §7）。
-2. **编排**：主会话在 **`workflows/*.yaml`** 里用 **`memory_agent` / `skill_agent`** 等 **`use: agent` + `async: true`** 枝叶声明记忆抽取与 Skills（见 [workflows-spec.md](workflows-spec.md) §4.3、§8）；默认内置 Catalog 条目可被用户覆盖。**当前 oneclaw** **未**实现演进专用的加载期闭环校验，也 **未**在 **`TurnContext`** 上维护嵌套演进剖面。
+2. **编排**：主会话在 **`workflows/*.yaml`** 里用 **`memory_agent` / `skill_agent`** 等 **`use: agent_task` + `async: true`** 枝叶声明记忆抽取与 Skills（见 [workflows-spec.md](workflows-spec.md)）；默认内置 Catalog 条目可被用户覆盖。**当前 oneclaw** **未**实现演进专用的加载期闭环校验，也 **未**在 **`TurnContext`** 上维护嵌套演进剖面。
 
 ---
 
@@ -93,7 +93,7 @@ sequenceDiagram
   TH->>E:  dequeue / 策略 serial|insert
   E->>R: Invoke TurnContext
   R->>P: OnReceive 已写入上下文
-  P->>P: 拼 Instruction / MEMORY / skills 摘要<br/>budget 裁剪
+  P->>P: 按 context_profile 拼 Instruction / MEMORY / skills / recall / transcript<br/>budget 裁剪
   P->>A: messages + tools + middleware
   loop ReAct 多步
     A->>A: BeforeModelRewriteState 等
@@ -157,13 +157,13 @@ flowchart TD
 
 ## 6. 链后继演进生命周期（记忆 / Skills）
 
-以下逻辑 **完全可用 `workflows/*.yaml` 的 DAG 中若干 `agent` 节点表达**；图仍沿用「主回合之后」的语义。展示 **角色拆分**（**`async`**）；默认模板为线性串联两 async 节点，并行扇出需自行构图（见 [workflows-spec.md](workflows-spec.md)）。
+以下逻辑 **完全可用 `workflows/*.yaml` 的 DAG 中若干 `agent_task` 节点表达**；图仍沿用「主回合之后」的语义。展示 **角色拆分**（**`async`**）；默认模板为线性串联两 async 节点，并行扇出需自行构图（见 [workflows-spec.md](workflows-spec.md)）。
 
 ```mermaid
 flowchart TD
   MAIN([主对话 on_respond 完成]) --> Q[workflow 出边<br/>workflows/*.yaml]
-  Q --> M["memory_agent<br/>use: agent async: true<br/>agent_type: memory_extractor"]
-  Q --> S["skill_agent<br/>use: agent async: true<br/>agent_type: skill_generator"]
+  Q --> M["memory_agent<br/>use: agent_task async: true<br/>agent_type: memory_extractor"]
+  Q --> S["skill_agent<br/>use: agent_task async: true<br/>agent_type: skill_generator"]
   M --> DISK1[("memory/yyyy-mm/*.md<br/>+ MEMORY.md ≤2KiB")]
   S --> DISK2[("UserDataRoot/skills/*")]
   M --> LOG1[runs 落盘]

@@ -136,7 +136,7 @@ flowchart LR
 | **Skills 落盘** | **`UserDataRoot/skills/*`**（全局 skills 树，与 [`paths.CatalogRoot`](../paths/paths.go) = `UserDataRoot` 一致）。 |
 | **`write_behavior_policy`** | **阶段 6 不实现**；路径与安全边界由工具与工作目录规则先行约束。 |
 | **异步与一致性** | PostTurn 演进 **默认异步**；**不**阻塞用户回复；**不**实现「reply 前 flush」或跨回合强一致。 |
-| **编排与 Workflow** | 主 turn 的 YAML **仅通过 `use: agent`** 指向演进类型；**不在 Catalog 增加**专用于演进的 **`workflow` 字段**。演进 Agent 若需 **独立 DAG**，使用 **`workflows/<agent_type>.yaml`**（与 Catalog **`agent_type` 同名**，沿用既有解析规则）。 |
+| **编排与 Workflow** | 主 turn 的 YAML **仅通过 `use: agent_task`** 指向演进类型；**不在 Catalog 增加**专用于演进的 **`workflow` 字段**。演进 Agent 若需 **独立 DAG**，使用 **`workflows/<agent_type>.yaml`**（与 Catalog **`agent_type` 同名**，沿用既有解析规则）。 |
 | **staging** | **不使用**任何 **`.staging`** 路径；演进写入直达上表约定位置。 |
 
 ---
@@ -145,7 +145,7 @@ flowchart LR
 
 定义窄接口，由 manifest 驱动注册：
 
-- **内置节点**：`load_prompt_md`、`filter_tools`、`if`（条件分支 + 出边 `branch`）、`noop`、`agent`（`params.agent_type` 指向 Catalog）、`memory_extract_llm`、`skill_suggest_llm` 等；**回合后记忆/Skills** 典型用 **`use: agent`** + **`async: true`**（节点 id 约定见 [workflows-spec.md](workflows-spec.md) §4.3）。
+- **内置节点**：`on_receive`、`llm`、`on_respond`、`agent_task`、`retrieve_context`、`command`、`tool_call`、`noop`；**回合后记忆/Skills** 典型用 **`use: agent_task`** + **`async: true`**（节点 id 约定见 [workflows-spec.md](workflows-spec.md)）。
 - **用户扩展**：manifest 里写节点名 + 参数；启动时 `RegisterPlugin(name, factory)`。
 - **重逻辑**：节点类型 `command` + manifest 中的 `argv`，由宿主统一 `exec`（需与主进程安全策略一致：路径、超时、资源上限）。
 
@@ -208,14 +208,14 @@ flowchart LR
 
 **与 oneclaw 实现对齐（FR-FLOW-05 [requirements.md](requirements.md)）**：
 
-- **配置真源在 workflow**：主会话通过 **`workflows/*.yaml`** 在 **`on_respond` 之后**声明 **`async: true`** 的 **`use: agent`** 枝（常见节点名 **`memory_agent`**、**`skill_agent`**），`params.agent_type` 默认为 **`memory_extractor` / `skill_generator`**（**嵌入内置 Catalog**，用户 **`agents/`** 同名 md **覆盖**）。
+- **配置真源在 workflow**：主会话通过 **`workflows/*.yaml`** 在 **`on_respond` 之后**声明 **`async: true`** 的 **`use: agent_task`** 枝（常见节点名 **`memory_agent`**、**`skill_agent`**），`agent_type` 默认为 **`memory_extractor` / `skill_generator`**（**嵌入内置 Catalog**，用户 **`agents/`** 同名 md **覆盖**）。
 - **当前实现** **未**做「演进专用 workflow 不得再挂同类 async 枝」的加载期校验；**未**在 **`TurnContext`** 上维护演进嵌套剖面或深度阈值。**`handleAgent`** 与普通子 Agent 路径一致。
 
 ---
 
 ## 6. 实现侧收口（建议）
 
-- **Runtime Facade**：将 ADK、Compose Graph（workflow 外壳）、Middleware、catalog 加载与 `TurnContext` 装配收口到少量模块，避免 prompt 拼装与执行内核散落在多处。
+- **Runtime Facade**：将 ADK、compose.Workflow（workflow 外壳）、Middleware、catalog 加载与 `TurnContext` 装配收口到少量模块，避免 prompt 拼装与执行内核散落在多处。
 - **与本文的映射**：`prepareSharedTurn` / `buildTurnSystem` 一类逻辑宜逐步变为 **PreTurn 节点子图** 的输出；子 Agent **复用同一套节点类型**，换 **`agents/<type>.md` + 可选 workflow**，且 **默认隔离上下文**（见 §5.4）。
 - **命名**：`Engine`、`SubmitUser`、`toolctx`、`notify` 等以实现仓库为准；本文不绑定具体源码路径或包名。
 
@@ -253,4 +253,4 @@ flowchart LR
 | 日期 | 说明 |
 |------|------|
 | 2026-05-02 | 增补 §8 Harness 治理交叉引用、§7 设计注意第 6–7 条、参考链接顺延；§3.4 `memory` 包草图；§2 树锚定 `UserDataRoot`；§5 `inherit_parent_memory`、`workspace` 等；§5.4 Workspace；§5.5 Eino 侧；§5.6 多 Agent 管线、执行记录、演进防递归；§6 实现收口；§7 Catalog 顺序；交叉引用 [reference-architecture.md](reference-architecture.md)；§3.1/§4 PostTurn 与内置节点；套件位置与 §3.1 指向 [workflows-spec.md](workflows-spec.md)；Claw 侧 **workflow / DAG** 命名取代纯 chain |
-| 2026-05-03 | §4 / §5.2 / §5.6 / §7：**演进仅靠 workflow（`async` + `use: agent`）**；删除 **`suppress_post_turn_evolution`**。**§3.4.1 / §5.3**：阶段 6 已定路径；**§3.4** 交叉引用 [memory-and-session.md](memory-and-session.md)。与实现对齐：内置 Catalog + 默认 turn；无演进专用加载期校验、无 `TurnContext` 演进剖面 |
+| 2026-05-03 | §4 / §5.2 / §5.6 / §7：**演进仅靠 workflow（`async` + `use: agent_task`）**；删除 **`suppress_post_turn_evolution`**。**§3.4.1 / §5.3**：阶段 6 已定路径；**§3.4** 交叉引用 [memory-and-session.md](memory-and-session.md)。与实现对齐：内置 Catalog + 默认 turn；无演进专用加载期校验、无 `TurnContext` 演进剖面 |

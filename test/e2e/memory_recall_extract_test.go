@@ -13,7 +13,7 @@ import (
 	"github.com/lengzhao/oneclaw/tools/builtin"
 )
 
-// 记忆「召回」路径：workflow load_memory_snapshot → MemoryRecallSection（树状摘要），正文读取走 read_memory_month（见 tools_contract 回合测试）。
+// 记忆「召回」路径：adk_main context prep → MemoryRecallSection（树状摘要），正文读取走 read_memory_month（见 tools_contract 回合测试）。
 
 func TestE2E_memory_recallSection_listsWrittenMonthFile(t *testing.T) {
 	tmp := t.TempDir()

@@ -19,28 +19,25 @@ import (
 	"github.com/lengzhao/oneclaw/workflow"
 )
 
-// RegisterPhase3Builtins registers handlers for each entry in workflow.Phase3BuiltinUses.
-func RegisterPhase3Builtins(r *Registry) error {
+// RegisterBuiltins registers handlers for each entry in workflow.BuiltinUses.
+func RegisterBuiltins(r *Registry) error {
 	if r == nil {
 		return fmt.Errorf("wfexec: nil registry")
 	}
 	byUse := map[string]Handler{
 		"on_receive":           handleOnReceive,
-		"load_prompt_md":       handleLoadPromptMD,
-		"load_memory_snapshot": handleLoadMemorySnapshot,
-		"list_skills":          handleListSkills,
-		"list_tasks":           handleListTasks,
-		"load_transcript":      handleLoadTranscript,
-		"filter_tools":         handleFilterTools,
-		"adk_main":             handleADKMain,
+		"llm":                  handleLLM,
 		"on_respond":           handleOnRespond,
-		"agent":                handleAgent,
+		"agent_task":           handleAgentTask,
+		"retrieve_context":     handlePassthroughTextNode,
+		"command":              handlePassthroughTextNode,
+		"tool_call":            handlePassthroughTextNode,
 		"noop":                 handleNoop,
 	}
-	for _, use := range workflow.Phase3BuiltinUses {
+	for _, use := range workflow.BuiltinUses {
 		h, ok := byUse[use]
 		if !ok {
-			return fmt.Errorf("wfexec: missing builtin handler for %q (sync with workflow.Phase3BuiltinUses)", use)
+			return fmt.Errorf("wfexec: missing builtin handler for %q (sync with workflow.BuiltinUses)", use)
 		}
 		if err := r.Register(use, h); err != nil {
 			return err
@@ -49,23 +46,26 @@ func RegisterPhase3Builtins(r *Registry) error {
 	return nil
 }
 
-func handleOnReceive(rtx *engine.RuntimeContext) error {
-	if strings.TrimSpace(rtx.EffectiveUserPrompt()) == "" {
-		return fmt.Errorf("wfexec: on_receive: empty user prompt")
+func handleOnReceive(_ context.Context, in NodeInput, env NodeEnv) (workflow.WorkflowNodeResult, error) {
+	rtx := env.Runtime
+	if strings.TrimSpace(in.Text) != "" {
+		rtx.UserPrompt = strings.TrimSpace(in.Text)
 	}
-	return nil
+	if strings.TrimSpace(rtx.EffectiveUserPrompt()) == "" {
+		return workflow.WorkflowNodeResult{}, fmt.Errorf("wfexec: on_receive: empty user prompt")
+	}
+	return workflow.WorkflowNodeResult{Text: strings.TrimSpace(rtx.EffectiveUserPrompt())}, nil
 }
 
-func handleLoadPromptMD(*engine.RuntimeContext) error {
-	// Prompt fragments are assembled at adk_main via RenderMainAgentPrompt + workflow-filled PromptTemplateData.
-	return nil
+func handlePassthroughTextNode(_ context.Context, in NodeInput, _ NodeEnv) (workflow.WorkflowNodeResult, error) {
+	return workflow.WorkflowNodeResult{Text: strings.TrimSpace(in.Text)}, nil
 }
 
 func handleLoadMemorySnapshot(rtx *engine.RuntimeContext) error {
 	if rtx == nil {
 		return nil
 	}
-	if rtx.Agent != nil && rtx.Agent.AgentType == "memory_extractor" {
+	if contextDisabled(rtx, "memory_recall") {
 		return nil
 	}
 	budget := preturn.CoalesceBudget(preturn.DefaultBudget())
@@ -76,6 +76,9 @@ func handleLoadMemorySnapshot(rtx *engine.RuntimeContext) error {
 
 func handleListSkills(rtx *engine.RuntimeContext) error {
 	if rtx == nil {
+		return nil
+	}
+	if contextDisabled(rtx, "skills") {
 		return nil
 	}
 	skillsRoot := filepath.Join(paths.CatalogRoot(strings.TrimSpace(rtx.UserDataRoot)), "skills")
@@ -98,6 +101,9 @@ func handleListTasks(rtx *engine.RuntimeContext) error {
 	if rtx == nil {
 		return nil
 	}
+	if contextDisabled(rtx, "tasks") {
+		return nil
+	}
 	p := filepath.Join(rtx.EffectiveInstructionRoot(), "todo.json")
 	b, err := os.ReadFile(p)
 	if err != nil {
@@ -115,6 +121,9 @@ func handleLoadTranscript(rtx *engine.RuntimeContext) error {
 	if rtx == nil {
 		return nil
 	}
+	if contextDisabled(rtx, "transcript") {
+		return nil
+	}
 	turns, err := session.LoadTranscriptTurns(rtx.EffectiveSessionRoot())
 	if err != nil {
 		return fmt.Errorf("wfexec: load_transcript: %w", err)
@@ -124,13 +133,38 @@ func handleLoadTranscript(rtx *engine.RuntimeContext) error {
 	return nil
 }
 
-func handleFilterTools(*engine.RuntimeContext) error { return nil }
+func handleNoop(context.Context, NodeInput, NodeEnv) (workflow.WorkflowNodeResult, error) {
+	return workflow.WorkflowNodeResult{}, nil
+}
 
-func handleNoop(*engine.RuntimeContext) error { return nil }
+func handleLLM(_ context.Context, in NodeInput, env NodeEnv) (workflow.WorkflowNodeResult, error) {
+	rtx := env.Runtime
+	if strings.TrimSpace(in.Text) != "" {
+		rtx.UserPrompt = strings.TrimSpace(in.Text)
+	}
+	at := strings.TrimSpace(env.Node.AgentType)
+	if at == "" {
+		at = workflow.AgentTypeParam(env.Node.Params)
+	}
+	if at != "" && (rtx.Agent == nil || at != strings.TrimSpace(rtx.Agent.AgentType)) {
+		reply, err := executeAgentTask(rtx, at, strings.TrimSpace(in.Text))
+		if err != nil {
+			return workflow.WorkflowNodeResult{}, err
+		}
+		return workflow.WorkflowNodeResult{Text: reply}, nil
+	}
+	if err := runMainLLM(rtx); err != nil {
+		return workflow.WorkflowNodeResult{}, err
+	}
+	return workflow.WorkflowNodeResult{Text: strings.TrimSpace(rtx.Assistant)}, nil
+}
 
-func handleADKMain(rtx *engine.RuntimeContext) error {
+func runMainLLM(rtx *engine.RuntimeContext) error {
 	if rtx.ChatAgent == nil {
 		return fmt.Errorf("wfexec: adk_main: ChatAgent not configured")
+	}
+	if err := prepareAgentContext(rtx); err != nil {
+		return err
 	}
 	instr, err := RenderMainAgentPrompt(rtx)
 	if err != nil {
@@ -143,10 +177,13 @@ func handleADKMain(rtx *engine.RuntimeContext) error {
 	if cur == "" {
 		return fmt.Errorf("wfexec: adk_main: empty user prompt")
 	}
-	if err := session.AppendTranscriptTurn(rtx.EffectiveSessionRoot(), session.TranscriptTurn{
-		Ts: time.Now().UTC(), Role: "user", Content: cur,
-	}); err != nil {
-		return fmt.Errorf("wfexec: adk_main: append user transcript: %w", err)
+	if !rtx.UserTurnAppended {
+		if err := session.AppendTranscriptTurn(rtx.EffectiveSessionRoot(), session.TranscriptTurn{
+			Ts: time.Now().UTC(), Role: "user", Content: cur,
+		}); err != nil {
+			return fmt.Errorf("wfexec: adk_main: append user transcript: %w", err)
+		}
+		rtx.UserTurnAppended = true
 	}
 	// Model input: [optional transcript history] + [optional memory-recall user message] + [current user message].
 	// System instruction is ChatAgent.Instruction only (RenderMainAgentPrompt, no MemoryRecall in template).
@@ -198,11 +235,42 @@ func handleADKMain(rtx *engine.RuntimeContext) error {
 		rtx.SetAssistant(strings.TrimSpace(strings.Join(chunks, "\n")))
 	}
 	rtx.EmitNodeOutput(map[string]any{
-		"use":            "adk_main",
+		"use":            "llm",
 		"assistant_text": rtx.Assistant,
 		"user_prompt":    rtx.UserPrompt,
 	})
 	return nil
+}
+
+func prepareAgentContext(rtx *engine.RuntimeContext) error {
+	if rtx == nil {
+		return nil
+	}
+	if _, ok := rtx.PromptTemplateRaw("MemoryRecall"); !ok && !contextDisabled(rtx, "memory_recall") {
+		if err := handleLoadMemorySnapshot(rtx); err != nil {
+			return err
+		}
+	}
+	if _, ok := rtx.PromptTemplateRaw("SkillsIndex"); !ok && !contextDisabled(rtx, "skills") {
+		if err := handleListSkills(rtx); err != nil {
+			return err
+		}
+	}
+	if _, ok := rtx.PromptTemplateRaw("Tasks"); !ok && !contextDisabled(rtx, "tasks") {
+		if err := handleListTasks(rtx); err != nil {
+			return err
+		}
+	}
+	if rtx.TranscriptReplayTurns == nil && !contextDisabled(rtx, "transcript") {
+		if err := handleLoadTranscript(rtx); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func contextDisabled(rtx *engine.RuntimeContext, block string) bool {
+	return rtx != nil && rtx.Agent != nil && rtx.Agent.ContextProfile.Disabled(block)
 }
 
 func adkMessagesForMain(rtx *engine.RuntimeContext) ([]adk.Message, error) {
@@ -226,6 +294,9 @@ func adkMessagesForMain(rtx *engine.RuntimeContext) ([]adk.Message, error) {
 
 func recallUserMessageFromPromptData(rtx *engine.RuntimeContext) adk.Message {
 	if rtx == nil {
+		return nil
+	}
+	if contextDisabled(rtx, "memory_recall") {
 		return nil
 	}
 	raw, ok := rtx.PromptTemplateRaw("MemoryRecall")
@@ -318,15 +389,19 @@ func transcriptTurnsToADKMessages(turns []session.TranscriptTurn) []adk.Message 
 	return msgs
 }
 
-func handleOnRespond(rtx *engine.RuntimeContext) error {
+func handleOnRespond(_ context.Context, in NodeInput, env NodeEnv) (workflow.WorkflowNodeResult, error) {
+	rtx := env.Runtime
+	if strings.TrimSpace(in.Text) != "" {
+		rtx.SetAssistant(strings.TrimSpace(in.Text))
+	}
 	rtx.SetSawOnRespond(true)
 	if strings.TrimSpace(rtx.Assistant) == "" {
-		return nil
+		return workflow.WorkflowNodeResult{}, nil
 	}
 	if err := session.AppendTranscriptTurn(rtx.EffectiveSessionRoot(), session.TranscriptTurn{
 		Ts: time.Now().UTC(), Role: "assistant", Content: rtx.Assistant,
 	}); err != nil {
-		return err
+		return workflow.WorkflowNodeResult{}, err
 	}
 	if rtx.PostAssistantRespond != nil {
 		c := rtx.GoCtx
@@ -334,7 +409,7 @@ func handleOnRespond(rtx *engine.RuntimeContext) error {
 			c = context.Background()
 		}
 		if err := rtx.PostAssistantRespond(c, rtx.Assistant); err != nil {
-			return err
+			return workflow.WorkflowNodeResult{}, err
 		}
 	}
 	rtx.EmitNodeOutput(map[string]any{
@@ -342,5 +417,5 @@ func handleOnRespond(rtx *engine.RuntimeContext) error {
 		"assistant_text":   rtx.Assistant,
 		"transcript_flush": true,
 	})
-	return nil
+	return workflow.WorkflowNodeResult{Text: strings.TrimSpace(rtx.Assistant)}, nil
 }

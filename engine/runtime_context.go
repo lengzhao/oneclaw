@@ -16,7 +16,7 @@ import (
 	"github.com/lengzhao/oneclaw/toolhost"
 )
 
-// AgentShellMeta holds ChatModelAgent fields needed to rebuild after mutating system instruction (e.g. load_memory_snapshot).
+// AgentShellMeta holds ChatModelAgent fields needed to rebuild after preparing the system instruction.
 type AgentShellMeta struct {
 	Name          string
 	Description   string
@@ -35,6 +35,7 @@ type WorkflowExec struct {
 	CurrentNodeID string
 	CurrentParams map[string]any
 	CurrentAsync  bool
+	UserTurnAppended bool
 }
 
 // TurnInputs is host-injected per-turn state (mostly stable during the workflow run).
@@ -91,7 +92,7 @@ type PromptScratch struct {
 	// PromptTemplateData holds workflow node outputs: SkillsIndex/Tasks merge into system prompt; MemoryRecall is attached as an optional user message in adk_main. Layout is embedded by default; optional agents/<agent_type>.prompt.tmpl overrides.
 	PromptTemplateData map[string]any
 
-	// TranscriptReplayTurns is set by workflow load_transcript from transcript.jsonl (trimmed). When nil, adk_main sends only EffectiveUserPrompt as one user message.
+	// TranscriptReplayTurns is set by adk_main context prep or explicit load_transcript from transcript.jsonl (trimmed). When nil, adk_main sends only EffectiveUserPrompt as one user message.
 	TranscriptReplayTurns []session.TranscriptTurn
 }
 

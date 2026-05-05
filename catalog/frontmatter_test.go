@@ -59,6 +59,32 @@ body
 	}
 }
 
+func TestParseAgentMarkdown_contextProfileDisable(t *testing.T) {
+	raw := []byte(`---
+name: Memory Extractor
+context_profile:
+  disable:
+    - memory_recall
+    - transcript
+    - tasks
+---
+body
+`)
+	a, err := ParseAgentMarkdown("memory_extractor", raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !a.ContextProfile.Disabled("memory_recall") {
+		t.Fatalf("expected memory_recall disabled: %+v", a.ContextProfile)
+	}
+	if !a.ContextProfile.Disabled("transcript") {
+		t.Fatalf("expected transcript disabled: %+v", a.ContextProfile)
+	}
+	if a.ContextProfile.Disabled("skills") {
+		t.Fatalf("skills should remain enabled by default: %+v", a.ContextProfile)
+	}
+}
+
 func TestParseAgentMarkdown_noFrontmatterUsesStem(t *testing.T) {
 	a, err := ParseAgentMarkdown("stemmy", []byte("plain"))
 	if err != nil {

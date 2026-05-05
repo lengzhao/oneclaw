@@ -70,12 +70,19 @@ func RenderMainAgentPrompt(rtx *engine.RuntimeContext) (string, error) {
 		return "", fmt.Errorf("wfexec: render prompt: empty instruction root")
 	}
 	ud := strings.TrimSpace(rtx.UserDataRoot)
+	profile := rtx.Agent.ContextProfile
 
 	agentMd := strings.TrimSpace(readOptionalText(filepath.Join(ir, "AGENT.md")))
+	if profile.Disabled("agent_md") {
+		agentMd = ""
+	}
 	memStr := ""
-	if raw, err := os.ReadFile(filepath.Join(ir, "MEMORY.md")); err == nil && len(raw) > 0 {
-		raw = memory.TruncateMEMORYMDForInjection(raw)
-		memStr = strings.TrimSpace(string(raw))
+	if !profile.Disabled("memory_md") {
+		raw, err := os.ReadFile(filepath.Join(ir, "MEMORY.md"))
+		if err == nil && len(raw) > 0 {
+			raw = memory.TruncateMEMORYMDForInjection(raw)
+			memStr = strings.TrimSpace(string(raw))
+		}
 	}
 
 	data := rtx.PromptTemplateDataCopy()
@@ -84,6 +91,9 @@ func RenderMainAgentPrompt(rtx *engine.RuntimeContext) (string, error) {
 	data["MEMORY_MD"] = memStr
 	data["AgentBody"] = strings.TrimSpace(rtx.Agent.Body)
 	refBlock := preturn.ReferencedSkillsIndexMarkdown(ud, rtx.Agent.ReferencedSkillIDs)
+	if profile.Disabled("skills") {
+		refBlock = ""
+	}
 	data["ReferencedSkillsIndex"] = refBlock
 	if strings.TrimSpace(refBlock) != "" {
 		data["SkillsIndexSectionTitle"] = "## Skills index (catalog allowlist)"
@@ -95,6 +105,12 @@ func RenderMainAgentPrompt(rtx *engine.RuntimeContext) (string, error) {
 			data[k] = ""
 		}
 		data[k] = stringifyTemplateVal(data[k])
+	}
+	if profile.Disabled("skills") {
+		data["SkillsIndex"] = ""
+	}
+	if profile.Disabled("tasks") {
+		data["Tasks"] = ""
 	}
 	// MemoryRecall is workflow-filled but sent as a separate user message in adk_main (not merged into system).
 	data["MemoryRecall"] = ""

@@ -1,7 +1,6 @@
 // Package wfexec resolves workflow paths, registers built-in "use" handlers, and runs workflows by
-// compiling YAML graphs to Eino compose.Graph with WithNodeTriggerMode(AllPredecessor) (DAG semantics).
-// Multi-sink graphs connect sinks through an internal _oneclaw_sink merge node so END has one edge.
-// Nodes with yaml async: true run their handler in a new goroutine; the DAG treats the step as
+// compiling YAML workflow v2 specs to Eino compose.Workflow.
+// Nodes with yaml async: true run their handler in a new goroutine; the workflow treats the step as
 // succeeded immediately so dependents run without waiting. Completion is recorded via
 // engine.RuntimeContext.RecordAsyncHandlerEnd / AsyncHandlerFinished (success => nil error).
 // Sync and async handlers share RuntimeContext.ExecMu — avoid long critical sections.

@@ -3,22 +3,17 @@ package workflow
 import "testing"
 
 func TestTopoSort_diamond(t *testing.T) {
-	g := &Graph{
-		Entry: "a",
+	w := &Workflow{
+		SpecVersion: 2,
+		ID:          "diamond",
 		Nodes: map[string]Node{
 			"a": {Use: "noop"},
-			"b": {Use: "noop"},
-			"c": {Use: "noop"},
-			"d": {Use: "noop"},
-		},
-		Edges: []Edge{
-			{From: "a", To: "b"},
-			{From: "a", To: "c"},
-			{From: "b", To: "d"},
-			{From: "c", To: "d"},
+			"b": {Use: "noop", DependsOn: []string{"a"}},
+			"c": {Use: "noop", DependsOn: []string{"a"}},
+			"d": {Use: "noop", DependsOn: []string{"b", "c"}},
 		},
 	}
-	order, err := TopoSort(g)
+	order, err := TopoSort(w)
 	if err != nil {
 		t.Fatal(err)
 	}

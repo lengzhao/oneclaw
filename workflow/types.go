@@ -1,41 +1,36 @@
 package workflow
 
-// Workflow is a normalized document (graph filled; defaults merged into nodes).
+// Workflow is workflow_spec_version: 2 document.
 type Workflow struct {
 	SpecVersion int               `yaml:"workflow_spec_version"`
 	ID          string            `yaml:"id"`
 	Description string            `yaml:"description,omitempty"`
 	Defaults    map[string]any    `yaml:"defaults,omitempty"`
 	Meta        map[string]any    `yaml:"meta,omitempty"`
-	Graph Graph `yaml:"graph"`
+	Nodes       map[string]Node   `yaml:"nodes"`
+	End         string            `yaml:"end,omitempty"`
 }
 
-// Graph is the DAG model (§4).
-type Graph struct {
-	Entry string          `yaml:"entry"`
-	Nodes map[string]Node `yaml:"nodes"`
-	Edges []Edge          `yaml:"edges"`
-}
-
-// Node is one workflow vertex (§5).
+// Node is one workflow node in v2.
 type Node struct {
-	Use    string         `yaml:"use"`
-	Params map[string]any `yaml:"params,omitempty"`
-	Async  bool           `yaml:"async,omitempty"`
-}
-
-// Edge is a directed edge (§4.2).
-type Edge struct {
-	From   string `yaml:"from"`
-	To     string `yaml:"to"`
-	Branch *bool  `yaml:"branch,omitempty"`
+	Use       string         `yaml:"use"`
+	AgentType string         `yaml:"agent_type,omitempty"`
+	Input     string         `yaml:"input,omitempty"`
+	Prompt    string         `yaml:"prompt,omitempty"`
+	DependsOn []string       `yaml:"depends_on,omitempty"`
+	Async     bool           `yaml:"async,omitempty"`
+	Params    map[string]any `yaml:"params,omitempty"`
 }
 
 type stepSugar struct {
-	Use    string         `yaml:"use"`
-	ID     string         `yaml:"id,omitempty"`
-	Params map[string]any `yaml:"params,omitempty"`
-	Async  bool           `yaml:"async,omitempty"`
+	ID        string         `yaml:"id,omitempty"`
+	Use       string         `yaml:"use"`
+	AgentType string         `yaml:"agent_type,omitempty"`
+	Input     string         `yaml:"input,omitempty"`
+	Prompt    string         `yaml:"prompt,omitempty"`
+	DependsOn []string       `yaml:"depends_on,omitempty"`
+	Async     bool           `yaml:"async,omitempty"`
+	Params    map[string]any `yaml:"params,omitempty"`
 }
 
 type rawDoc struct {
@@ -44,6 +39,7 @@ type rawDoc struct {
 	Description string            `yaml:"description,omitempty"`
 	Defaults    map[string]any    `yaml:"defaults,omitempty"`
 	Meta        map[string]any    `yaml:"meta,omitempty"`
-	Graph       *Graph            `yaml:"graph,omitempty"`
+	Nodes       map[string]Node   `yaml:"nodes,omitempty"`
+	End         string            `yaml:"end,omitempty"`
 	Steps       []stepSugar       `yaml:"steps,omitempty"`
 }

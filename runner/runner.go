@@ -232,7 +232,7 @@ func ExecuteTurn(p Params) error {
 	}
 
 	now := time.Now().UTC()
-	// User transcript is appended in wfexec adk_main so load_transcript sees prior turns only;
+	// User transcript is appended in wfexec adk_main so context prep sees prior turns only;
 	// the model receives history messages plus the current prompt as the final user message.
 	if err := session.AppendRunEvent(sessionRoot, ag.AgentType, session.RunEvent{
 		Ts: now, AgentType: ag.AgentType, Phase: "run_start",
@@ -293,7 +293,7 @@ func ExecuteTurn(p Params) error {
 		rtx.OnAssistantChunk = onAssistantChunk
 	}
 	reg := wfexec.NewRegistry()
-	if err := wfexec.RegisterPhase3Builtins(reg); err != nil {
+	if err := wfexec.RegisterBuiltins(reg); err != nil {
 		return err
 	}
 	if err := wfexec.Execute(ctx, wfDoc, reg, rtx); err != nil {

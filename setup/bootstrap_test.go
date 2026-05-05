@@ -49,6 +49,14 @@ func TestBootstrap_idempotent(t *testing.T) {
 	if _, err := os.Stat(agReadme); err != nil {
 		t.Fatalf("expected agents/README.md copied from embedded templates/: %v", err)
 	}
+	for _, p := range []string{
+		filepath.Join(root, "agents", "memory_extractor.md"),
+		filepath.Join(root, "agents", "skill_generator.md"),
+	} {
+		if _, err := os.Stat(p); err != nil {
+			t.Fatalf("expected agent template copied from embedded templates/: %s: %v", p, err)
+		}
+	}
 	for _, dir := range []string{
 		filepath.Join(root, "sessions"),
 		filepath.Join(root, "prompts"),

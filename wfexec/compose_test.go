@@ -8,9 +8,9 @@ import (
 	"github.com/lengzhao/oneclaw/workflow"
 )
 
-func TestCompilePhase3Workflow_invokeMinimal(t *testing.T) {
+func TestCompileEinoWorkflow_invokeMinimal(t *testing.T) {
 	ctx := context.Background()
-	raw := []byte(`workflow_spec_version: 1
+	raw := []byte(`workflow_spec_version: 2
 id: t
 steps:
   - use: on_receive
@@ -24,19 +24,19 @@ steps:
 		t.Fatal(err)
 	}
 	reg := NewRegistry()
-	if err := RegisterPhase3Builtins(reg); err != nil {
-		t.Fatal(err)
-	}
-	run, err := CompilePhase3Workflow(ctx, wf, reg)
-	if err != nil {
+	if err := RegisterBuiltins(reg); err != nil {
 		t.Fatal(err)
 	}
 	rtx := &engine.RuntimeContext{TurnInputs: engine.TurnInputs{UserPrompt: "hi"}}
-	out, err := run.Invoke(ctx, rtx)
+	run, err := CompileEinoWorkflow(ctx, wf, reg, rtx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if out != rtx {
+	out, err := run.Invoke(ctx, TurnWorkflowInput{UserPrompt: "hi", Runtime: rtx})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.Runtime != rtx {
 		t.Fatal("expected same runtime pointer pass-through")
 	}
 }

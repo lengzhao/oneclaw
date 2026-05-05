@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sort"
+	"strings"
 
 	"github.com/cloudwego/eino/compose"
 
@@ -12,209 +13,202 @@ import (
 	"github.com/lengzhao/oneclaw/workflow"
 )
 
-// composeSinkMergeID terminates multi-sink DAGs so END receives a single merge edge (Eino limitation).
-const composeSinkMergeID = "_oneclaw_sink"
+const composeResultNodeID = "_oneclaw_result"
 
-// CompilePhase3Workflow builds an Eino compose Runnable from the workflow YAML graph:
-// real START / edges / END (plus a synthetic sink merge when there are multiple sinks).
-// Nodes with async: true spawn a goroutine for the handler; the compose layer treats the node as
-// succeeded immediately so downstream nodes can run without waiting (see engine.AsyncHandlerFinished).
-func CompilePhase3Workflow(ctx context.Context, wf *workflow.Workflow, reg *Registry) (compose.Runnable[*engine.RuntimeContext, *engine.RuntimeContext], error) {
-	if wf == nil || reg == nil {
-		return nil, fmt.Errorf("wfexec: nil workflow or registry")
+func CompileEinoWorkflow(ctx context.Context, wf *workflow.Workflow, reg *Registry, rtx *engine.RuntimeContext) (compose.Runnable[TurnWorkflowInput, TurnWorkflowResult], error) {
+	if wf == nil || reg == nil || rtx == nil {
+		return nil, fmt.Errorf("wfexec: nil argument")
 	}
-	if len(wf.Graph.Nodes) == 0 {
-		return nil, fmt.Errorf("wfexec: empty workflow graph")
+	if len(wf.Nodes) == 0 {
+		return nil, fmt.Errorf("wfexec: empty workflow nodes")
 	}
 
-	nodeIDs := sortedNodeIDs(&wf.Graph)
-	needsKey := outputKeySenders(&wf.Graph)
-
-	sinks := workflow.SinkNodes(&wf.Graph)
-	if len(sinks) > 1 {
-		for _, s := range sinks {
-			needsKey[s] = true
-		}
+	state := &compileState{
+		wf:  wf,
+		reg: reg,
+		rtx: rtx,
 	}
-
-	g := compose.NewGraph[*engine.RuntimeContext, *engine.RuntimeContext]()
-	for _, id := range nodeIDs {
-		if err := addWorkflowLambda(g, id, wf, reg, needsKey); err != nil {
+	w := compose.NewWorkflow[TurnWorkflowInput, TurnWorkflowResult]()
+	for _, id := range sortedNodeIDs(wf) {
+		if err := addWorkflowNodeV2(w, state, id); err != nil {
 			return nil, err
 		}
 	}
-
-	if len(sinks) > 1 {
-		if err := g.AddLambdaNode(composeSinkMergeID, compose.InvokableLambda(func(_ context.Context, in map[string]any) (*engine.RuntimeContext, error) {
-			return coalesceRTX(in)
-		})); err != nil {
-			return nil, fmt.Errorf("wfexec: add sink merge: %w", err)
-		}
+	resultNode := w.AddLambdaNode(composeResultNodeID, compose.InvokableLambda(func(_ context.Context, _ any) (TurnWorkflowResult, error) {
+		return TurnWorkflowResult{
+			Assistant: strings.TrimSpace(state.rtx.Assistant),
+			Runtime:   state.rtx,
+		}, nil
+	}))
+	for _, dep := range state.finalDependsOn() {
+		resultNode.AddDependency(dep)
 	}
+	w.End().AddInput(composeResultNodeID)
 
-	if err := g.AddEdge(compose.START, wf.Graph.Entry); err != nil {
-		return nil, fmt.Errorf("wfexec: START edge: %w", err)
-	}
-	for _, e := range wf.Graph.Edges {
-		if err := g.AddEdge(e.From, e.To); err != nil {
-			return nil, fmt.Errorf("wfexec: edge %q -> %q: %w", e.From, e.To, err)
-		}
-	}
-
-	switch len(sinks) {
-	case 1:
-		if err := g.AddEdge(sinks[0], compose.END); err != nil {
-			return nil, fmt.Errorf("wfexec: END edge: %w", err)
-		}
-	default:
-		for _, s := range sinks {
-			if err := g.AddEdge(s, composeSinkMergeID); err != nil {
-				return nil, fmt.Errorf("wfexec: sink edge %q: %w", s, err)
-			}
-		}
-		if err := g.AddEdge(composeSinkMergeID, compose.END); err != nil {
-			return nil, fmt.Errorf("wfexec: sink merge -> END: %w", err)
-		}
-	}
-
-	run, err := g.Compile(ctx, compose.WithNodeTriggerMode(compose.AllPredecessor))
+	run, err := w.Compile(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("wfexec: compile compose graph: %w", err)
+		return nil, fmt.Errorf("wfexec: compile compose workflow: %w", err)
 	}
 	return run, nil
 }
 
-func sortedNodeIDs(g *workflow.Graph) []string {
-	ids := make([]string, 0, len(g.Nodes))
-	for id := range g.Nodes {
+type compileState struct {
+	wf  *workflow.Workflow
+	reg *Registry
+	rtx *engine.RuntimeContext
+}
+
+func (s *compileState) finalDependsOn() []string {
+	if end := strings.TrimSpace(s.wf.End); end != "" {
+		return []string{end}
+	}
+	order, err := workflow.TopoSort(s.wf)
+	if err == nil {
+		for i := len(order) - 1; i >= 0; i-- {
+			if !s.wf.Nodes[order[i]].Async {
+				return []string{order[i]}
+			}
+		}
+	}
+	return workflow.SinkNodes(s.wf)
+}
+
+func sortedNodeIDs(wf *workflow.Workflow) []string {
+	ids := make([]string, 0, len(wf.Nodes))
+	for id := range wf.Nodes {
 		ids = append(ids, id)
 	}
 	sort.Strings(ids)
 	return ids
 }
 
-func outputKeySenders(g *workflow.Graph) map[string]bool {
-	out := map[string]bool{}
-	for _, e := range g.Edges {
-		if workflow.ComposeIndegree(g, e.To) >= 2 {
-			out[e.From] = true
+func addWorkflowNodeV2(w *compose.Workflow[TurnWorkflowInput, TurnWorkflowResult], state *compileState, nodeID string) error {
+	node := state.wf.Nodes[nodeID]
+	n := w.AddLambdaNode(nodeID, compose.InvokableLambda(func(ctx context.Context, in any) (workflow.WorkflowNodeResult, error) {
+		return invokeWorkflowNodeV2(ctx, state, nodeID, node, in)
+	}))
+	n.AddInput(compose.START, compose.MapFields("Runtime", "runtime"))
+	simpleRefs := simpleTemplateNodeRefs(node)
+	for _, dep := range simpleRefs {
+		dep = strings.TrimSpace(dep)
+		if dep == "" {
+			continue
+		}
+		n.AddInput(dep, compose.MapFields("Text", composeNodeTextInputField+"."+dep))
+	}
+	advancedRefs := advancedTemplateNodeRefs(node)
+	for _, ref := range advancedRefs {
+		dep := strings.TrimSpace(ref.NodeID)
+		if dep == "" || len(ref.FieldPath) == 0 {
+			continue
+		}
+		fromPath := "Data." + strings.Join(ref.FieldPath, ".")
+		toPath := composeNodeDataInputField + "." + dep + "." + strings.Join(ref.FieldPath, ".")
+		n.AddInput(dep, compose.MapFields(fromPath, toPath))
+	}
+	simpleSet := map[string]struct{}{}
+	for _, dep := range simpleRefs {
+		simpleSet[dep] = struct{}{}
+	}
+	advancedSet := map[string]struct{}{}
+	for _, ref := range advancedRefs {
+		if strings.TrimSpace(ref.NodeID) != "" {
+			advancedSet[ref.NodeID] = struct{}{}
 		}
 	}
-	return out
-}
-
-func addWorkflowLambda(
-	g *compose.Graph[*engine.RuntimeContext, *engine.RuntimeContext],
-	nodeID string,
-	wf *workflow.Workflow,
-	reg *Registry,
-	needsKey map[string]bool,
-) error {
-	node := wf.Graph.Nodes[nodeID]
-	use := node.Use
-	indeg := workflow.ComposeIndegree(&wf.Graph, nodeID)
-
-	var opts []compose.GraphAddNodeOpt
-	if needsKey[nodeID] {
-		opts = append(opts, compose.WithOutputKey(nodeID))
-	}
-
-	if indeg >= 2 {
-		err := g.AddLambdaNode(nodeID, compose.InvokableLambda(func(ctx context.Context, in map[string]any) (*engine.RuntimeContext, error) {
-			rtx, err := coalesceRTX(in)
-			if err != nil {
-				return nil, fmt.Errorf("wfexec: node %q: %w", nodeID, err)
-			}
-			return invokeWorkflowNode(ctx, rtx, nodeID, node, use, reg)
-		}), opts...)
-		if err != nil {
-			return fmt.Errorf("wfexec: add node %q: %w", nodeID, err)
+	deps := inferredTemplateDeps(node)
+	for _, dep := range deps {
+		dep = strings.TrimSpace(dep)
+		if dep == "" {
+			continue
 		}
-		return nil
-	}
-
-	err := g.AddLambdaNode(nodeID, compose.InvokableLambda(func(ctx context.Context, rtx *engine.RuntimeContext) (*engine.RuntimeContext, error) {
-		if rtx == nil {
-			return nil, fmt.Errorf("wfexec: node %q: nil runtime context", nodeID)
+		if _, ok := simpleSet[dep]; ok {
+			continue
 		}
-		return invokeWorkflowNode(ctx, rtx, nodeID, node, use, reg)
-	}), opts...)
-	if err != nil {
-		return fmt.Errorf("wfexec: add node %q: %w", nodeID, err)
+		if _, ok := advancedSet[dep]; ok {
+			continue
+		}
+		n.AddDependency(dep)
 	}
 	return nil
 }
 
-func invokeWorkflowNode(
-	ctx context.Context,
-	rtx *engine.RuntimeContext,
-	nodeID string,
-	node workflow.Node,
-	use string,
-	reg *Registry,
-) (*engine.RuntimeContext, error) {
+func invokeWorkflowNodeV2(ctx context.Context, state *compileState, nodeID string, node workflow.Node, graphInputAny any) (workflow.WorkflowNodeResult, error) {
+	graphInput := asGraphInputMap(graphInputAny)
 	if node.Async {
-		rtx.ExecMu.Lock()
-		snap := engine.CaptureReadSnapshot(rtx)
-		rtx.ExecMu.Unlock()
+		state.rtx.ExecMu.Lock()
+		snap := engine.CaptureReadSnapshot(state.rtx)
+		state.rtx.ExecMu.Unlock()
 		bgCtx := engine.WithReadSnapshot(context.WithoutCancel(ctx), snap)
-		go runAsyncWorkflowHandler(bgCtx, rtx, nodeID, node, use, reg)
-		return rtx, nil
+		go runAsyncWorkflowHandlerV2(bgCtx, state, nodeID, node, graphInput)
+		return workflow.WorkflowNodeResult{}, nil
 	}
-	if err := executeWorkflowHandler(ctx, rtx, nodeID, node, use, reg); err != nil {
-		return nil, err
+	out, err := executeWorkflowNodeV2(ctx, state, nodeID, node, graphInput)
+	if err != nil {
+		return workflow.WorkflowNodeResult{}, err
 	}
-	return rtx, nil
+	return out, nil
 }
 
-func runAsyncWorkflowHandler(bgCtx context.Context, rtx *engine.RuntimeContext, nodeID string, node workflow.Node, use string, reg *Registry) {
+func runAsyncWorkflowHandlerV2(bgCtx context.Context, state *compileState, nodeID string, node workflow.Node, graphInput map[string]any) {
 	var handlerErr error
 	defer func() {
 		if r := recover(); r != nil {
 			handlerErr = fmt.Errorf("panic: %v", r)
-			slog.Error("wfexec: async workflow node panic", "node", nodeID, "use", use, "recover", r)
+			slog.Error("wfexec: async workflow node panic", "node", nodeID, "use", node.Use, "recover", r)
 		}
-		rtx.RecordAsyncHandlerEnd(nodeID, handlerErr)
+		state.rtx.RecordAsyncHandlerEnd(nodeID, handlerErr)
 	}()
-	handlerErr = executeWorkflowHandler(bgCtx, rtx, nodeID, node, use, reg)
-	if handlerErr != nil {
-		slog.Error("wfexec: async workflow node failed", "node", nodeID, "use", use, "err", handlerErr)
+	_, err := executeWorkflowNodeV2(bgCtx, state, nodeID, node, graphInput)
+	handlerErr = err
+	if err == nil {
+		return
 	}
+	slog.Error("wfexec: async workflow node failed", "node", nodeID, "use", node.Use, "err", err)
 }
 
-func executeWorkflowHandler(
-	ctx context.Context,
-	rtx *engine.RuntimeContext,
-	nodeID string,
-	node workflow.Node,
-	use string,
-	reg *Registry,
-) error {
+func executeWorkflowNodeV2(ctx context.Context, state *compileState, nodeID string, node workflow.Node, graphInput map[string]any) (workflow.WorkflowNodeResult, error) {
+	rtx := state.rtx
 	rtx.ExecMu.Lock()
 	defer rtx.ExecMu.Unlock()
 
 	rtx.GoCtx = ctx
 	rtx.CurrentNodeID = nodeID
 	rtx.CurrentAsync = node.Async
-	if len(node.Params) > 0 {
-		rtx.CurrentParams = cloneParams(node.Params)
-	} else {
-		rtx.CurrentParams = nil
-	}
+	rtx.CurrentParams = cloneParams(node.Params)
 	defer func() {
 		rtx.CurrentNodeID = ""
 		rtx.CurrentAsync = false
 		rtx.CurrentParams = nil
 	}()
 
-	h := reg.Lookup(use)
+	h := state.reg.Lookup(node.Use)
 	if h == nil {
-		return fmt.Errorf("wfexec: no handler registered for use %q (node %q)", use, nodeID)
+		return workflow.WorkflowNodeResult{}, fmt.Errorf("wfexec: no handler registered for use %q (node %q)", node.Use, nodeID)
 	}
-	if err := h(rtx); err != nil {
-		return fmt.Errorf("wfexec: node %q (%s): %w", nodeID, use, err)
+	in, err := nodeInputForExec(state, graphInput, node)
+	if err != nil {
+		return workflow.WorkflowNodeResult{}, err
 	}
-	return nil
+	out, err := h(ctx, in, NodeEnv{Runtime: rtx, NodeID: nodeID, Node: node})
+	if err != nil {
+		return workflow.WorkflowNodeResult{}, fmt.Errorf("wfexec: node %q (%s): %w", nodeID, node.Use, err)
+	}
+	if out.Data == nil {
+		out.Data = map[string]any{}
+	}
+	return out, nil
+}
+
+func asGraphInputMap(in any) map[string]any {
+	switch m := in.(type) {
+	case nil:
+		return nil
+	case map[string]any:
+		return m
+	default:
+		return nil
+	}
 }
 
 func cloneParams(p map[string]any) map[string]any {

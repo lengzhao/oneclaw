@@ -7,7 +7,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// ParseBytes parses YAML, expands steps sugar when graph absent, merges defaults into nodes.
+// ParseBytes parses workflow v2 YAML, expands steps sugar when nodes absent, merges defaults into node params.
 func ParseBytes(raw []byte) (*Workflow, error) {
 	var d rawDoc
 	if err := yaml.Unmarshal(raw, &d); err != nil {
@@ -19,31 +19,29 @@ func ParseBytes(raw []byte) (*Workflow, error) {
 		Description: d.Description,
 		Defaults:    d.Defaults,
 		Meta:        d.Meta,
+		End:         strings.TrimSpace(d.End),
 	}
 	switch {
-	case d.Graph != nil && (len(d.Graph.Nodes) > 0 || d.Graph.Entry != ""):
-		w.Graph = *d.Graph
+	case len(d.Nodes) > 0:
+		w.Nodes = d.Nodes
 	case len(d.Steps) > 0:
-		g, err := expandSteps(d.Steps)
+		nodes, err := expandSteps(d.Steps)
 		if err != nil {
 			return nil, err
 		}
-		w.Graph = *g
+		w.Nodes = nodes
 	default:
-		return nil, fmt.Errorf("workflow: need graph or steps")
+		return nil, fmt.Errorf("workflow: need nodes or steps")
 	}
-	mergeDefaultsIntoNodes(w.Defaults, &w.Graph)
+	mergeDefaultsIntoNodes(w.Defaults, w.Nodes)
 	return w, nil
 }
 
-func expandSteps(steps []stepSugar) (*Graph, error) {
+func expandSteps(steps []stepSugar) (map[string]Node, error) {
 	if len(steps) == 0 {
 		return nil, fmt.Errorf("workflow: empty steps")
 	}
-	g := &Graph{
-		Nodes: make(map[string]Node),
-		Edges: nil,
-	}
+	nodes := make(map[string]Node, len(steps))
 	seen := map[string]bool{}
 	var lastID string
 	for i, s := range steps {
@@ -58,29 +56,33 @@ func expandSteps(steps []stepSugar) (*Graph, error) {
 			return nil, fmt.Errorf("workflow: duplicate step id %q", id)
 		}
 		seen[id] = true
-		g.Nodes[id] = Node{Use: s.Use, Params: s.Params, Async: s.Async}
-		if lastID != "" {
-			g.Edges = append(g.Edges, Edge{From: lastID, To: id})
-		} else {
-			g.Entry = id
+		n := Node{
+			Use:       s.Use,
+			AgentType: strings.TrimSpace(s.AgentType),
+			Input:     s.Input,
+			Prompt:    s.Prompt,
+			Async:     s.Async,
+			Params:    s.Params,
+			DependsOn: append([]string(nil), s.DependsOn...),
 		}
+		if len(n.DependsOn) == 0 && lastID != "" {
+			n.DependsOn = []string{lastID}
+		}
+		nodes[id] = n
 		lastID = id
 	}
-	if g.Entry == "" {
-		g.Entry = lastID
-	}
-	return g, nil
+	return nodes, nil
 }
 
-func mergeDefaultsIntoNodes(defaults map[string]any, g *Graph) {
-	if len(defaults) == 0 || g == nil {
+func mergeDefaultsIntoNodes(defaults map[string]any, nodes map[string]Node) {
+	if len(defaults) == 0 || len(nodes) == 0 {
 		return
 	}
-	for id, n := range g.Nodes {
+	for id, n := range nodes {
 		if len(n.Params) == 0 {
 			cp := shallowCloneMap(defaults)
 			n.Params = cp
-			g.Nodes[id] = n
+			nodes[id] = n
 			continue
 		}
 		merged := shallowCloneMap(defaults)
@@ -88,7 +90,7 @@ func mergeDefaultsIntoNodes(defaults map[string]any, g *Graph) {
 			merged[k] = v
 		}
 		n.Params = merged
-		g.Nodes[id] = n
+		nodes[id] = n
 	}
 }
 

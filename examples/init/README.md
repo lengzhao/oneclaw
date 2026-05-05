@@ -10,7 +10,9 @@
 | `manifest.yaml` | `default_agent`、`workflows.default_turn` |
 | `AGENT.md` / `MEMORY.md` | 会话说明与记忆占位 |
 | `workflows/*.yaml` | 主回合与子 Agent（`memory_extractor` / `skill_generator`）workflow |
-| `agents/default.md` | 默认 Catalog Agent（**Go `text/template`** 渲染 `UserDataRoot`） |
+| `agents/default.md` | 默认主 Agent（**Go `text/template`** 渲染 `UserDataRoot`） |
+| `agents/memory_extractor.md` | 默认记忆抽取 Agent（精简上下文，默认不读 MEMORY/recall/transcript） |
+| `agents/skill_generator.md` | 默认技能生成 Agent（精简上下文，默认不读 MEMORY/recall/transcript） |
 | `agents/README.md` | 若模板中存在，会一并拷入（Catalog **不**把 `README.md` 当 Agent 加载） |
 | **`skills/**`** | 含默认 **`skill-creator/`**（见下）与 **`skills/README.md`** |
 | `prompts/` | 预留 prompt override / prompt assets |

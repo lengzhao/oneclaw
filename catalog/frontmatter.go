@@ -31,14 +31,15 @@ func SplitYAMLFrontmatter(raw []byte) (frontYAML []byte, body string, err error)
 
 // AgentFrontmatter is the YAML block in agents/*.md.
 type AgentFrontmatter struct {
-	Name                string   `yaml:"name,omitempty"`
-	Description         string   `yaml:"description,omitempty"`
-	Tools               []string `yaml:"tools,omitempty"`
-	Skills              []string `yaml:"skills,omitempty"`
-	Model               string   `yaml:"model,omitempty"`
-	MaxTurns            int      `yaml:"max_turns,omitempty"`
-	Workspace           string   `yaml:"workspace,omitempty"`
-	InheritParentMemory bool     `yaml:"inherit_parent_memory,omitempty"`
+	Name                string         `yaml:"name,omitempty"`
+	Description         string         `yaml:"description,omitempty"`
+	Tools               []string       `yaml:"tools,omitempty"`
+	Skills              []string       `yaml:"skills,omitempty"`
+	Model               string         `yaml:"model,omitempty"`
+	MaxTurns            int            `yaml:"max_turns,omitempty"`
+	Workspace           string         `yaml:"workspace,omitempty"`
+	InheritParentMemory bool           `yaml:"inherit_parent_memory,omitempty"`
+	ContextProfile      ContextProfile `yaml:"context_profile,omitempty"`
 }
 
 // ParseAgentMarkdown extracts frontmatter + body. Catalog identity is always stem (filename without extension).
@@ -69,6 +70,7 @@ func ParseAgentMarkdown(stem string, raw []byte) (*Agent, error) {
 	a.MaxTurns = fm.MaxTurns
 	a.Workspace = strings.TrimSpace(fm.Workspace)
 	a.InheritParentMemory = fm.InheritParentMemory
+	a.ContextProfile = fm.ContextProfile
 	if a.Name == "" {
 		a.Name = a.AgentType
 	}

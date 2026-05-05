@@ -1,6 +1,7 @@
 package wfexec
 
 import (
+	"context"
 	"fmt"
 	"maps"
 	"strings"
@@ -12,27 +13,46 @@ import (
 	"github.com/lengzhao/oneclaw/workflow"
 )
 
-func handleAgent(rtx *engine.RuntimeContext) error {
-	subType := workflow.AgentTypeParam(rtx.CurrentParams)
+func handleAgentTask(_ context.Context, in NodeInput, env NodeEnv) (workflow.WorkflowNodeResult, error) {
+	rtx := env.Runtime
+	subType := strings.TrimSpace(env.Node.AgentType)
 	if subType == "" {
-		return fmt.Errorf("wfexec: agent: missing params.agent_type")
+		subType = workflow.AgentTypeParam(env.Node.Params)
+	}
+	if subType == "" {
+		return workflow.WorkflowNodeResult{}, fmt.Errorf("wfexec: agent_task: missing agent_type")
+	}
+	reply, err := executeAgentTask(rtx, subType, strings.TrimSpace(in.Text))
+	if err != nil {
+		return workflow.WorkflowNodeResult{}, err
+	}
+	return workflow.WorkflowNodeResult{Text: reply}, nil
+}
+
+func executeAgentTask(rtx *engine.RuntimeContext, subType string, prompt string) (string, error) {
+	if strings.TrimSpace(prompt) == "" {
+		p, err := BuildSubagentUserPrompt(rtx)
+		if err != nil {
+			return "", err
+		}
+		prompt = p
 	}
 	if rtx.Catalog == nil || rtx.Cfg == nil {
-		return fmt.Errorf("wfexec: agent: Catalog and Cfg must be set on RuntimeContext")
+		return "", fmt.Errorf("wfexec: agent_task: Catalog and Cfg must be set on RuntimeContext")
 	}
 	if strings.TrimSpace(rtx.EffectiveUserDataRoot()) == "" || strings.TrimSpace(rtx.EffectiveInstructionRoot()) == "" {
-		return fmt.Errorf("wfexec: agent: UserDataRoot and InstructionRoot must be set")
+		return "", fmt.Errorf("wfexec: agent_task: UserDataRoot and InstructionRoot must be set")
 	}
 	sub := rtx.Catalog.Get(subType)
 	if sub == nil {
-		return fmt.Errorf("wfexec: agent: unknown agent_type %q", subType)
+		return "", fmt.Errorf("wfexec: agent_task: unknown agent_type %q", subType)
 	}
 
 	var parentReg toolhost.Registry = rtx.ToolRegistry
 	if parentReg == nil {
 		r := tools.NewRegistry(rtx.EffectiveWorkspacePath())
 		if err := tools.RegisterBuiltinsForConfig(r, rtx.Cfg); err != nil {
-			return err
+			return "", err
 		}
 		parentReg = r
 	}
@@ -68,10 +88,6 @@ func handleAgent(rtx *engine.RuntimeContext) error {
 		ParentRegistry:  parentReg,
 		DelegationDepth: rtx.DelegationDepth,
 	}
-	userPrompt, err := BuildSubagentUserPrompt(rtx)
-	if err != nil {
-		return err
-	}
-	_, err = subagent.ExecuteSubAgentTurn(rtx.GoCtx, deps, sub, userPrompt)
-	return err
+	reply, err := subagent.ExecuteSubAgentTurn(rtx.GoCtx, deps, sub, prompt)
+	return reply, err
 }

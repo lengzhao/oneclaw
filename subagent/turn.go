@@ -51,7 +51,7 @@ func truncateRunes(s string, max int) string {
 	return string(r[:max])
 }
 
-// ExecuteSubAgentTurn runs a sub-agent: ResolveWorkflowPath(agent_type) → wfexec.Execute (registered via RegisterPhase3WorkflowExecutor).
+// ExecuteSubAgentTurn runs a sub-agent: ResolveWorkflowPath(agent_type) → wfexec.Execute (registered via RegisterWorkflowExecutor).
 func ExecuteSubAgentTurn(ctx context.Context, deps *RunAgentDeps, sub *catalog.Agent, userContent string) (string, error) {
 	if deps == nil || sub == nil {
 		return "", fmt.Errorf("subagent: ExecuteSubAgentTurn: nil deps or agent")
@@ -284,7 +284,7 @@ func ExecuteSubAgentTurn(ctx context.Context, deps *RunAgentDeps, sub *catalog.A
 		)
 	}
 
-	if err := runPhase3Workflow(runCtx, wfDoc, childRTX); err != nil {
+	if err := runWorkflow(runCtx, wfDoc, childRTX); err != nil {
 		return "", err
 	}
 

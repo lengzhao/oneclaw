@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-// Agent context attachment refs (params.context[] on use: agent nodes).
+// Agent context attachment refs (params.context[] on use: agent_task nodes).
 const (
 	AgentContextRefRunJournal    = "run_journal"
 	AgentContextRefWorkflowNode  = "workflow_node"
@@ -26,7 +26,7 @@ type AgentContextAttachment struct {
 	Select map[string]any
 }
 
-// ParseAgentContextAttachments parses params.context for use: agent nodes.
+// ParseAgentContextAttachments parses params.context for use: agent_task nodes.
 func ParseAgentContextAttachments(params map[string]any) []AgentContextAttachment {
 	var out []AgentContextAttachment
 	if len(params) == 0 {

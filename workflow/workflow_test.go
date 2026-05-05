@@ -6,7 +6,7 @@ import (
 )
 
 func TestParseBytes_stepsExpandAndDefaults(t *testing.T) {
-	raw := []byte(`workflow_spec_version: 1
+	raw := []byte(`workflow_spec_version: 2
 id: t
 defaults:
   x: 1
@@ -18,14 +18,11 @@ steps:
 	if err != nil {
 		t.Fatal(err)
 	}
-	if w.Graph.Entry != "step_0" {
-		t.Fatal(w.Graph.Entry)
+	if got := w.Nodes["step_1"].DependsOn; len(got) != 1 || got[0] != "step_0" {
+		t.Fatalf("%+v", got)
 	}
-	if len(w.Graph.Edges) != 1 || w.Graph.Edges[0].From != "step_0" || w.Graph.Edges[0].To != "step_1" {
-		t.Fatalf("%+v", w.Graph.Edges)
-	}
-	if w.Graph.Nodes["step_0"].Params["x"] != 1 {
-		t.Fatalf("%+v", w.Graph.Nodes["step_0"].Params)
+	if w.Nodes["step_0"].Params["x"] != 1 {
+		t.Fatalf("%+v", w.Nodes["step_0"].Params)
 	}
 	if err := Validate(w); err != nil {
 		t.Fatal(err)
@@ -34,16 +31,12 @@ steps:
 
 func TestValidate_rejectsCycle(t *testing.T) {
 	w := &Workflow{
-		SpecVersion: 1,
+		SpecVersion: 2,
 		ID:          "c",
-		Graph: Graph{
-			Entry: "a",
-			Nodes: map[string]Node{
-				"a": {Use: "noop"},
-				"b": {Use: "noop"},
-				"c": {Use: "noop"},
-			},
-			Edges: []Edge{{From: "a", To: "b"}, {From: "b", To: "c"}, {From: "c", To: "b"}},
+		Nodes: map[string]Node{
+			"a": {Use: "noop"},
+			"b": {Use: "noop", DependsOn: []string{"a", "c"}},
+			"c": {Use: "noop", DependsOn: []string{"b"}},
 		},
 	}
 	if err := Validate(w); err == nil || !strings.Contains(err.Error(), "cycle") {
@@ -53,28 +46,20 @@ func TestValidate_rejectsCycle(t *testing.T) {
 
 func TestValidate_reservedComposeNodeID(t *testing.T) {
 	w := &Workflow{
-		SpecVersion: 1,
+		SpecVersion: 2,
 		ID:          "bad",
-		Graph: Graph{
-			Entry: "start",
-			Nodes: map[string]Node{"start": {Use: "noop"}},
-			Edges: []Edge{},
-		},
+		Nodes:       map[string]Node{"start": {Use: "noop"}},
 	}
 	if err := Validate(w); err == nil || !strings.Contains(err.Error(), "reserved") {
 		t.Fatalf("expected reserved id error, got %v", err)
 	}
 }
 
-func TestValidate_agentRequiresAgentType(t *testing.T) {
+func TestValidate_agentTaskRequiresAgentType(t *testing.T) {
 	w := &Workflow{
-		SpecVersion: 1,
+		SpecVersion: 2,
 		ID:          "x",
-		Graph: Graph{
-			Entry: "a",
-			Nodes: map[string]Node{"a": {Use: "agent"}},
-			Edges: []Edge{},
-		},
+		Nodes:       map[string]Node{"a": {Use: "agent_task"}},
 	}
 	if err := Validate(w); err == nil || !strings.Contains(err.Error(), "agent_type") {
 		t.Fatalf("expected agent_type error, got %v", err)
@@ -82,26 +67,20 @@ func TestValidate_agentRequiresAgentType(t *testing.T) {
 }
 
 func TestValidate_postRespondAsyncAgents_defaultShape(t *testing.T) {
-	raw := []byte(`workflow_spec_version: 1
+	raw := []byte(`workflow_spec_version: 2
 id: default.turn
 steps:
   - use: on_receive
   - use: noop
   - use: on_respond
   - id: memory_agent
-    use: agent
+    use: agent_task
     async: true
-    params:
-      agent_type: memory_extractor
-      context:
-        - ref: run_journal
-          scope: current_turn
-          as: user_message
+    agent_type: memory_extractor
   - id: skill_agent
-    use: agent
+    use: agent_task
     async: true
-    params:
-      agent_type: skill_generator
+    agent_type: skill_generator
 `)
 	w, err := ParseBytes(raw)
 	if err != nil {
@@ -110,20 +89,16 @@ steps:
 	if err := Validate(w); err != nil {
 		t.Fatal(err)
 	}
-	if !w.Graph.Nodes["memory_agent"].Async || !w.Graph.Nodes["skill_agent"].Async {
+	if !w.Nodes["memory_agent"].Async || !w.Nodes["skill_agent"].Async {
 		t.Fatal("expected async branches")
 	}
 }
 
 func TestValidate_unknownUse(t *testing.T) {
 	w := &Workflow{
-		SpecVersion: 1,
+		SpecVersion: 2,
 		ID:          "x",
-		Graph: Graph{
-			Entry: "m",
-			Nodes: map[string]Node{"m": {Use: "unknown_node"}},
-			Edges: []Edge{},
-		},
+		Nodes:       map[string]Node{"m": {Use: "unknown_node"}},
 	}
 	if err := Validate(w); err == nil {
 		t.Fatal("expected error")
