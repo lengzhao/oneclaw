@@ -12,7 +12,7 @@
 
 ## 1. 术语（与 `glossary.md` 对齐）
 
-- **UserDataRoot**：用户级根路径，**默认在用户主目录**（示例：`~/.claw`，以产品名为准）。
+- **UserDataRoot**：用户级根路径，**默认在用户主目录**（**oneclaw** 默认为 **`~/.oneclaw`**，可配置；泛化示例仍可为 `~/.<app>`）。
 - **InstructionRoot**：**`AGENT.md` 与记忆入口必须共处于同一 InstructionRoot**。「记忆入口」可为 **`MEMORY.md`**，或 **`memory/` 目录下的分片文件**（及 sidecar）；二者不应与 `AGENT.md` 分属不同根路径。
 - **Workspace**：默认作为文件工具 / `exec` 等工作目录的路径；通常为 `<InstructionRoot>/workspace`（目录名固定为 `workspace`）。
 - **SessionRoot**：`UserDataRoot/sessions/<session_id>/`，承载该会话的转写等；是否兼作 InstructionRoot 由 **会话隔离** 策略决定。
@@ -23,14 +23,14 @@
 
 - **InstructionRoot = UserDataRoot**。
 - 典型包含：`config.yaml`、`AGENT.md`、`MEMORY.md`（或 `memory/` 分片）、`rules/`、`workspace/`、`sessions/<id>/transcript*.json`、`scheduled_jobs.json`（位置以实现为准）。
-- **与 PRD §5 对齐时**，同一用户数据根下还常有 **`agents/`、`skills/`、`workflows/`** 及 **Manifest**（路径可为 `.agent/manifest.yaml` 或配置声明的其他根）；完整列见 [requirements.md](requirements.md) §5，此处仅强调与 InstructionRoot 共位的「说明 + 记忆入口」。
+- **与 PRD §5 对齐时**，同一用户数据根下还常有 **`manifest.yaml`、`agents/`、`skills/`、`workflows/`**（**oneclaw**：与 `UserDataRoot` 平铺，**无** `.agent/` 包裹层，见 [workflows-spec.md](workflows-spec.md) §8）；完整列见 [requirements.md](requirements.md) §5，此处仅强调与 InstructionRoot 共位的「说明 + 记忆入口」。
 
 ---
 
 ## 3. 开启会话隔离（**主会话推荐默认**）
 
 - **InstructionRoot = SessionRoot**（`UserDataRoot/sessions/<session_id>/`），其下仍应有配对的 `AGENT.md`、记忆入口（`MEMORY.md` 或 `memory/`）与同构的 `workspace/`。
-- 全局 `UserDataRoot` 仍保留 **全局** `config.yaml`、**全局** `agents/`、`skills/`、`workflows/`、`.agent/manifest.yaml`（或等价路径）——**角色定义与 workflow 定义共享**；**每会话可变的是 InstructionRoot 内的说明、记忆与工作区**。
+- 全局 `UserDataRoot` 仍保留 **全局** `config.yaml`、**全局** `manifest.yaml`、`agents/`、`skills/`、`workflows/`（**oneclaw** 下与数据根同目录，见上）——**角色定义与 workflow 定义共享**；**每会话可变的是 InstructionRoot 内的说明、记忆与工作区**。
 
 ### 3.1 子 Agent（**默认：会话隔离 + 上下文隔离**）
 

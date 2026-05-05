@@ -110,7 +110,7 @@ flowchart LR
 | FR-FLOW-02 | **Workflow 定义**：回合前/后及异步任务等为 **声明式 DAG**（`workflows/*.yaml`，可选线性 `steps` 糖）；Go 提供 **节点注册表 + 图执行器** | 规格见 [workflows-spec.md](workflows-spec.md) |
 | FR-FLOW-03 | **Prompt 拼装**：分段 md 按顺序与预算拼接；支持按 agent 覆盖 | |
 | FR-FLOW-04 | **工具白名单**：声明为列表或 tag；解析后为 Registry filter | |
-| FR-FLOW-05 | **演进编排约定（与实现对齐）**：记忆抽取、Skills 生成 **只通过 workflow 编排**（见 [workflows-spec.md](workflows-spec.md) §4.3、§8）；默认内置 **`memory_extractor` / `skill_generator`**，用户 **`agents/`** 同名覆盖。**不设** Agent frontmatter 中的演进关闭布尔项。**当前实现** **未**做「演进专用 workflow 不得再挂同类 async 枝」的加载期校验，也 **未**在 **`TurnContext`** 上维护嵌套演进剖面；闭环防范依赖编排设计与后续可选扩展 | 见 [eino-md-chain-architecture.md](eino-md-chain-architecture.md) §5.6 |
+| FR-FLOW-05 | **演进编排约定（与实现对齐）**：记忆抽取、Skills 生成 **只通过 workflow 编排**（推荐模板与节点约定见 [workflows-spec.md](workflows-spec.md) §5；manifest / 文件选用见 **§8**）；默认内置 **`memory_extractor` / `skill_generator`**，用户 **`agents/`** 同名覆盖。**不设** Agent frontmatter 中的演进关闭布尔项。**当前实现** **未**做「演进专用 workflow 不得再挂同类 async 枝」的加载期校验，也 **未**在 **`TurnContext`** 上维护嵌套演进剖面；闭环防范依赖编排设计与后续可选扩展 | 见 [eino-md-chain-architecture.md](eino-md-chain-architecture.md) §5.6 |
 
 ### 3.5 知识与 RAG（可选模块）
 
@@ -179,7 +179,7 @@ flowchart LR
 | 概念 | 说明 |
 |------|------|
 | 用户数据根 | **默认在用户主目录** `~/.<app>`（可配置）；含 config、会话、workspace；**不以当前 shell 工作目录为默认真源** |
-| Manifest | **`UserDataRoot/.agent/manifest.yaml`**（或配置覆盖路径）；与 prompts/agents/workflows 同级放在 `.agent/` 下 |
+| Manifest | **`UserDataRoot/manifest.yaml`**（**oneclaw**：[`paths.CatalogRoot`](../paths/paths.go) = `UserDataRoot`，与 `agents/`、`workflows/` 平铺；非 oneclaw 的泛化产品仍可选用 `.agent/` 等其它布局） |
 | Agents | `agents/*.md` |
 | Skills | `skills/<id>/SKILL.md` + 可选 staging |
 | Workflows | `workflows/*.yaml`（DAG；可选线性 `steps` 糖） |
@@ -226,5 +226,6 @@ flowchart LR
 | 日期 | 说明 |
 |------|------|
 | （文档创建） | 首版：需求与主路径梳理 |
-| 2026-05-02 | **重写为项目目标 PRD**；增补知识与 RAG（FR-KNOW-* 等）；明确 **`github.com/lengzhao/clawbridge`** 为多渠道接入依赖；新增 **§8 增强与扩展** 与 [harness-governance-extensions.md](harness-governance-extensions.md)（修订记录顺延为 §9）；glossary / reference / README 同步；§5 锚定用户主目录与 `UserDataRoot/.agent/`；FR-AGT-02 默认隔离；架构参考更名为 [reference-architecture.md](reference-architecture.md)；FR-AGT-05/06、FR-FLOW-05、FR-OBS-04；§5 审计路径补充；§2.3 流程图说明；§6 指向 [eino-integration-surface.md](eino-integration-surface.md)；文首 / README / reference 指向 [architecture.md](architecture.md)；[workflows-spec.md](workflows-spec.md) 取代 chains-spec（DAG + workflow 命名）；FR-FLOW-01/02、§8 节前指引同步 |
+| 2026-05-02 | **重写为项目目标 PRD**；增补知识与 RAG（FR-KNOW-* 等）；明确 **`github.com/lengzhao/clawbridge`** 为多渠道接入依赖；新增 **§8 增强与扩展** 与 [harness-governance-extensions.md](harness-governance-extensions.md)（修订记录顺延为 §9）；glossary / reference / README 同步；§5 锚定用户主目录与 Catalog 布局；FR-AGT-02 默认隔离；架构参考更名为 [reference-architecture.md](reference-architecture.md)；FR-AGT-05/06、FR-FLOW-05、FR-OBS-04；§5 审计路径补充；§2.3 流程图说明；§6 指向 [eino-integration-surface.md](eino-integration-surface.md)；文首 / README / reference 指向 [architecture.md](architecture.md)；[workflows-spec.md](workflows-spec.md) 取代 chains-spec（DAG + workflow 命名）；FR-FLOW-01/02、§8 节前指引同步 |
 | 2026-05-03 | FR-FLOW-05、§2.1 / §2.3：**演进仅靠 `workflows/*.yaml`（`async` + `use: agent_task`）**；移除 Catalog **`suppress_post_turn_evolution`** 表述。**FR-FLOW-05 与实现对齐**：无演进专用加载期校验、无 `TurnContext` 演进嵌套字段；内置 `memory_extractor` / `skill_generator` + 默认 turn 模板 |
+| 2026-05-05 | §5 Manifest 与 **oneclaw** 对齐：`UserDataRoot/manifest.yaml` 平铺；FR-FLOW-05 交叉引用 [workflows-spec.md](workflows-spec.md) §5 / §8（修正旧 §4.3 / §8 节号） |

@@ -76,7 +76,7 @@
 ### 2.8 多 Agent 与 `agents/` 目录
 
 - **目录即目录**：每个 Agent 对应 **`agents/<name>.md`**（或约定统一扩展名），由宿主扫描加载成 **Catalog**（内置默认 + 用户文件覆盖同名）。
-- **单文件格式**：可选 **YAML frontmatter** + **正文作为该 Agent 的 system/instruction**；frontmatter 携带 **`agent_type`/`name`、`description`、允许 **`tools` 列表、`max_turns`、可选 `model`** 等，避免在 Go 里按 Agent 分支。
+- **单文件格式**：可选 **YAML frontmatter** + **正文作为该 Agent 的 system/instruction**；frontmatter 携带 **`name`、`description`、允许 `tools` / `skills` 列表、`context_profile`、`max_turns`、可选 `model`** 等；**oneclaw** 以 **文件名 stem** 为 Catalog id（见 [eino-md-chain-architecture.md](eino-md-chain-architecture.md) §5.1）。
 - **调用方式**：主线程通过 **`run_agent`**（或路由层按渠道绑定默认 Agent）选中类型；子循环使用过滤后的工具集。
 - **子 Agent 默认（已定）**：**会话隔离 + 上下文隔离** —— 独立子 transcript/命名空间（见 [appendix-data-layout.md](appendix-data-layout.md) §3.1）、独立 messages，**不**默认注入主会话 MEMORY；若需共享需在 Agent 定义中 **显式**开启（如 `inherit_parent_memory`）。
 - **Workspace**：子 Agent / 后台管线 Agent 的工具工作目录 **默认与主 Agent 当前回合共享**（`workspace: shared`）；可选 **`private`** 独占目录，避免文件/exec 互扰（见 FR-AGT-06）。

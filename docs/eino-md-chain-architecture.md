@@ -51,6 +51,8 @@
     transcript*.json               # 位置以实现为准
 ```
 
+**oneclaw 当前实现（与上树差异）**：**无** `.agent/` 包裹层；**`manifest.yaml`、`agents/`、`skills/`、`workflows/`、`prompts/`** 等与 **`config.yaml` 同层**落在 **`UserDataRoot`**（[`paths.CatalogRoot`](../paths/paths.go) = `UserDataRoot`）。选用 workflow 文件的规则见 [workflows-spec.md](workflows-spec.md) §8。
+
 **原则**：
 
 - **叙述与规范 prose** 放 md；**列表 / 顺序 / 开关** 放 yaml（或 md 的 `---` frontmatter）。
@@ -69,11 +71,13 @@ flowchart LR
     R[OnReceive]
     P[PreTurn — 拼 prompt / 拉 md]
     A[ADK ChatModelAgent + Tools]
-    Q[PostTurn — 记忆 / skill 写盘]
     O[OnRespond — outbound]
+    Q[PostTurn — 记忆 / skill 写盘]
   end
-  R --> P --> A --> Q --> O
+  R --> P --> A --> O --> Q
 ```
+
+与 **`default.turn`** 一致：**用户可见回复**在 **`on_respond`** 收口；**PostTurn** 多为 **`respond` 之后的 `async` 枝**（见 [workflows-spec.md](workflows-spec.md) §5）。
 
 ### 3.1 回合外：compose.Chain / Graph（确定性）
 
@@ -82,7 +86,7 @@ flowchart LR
 - **PostTurn**：记忆提取、skill 候选生成 —— 通常各绑定 **独立 `agent_type`**（与主对话区分），以 **`NewChatModelAgent` + 收窄工具集** 运行；每次运行 **落盘执行记录**。**不得**在「抽取 / 生成」类 Agent 完成后再次调度 PostTurn 演进（见 §5.6）。
 - **OnRespond**：格式化、裁剪、写 transcript、触发 bus。
 
-用户定义的 workflow = **一张 DAG（或线性 `steps` 糖）上的命名节点**；每个节点在 Go 里仅为薄适配器（读 manifest 参数 + 调接口）。**YAML 字段、内置 `use`、manifest 引用规则** 见 [workflows-spec.md](workflows-spec.md)。
+用户定义的 workflow = **一张 DAG（或线性 `steps` 糖）上的命名节点**；每个节点在 Go 里仅为薄适配器（读 manifest 参数 + 调接口）。**YAML 字段、内置 `use`** 见 [workflows-spec.md](workflows-spec.md)；**manifest 路径与 workflow 文件选用** 见同文档 **§8**。
 
 ### 3.2 回合内：ADK ChatModelAgentMiddleware
 
@@ -112,7 +116,7 @@ flowchart LR
 
 | 职责 | 调用方 | 行为 |
 |------|--------|------|
-| **注入快照** | PreTurn（或拼 Instruction 的节点） | 读取 `MEMORY.md` / `memory/*.md` 及 sidecar，产出 **一块或多块「记忆块」**（纯文本或结构化条目列表），并附带 **预估 token/字节** 供上层 **budget** 裁剪；尊重 manifest / Agent 的 `omit_memory_injection`。 |
+| **注入快照** | PreTurn（或拼 Instruction 的节点） | 读取 `MEMORY.md` / `memory/*.md` 及 sidecar，产出 **一块或多块「记忆块」**（纯文本或结构化条目列表），并附带 **预估 token/字节** 供上层 **budget** 裁剪；尊重 Agent 的 **`context_profile.disable`**（按块名关闭注入，如 `memory_recall` / `transcript` 等，见实现）。 |
 | **抽取写入** | PostTurn（`memory_extract_llm` 节点或 Lambda） | 输入为本回合 **可见 transcript 摘要 + 工具结果引用**（非必须全长 messages）；输出为 **候选事实列表 + 每条引用锚点**；经 **写入策略**（合并、去重、版本、人工确认门槛）后调用 **Store** 追加/修订文件与 sidecar。 |
 | **只读枚举（可选）** | Skills 管线、调试 CLI | 列出当前会话 InstructionRoot 下的记忆文件与条目 id，供 `skill_suggest_llm` 引用。 |
 
@@ -158,7 +162,7 @@ flowchart LR
 ### 5.1 目录约定
 
 - **`agents/*.md`**：一层扁平 md（与子目录方案二选一；实现简单）。
-- 每个文件 = 一个可被选中的 **Agent 定义**（类型名来自 frontmatter 的 `agent_type` 或 `name`，否则取自文件名去扩展名）。
+- 每个文件 = 一个可被选中的 **Agent 定义**。**oneclaw**：**Catalog id（运行时的 `agent_type` 键、workflow 文件名 stem）恒为文件名去扩展名**；frontmatter 的 **`name`** 仅为展示名（缺省同 stem）。**不在** frontmatter 中单独解析 `agent_type` 覆盖文件名。
 
 ### 5.2 文件格式（frontmatter + 正文）
 
@@ -166,12 +170,14 @@ flowchart LR
 
 | 字段 | 含义 |
 |------|------|
-| `agent_type` / `name` | 稳定 id（`run_agent`、路由、`toolctx.AgentID` / 观测） |
+| （文件名 stem） | **稳定 id**：`run_agent`、路由、workflow **`workflows/<stem>.yaml`**、观测中的 agent 类型（**oneclaw** 以 stem 为准） |
+| `name` | 人类可读名；缺省同 stem |
 | `description` | 工具 schema / Catalog 列表展示用 |
 | `tools` | 允许的工具名列表；与父 `Registry` 求交并去掉元工具 |
+| `skills` | 引用的 **skill 目录 id** 列表（`UserDataRoot/skills/<id>/`），PreTurn 可注入对应 `SKILL.md` 摘要 |
 | `max_turns` | 子循环最大轮次（若适用） |
 | `model` | 非空则覆盖宿主默认模型 |
-| `omit_memory_injection` | 为 true 时可跳过 **当前 InstructionRoot** 记忆块注入（探索类 Agent） |
+| `context_profile.disable` | 按块名关闭默认上下文的片段（如 **`memory_recall`**、**`transcript`**、**`skills`**、**`tasks`** 等）；用于演进管线 Agent 收窄注入 |
 | `inherit_parent_memory` | 默认 **false**。子 Agent 为 **true** 时，PreTurn 可把 **父会话** MEMORY 摘要注入（仍受 budget 约束）；滥用会削弱隔离，建议仅协作型角色开启 |
 | `workspace` | 默认 **`shared`**：文件/exec 类工具的 cwd **与当前主 Agent 回合相同**（宿主解析，一般为会话 `<InstructionRoot>/workspace`）。**`private`**：使用该 Agent **独占**目录（如 `sessions/<...>/subs/<sub_run>/workspace`），避免与主会话互相读写干扰 |
 
@@ -179,9 +185,9 @@ flowchart LR
 
 ### 5.3 与 Workflow、工具、路由的关系
 
-- **默认 Agent**：`manifest.yaml` 中 `default_agent: <agent_type>`；无则退回内置 `general-purpose` 等价物。
+- **默认 Agent**：`manifest.yaml` 中 `default_agent: <id>`（与 **`agents/<id>.md`** stem 一致）；缺省或空时按 **`default`**（与 [`catalog.LoadManifest`](../catalog/manifest.go) 及内置模板一致）。
 - **按渠道/会话切换**：入站 `Metadata`（或会话首次绑定）写入 **`agent_id`**，PreTurn 节点根据 id 从 Catalog 取 Definition，再 **`FilterRegistry`** + 拼 Instruction。
-- **Per-agent Workflow（推荐约定）**：若存在 **`workflows/<agent_type>.yaml`**（与当前 Catalog 的 **类型 id** 同名），宿主 **自动选用**；否则回落 manifest 的 **`default_turn`**。若需 **共用非同名文件** 或临时覆盖，再在 frontmatter 写 **`workflow: <id>`**（可选别名 **`chain:`**，见 [workflows-spec.md](workflows-spec.md) §3）。**演进管线 Agent**（如 `memory_extractor` / `skill_generator`）不要求 Catalog 额外字段即可挂上 **同名** `workflows/<agent_type>.yaml`（见 §3.4.1）。
+- **Per-agent Workflow（oneclaw 实现）**：若存在 **`workflows/<agent_type>.yaml|.yml`**（**`<agent_type>` = 文件名 stem**），宿主 **自动选用**；否则回落 manifest 的 **`workflows.default_turn`**（或兼容顶层 **`default_turn`**），默认可解析为 **`default.turn`**。详见 [workflows-spec.md](workflows-spec.md) §8。**当前未实现** frontmatter **`workflow:` / `chain:`** 覆盖。**演进管线 Agent**（如 `memory_extractor` / `skill_generator`）不要求 Catalog 额外字段即可挂上 **同名** `workflows/<agent_type>.yaml`（见 §3.4.1）。
 - **嵌套**：子 Agent 仍可声明自己的 `tools`；避免在子定义里放开 `run_agent` / `fork_context` 除非明确需要（防深度爆炸）。
 
 ### 5.4 子 Agent 默认：**会话隔离 + 上下文隔离**（已定）
@@ -254,3 +260,4 @@ flowchart LR
 |------|------|
 | 2026-05-02 | 增补 §8 Harness 治理交叉引用、§7 设计注意第 6–7 条、参考链接顺延；§3.4 `memory` 包草图；§2 树锚定 `UserDataRoot`；§5 `inherit_parent_memory`、`workspace` 等；§5.4 Workspace；§5.5 Eino 侧；§5.6 多 Agent 管线、执行记录、演进防递归；§6 实现收口；§7 Catalog 顺序；交叉引用 [reference-architecture.md](reference-architecture.md)；§3.1/§4 PostTurn 与内置节点；套件位置与 §3.1 指向 [workflows-spec.md](workflows-spec.md)；Claw 侧 **workflow / DAG** 命名取代纯 chain |
 | 2026-05-03 | §4 / §5.2 / §5.6 / §7：**演进仅靠 workflow（`async` + `use: agent_task`）**；删除 **`suppress_post_turn_evolution`**。**§3.4.1 / §5.3**：阶段 6 已定路径；**§3.4** 交叉引用 [memory-and-session.md](memory-and-session.md)。与实现对齐：内置 Catalog + 默认 turn；无演进专用加载期校验、无 `TurnContext` 演进剖面 |
+| 2026-05-05 | §2 **oneclaw CatalogRoot 平铺**；§3.1 流程图 **O 在 Q 前**；§3.4 `context_profile.disable` 取代 `omit_memory_injection`；§5.1/§5.2 **stem 为 id**、`skills`/`context_profile`；§5.3 **default** 默认 agent、workflow 选用链路与 **§8** 对齐，删除未实现的 frontmatter `workflow` |

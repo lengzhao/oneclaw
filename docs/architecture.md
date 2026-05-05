@@ -35,7 +35,7 @@ flowchart TB
   subgraph disk [用户主目录数据]
     UD[(UserDataRoot)]
     SR[(SessionRoot / InstructionRoot)]
-    AG[.agent Catalog / workflows]
+    AG[CatalogRoot<br/>manifest / agents / workflows]
   end
   subgraph llm [模型与可选 RAG]
     API[Chat API]
@@ -64,7 +64,7 @@ flowchart TB
 
 **Workflow 实现侧**的复杂度评审、优化优先级与路线图见 **[workflow-architecture-review.md](workflow-architecture-review.md)**（与本文互补：规格仍以 [workflows-spec.md](workflows-spec.md) 为准）。
 
-读默认 **`default.turn`** 时可用 **四阶段** 对齐：**Receive**（`on_receive`）→ **RunMainADK**（`llm`，按 Agent 的 **`context_profile`** 自动准备默认 full context）→ **Respond**（`on_respond`）→ **PostTurnAsync**（`memory_agent` / `skill_agent` 等 `async: true` 的 `agent_task`）。细节与可选 **`stream`** 见该文档 **§4.1**。
+读默认 **`default.turn`** 时可用 **四阶段** 对齐：**Receive**（`on_receive`）→ **RunMainADK**（`llm`，按 Agent 的 **`context_profile`** 自动准备默认 full context）→ **Respond**（`on_respond`）→ **PostTurnAsync**（`memory_agent` / `skill_agent` 等 `async: true` 的 `agent_task`，依赖 `respond`、**不阻塞**用户可见回复）。编排与 **`stream`** 见 [workflow-architecture-review.md](workflow-architecture-review.md) **§2–§3**。
 
 仍需显式策略的两点（**与是否叫 PostTurn 无关**）：
 
@@ -119,11 +119,13 @@ flowchart LR
     R[OnReceive<br/>校验 / 附件 / TurnContext]
     P[PreTurn<br/>md → Instruction<br/>MEMORY 快照<br/>Registry filter]
     A[ADK<br/>主 agent_type]
-    Q[链后继<br/>YAML 声明]
     O[OnRespond<br/>裁剪 / transcript<br/>runs 记录 / Bus]
+    Q[链后继<br/>YAML；常 async]
   end
-  R --> P --> A --> Q --> O
+  R --> P --> A --> O --> Q
 ```
+
+与默认 **`default.turn`** 一致：**`on_respond`**（`end` 收口）先完成用户可见路径；**`memory_agent` / `skill_agent`** 等挂在 **`respond` 之后**，可为异步枝。
 
 **持久化触点**：
 
@@ -208,9 +210,9 @@ flowchart LR
 
 ```mermaid
 flowchart TB
-  subgraph global [UserDataRoot]
+  subgraph global [UserDataRoot = CatalogRoot]
     CFG[config.yaml]
-    MAN[.agent/manifest<br/>agents / workflows / prompts]
+    MAN[manifest.yaml<br/>agents / workflows / prompts]
   end
   subgraph session [SessionRoot = InstructionRoot]
     AG[AGENT.md]
@@ -280,3 +282,4 @@ flowchart LR
 | 日期 | 说明 |
 |------|------|
 | 2026-05-02 | 首版：系统上下文、端到端序列图、Compose/ADK/子Agent/目录/RAG/定时 生命周期图；§2.1 后继编排；`chains` → `workflows`（DAG）；索引 [workflows-spec.md](workflows-spec.md) |
+| 2026-05-05 | 与实现对齐：**CatalogRoot = UserDataRoot**（图中不再使用 `.agent/`）；§4 单回合阶段图改为 **`on_respond` 先于链后继**；修正 workflow 评审文档交叉引用 |

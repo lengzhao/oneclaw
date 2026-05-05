@@ -9,7 +9,7 @@ import (
 	"github.com/lengzhao/oneclaw/catalog"
 )
 
-// ResolveWorkflowPath picks workflows/<agent>.yaml|.yml then manifest default_turn (docs/workflows-spec §3).
+// ResolveWorkflowPath picks workflows/<agent>.yaml|.yml then manifest default_turn (docs/workflows-spec.md §8).
 func ResolveWorkflowPath(catalogRoot, agentID string, mf *catalog.Manifest) (string, error) {
 	root, err := filepath.Abs(catalogRoot)
 	if err != nil {
