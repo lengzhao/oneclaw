@@ -21,6 +21,7 @@
 | [appendix-data-layout.md](appendix-data-layout.md) | UserDataRoot / InstructionRoot / 隔离策略摘要 | **建议保留**（落地路径设计时对照） |
 | [reference-architecture.md](reference-architecture.md) | 架构原则 + 场景化 PRD 条目 + 落地顺序 | **建议保留** |
 | [architecture.md](architecture.md) | **主流程 + 各子系统生命周期**（Mermaid） | **建议保留** |
+| [simplicity-roadmap.md](simplicity-roadmap.md) | **oneclaw 优缺点评估 + 简单易用改进路线** | **产品化 / 收敛默认体验时建议保留** |
 | [workflow-architecture-review.md](workflow-architecture-review.md) | **oneclaw workflow 实现侧**复杂度、路线图；默认回合可读 **四阶段**（PreparePrompt → RunMainADK → Respond → PostTurnAsync），示例模板见仓库 **`setup/templates/workflows/default.turn.yaml`** | **实现/评审 oneclaw 时建议保留** |
 | [eino-md-chain-architecture.md](eino-md-chain-architecture.md) | Eino + 全 MD + `agents/` + **Workflow（Graph）** | **选 Go+Eino 时核心** |
 | [workflows-spec.md](workflows-spec.md) | **`workflows/*.yaml` Graph、`steps` 糖、manifest** | **实现编排必读** |
@@ -29,11 +30,14 @@
 | [harness-governance-extensions.md](harness-governance-extensions.md) | Harness 治理、SafeHarness 映射、**扩展 backlog** 与初期预留扩展性 | **增强方向**；一期验收以 requirements 为准 |
 | [requirements.md](requirements.md) | **目标产品 PRD**（FR/NFR、验收要点） | **绿场核心**；若产品范围不同可删或替换 |
 
+本仓库 **`examples/init/README.md`** 说明 init 落盘布局；**`examples/skills/`** 等与 **`setup/templates/`** 子树对齐，便于在 Git 中浏览。**`oneclaw init`** 通过 **`//go:embed templates`** 将 **`setup/templates/`** 整树拷到 **UserDataRoot**（缺才写；**`config.yaml`** 合并缺失键；**`agents/default.md`** 经模板渲染）。
+
 ```mermaid
 flowchart TB
   README[README.md]
   G[glossary.md]
   A[architecture.md]
+  S[simplicity-roadmap.md]
   L[appendix-data-layout.md]
   R[reference-architecture.md]
   E[eino-md-chain-architecture.md]
@@ -41,12 +45,15 @@ flowchart TB
   Q[requirements.md]
   README --> G
   README --> A
+  README --> S
   README --> L
   README --> R
   README --> E
   README --> H
   README --> Q
   R --> A
+  R -.->|产品化取舍| S
+  A -.->|现状对照| S
   A -.->|流程对齐| E
   R -.->|原则对齐| E
   Q -.->|FR 细化| R
@@ -64,13 +71,14 @@ flowchart TB
 1. **[glossary.md](glossary.md)**（首次阅读扫一遍术语）
 2. **[architecture.md](architecture.md)** — **主流程与各生命周期图**（建议第二读）
 3. **[reference-architecture.md](reference-architecture.md)** — 边界、架构块、PRD、落地顺序  
-4. **[eino-md-chain-architecture.md](eino-md-chain-architecture.md)** — 若技术栈含 Go + Eino  
-5. **[workflows-spec.md](workflows-spec.md)** — `workflows/*.yaml`（DAG）与内置节点  
-6. **[eino-integration-surface.md](eino-integration-surface.md)** — Eino / eino-ext **包与接口清单**（实现对照）  
-7. **[memory-and-session.md](memory-and-session.md)** — 对话持久化、`lengzhao/memory` 与文件 MEMORY 边界  
-8. **[appendix-data-layout.md](appendix-data-layout.md)** — 定目录与隔离策略时（含 **§6 其余推荐默认**）  
-9. **[requirements.md](requirements.md)** — PRD 与验收要点  
-10. **[harness-governance-extensions.md](harness-governance-extensions.md)** — 治理增强、扩展路线与初期预留扩展性（可选）  
+4. **[simplicity-roadmap.md](simplicity-roadmap.md)** — oneclaw 优缺点评估与「简单 / 易用」路线
+5. **[eino-md-chain-architecture.md](eino-md-chain-architecture.md)** — 若技术栈含 Go + Eino  
+6. **[workflows-spec.md](workflows-spec.md)** — `workflows/*.yaml`（DAG）与内置节点  
+7. **[eino-integration-surface.md](eino-integration-surface.md)** — Eino / eino-ext **包与接口清单**（实现对照）  
+8. **[memory-and-session.md](memory-and-session.md)** — 对话持久化、`lengzhao/memory` 与文件 MEMORY 边界  
+9. **[appendix-data-layout.md](appendix-data-layout.md)** — 定目录与隔离策略时（含 **§6 其余推荐默认**）  
+10. **[requirements.md](requirements.md)** — PRD 与验收要点  
+11. **[harness-governance-extensions.md](harness-governance-extensions.md)** — 治理增强、扩展路线与初期预留扩展性（可选）  
 
 ---
 

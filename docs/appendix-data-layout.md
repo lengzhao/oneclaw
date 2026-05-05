@@ -74,7 +74,7 @@
 | **PostTurn 演进** | **默认异步**；**不**阻塞用户回复；**不**实现「reply 前 flush」或跨回合强一致。下一回合 PreTurn **best-effort** 读取已落盘文件（若未到盘则仅用当期上文）。 |
 | **演进写入（oneclaw 阶段 6）** | **`MEMORY.md`**（`InstructionRoot`）：仅规则与最重要摘要，**≤ 2048 字节**（超出策略由实现定义）。**抽取事实**：**`memory/yyyy-mm/*.md`**（`yyyy-mm` = **UTC** 历年月）。**Skills**：**`UserDataRoot/skills/*`**。**不使用** `.staging`；**`write_behavior_policy`** 暂缓（见 [eino-md-chain-architecture.md](eino-md-chain-architecture.md) §3.4.1）。 |
 | **Catalog 加载顺序** | **内置 agents → 用户 `UserDataRoot/agents/`**（与 [`paths.CatalogRoot`](../paths/paths.go) 布局一致）；同名 **用户覆盖** |
-| **知识库原文** | 默认放在 **`UserDataRoot/knowledge/sources/`**（或 manifest 声明的绝对/相对 **UserDataRoot** 路径），与向量索引（可重建）分离 |
+| **知识库原文** | 默认放在 **`UserDataRoot/knowledge/sources/`**（或 manifest 声明的绝对/相对 **UserDataRoot** 路径），与向量索引（可重建）分离；**`oneclaw init` 预建该目录**，便于开箱后直接放入知识库原文 |
 | **可观测** | 子 Agent subsession 的日志/trace **带 `parent_session_id` + `sub_run_id`**；**每个 `agent_type` 的执行记录**单独落盘（见 FR-AGT-05） |
 
 **与 Eino / SQLite 记忆库的分层**（对话 JSONL、`CheckPointStore`、`github.com/lengzhao/memory`）见 [memory-and-session.md](memory-and-session.md)。

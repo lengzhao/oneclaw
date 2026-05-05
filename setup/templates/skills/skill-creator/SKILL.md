@@ -5,6 +5,8 @@ description: Layout and quality bar for authoring skills in oneclaw (SKILL.md + 
 
 # Skill authoring (oneclaw)
 
+This skill exists so **recurring user problems** can be turned into **reusable `skills/<skill-id>/` trees** (procedure + optional scripts), instead of being re-explained every session. 
+
 When you **create or extend** a skill under `skills/<skill-id>/`, follow this layout so humans and agents can use it reliably.
 
 ## Directory layout

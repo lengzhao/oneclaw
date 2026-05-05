@@ -11,32 +11,32 @@ import (
 	"github.com/lengzhao/oneclaw/config"
 )
 
-// AgentBootstrapVars is passed when rendering the embedded templates/agents/default.md during Bootstrap (Go text/template).
+const embeddedTemplatesRoot = "templates"
+
+// AgentBootstrapVars is passed when rendering templates/agents/default.md during Bootstrap (Go text/template).
 type AgentBootstrapVars struct {
 	UserDataRoot string
 }
 
-// Bootstrap creates UserDataRoot layout and writes templates only when missing (FR-CFG-02).
+// Bootstrap creates UserDataRoot layout and writes embedded templates/** only when missing (FR-CFG-02).
+// The full tree under setup/templates is embedded (see embed.go); add or edit files there to change defaults.
 func Bootstrap(userDataRoot string) error {
 	if err := os.MkdirAll(userDataRoot, 0o755); err != nil {
 		return err
 	}
-	dirs := []string{
-		filepath.Join(userDataRoot, "agents"),
-		filepath.Join(userDataRoot, "skills"),
-		filepath.Join(userDataRoot, "workflows"),
-		filepath.Join(userDataRoot, "prompts"),
+	// Keep runtime-only directories that do not need placeholder files under templates/.
+	for _, d := range []string{
 		filepath.Join(userDataRoot, "sessions"),
+		filepath.Join(userDataRoot, "prompts"),
 		filepath.Join(userDataRoot, "knowledge", "sources"),
-	}
-	for _, d := range dirs {
+	} {
 		if err := os.MkdirAll(d, 0o755); err != nil {
 			return err
 		}
 	}
 
 	cfgPath := filepath.Join(userDataRoot, "config.yaml")
-	defaults, err := templates.ReadFile("templates/config.yaml")
+	defaults, err := templates.ReadFile(embeddedTemplatesRoot + "/config.yaml")
 	if err != nil {
 		return err
 	}
@@ -52,50 +52,32 @@ func Bootstrap(userDataRoot string) error {
 		}
 	}
 
-	type fileJob struct {
-		tmpl string
-		dst  string
-	}
-	jobs := []fileJob{
-		{"templates/manifest.yaml", filepath.Join(userDataRoot, "manifest.yaml")},
-		{"templates/AGENT.md", filepath.Join(userDataRoot, "AGENT.md")},
-		{"templates/MEMORY.md", filepath.Join(userDataRoot, "MEMORY.md")},
-		{"templates/workflows/default.turn.yaml", filepath.Join(userDataRoot, "workflows", "default.turn.yaml")},
-		{"templates/workflows/memory_extractor.yaml", filepath.Join(userDataRoot, "workflows", "memory_extractor.yaml")},
-		{"templates/workflows/skill_generator.yaml", filepath.Join(userDataRoot, "workflows", "skill_generator.yaml")},
-		{"templates/agents/README.md", filepath.Join(userDataRoot, "agents", "README.md")},
-	}
-	for _, j := range jobs {
-		if err := copyTemplateIfMissing(j.tmpl, j.dst); err != nil {
-			return err
-		}
-	}
-	if err := renderAgentMarkdownTemplateIfMissing(
-		"templates/agents/default.md",
-		filepath.Join(userDataRoot, "agents", "default.md"),
-		AgentBootstrapVars{UserDataRoot: userDataRoot},
-	); err != nil {
-		return err
-	}
-	return bootstrapSkillsFromTemplates(userDataRoot)
-}
-
-// bootstrapSkillsFromTemplates copies embedded templates/skills/** into UserDataRoot/skills/ when missing (never overwrites).
-func bootstrapSkillsFromTemplates(userDataRoot string) error {
-	const prefix = "templates/skills"
-	return fs.WalkDir(templates, prefix, func(path string, d fs.DirEntry, err error) error {
+	return fs.WalkDir(templates, embeddedTemplatesRoot, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 		if d.IsDir() {
 			return nil
 		}
-		rel, err := filepath.Rel(prefix, path)
+		rel, err := filepath.Rel(embeddedTemplatesRoot, path)
 		if err != nil {
 			return err
 		}
-		dst := filepath.Join(userDataRoot, "skills", filepath.FromSlash(rel))
-		return copyTemplateIfMissing(path, dst)
+		rel = filepath.ToSlash(rel)
+		if rel == "config.yaml" {
+			return nil
+		}
+		dst := filepath.Join(userDataRoot, filepath.FromSlash(rel))
+		// embed.FS paths must use "/" (see go:embed docs), even on Windows.
+		tmplKey := embeddedTemplatesRoot + "/" + rel
+		if rel == "agents/default.md" {
+			return renderAgentMarkdownTemplateIfMissing(
+				tmplKey,
+				dst,
+				AgentBootstrapVars{UserDataRoot: userDataRoot},
+			)
+		}
+		return copyTemplateIfMissing(tmplKey, dst)
 	})
 }
 

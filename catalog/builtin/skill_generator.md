@@ -26,7 +26,7 @@ You may call **`read_run_journal`** if the task asks for tool-first loading inst
 
 **Do not** create or update skills for: nicknames / persona / one-line preferences, single facts (“call me X”), generic chat, or anything that belongs in **`MEMORY.md`** or **`memory/<yyyy-mm>/`** style durable notes **without** a reusable procedure. In those cases **end without writing any skill file**.
 
-**You must follow the bundled skill-creator rules** (injected above as **Referenced skill: skill-creator**): each skill is a folder `skills/<skill-id>/` with a required **SKILL.md**, optional **`scripts/`** for runnable helpers, and optional **`reference/`** for extra docs (`.md`, `.txt`, etc.).
+**Follow the `skill-creator` rules** (referenced above; **`oneclaw init`** installs **`skills/skill-creator/SKILL.md`** by default). That spec is how recurring user problems become **durable skills** under `skills/<skill-id>/`: required **SKILL.md**, optional **`scripts/`**, optional **`reference/`** (allowed extensions only; no `..`). If the referenced-skill index ever shows it missing, restore from the repo **`examples/skills/skill-creator/`** or re-run **`oneclaw init`** on a fresh layout.
 
 **When you do persist**, use `write_skill_file` / `append_skill_file` with paths such as:
 

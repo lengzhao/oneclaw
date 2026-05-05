@@ -29,9 +29,13 @@ func TestBootstrap_idempotent(t *testing.T) {
 	if _, ok := m["models"]; !ok {
 		t.Fatal("missing models")
 	}
+	readme := filepath.Join(root, "skills", "README.md")
+	if _, err := os.Stat(readme); err != nil {
+		t.Fatalf("expected skills/README.md from bootstrap: %v", err)
+	}
 	sk := filepath.Join(root, "skills", "skill-creator", "SKILL.md")
 	if _, err := os.Stat(sk); err != nil {
-		t.Fatalf("expected builtin skill-creator template: %v", err)
+		t.Fatalf("expected bundled skill-creator (core capability loop): %v", err)
 	}
 	def := filepath.Join(root, "agents", "default.md")
 	b, err := os.ReadFile(def)
@@ -40,5 +44,18 @@ func TestBootstrap_idempotent(t *testing.T) {
 	}
 	if !strings.Contains(string(b), root) {
 		t.Fatalf("default.md should contain rendered UserDataRoot")
+	}
+	agReadme := filepath.Join(root, "agents", "README.md")
+	if _, err := os.Stat(agReadme); err != nil {
+		t.Fatalf("expected agents/README.md copied from embedded templates/: %v", err)
+	}
+	for _, dir := range []string{
+		filepath.Join(root, "sessions"),
+		filepath.Join(root, "prompts"),
+		filepath.Join(root, "knowledge", "sources"),
+	} {
+		if st, err := os.Stat(dir); err != nil || !st.IsDir() {
+			t.Fatalf("expected init directory %s: %v", dir, err)
+		}
 	}
 }
