@@ -71,7 +71,7 @@ func loadRunEnv(t *testing.T, root string, extraYAML string) *config.File {
 	if err != nil {
 		t.Fatal(err)
 	}
-	config.ApplyEnvSecrets(cfg)
+	config.ApplyUserDataSecrets(root, cfg)
 	config.PushRuntime(cfg)
 	return cfg
 }
@@ -316,11 +316,11 @@ func TestE2E_MockTurn_configProviderMockWithoutFlag(t *testing.T) {
 	}
 	root := bootstrapUserData(t)
 	patch := `
+default_model: mock/stub
 models:
   - id: default
     priority: 0
     provider: mock
-    default_model: stub
 `
 	cfg := loadRunEnv(t, root, patch)
 

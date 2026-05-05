@@ -9,7 +9,7 @@ import (
 	"github.com/lengzhao/oneclaw/config"
 )
 
-// NewToolCallingChatModel returns a stub or OpenAI-compatible model from a resolved profile.
+// NewToolCallingChatModel returns a stub or an eino-ext ToolCallingChatModel from a resolved profile (see chatmodels.go).
 func NewToolCallingChatModel(ctx context.Context, prof *config.ModelProfile, useMock bool) (model.ToolCallingChatModel, error) {
 	if prof == nil {
 		return nil, fmt.Errorf("adkhost: nil model profile")
@@ -17,7 +17,7 @@ func NewToolCallingChatModel(ctx context.Context, prof *config.ModelProfile, use
 	if useMock {
 		return NewStubChatModel("Hello from oneclaw stub model."), nil
 	}
-	return NewOpenAIChatModel(ctx, prof)
+	return newChatModelFromProfile(ctx, prof)
 }
 
 // MaxAgentIterations returns a positive iteration cap from config defaults.

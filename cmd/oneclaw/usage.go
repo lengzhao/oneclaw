@@ -18,9 +18,11 @@ Env:
 
 Commands:
   init       Bootstrap UserDataRoot (flags: --user-data; merges config keys if config.yaml exists)
+  onboard    Guided LLM (OpenAI/Claude/Gemini/Ark/Moonshot/Qwen/DeepSeek/OpenRouter or custom compat; key_files + model) + Weixin
   run, repl  Single-turn agent (flags: --mock-llm, --profile, --agent, --prompt, --session)
   serve      clawbridge + WebChat + TurnHub + optional schedule (flags: --no-schedule, --mock-llm); send /reset to clear transcript.jsonl only (runs/subs unchanged)
   channel    clawbridge driver onboarding: list-drivers | onboard <driver> (see -h)
+  config     Inspect merged config: show (redacted effective YAML; see -h)
   snapshot   Export session snapshot for backup/migration (stub)
   version    Print version
   help       Show this message

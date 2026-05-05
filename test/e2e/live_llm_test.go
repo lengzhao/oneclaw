@@ -11,6 +11,7 @@ import (
 
 // Live LLM：`ONECLAW_E2E_LIVE_LLM=1` 且勿使用 `-short` 时，本包内凡调用 executeTurn 的用例均走真实模型（另见 live_mode_helpers_test.go）。
 // 凭证：`test/e2e/.env` 或仓库根 `.env`（TestMain 加载），变量 ONECLAW_E2E_* 或别名 base_url / api_key / default_model。
+// default_model 可为裸 API 模型名（合并为 openai_compatible/<name>）或已是 profile_id_or_provider/model。
 //
 // 仅 Live 冒烟：go test ./test/e2e -run TestLiveLLM -count=1 -timeout 20m -v
 // 全套集成（耗 API）：ONECLAW_E2E_LIVE_LLM=1 go test ./test/e2e -count=1 -timeout 120m -v

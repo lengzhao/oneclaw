@@ -31,10 +31,11 @@ func SplitYAMLFrontmatter(raw []byte) (frontYAML []byte, body string, err error)
 
 // AgentFrontmatter is the YAML block in agents/*.md.
 type AgentFrontmatter struct {
-	Name                string         `yaml:"name,omitempty"`
-	Description         string         `yaml:"description,omitempty"`
-	Tools               []string       `yaml:"tools,omitempty"`
-	Skills              []string       `yaml:"skills,omitempty"`
+	Name        string   `yaml:"name,omitempty"`
+	Description string   `yaml:"description,omitempty"`
+	Tools       []string `yaml:"tools,omitempty"`
+	Skills      []string `yaml:"skills,omitempty"`
+	// Model is profile_id_or_provider/api_model_id (first '/' only); empty uses config root default_model.
 	Model               string         `yaml:"model,omitempty"`
 	MaxTurns            int            `yaml:"max_turns,omitempty"`
 	Workspace           string         `yaml:"workspace,omitempty"`

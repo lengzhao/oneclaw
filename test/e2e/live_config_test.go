@@ -7,6 +7,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/lengzhao/oneclaw/config"
 	"github.com/lengzhao/oneclaw/test/e2e/dotenv"
 )
 
@@ -32,13 +33,15 @@ func liveLLMConfigPatchYAML(t *testing.T) string {
 	if base != "" {
 		prof["base_url"] = base
 	}
-	if dm != "" {
-		prof["default_model"] = dm
-	}
-
 	root := map[string]any{"models": []any{prof}}
 	if dm != "" {
-		root["default_model"] = dm
+		if _, _, ok := config.SplitProviderModel(dm); ok {
+			root["default_model"] = dm
+		} else {
+			root["default_model"] = "openai_compatible/" + dm
+		}
+	} else {
+		root["default_model"] = "openai_compatible/gpt-5.4-nano"
 	}
 
 	b, err := yaml.Marshal(root)

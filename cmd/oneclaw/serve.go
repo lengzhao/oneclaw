@@ -54,30 +54,21 @@ func cmdServe(ctx context.Context, g globalOpts, args []string) error {
 		return fmt.Errorf("serve: %w\n%s", err, buf.String())
 	}
 
-	cfgPaths := []string{}
-	if cp := strings.TrimSpace(g.ConfigPath); cp != "" {
-		cfgPaths = append(cfgPaths, cp)
-	} else {
-		rootGuess, err := paths.ResolveUserDataRoot(nil)
-		if err != nil {
-			return fmt.Errorf("resolve default user data root: %w", err)
-		}
-		candidate := filepath.Join(rootGuess, "config.yaml")
-		if _, err := os.Stat(candidate); err == nil {
-			cfgPaths = append(cfgPaths, candidate)
-		}
+	cfgPaths, err := mergedConfigPaths(g)
+	if err != nil {
+		return fmt.Errorf("resolve config paths: %w", err)
 	}
 	ocfg, err := config.LoadMerged(cfgPaths)
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
 	}
-	config.ApplyEnvSecrets(ocfg)
-	config.PushRuntime(ocfg)
 
 	root, err := paths.ResolveUserDataRoot(ocfg)
 	if err != nil {
 		return err
 	}
+	config.ApplyUserDataSecrets(root, ocfg)
+	config.PushRuntime(ocfg)
 	catRoot := paths.CatalogRoot(root)
 	cat, err := catalog.Load(filepath.Join(catRoot, "agents"))
 	if err != nil {
@@ -86,7 +77,7 @@ func cmdServe(ctx context.Context, g globalOpts, args []string) error {
 
 	cbCfg := ocfg.Clawbridge
 	if countEnabledClients(cbCfg.Clients) == 0 {
-		return fmt.Errorf("clawbridge: no enabled clients in config — add a `clawbridge:` section with at least one enabled driver (e.g. webchat); see setup/templates/config.yaml")
+		return fmt.Errorf("clawbridge: no enabled clients — run `oneclaw onboard` (Weixin), or set `clawbridge.clients[].enabled: true` (e.g. webchat); see `oneclaw config show`")
 	}
 
 	b, err := clawbridge.New(cbCfg, clawbridge.WithOutboundSendNotify(func(_ context.Context, info clawbridge.OutboundSendNotifyInfo) {

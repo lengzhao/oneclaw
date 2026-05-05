@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"runtime/debug"
 )
 
 func cmdRun(ctx context.Context, g globalOpts, args []string) error {
@@ -17,6 +18,11 @@ func cmdSnapshot(ctx context.Context, g globalOpts, args []string) error {
 }
 
 func cmdVersion(_ context.Context) error {
-	_, err := fmt.Fprintf(os.Stdout, "%s\n", version)
-	return err
+	if _, err := fmt.Fprintf(os.Stdout, "%s\n", version); err != nil {
+		return err
+	}
+	if bi, ok := debug.ReadBuildInfo(); ok && bi.Main.Path != "" {
+		_, _ = fmt.Fprintf(os.Stdout, "module %s\n", bi.Main.Path)
+	}
+	return nil
 }

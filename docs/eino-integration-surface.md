@@ -47,7 +47,7 @@ go get github.com/cloudwego/eino-ext@latest
 | `ToolCallingChatModel` | **主路径**：支持 `WithTools` / `BindTools`，驱动 ReAct 式工具循环 |
 | `Option` | 模型调用级选项（如模型名） |
 
-**实现来源**：具体 `ChatModel` 一般由 **eino-ext** 提供（如 `github.com/cloudwego/eino-ext/components/model/openai`），Claw 仅依赖 **接口** 与配置注入。
+**实现来源**：具体 `ChatModel` 由 **eino-ext** 按 **`config.models[].provider`** 选择（如 **`openai`**、**`claude`**、**`gemini`**、**`ark`**、**`qwen`**、**`deepseek`**、**`openrouter`**；**`moonshot`** 走 Moonshot 兼容 URL + **`openai`** 组件），Claw 侧仅依赖 **`ToolCallingChatModel`** 与配置注入。
 
 ---
 

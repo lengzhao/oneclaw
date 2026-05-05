@@ -11,16 +11,17 @@ func TestPushRuntime_roundTrip(t *testing.T) {
 		t.Fatal("expected nil")
 	}
 	f := &File{
-		Models: []ModelProfile{{ID: "p", DefaultModel: "x"}},
+		DefaultModel: "p/api-model",
+		Models:       []ModelProfile{{ID: "p"}},
 	}
 	ApplyDefaults(f)
 	PushRuntime(f)
 	v := Runtime()
-	if v == nil || len(v.Config.Models) != 1 || v.Config.Models[0].DefaultModel != "x" {
+	if v == nil || len(v.Config.Models) != 1 || v.Config.DefaultModel != "p/api-model" {
 		t.Fatalf("snapshot %+v", v)
 	}
-	f.Models[0].DefaultModel = "mutate-after-push"
-	if Runtime().Config.Models[0].DefaultModel != "x" {
+	f.DefaultModel = "mutate-after-push"
+	if Runtime().Config.DefaultModel != "p/api-model" {
 		t.Fatal("snapshot should be cloned")
 	}
 }

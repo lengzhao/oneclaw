@@ -6,7 +6,7 @@
 
 | 路径 | 说明 |
 |------|------|
-| `config.yaml` | 模型、工具、`clawbridge`、`catalog.default_agent` / `catalog.workflows.default_turn` 等 |
+| `config.yaml` | 根 **`default_model: <profile id 或 provider>/api模型`**、`models[]`（仅凭证）、工具、`clawbridge`、`catalog` 等 |
 | `AGENT.md` / `MEMORY.md` | 会话说明与记忆占位 |
 | `workflows/*.yaml` | 主回合与子 Agent（`memory_extractor` / `skill_generator`）workflow |
 | `agents/default.md` | 默认主 Agent（**Go `text/template`** 渲染 `UserDataRoot`） |
@@ -17,6 +17,9 @@
 | `prompts/` | 预留 prompt override / prompt assets |
 | `knowledge/sources/` | 预留知识库原文入口 |
 | `sessions/` | 会话根目录 |
+| `key_files/` | 模型密钥 / OAuth 派生 JSON（`bootstrap` 创建为 `0700`）；**`oneclaw onboard`** 按所选厂商写入如 **`dashscope.json`** / **`openai.json`** 等 |
+
+**`oneclaw serve`**：需要至少一个 **`clawbridge.clients[].enabled: true`**。模板里 **webchat 默认 `enabled: false`**，微信通道请 **`oneclaw onboard`** 或手工打开 webchat；详见 [docs/user-guide.md](../../docs/user-guide.md)。
 
 ## **`skill-creator`（默认随 init 下发）**
 

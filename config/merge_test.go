@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -14,16 +15,15 @@ func TestLoadMerged_layering(t *testing.T) {
 	if err := os.WriteFile(p1, []byte(`
 sessions:
   isolate_instruction_root: false
+default_model: openai_compatible/gpt-4o
 models:
   - id: default
-    default_model: gpt-4o
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(p2, []byte(`
 models:
   - id: default
-    default_model: gpt-4o
     base_url: https://example.com/v1
 `), 0o644); err != nil {
 		t.Fatal(err)
@@ -39,8 +39,11 @@ models:
 	if m0.BaseURL != "https://example.com/v1" {
 		t.Fatalf("base_url=%q", m0.BaseURL)
 	}
-	if m0.DefaultModel != "gpt-4o" {
-		t.Fatalf("model=%q", m0.DefaultModel)
+	if strings.TrimSpace(m0.DefaultModel) != "" {
+		t.Fatalf("profile default_model should be unset: %q", m0.DefaultModel)
+	}
+	if strings.TrimSpace(f.DefaultModel) != "openai_compatible/gpt-4o" {
+		t.Fatalf("root default_model=%q", f.DefaultModel)
 	}
 	if f.IsolateInstructionOrDefault() {
 		t.Fatal("expected isolate false from base")
@@ -59,8 +62,11 @@ func TestLoadMerged_emptyIsDefaults(t *testing.T) {
 	if !f.IsolateInstructionOrDefault() {
 		t.Fatal("default isolate should be true")
 	}
-	if f.Models[0].DefaultModel != "gpt-5.4-nano" {
-		t.Fatalf("default model %q", f.Models[0].DefaultModel)
+	if strings.TrimSpace(f.Models[0].DefaultModel) != "" {
+		t.Fatalf("implicit profile must not set default_model: %q", f.Models[0].DefaultModel)
+	}
+	if strings.TrimSpace(f.DefaultModel) != "openai_compatible/gpt-5.4-nano" {
+		t.Fatalf("root default_model %q", f.DefaultModel)
 	}
 }
 
@@ -69,11 +75,11 @@ func TestLoadMerged_modelsList(t *testing.T) {
 	dir := t.TempDir()
 	p := filepath.Join(dir, "m.yaml")
 	yaml := `
+default_model: primary/gpt-4o-mini
 models:
   - id: primary
     priority: 0
     api_key_env: OPENAI_API_KEY
-    default_model: gpt-4o-mini
   - id: backup
     priority: 10
     provider: mock

@@ -77,6 +77,12 @@ func run(argv []string) int {
 			return 1
 		}
 		return 0
+	case "onboard":
+		if err := cmdOnboard(ctx, g, cmdArgs); err != nil {
+			slog.Error("onboard", "err", err)
+			return 1
+		}
+		return 0
 	case "run", "repl":
 		if err := cmdRun(ctx, g, cmdArgs); err != nil {
 			slog.Error(cmd, "err", err)
@@ -98,6 +104,12 @@ func run(argv []string) int {
 	case "channel":
 		if err := cmdChannel(ctx, g, cmdArgs); err != nil {
 			slog.Error("channel", "err", err)
+			return 1
+		}
+		return 0
+	case "config":
+		if err := cmdConfig(ctx, g, cmdArgs); err != nil {
+			slog.Error("config", "err", err)
 			return 1
 		}
 		return 0

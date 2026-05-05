@@ -20,7 +20,7 @@ func runInteractive(ctx context.Context, g globalOpts, args []string) error {
 	buf := &strings.Builder{}
 	fs.SetOutput(buf)
 	mockLLM := fs.Bool("mock-llm", false, "use stub ChatModel (no external API)")
-	profileID := fs.String("profile", "", "model profile id (see config models[]; default: highest priority)")
+	profileID := fs.String("profile", "", "profile_id_or_provider/model (see config; overrides agent frontmatter model)")
 	agentID := fs.String("agent", "", "catalog agent id: *.md filename stem (default: config catalog.default_agent)")
 	prompt := fs.String("prompt", "Say hello in one short sentence.", "single-turn user message")
 	sessionID := fs.String("session", "cli-default", "session id for layout under UserDataRoot (unsafe chars replaced)")
@@ -28,31 +28,21 @@ func runInteractive(ctx context.Context, g globalOpts, args []string) error {
 		return fmt.Errorf("run: %w\n%s", err, buf.String())
 	}
 
-	cfgPaths := []string{}
-	if cp := strings.TrimSpace(g.ConfigPath); cp != "" {
-		cfgPaths = append(cfgPaths, cp)
-	} else {
-		// Without -config, still load ~/.oneclaw/config.yaml (or ONECLAW_USER_DATA_ROOT/config.yaml) when present.
-		root, err := paths.ResolveUserDataRoot(nil)
-		if err != nil {
-			return fmt.Errorf("resolve default user data root: %w", err)
-		}
-		candidate := filepath.Join(root, "config.yaml")
-		if _, err := os.Stat(candidate); err == nil {
-			cfgPaths = append(cfgPaths, candidate)
-		}
+	cfgPaths, err := mergedConfigPaths(g)
+	if err != nil {
+		return fmt.Errorf("resolve config paths: %w", err)
 	}
 	cfg, err := config.LoadMerged(cfgPaths)
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
 	}
-	config.ApplyEnvSecrets(cfg)
-	config.PushRuntime(cfg)
 
 	root, err := paths.ResolveUserDataRoot(cfg)
 	if err != nil {
 		return err
 	}
+	config.ApplyUserDataSecrets(root, cfg)
+	config.PushRuntime(cfg)
 
 	catRoot := paths.CatalogRoot(root)
 	cat, err := catalog.Load(filepath.Join(catRoot, "agents"))
@@ -62,8 +52,18 @@ func runInteractive(ctx context.Context, g globalOpts, args []string) error {
 
 	sessWire := strings.TrimSpace(*sessionID)
 
+	at := strings.TrimSpace(*agentID)
+	if at == "" {
+		at = cfg.ResolvedDefaultAgent()
+	}
+	ag := cat.Get(at)
+	if ag == nil {
+		return fmt.Errorf("unknown agent id %q (run init; check agents/)", at)
+	}
+
 	useMock := *mockLLM
-	prof, err := config.ResolveModelProfile(cfg, strings.TrimSpace(*profileID))
+	sel := config.EffectiveModelSelector(strings.TrimSpace(*profileID), ag.Model)
+	prof, err := config.ResolveModelForTurn(cfg, sel)
 	if err != nil {
 		return err
 	}
@@ -73,8 +73,8 @@ func runInteractive(ctx context.Context, g globalOpts, args []string) error {
 		Ctx:            ctx,
 		UserDataRoot:   root,
 		Config:         cfg,
-		Catalog: cat,
-		AgentID: strings.TrimSpace(*agentID),
+		Catalog:        cat,
+		AgentID:        at,
 		ProfileID:      strings.TrimSpace(*profileID),
 		SessionSegment: sessWire,
 		UserPrompt:     *prompt,

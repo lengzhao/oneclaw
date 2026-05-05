@@ -29,8 +29,13 @@ func Bootstrap(userDataRoot string) error {
 		filepath.Join(userDataRoot, "sessions"),
 		filepath.Join(userDataRoot, "prompts"),
 		filepath.Join(userDataRoot, "knowledge", "sources"),
+		filepath.Join(userDataRoot, "key_files"),
 	} {
-		if err := os.MkdirAll(d, 0o755); err != nil {
+		perms := os.FileMode(0o755)
+		if filepath.Base(d) == "key_files" {
+			perms = 0o700
+		}
+		if err := os.MkdirAll(d, perms); err != nil {
 			return err
 		}
 	}

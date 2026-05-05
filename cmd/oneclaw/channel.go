@@ -126,7 +126,11 @@ func persistClawbridgeMerge(g globalOpts, patch cbconfig.Config, msg string) err
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
 	}
-	config.ApplyEnvSecrets(f)
+	rootForSecrets, err := paths.ResolveUserDataRoot(f)
+	if err != nil {
+		return err
+	}
+	config.ApplyUserDataSecrets(rootForSecrets, f)
 
 	cfgPath, err := resolvedConfigWritePath(g, f)
 	if err != nil {

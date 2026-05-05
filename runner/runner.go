@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/cloudwego/eino/adk"
+	"github.com/cloudwego/eino/components/model"
 
 	"github.com/lengzhao/oneclaw/adkhost"
 	"github.com/lengzhao/oneclaw/catalog"
@@ -31,9 +32,9 @@ type Params struct {
 
 	UserDataRoot string
 	Config       *config.File
-	Catalog *catalog.Catalog
+	Catalog      *catalog.Catalog
 
-	AgentID string // catalog agent id; empty uses config catalog.default_agent (see InboundMeta* for clawbridge Metadata)
+	AgentID   string // catalog agent id; empty uses config catalog.default_agent (see InboundMeta* for clawbridge Metadata)
 	ProfileID string // empty uses config default profile resolution
 	// SessionSegment is the raw channel session id (e.g. Weixin …@im.wechat). Paths use SanitizeSessionPathSegment internally.
 	SessionSegment string
@@ -75,6 +76,7 @@ func ExecuteTurn(p Params) error {
 	if root == "" {
 		return fmt.Errorf("runner: empty user data root")
 	}
+	config.ApplyUserDataSecrets(root, p.Config)
 
 	at := strings.TrimSpace(p.AgentID)
 	if at == "" {
@@ -122,9 +124,34 @@ func ExecuteTurn(p Params) error {
 		return err
 	}
 
-	prof, err := config.ResolveModelProfile(p.Config, strings.TrimSpace(p.ProfileID))
+	sel := config.EffectiveModelSelector(p.ProfileID, ag.Model)
+	profCandidates, err := config.ResolveModelProfilesForTurn(p.Config, sel)
 	if err != nil {
 		return err
+	}
+
+	var prof config.ModelProfile
+	var cm model.ToolCallingChatModel
+	var lastConstructErr error
+	for i := range profCandidates {
+		pp := profCandidates[i]
+		um := p.UseMock || strings.EqualFold(pp.Provider, "mock")
+		c, err := adkhost.NewToolCallingChatModel(ctx, &pp, um)
+		if err != nil {
+			lastConstructErr = err
+			slog.WarnContext(ctx, "runner: model profile unavailable, trying failover",
+				"profile_id", pp.ID, "provider", pp.Provider, "err", err)
+			continue
+		}
+		prof = pp
+		cm = c
+		break
+	}
+	if cm == nil {
+		if lastConstructErr != nil {
+			return fmt.Errorf("no usable model profile after failover: %w (use --mock-llm for offline)", lastConstructErr)
+		}
+		return fmt.Errorf("no usable model profile after failover (use --mock-llm for offline)")
 	}
 
 	useMock := p.UseMock || strings.EqualFold(prof.Provider, "mock")
@@ -162,11 +189,6 @@ func ExecuteTurn(p Params) error {
 
 	if useMock {
 		slog.InfoContext(ctx, "using stub ChatModel", "profile", prof.ID, "provider", prof.Provider)
-	}
-
-	cm, err := adkhost.NewToolCallingChatModel(ctx, prof, useMock)
-	if err != nil {
-		return fmt.Errorf("%w (use --mock-llm for offline)", err)
 	}
 
 	desc := ag.Description

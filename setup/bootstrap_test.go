@@ -61,6 +61,7 @@ func TestBootstrap_idempotent(t *testing.T) {
 		filepath.Join(root, "sessions"),
 		filepath.Join(root, "prompts"),
 		filepath.Join(root, "knowledge", "sources"),
+		filepath.Join(root, "key_files"),
 	} {
 		if st, err := os.Stat(dir); err != nil || !st.IsDir() {
 			t.Fatalf("expected init directory %s: %v", dir, err)

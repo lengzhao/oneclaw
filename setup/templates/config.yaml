@@ -5,7 +5,8 @@ catalog:
 
 sessions:
   isolate_instruction_root: true
-default_model: gpt-5.4-nano
+# 左侧优先匹配 models[].id，否则按 models[].provider 聚类并按 priority 故障转移；右侧为 API model。
+default_model: openai_compatible/gpt-5.4-nano
 models:
   - id: default
     priority: 0
@@ -13,23 +14,23 @@ models:
     base_url: https://api.openai.com/v1
     # api_key_env is the *name* of an env var, not the secret. Moonshot host defaults to MOONSHOT_API_KEY.
     api_key_env: OPENAI_API_KEY
-    default_model: gpt-5.4-nano
 runtime:
   max_agent_iterations: 100
   max_delegation_depth: 3
 
-# clawbridge：`oneclaw serve` 读此块；webchat 仅建议绑定 127.0.0.1（见 clawbridge 文档）。
+# clawbridge：`oneclaw serve` 读此块；至少一个 enabled client。
+# 默认关闭 webchat，优先走 `oneclaw onboard` 写入 Weixin；本地调试可把 webchat 设为 enabled: true。
 clawbridge:
   media: {}
   clients:
     - id: webchat-1
       driver: webchat
-      enabled: true
+      enabled: false
       options:
         display_name: You
         listen: "127.0.0.1:8765"
         path: /
-# 微信 iLink 等：扫码 onboarding 写入本块 — `oneclaw channel onboard weixin -client-id weixin-1`（见 clawbridge examples/weixin-onboard）。
+# 微信：`oneclaw onboard` 或 `oneclaw channel onboard weixin`（见 clawbridge examples/weixin-onboard）。
 
 # 内置工具默认全开；catalog 的 tools: 仍是每 Agent 白名单。生产环境请收窄 exec（allow 前缀或去掉 "*"）。
 tools:

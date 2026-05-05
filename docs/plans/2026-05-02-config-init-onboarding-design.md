@@ -17,12 +17,13 @@
 与 [docs/appendix-data-layout.md](../appendix-data-layout.md) 一致：`config.yaml` 在用户数据根（或 `-config` 指定）。其中增加两块 **可由 init 写入** 的字段：
 
 ```yaml
-# 示例：形状仅供设计讨论，字段名以实现为准
-model:
-  provider: openai_compatible   # 枚举见 §4
-  base_url: https://api.openai.com/v1
-  api_key_env: OPENAI_API_KEY   # 真密钥只进 env（FR-CFG-01）
-  default_model: gpt-4o-mini
+# 示例：形状仅供设计讨论；实现上为根 default_model + models[]（见 unified-model-auth §5.1）
+default_model: openai_compatible/gpt-4o-mini
+models:
+  - id: default
+    provider: openai_compatible   # 枚举见 §4
+    base_url: https://api.openai.com/v1
+    api_key_env: OPENAI_API_KEY   # 真密钥只进 env（FR-CFG-01）
 
 clawbridge:
   # 方案 A：内联（小部署）
@@ -96,9 +97,9 @@ driver 名与注册一致：`feishu`、`weixin`、`telegram`、`slack`、`webcha
 
 | provider id           | 典型用途           | 写入字段（概念） |
 |-----------------------|--------------------|------------------|
-| `openai_compatible`   | OpenAI / 多数兼容网关 | `base_url`、`api_key_env`、`default_model` |
+| `openai_compatible`   | OpenAI / 多数兼容网关 | `models[].base_url`、`api_key_env`（或 `auth.token_file`）；**API 模型名**由 **`default_model:` / Agent / `--profile` 的「左侧/model」** 指定；左侧为 **`models[].id`** 或 **`models[].provider`**（见 unified-model-auth §5.1） |
 | `volcengine_ark`      | 火山方舟           | `ark_api_key_env`、`endpoint_id` / 模型字段（与 eino-ext Ark 对齐） |
-| `deepseek`            | DeepSeek OpenAI 兼容 | `base_url` 固定或可选、`api_key_env`、`default_model` |
+| `deepseek`            | DeepSeek OpenAI 兼容 | `base_url` 固定或可选、`api_key_env`；模型名同上 **`credential/model`** |
 | `azure_openai`        | Azure              | `endpoint`、`deployment`、`api_key_env`（若走单独 ChatModel 构造） |
 | `skip_llm`            | 仅渠道 / dry-run   | 不写密钥，模型块注释说明 |
 

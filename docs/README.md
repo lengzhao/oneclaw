@@ -17,6 +17,7 @@
 | 文件 | 角色 | 复制到新项目时 |
 |------|------|----------------|
 | [README.md](README.md) | 本索引与复制指南 | **必留** |
+| [user-guide.md](user-guide.md) | **最短路径**：init / onboard / serve / 诊断 | **建议保留**（终端用户入口） |
 | [glossary.md](glossary.md) | 术语统一 | **建议保留**（可与 README 合并） |
 | [appendix-data-layout.md](appendix-data-layout.md) | UserDataRoot / InstructionRoot / 隔离策略摘要 | **建议保留**（落地路径设计时对照） |
 | [reference-architecture.md](reference-architecture.md) | 架构原则 + 场景化 PRD 条目 + 落地顺序 | **建议保留** |
@@ -29,6 +30,10 @@
 | [memory-and-session.md](memory-and-session.md) | **Eino Session 示例 vs 检查点 vs `lengzhao/memory` vs oneclaw 文件 MEMORY** | **接记忆/会话持久化前读** |
 | [harness-governance-extensions.md](harness-governance-extensions.md) | Harness 治理、SafeHarness 映射、**扩展 backlog** 与初期预留扩展性 | **增强方向**；一期验收以 requirements 为准 |
 | [requirements.md](requirements.md) | **目标产品 PRD**（FR/NFR、验收要点） | **绿场核心**；若产品范围不同可删或替换 |
+
+**普通用户短入口**：[user-guide.md](user-guide.md)（init / onboard / serve / `config show`）。
+
+**实现计划（`plans/`，可选阅读）**：[通用 `init` 交互引导（渠道 + LLM）](plans/2026-05-02-config-init-onboarding-design.md)；[微信扫码 + 阿里云 OAuth 极简 onboard（对标 OpenClaw wizard 收窄版）](plans/weixin-alibaba-oauth-minimal-onboarding.md)；[**统一多厂商模型鉴权**（`key_files` + API Key）](plans/unified-model-auth.md)。
 
 本仓库 **`examples/init/README.md`** 说明 init 落盘布局；**`examples/skills/`** 等与 **`setup/templates/`** 子树对齐，便于在 Git 中浏览。**`oneclaw init`** 通过 **`//go:embed templates`** 将 **`setup/templates/`** 整树拷到 **UserDataRoot**（缺才写；**`config.yaml`** 合并缺失键；**`agents/default.md`** 经模板渲染）。
 
@@ -68,6 +73,7 @@ flowchart TB
 
 ## 推荐阅读顺序
 
+0. **[user-guide.md](user-guide.md)** — 最短路径（init / onboard / serve / `config show`），不必先读术语  
 1. **[glossary.md](glossary.md)**（首次阅读扫一遍术语）
 2. **[architecture.md](architecture.md)** — **主流程与各生命周期图**（建议第二读）
 3. **[reference-architecture.md](reference-architecture.md)** — 边界、架构块、PRD、落地顺序  

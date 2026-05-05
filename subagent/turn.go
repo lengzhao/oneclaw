@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/cloudwego/eino/adk"
+	"github.com/cloudwego/eino/components/model"
 
 	"github.com/lengzhao/oneclaw/adkhost"
 	"github.com/lengzhao/oneclaw/catalog"
@@ -118,26 +119,42 @@ func ExecuteSubAgentTurn(ctx context.Context, deps *RunAgentDeps, sub *catalog.A
 		OnSubAgentChunk: deps.OnSubAgentChunk,
 		CorrelationID:   deps.CorrelationID,
 		DelegationDepth: deps.DelegationDepth + 1,
-		ParentRegistry: deps.ParentRegistry,
+		ParentRegistry:  deps.ParentRegistry,
 	}
 	childReg, err := BuildRegistryForAgent(childWS, bundle.ToolAllowlist, deps.ParentRegistry, runTmpl)
 	if err != nil {
 		return "", err
 	}
 
-	profID := strings.TrimSpace(sub.Model)
-	if profID == "" {
-		profID = strings.TrimSpace(deps.ProfileID)
-	}
-	prof, err := config.ResolveModelProfile(deps.Cfg, profID)
+	sel := config.EffectiveModelSelector(deps.ProfileID, sub.Model)
+	profCandidates, err := config.ResolveModelProfilesForTurn(deps.Cfg, sel)
 	if err != nil {
 		return "", fmt.Errorf("sub-agent %q: %w", sub.AgentType, err)
+	}
+	var prof config.ModelProfile
+	var cm model.ToolCallingChatModel
+	var lastConstructErr error
+	for i := range profCandidates {
+		pp := profCandidates[i]
+		um := deps.UseMock || strings.EqualFold(pp.Provider, "mock")
+		c, err := adkhost.NewToolCallingChatModel(ctx, &pp, um)
+		if err != nil {
+			lastConstructErr = err
+			slog.WarnContext(ctx, "subagent: model profile unavailable, trying failover",
+				"agent_type", sub.AgentType, "profile_id", pp.ID, "provider", pp.Provider, "err", err)
+			continue
+		}
+		prof = pp
+		cm = c
+		break
+	}
+	if cm == nil {
+		if lastConstructErr != nil {
+			return "", fmt.Errorf("sub-agent %q: no usable model profile after failover: %w", sub.AgentType, lastConstructErr)
+		}
+		return "", fmt.Errorf("sub-agent %q: no usable model profile after failover", sub.AgentType)
 	}
 	useMock := deps.UseMock || strings.EqualFold(prof.Provider, "mock")
-	cm, err := adkhost.NewToolCallingChatModel(ctx, prof, useMock)
-	if err != nil {
-		return "", fmt.Errorf("sub-agent %q: %w", sub.AgentType, err)
-	}
 
 	desc := sub.Description
 	if desc == "" {

@@ -9,7 +9,7 @@
 目标：用户通过 `oneclaw init` + `oneclaw run` 能完成最短可用路径，不需要先理解 workflow、Catalog、ADK 或异步后继。
 
 - [x] **梳理 `init` 默认产物**：**`//go:embed templates`** 嵌入 **`setup/templates/`** 整树，`Bootstrap` 遍历拷到 UserDataRoot（缺才写）；**`config.yaml`** 仍单独合并；**`agents/default.md`** 仍 Go 模板渲染 **`UserDataRoot`**；**`sessions/`**、**`prompts/`**、**`knowledge/sources/`** 空目录保留；**`examples/skills/`** 与模板对齐供浏览；**`tools.exec` 默认保持开启（配置里 deny 基础危险分隔符）**（见 `setup/bootstrap.go`、`setup/embed.go`）。
-- [ ] **补充 5 分钟上手文档**：新增面向普通用户的入口文档，覆盖 `init`、配置模型、`run`、常见失败。
+- [x] **补充 5 分钟上手文档**：入口文档 [docs/user-guide.md](docs/user-guide.md)（`init` / `onboard` / `serve` / `config show`、常见失败）。
 - [ ] **统一最短路径验收**：增加或整理烟测命令，覆盖 mock 模型与真实 OpenAI compatible 配置两种路径；默认 workflow 已收缩为生命周期节点，上下文由 `context_profile` 控制。
 
 ---
@@ -18,7 +18,7 @@
 
 目标：让用户少读 YAML / config，也能理解系统当前状态。
 
-- [ ] **`oneclaw config show`**：展示合并后的有效配置，敏感值脱敏，明确配置来源与默认值。
+- [x] **`oneclaw config show`**：展示合并后的有效配置（默认应用 env + `key_files`），敏感值脱敏；**`--raw`** 仅合并 YAML；头部注释标明路径与 UserDataRoot。
 - [ ] **`oneclaw agent list`**：展示内置与用户 Agent、工具白名单、模型覆盖、workspace / memory 策略。
 - [ ] **`oneclaw agent new <name>`**：生成最小 `agents/<name>.md`，降低新 Agent 创建成本。
 - [ ] **`oneclaw agent run <name> <prompt>`**：提供不改 workflow 的直接 Agent 运行入口。
@@ -42,7 +42,7 @@
 
 目标：保留当前架构文档深度，同时给普通用户更短入口。
 
-- [ ] **新增 `docs/user-guide.md`**：日常使用、配置、运行、常见错误。
+- [x] **新增 `docs/user-guide.md`**：日常使用、配置、运行、常见错误（最短路径 + `config show`）。
 - [ ] **新增 `docs/concepts.md`**：解释 Agent、Session、Memory、Tool、Workflow、Workspace 等核心概念。
 - [ ] **新增 `docs/dev-guide.md`**：贡献者如何加工具、加 workflow 节点、加命令入口。
 - [ ] **调整 `docs/README.md` 阅读路径**：区分普通用户、进阶用户、实现者 / 架构评审者。
