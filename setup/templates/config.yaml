@@ -4,7 +4,7 @@ catalog:
     default_turn: default.turn
 
 sessions:
-  isolate_instruction_root: true
+  isolate_instruction_root: false
 # 左侧优先匹配 models[].id，否则按 models[].provider 聚类并按 priority 故障转移；右侧为 API model。
 default_model: openai_compatible/gpt-5.4-nano
 models:

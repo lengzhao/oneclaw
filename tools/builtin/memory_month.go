@@ -3,6 +3,7 @@ package builtin
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,17 +22,41 @@ const (
 )
 
 type memoryMonthPathIn struct {
-	Path string `json:"path" jsonschema:"description=Exact relative path memory/2026-05/note.md (UTC yyyy-mm, single .md filename); use lowercase memory/ prefix"`
+	Path string `json:"path" jsonschema:"description=Optional relative path under memory/YYYY-MM/*.md. Empty defaults to memory/<UTC-yyyy-mm>/<UTC-yyyy-mm-dd>.md"`
 }
 
 type writeMemoryMonthIn struct {
-	Path    string `json:"path" jsonschema:"description=Exact relative path memory/2026-05/note.md under instruction root (UTC month folder)"`
+	Path    string `json:"path" jsonschema:"description=Optional relative path under memory/YYYY-MM/*.md. Empty defaults to memory/<UTC-yyyy-mm>/<UTC-yyyy-mm-dd>.md"`
 	Content string `json:"content" jsonschema:"description=Full UTF-8 file contents"`
 }
 
 type appendMemoryMonthIn struct {
-	Path    string `json:"path" jsonschema:"description=Exact relative path memory/2026-05/note.md under instruction root"`
+	Path    string `json:"path" jsonschema:"description=Optional relative path under memory/YYYY-MM/*.md. Empty defaults to memory/<UTC-yyyy-mm>/<UTC-yyyy-mm-dd>.md"`
 	Content string `json:"content" jsonschema:"description=UTF-8 text to append"`
+}
+
+func defaultMemoryMonthPath(now time.Time) string {
+	u := now.UTC()
+	return "memory/" + memory.MonthUTC(u) + "/" + u.Format("2006-01-02") + ".md"
+}
+
+func normalizeWritePathOrDefault(ctx context.Context, raw string, now time.Time) string {
+	def := defaultMemoryMonthPath(now)
+	rel := strings.TrimSpace(raw)
+	if rel == "" {
+		return def
+	}
+	norm, err := memory.NormalizeMemoryMonthRel(rel)
+	if err == nil {
+		if err2 := memory.RequireWriteUsesCurrentUTCMemoryMonth(norm, now); err2 == nil {
+			return norm
+		}
+	}
+	slog.WarnContext(ctx, "memory_month: invalid write path, fallback to default",
+		"raw_path", rel,
+		"default_path", def,
+	)
+	return def
 }
 
 // InferWriteMemoryMonth writes only under InstructionRoot/memory/yyyy-mm/*.md.
@@ -47,10 +72,12 @@ func InferWriteMemoryMonth(instructionRoot string) (tool.InvokableTool, error) {
 			if len(in.Content) > workspace.MaxWorkspaceWriteBytes {
 				return "", fmt.Errorf("content exceeds %d bytes", workspace.MaxWorkspaceWriteBytes)
 			}
-			if err := memory.RequireWriteUsesCurrentUTCMemoryMonth(in.Path, time.Now()); err != nil {
+			now := time.Now().UTC()
+			rel := normalizeWritePathOrDefault(ctx, in.Path, now)
+			if err := memory.RequireWriteUsesCurrentUTCMemoryMonth(rel, now); err != nil {
 				return "", err
 			}
-			full, err := memory.ResolveMemoryMonthMarkdown(root, in.Path)
+			full, err := memory.ResolveMemoryMonthMarkdown(root, rel)
 			if err != nil {
 				return "", err
 			}
@@ -60,7 +87,7 @@ func InferWriteMemoryMonth(instructionRoot string) (tool.InvokableTool, error) {
 			if err := os.WriteFile(full, []byte(in.Content), 0o644); err != nil {
 				return "", err
 			}
-			return fmt.Sprintf("wrote %d bytes to %s", len(in.Content), filepath.ToSlash(strings.TrimSpace(in.Path))), nil
+			return fmt.Sprintf("wrote %d bytes to %s", len(in.Content), filepath.ToSlash(rel)), nil
 		})
 }
 
@@ -77,10 +104,12 @@ func InferAppendMemoryMonth(instructionRoot string) (tool.InvokableTool, error) 
 			if len(in.Content) > workspace.MaxWorkspaceWriteBytes {
 				return "", fmt.Errorf("content exceeds %d bytes", workspace.MaxWorkspaceWriteBytes)
 			}
-			if err := memory.RequireWriteUsesCurrentUTCMemoryMonth(in.Path, time.Now()); err != nil {
+			now := time.Now().UTC()
+			rel := normalizeWritePathOrDefault(ctx, in.Path, now)
+			if err := memory.RequireWriteUsesCurrentUTCMemoryMonth(rel, now); err != nil {
 				return "", err
 			}
-			full, err := memory.ResolveMemoryMonthMarkdown(root, in.Path)
+			full, err := memory.ResolveMemoryMonthMarkdown(root, rel)
 			if err != nil {
 				return "", err
 			}
@@ -96,7 +125,7 @@ func InferAppendMemoryMonth(instructionRoot string) (tool.InvokableTool, error) 
 			if err != nil {
 				return "", err
 			}
-			return fmt.Sprintf("appended %d bytes to %s", n, filepath.ToSlash(strings.TrimSpace(in.Path))), nil
+			return fmt.Sprintf("appended %d bytes to %s", n, filepath.ToSlash(rel)), nil
 		})
 }
 
@@ -110,7 +139,11 @@ func InferReadMemoryMonth(instructionRoot string) (tool.InvokableTool, error) {
 	return utils.InferTool(NameReadMemoryMonth,
 		fmt.Sprintf("Read a UTF-8 markdown file under memory/YYYY-MM/ relative to the session instruction root. Any valid UTC month is allowed (example current month: %s).", mm),
 		func(ctx context.Context, in memoryMonthPathIn) (string, error) {
-			full, err := memory.ResolveMemoryMonthMarkdown(root, in.Path)
+			rel := strings.TrimSpace(in.Path)
+			if rel == "" {
+				rel = defaultMemoryMonthPath(time.Now().UTC())
+			}
+			full, err := memory.ResolveMemoryMonthMarkdown(root, rel)
 			if err != nil {
 				return "", err
 			}

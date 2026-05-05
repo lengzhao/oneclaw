@@ -52,6 +52,21 @@ func truncateRunes(s string, max int) string {
 	return string(r[:max])
 }
 
+func effectiveParentModelSelector(deps *RunAgentDeps) string {
+	if deps == nil {
+		return ""
+	}
+	profile := strings.TrimSpace(deps.ProfileID)
+	if _, _, ok := config.SplitProviderModel(profile); ok {
+		return profile
+	}
+	modelName := strings.TrimSpace(deps.ModelName)
+	if profile == "" || modelName == "" {
+		return profile
+	}
+	return profile + "/" + modelName
+}
+
 // ExecuteSubAgentTurn runs a sub-agent: ResolveWorkflowPath(agent_type) → wfexec.Execute (registered via RegisterWorkflowExecutor).
 func ExecuteSubAgentTurn(ctx context.Context, deps *RunAgentDeps, sub *catalog.Agent, userContent string) (string, error) {
 	if deps == nil || sub == nil {
@@ -114,6 +129,7 @@ func ExecuteSubAgentTurn(ctx context.Context, deps *RunAgentDeps, sub *catalog.A
 		SessionRoot:     deps.SessionRoot,
 		ParentWorkspace: childWS,
 		ProfileID:       deps.ProfileID,
+		ModelName:       deps.ModelName,
 		UseMock:         deps.UseMock,
 		Stdout:          deps.Stdout,
 		OnSubAgentChunk: deps.OnSubAgentChunk,
@@ -126,7 +142,7 @@ func ExecuteSubAgentTurn(ctx context.Context, deps *RunAgentDeps, sub *catalog.A
 		return "", err
 	}
 
-	sel := config.EffectiveModelSelector(deps.ProfileID, sub.Model)
+	sel := config.EffectiveModelSelector(effectiveParentModelSelector(deps), sub.Model)
 	profCandidates, err := config.ResolveModelProfilesForTurn(deps.Cfg, sel)
 	if err != nil {
 		return "", fmt.Errorf("sub-agent %q: %w", sub.AgentType, err)

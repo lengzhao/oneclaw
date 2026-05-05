@@ -80,6 +80,7 @@ func executeAgentTask(rtx *engine.RuntimeContext, subType string, prompt string)
 		SessionRoot:     rtx.EffectiveSessionRoot(),
 		ParentWorkspace: rtx.EffectiveWorkspacePath(),
 		ProfileID:       rtx.EffectiveProfileID(),
+		ModelName:       rtx.EffectiveModelName(),
 		UseMock:         rtx.EffectiveUseMock(),
 		Stdout:          rtx.Stdout,
 		OnSubAgentChunk: rtx.OnSubAgentAssistantChunk,

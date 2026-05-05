@@ -34,6 +34,27 @@ func TestNewSubRunID_shape(t *testing.T) {
 	}
 }
 
+func TestEffectiveParentModelSelector(t *testing.T) {
+	t.Run("full selector unchanged", func(t *testing.T) {
+		got := effectiveParentModelSelector(&RunAgentDeps{ProfileID: "custom/gpt-5.4-nano", ModelName: "ignored"})
+		if got != "custom/gpt-5.4-nano" {
+			t.Fatalf("got %q", got)
+		}
+	})
+	t.Run("compose from profile and model", func(t *testing.T) {
+		got := effectiveParentModelSelector(&RunAgentDeps{ProfileID: "custom", ModelName: "gpt-5.4-nano"})
+		if got != "custom/gpt-5.4-nano" {
+			t.Fatalf("got %q", got)
+		}
+	})
+	t.Run("missing model keeps profile only", func(t *testing.T) {
+		got := effectiveParentModelSelector(&RunAgentDeps{ProfileID: "custom"})
+		if got != "custom" {
+			t.Fatalf("got %q", got)
+		}
+	})
+}
+
 func TestChildRegistryFromParent_echoOnly(t *testing.T) {
 	ws := filepath.Join(t.TempDir(), "ws")
 	parent := tools.NewRegistry(ws)

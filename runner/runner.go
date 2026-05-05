@@ -178,6 +178,7 @@ func ExecuteTurn(p Params) error {
 		SessionRoot:     sessionRoot,
 		ParentWorkspace: ws,
 		ProfileID:       prof.ID,
+		ModelName:       prof.DefaultModel,
 		UseMock:         useMock,
 		Stdout:          p.Stdout,
 		CorrelationID:   corrID,

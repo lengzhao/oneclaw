@@ -108,7 +108,8 @@ func cmdChannelOnboard(ctx context.Context, g globalOpts, args []string) error {
 
 	if !res.Ready() {
 		if res.Phase == client.OnboardingPhaseManual {
-			return persistClawbridgeMerge(g, res.Config, "wrote manual clawbridge client stub (set enabled: true after filling options)")
+			patch, msg := normalizeManualOnboardingPatch(res.Config)
+			return persistClawbridgeMerge(g, patch, msg)
 		}
 		return fmt.Errorf("onboarding finished without a runnable client (phase=%s)", res.Phase)
 	}
@@ -180,4 +181,37 @@ func splitAllowFromCSV(s string) []string {
 		return []string{"*"}
 	}
 	return out
+}
+
+func normalizeManualOnboardingPatch(patch cbconfig.Config) (cbconfig.Config, string) {
+	changed := false
+	for i := range patch.Clients {
+		c := &patch.Clients[i]
+		if strings.TrimSpace(c.Driver) != "webchat" {
+			continue
+		}
+		if !c.Enabled {
+			c.Enabled = true
+			changed = true
+		}
+		if c.Options == nil {
+			c.Options = map[string]any{}
+		}
+		if strings.TrimSpace(fmt.Sprint(c.Options["listen"])) == "" || fmt.Sprint(c.Options["listen"]) == "<nil>" {
+			c.Options["listen"] = "127.0.0.1:8765"
+			changed = true
+		}
+		if strings.TrimSpace(fmt.Sprint(c.Options["path"])) == "" || fmt.Sprint(c.Options["path"]) == "<nil>" {
+			c.Options["path"] = "/"
+			changed = true
+		}
+		if strings.TrimSpace(fmt.Sprint(c.Options["display_name"])) == "" || fmt.Sprint(c.Options["display_name"]) == "<nil>" {
+			c.Options["display_name"] = "You"
+			changed = true
+		}
+	}
+	if changed {
+		return patch, "merged manual webchat client with defaults (enabled=true)"
+	}
+	return patch, "wrote manual clawbridge client stub (fill options and enable if needed)"
 }

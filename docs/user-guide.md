@@ -2,7 +2,7 @@
 
 面向「先跑起来再读架构」的使用说明；深度设计见 [README.md](README.md) 索引。
 
-**默认产品路径**：**微信收发** + **自选 LLM（OpenAI 兼容 + API Key）**，数据落在 **`~/.oneclaw`**；向导会写入 **`key_files/*.json`** 并合并 **`models`** / **`default_model`**，再上微信 onboard；背景方案仍可参考 [极简 onboard](plans/weixin-alibaba-oauth-minimal-onboarding.md)（现为「菜单选厂商 + Key」，已无向导内 OAuth）。
+**默认产品路径**：**自选 LLM** + **可选 clawbridge 渠道**，数据落在 **`~/.oneclaw`**；向导会写入 **`key_files/*.json`** 并合并 **`models`** / **`default_model`**；LLM 与渠道都支持 **skip**（保留默认或已有配置）。交互终端上渠道一步与 LLM 类似——**按序号选择已注册的 driver**（与 **`oneclaw channel list-drivers`** 一致），**0** 跳过；可多次添加；背景方案仍可参考 [极简 onboard](plans/weixin-alibaba-oauth-minimal-onboarding.md)。
 
 ---
 
@@ -22,7 +22,7 @@
 | 步骤 | 命令 | 做什么 |
 |------|------|--------|
 | 1 | **`oneclaw init`** | 生成 **`~/.oneclaw`** 下模板：`config.yaml`、`agents/`、`workflows/`、`key_files/`（0700）等，见 [examples/init/README.md](../examples/init/README.md)。 |
-| 2 | **`oneclaw onboard`** | **LLM**：菜单选厂商（OpenAI / Claude / Gemini / Ark / Moonshot / Qwen(DashScope) / DeepSeek / OpenRouter / 自定义网关）；打开**控制台**后粘贴 **API Key** → **`key_files/*.json`**；再填 **模型名**（Ark 为先填 **Endpoint ID**）。合并 **`models`**（**`provider`** 为对应 eino-ext 驱动，如 **`qwen`**、**`claude`**、**`moonshot`**；自定义为 **`openai_compatible`**）与 **`auth.token_file`**，并设置 **`default_model: <profile_id>/<模型>`**。**随后微信**：终端扫码 → **`clawbridge.clients`** **`driver: weixin`**。 |
+| 2 | **`oneclaw onboard`** | **LLM（可选）**：菜单选厂商（OpenAI / Claude / Gemini / Ark / Moonshot / Qwen(DashScope) / DeepSeek / OpenRouter / 自定义网关），**`0` 跳过**（保留默认或已有模型配置）；选择厂商后打开**控制台**粘贴 **API Key** → **`key_files/*.json`**，再填 **模型名**（Ark 为先填 **Endpoint ID**），并合并 **`models`** + **`default_model`**。**渠道（可选）**：序号菜单选择 **`clawbridge` onboarding driver**（如 **weixin**、**webchat** 等，取决于已注册实现）；**`0` 跳过**（保留已有客户端配置）；同一向导内可「继续添加其他渠道」。其中 **webchat manual** 会自动写入 **`enabled: true`** 与默认 **`listen/path/display_name`**，无需手改。等价单步命令：**`oneclaw channel onboard <driver>`**。 |
 | 3 | **`oneclaw serve`** | 拉起 clawbridge + TurnHub；在微信里发消息即可对话（模板里 webchat 默认关，**不靠 webchat 做主路径**）。 |
 
 完成后可用 **`oneclaw config show`** 看头部 **`# user_data_root`**（应为 **`~/.oneclaw`**）、脱敏后的 **`models`** / **`clawbridge`**。
@@ -31,7 +31,7 @@
 
 OpenClaw 的向导可按供应商走浏览器 **OAuth**、CLI 复用等；凭证集中在 **`auth-profiles.json`** 一类存储。**oneclaw** 仅支持 **API Key**：向导写入 **`key_files/*.json`**（或你使用 **`api_key_env`**），**不进行 OAuth 与令牌刷新**（规格见 [unified-model-auth](plans/unified-model-auth.md)）。
 
-**向导可选参数**：**`--mock-llm`**、**`--skip-weixin`**、**`--channels-first`**、**`--no-browser`**、**`--listen ADDR`**。详见 **`oneclaw onboard -h`**。
+**向导可选参数**：**`--skip-llm`**、**`--skip-drivers`**、**`--mock-llm`**、**`--no-browser`**、**`--listen ADDR`**（仅当选中的渠道为 **weixin** 时传给 **`channel onboard`**，浏览器扫码页兜底）。stdin 非终端时：LLM 菜单默认走 skip，渠道步骤直接跳过（需要时再执行 **`oneclaw channel onboard <driver>`**）。详见 **`oneclaw onboard -h`**。
 
 ---
 

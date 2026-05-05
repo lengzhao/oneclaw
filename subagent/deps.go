@@ -24,6 +24,7 @@ type RunAgentDeps struct {
 	SessionRoot     string
 	ParentWorkspace string
 	ProfileID       string
+	ModelName       string
 	UseMock         bool
 	Stdout          io.Writer
 	OnSubAgentChunk SubAgentChunkFunc

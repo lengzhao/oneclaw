@@ -27,6 +27,8 @@ func TestRequireWriteUsesCurrentUTCMemoryMonth(t *testing.T) {
 }
 
 func TestNormalizeMemoryMonthRel(t *testing.T) {
+	now := time.Now().UTC()
+	today := now.Format("2006-01-02")
 	tests := []struct {
 		in   string
 		want string
@@ -35,6 +37,13 @@ func TestNormalizeMemoryMonthRel(t *testing.T) {
 		{"Memory/2026-05/a.md", "memory/2026-05/a.md"},
 		{"./memory/2026-05/a.md", "memory/2026-05/a.md"},
 		{"2026-05/a.md", "memory/2026-05/a.md"},
+		{"memory/2026-05", "memory/2026-05/" + today + ".md"},
+		{"2026-05", "memory/2026-05/" + today + ".md"},
+		{"memory/2026-05.md", "memory/2026-05/" + today + ".md"},
+		{"2026-05.md", "memory/2026-05/" + today + ".md"},
+		{"memory/2026-05/extract", "memory/2026-05/extract.md"},
+		{"2026-05/extract", "memory/2026-05/extract.md"},
+		{"", "memory/" + MonthUTC(now) + "/" + today + ".md"},
 	}
 	for _, tt := range tests {
 		got, err := NormalizeMemoryMonthRel(tt.in)

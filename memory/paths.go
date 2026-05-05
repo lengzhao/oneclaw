@@ -12,6 +12,8 @@ import (
 const MEMORYMDMaxBytes = 2048
 
 var memoryMonthMarkdown = regexp.MustCompile(`^memory/(\d{4}-\d{2})/([^/]+\.md)$`)
+var memoryMonthWithOptionalDotMD = regexp.MustCompile(`^memory/(\d{4}-\d{2})(?:\.md)?$`)
+var memoryMonthName = regexp.MustCompile(`^memory/(\d{4}-\d{2})/([^/]+)$`)
 
 // MonthUTC returns the yyyy-mm segment for t in UTC (memory_extractor month folders).
 func MonthUTC(t time.Time) string {
@@ -40,14 +42,18 @@ func RequireWriteUsesCurrentUTCMemoryMonth(pathOrRel string, now time.Time) erro
 // Accepts optional leading "./", case-insensitive "memory/" prefix, or "<yyyy-mm>/<file>.md" with implied "memory/".
 func NormalizeMemoryMonthRel(rel string) (string, error) {
 	rel = filepath.ToSlash(strings.TrimSpace(rel))
-	if rel == "" || strings.Contains(rel, "..") {
+	if strings.Contains(rel, "..") {
 		return "", fmt.Errorf("memory: invalid relative path")
 	}
 	rel = strings.TrimPrefix(rel, "./")
+	if rel == "" || rel == "memory" || rel == "memory/" {
+		now := time.Now().UTC()
+		return "memory/" + MonthUTC(now) + "/" + now.Format("2006-01-02") + ".md", nil
+	}
 	if len(rel) >= 7 && strings.EqualFold(rel[:6], "memory") && rel[6] == '/' {
 		rel = "memory/" + rel[7:]
 	}
-	if !strings.HasPrefix(rel, "memory/") && memoryMonthShort.MatchString(rel) {
+	if !strings.HasPrefix(rel, "memory/") {
 		rel = "memory/" + rel
 	}
 	// Models often copy doc placeholders literally (e.g. memory/YYYY-MM/note.md).
@@ -58,11 +64,20 @@ func NormalizeMemoryMonthRel(rel string) (string, error) {
 	case strings.Contains(rel, "yyyy-mm"):
 		rel = strings.Replace(rel, "yyyy-mm", mm, 1)
 	}
+
+	if m := memoryMonthWithOptionalDotMD.FindStringSubmatch(rel); m != nil {
+		now := time.Now().UTC()
+		return "memory/" + m[1] + "/" + now.Format("2006-01-02") + ".md", nil
+	}
+	if m := memoryMonthName.FindStringSubmatch(rel); m != nil {
+		name := m[2]
+		if strings.ToLower(filepath.Ext(name)) != ".md" {
+			name += ".md"
+		}
+		return "memory/" + m[1] + "/" + name, nil
+	}
 	return rel, nil
 }
-
-// memoryMonthShort matches yyyy-mm/name.md without the memory/ prefix.
-var memoryMonthShort = regexp.MustCompile(`^(\d{4}-\d{2})/([^/]+\.md)$`)
 
 // ResolveMemoryMonthMarkdown maps rel (slash form: memory/yyyy-mm/name.md) under instructionRoot.
 func ResolveMemoryMonthMarkdown(instructionRoot, rel string) (abs string, err error) {

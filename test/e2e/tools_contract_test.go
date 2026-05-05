@@ -113,3 +113,82 @@ func TestE2E_contract_memoryMonth_writeThenReadRoundTrip(t *testing.T) {
 		t.Fatalf("read_memory_month: want %q got %q", body, got)
 	}
 }
+
+func TestE2E_contract_memoryMonth_defaultPathWhenOmitted(t *testing.T) {
+	ctx := context.Background()
+	tmp := t.TempDir()
+	instr := filepath.Join(tmp, "instruction")
+	if err := os.MkdirAll(instr, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	rel := "memory/" + memory.MonthUTC(now) + "/" + now.Format("2006-01-02") + ".md"
+	body := "default path body\n"
+
+	wtool, err := builtin.InferWriteMemoryMonth(instr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wargs, err := json.Marshal(map[string]string{"content": body})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := wtool.InvokableRun(ctx, string(wargs)); err != nil {
+		t.Fatal(err)
+	}
+
+	rtool, err := builtin.InferReadMemoryMonth(instr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rargs, err := json.Marshal(map[string]string{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := rtool.InvokableRun(ctx, string(rargs))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != body {
+		t.Fatalf("read default path: want %q got %q", body, got)
+	}
+
+	b, err := os.ReadFile(filepath.Join(instr, filepath.FromSlash(rel)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(b) != body {
+		t.Fatalf("default file content: want %q got %q", body, string(b))
+	}
+}
+
+func TestE2E_contract_memoryMonth_invalidPathFallsBackToDefault(t *testing.T) {
+	ctx := context.Background()
+	tmp := t.TempDir()
+	instr := filepath.Join(tmp, "instruction")
+	if err := os.MkdirAll(instr, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	rel := "memory/" + memory.MonthUTC(now) + "/" + now.Format("2006-01-02") + ".md"
+	body := "fallback path body\n"
+
+	wtool, err := builtin.InferWriteMemoryMonth(instr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wargs, err := json.Marshal(map[string]string{"path": "invalid-path-shape", "content": body})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := wtool.InvokableRun(ctx, string(wargs)); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(filepath.Join(instr, filepath.FromSlash(rel)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(b) != body {
+		t.Fatalf("fallback file content: want %q got %q", body, string(b))
+	}
+}

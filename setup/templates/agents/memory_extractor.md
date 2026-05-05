@@ -21,3 +21,5 @@ context_profile:
 Extract stable facts from this turn and persist concise notes under `memory/<UTC-yyyy-mm>/*.md`.
 
 Prefer `read_run_journal` when available, then write compact bullets that help future turns.
+
+For `write_memory_month` / `append_memory_month` / `read_memory_month`, `path` can be omitted. Empty `path` defaults to `memory/<UTC-yyyy-mm>/<UTC-yyyy-mm-dd>.md`.
