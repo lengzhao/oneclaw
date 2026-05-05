@@ -11,7 +11,7 @@ import (
 	"github.com/lengzhao/oneclaw/session"
 )
 
-// NameReadRunJournal reads sessions/<id>/runs/<agent>/runs.jsonl for post-turn agents.
+// NameReadRunJournal reads per-turn JSONL under sessions/<id>/runs/<agent>/ (merged when scope is full).
 const NameReadRunJournal = "read_run_journal"
 
 type readRunJournalIn struct {
@@ -26,7 +26,7 @@ func InferReadRunJournal(sessionRoot, hostAgentID, correlationID string) (tool.I
 		return nil, fmt.Errorf("%s: session root required", NameReadRunJournal)
 	}
 	return utils.InferTool(NameReadRunJournal,
-		`Read UTF-8 JSONL execution records for the host agent under sessions/.../runs/<agent_type>/runs.jsonl. scope current_turn (default) returns lines whose detail.correlation_id matches this invocation; use full for the entire journal.`,
+		`Read UTF-8 JSONL run records under sessions/.../runs/<agent_type>/: per-turn files <correlation_id>.jsonl (and sub-agent keys parentcorr__subrun.jsonl). scope current_turn (default) reads that single turn file (retry until complete). scope full merges all per-turn *.jsonl in the directory (excluding legacy runs.jsonl). correlation_id empty + either scope merges all journals.`,
 		func(ctx context.Context, in readRunJournalIn) (string, error) {
 			if ctx.Err() != nil {
 				return "", ctx.Err()

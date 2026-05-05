@@ -116,8 +116,8 @@ func executeTurnCtx(t *testing.T, ctx context.Context, root string, cfg *config.
 		Ctx:            ctx,
 		UserDataRoot:   root,
 		Config:         cfg,
-		Catalog: loadCatalog(t, root),
-		AgentID: agentID,
+		Catalog:        loadCatalog(t, root),
+		AgentID:        agentID,
 		SessionSegment: sess,
 		UserPrompt:     prompt,
 		UseMock:        useMock,
@@ -139,14 +139,39 @@ func executeTurn(t *testing.T, root string, cfg *config.File, sess, prompt strin
 	return executeTurnCtx(t, ctx, root, cfg, sess, prompt, useMock, agentID)
 }
 
+func latestTurnJournalPath(t *testing.T, sessionRoot, agentType string) string {
+	t.Helper()
+	dir := filepath.Join(sessionRoot, "runs", agentType)
+	matches, err := filepath.Glob(filepath.Join(dir, "*.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var bestPath string
+	var bestMod time.Time
+	for _, m := range matches {
+		if filepath.Base(m) == "runs.jsonl" {
+			continue
+		}
+		info, err := os.Stat(m)
+		if err != nil {
+			continue
+		}
+		if info.ModTime().After(bestMod) || bestPath == "" {
+			bestMod = info.ModTime()
+			bestPath = m
+		}
+	}
+	return bestPath
+}
+
 func readRunEvents(t *testing.T, sessionRoot, agentType string) []session.RunEvent {
 	t.Helper()
-	path := filepath.Join(sessionRoot, "runs", agentType, "runs.jsonl")
+	path := latestTurnJournalPath(t, sessionRoot, agentType)
+	if path == "" {
+		return nil
+	}
 	b, err := os.ReadFile(path)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
 		t.Fatal(err)
 	}
 	var out []session.RunEvent
@@ -158,7 +183,7 @@ func readRunEvents(t *testing.T, sessionRoot, agentType string) []session.RunEve
 		}
 		var e session.RunEvent
 		if err := json.Unmarshal(line, &e); err != nil {
-			t.Fatalf("runs.jsonl: %v", err)
+			t.Fatalf("run journal %s: %v", path, err)
 		}
 		out = append(out, e)
 	}
@@ -506,5 +531,5 @@ func assertRunJournalHasPhase(t *testing.T, sessionRoot, agentType, phase string
 			return
 		}
 	}
-	t.Fatalf("runs.jsonl missing phase %q; phases=%v", phase, phaseList(evs))
+	t.Fatalf("run journal missing phase %q; phases=%v", phase, phaseList(evs))
 }

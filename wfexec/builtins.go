@@ -27,14 +27,14 @@ func RegisterBuiltins(r *Registry) error {
 		return fmt.Errorf("wfexec: nil registry")
 	}
 	byUse := map[string]Handler{
-		"on_receive":           handleOnReceive,
-		"llm":                  handleLLM,
-		"on_respond":           handleOnRespond,
-		"agent_task":           handleAgentTask,
-		"retrieve_context":     handlePassthroughTextNode,
-		"command":              handlePassthroughTextNode,
-		"tool_call":            handlePassthroughTextNode,
-		"noop":                 handleNoop,
+		"on_receive":       handleOnReceive,
+		"llm":              handleLLM,
+		"on_respond":       handleOnRespond,
+		"agent_task":       handleAgentTask,
+		"retrieve_context": handlePassthroughTextNode,
+		"command":          handlePassthroughTextNode,
+		"tool_call":        handlePassthroughTextNode,
+		"noop":             handleNoop,
 	}
 	for _, use := range workflow.BuiltinUses {
 		h, ok := byUse[use]
@@ -232,6 +232,7 @@ func runMainLLM(rtx *engine.RuntimeContext) error {
 			return fmt.Errorf("wfexec: adk_main: append user transcript: %w", err)
 		}
 		rtx.UserTurnAppended = true
+		appendRunJournalEntry(rtx, "user_message", map[string]any{"content": cur})
 	}
 	// Model input: [optional transcript history] + [optional memory-recall user message] + [current user message].
 	// System instruction is ChatAgent.Instruction only (RenderMainAgentPrompt, no MemoryRecall in template).
@@ -454,6 +455,17 @@ func logToolActivity(ctx context.Context, rtx *engine.RuntimeContext, msg *schem
 			"tool_name", strings.TrimSpace(tc.Function.Name),
 			"arguments_len", len(strings.TrimSpace(tc.Function.Arguments)),
 		)
+		if rtx != nil {
+			args := strings.TrimSpace(tc.Function.Arguments)
+			if len(args) > 800 {
+				args = args[:800] + "…"
+			}
+			appendRunJournalEntry(rtx, "tool_call", map[string]any{
+				"tool_call_id": id,
+				"tool_name":    strings.TrimSpace(tc.Function.Name),
+				"arguments":    args,
+			})
+		}
 	}
 	if msg.Role != schema.Tool {
 		return
@@ -475,6 +487,17 @@ func logToolActivity(ctx context.Context, rtx *engine.RuntimeContext, msg *schem
 		"tool_name", strings.TrimSpace(msg.ToolName),
 		"content_len", len(strings.TrimSpace(msg.Content)),
 	)
+	if rtx != nil {
+		body := strings.TrimSpace(msg.Content)
+		if len(body) > 1200 {
+			body = body[:1200] + "…"
+		}
+		appendRunJournalEntry(rtx, "tool_result", map[string]any{
+			"tool_call_id": strings.TrimSpace(msg.ToolCallID),
+			"tool_name":    strings.TrimSpace(msg.ToolName),
+			"content":      body,
+		})
+	}
 }
 
 func transcriptTurnsToADKMessages(turns []session.TranscriptTurn) []adk.Message {
@@ -511,6 +534,7 @@ func handleOnRespond(_ context.Context, in NodeInput, env NodeEnv) (workflow.Wor
 	}); err != nil {
 		return workflow.WorkflowNodeResult{}, err
 	}
+	appendRunJournalEntry(rtx, "assistant_message", map[string]any{"content": rtx.Assistant})
 	if rtx.PostAssistantRespond != nil {
 		c := rtx.GoCtx
 		if c == nil {
@@ -561,7 +585,19 @@ func extractStructuredMemoryFromMainTurn(rtx *engine.RuntimeContext) error {
 	if strings.TrimSpace(prof.ID) == "" && strings.TrimSpace(prof.Provider) == "" {
 		return nil
 	}
-	dialog := "User: " + user + "\nAssistant: " + assistant
+	dialog := ""
+	corr := strings.TrimSpace(rtx.CorrelationID)
+	sr := strings.TrimSpace(rtx.EffectiveSessionRoot())
+	at := runtimeAgentType(rtx)
+	if corr != "" && sr != "" && at != "" {
+		p := session.TurnRunJournalPath(sr, at, corr)
+		if b, err := os.ReadFile(p); err == nil && strings.TrimSpace(string(b)) != "" {
+			dialog = string(b)
+		}
+	}
+	if strings.TrimSpace(dialog) == "" {
+		dialog = "User: " + user + "\nAssistant: " + assistant
+	}
 	agentID := runtimeAgentType(rtx)
 	return structuredmem.AppendExtractJournal(
 		c,

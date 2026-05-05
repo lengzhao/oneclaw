@@ -32,9 +32,9 @@ type WorkflowExec struct {
 	asyncMu    sync.Mutex
 	asyncSlots map[string]*asyncHandlerSlot // lazy: async handler completion
 
-	CurrentNodeID string
-	CurrentParams map[string]any
-	CurrentAsync  bool
+	CurrentNodeID    string
+	CurrentParams    map[string]any
+	CurrentAsync     bool
 	UserTurnAppended bool
 }
 

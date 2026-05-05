@@ -96,22 +96,31 @@ func materializeRunJournal(rtx *engine.RuntimeContext, host, header string, a wo
 	if sr == "" || host == "" {
 		return "", fmt.Errorf("wfexec: run_journal context needs session root and host agent id")
 	}
-	path := filepath.Join(sr, "runs", host, "runs.jsonl")
+	runDir := filepath.Join(sr, "runs", host)
+	corr := strings.TrimSpace(rtx.CorrelationID)
+	var turnPath string
+	if corr != "" {
+		turnPath = filepath.Join(runDir, corr+".jsonl")
+	}
 
 	switch as {
 	case workflow.AgentContextAsToolBinding:
 		var tip strings.Builder
 		tip.WriteString(header)
 		tip.WriteString("Use the read_run_journal tool to load the execution journal before proceeding.")
-		corr := strings.TrimSpace(rtx.CorrelationID)
 		if corr != "" {
 			tip.WriteString(` Use scope "current_turn".`)
 		} else {
-			tip.WriteString(` Use scope "full" if correlation_id is unavailable.`)
+			tip.WriteString(` Use scope "full" to merge all per-turn journals under the agent directory.`)
 		}
-		tip.WriteString("\n\nJournal path (reference): ")
-		tip.WriteString(path)
+		tip.WriteString("\n\nrun_journal_dir: ")
+		tip.WriteString(runDir)
 		tip.WriteByte('\n')
+		if turnPath != "" {
+			tip.WriteString("run_journal_path (this turn): ")
+			tip.WriteString(turnPath)
+			tip.WriteByte('\n')
+		}
 		return tip.String(), nil
 	case workflow.AgentContextAsUserMessage:
 		text, err := session.ReadRunJournalText(sr, host, strings.TrimSpace(rtx.CorrelationID), scope)
@@ -122,10 +131,17 @@ func materializeRunJournal(rtx *engine.RuntimeContext, host, header string, a wo
 	case workflow.AgentContextAsPathMetadata:
 		var meta strings.Builder
 		meta.WriteString(header)
-		meta.WriteString("run_journal_path: ")
-		meta.WriteString(path)
+		meta.WriteString("run_journal_dir: ")
+		meta.WriteString(runDir)
 		meta.WriteByte('\n')
-		info, err := os.Stat(path)
+		statPath := runDir
+		if turnPath != "" {
+			meta.WriteString("run_journal_path: ")
+			meta.WriteString(turnPath)
+			meta.WriteByte('\n')
+			statPath = turnPath
+		}
+		info, err := os.Stat(statPath)
 		if err != nil {
 			meta.WriteString("size_bytes: unknown\n")
 			meta.WriteString("stat_note: ")

@@ -34,10 +34,10 @@ func TestSyncMemoryMDFromExtract_promotesAssistantName(t *testing.T) {
 		Memories: []lzmem.ExtractedMemory{
 			{
 				Namespace:  lzmem.NamespaceProfile,
-				Summary:    "用户指定并确认助手名字为“小飞”。",
-				Content:    "用户希望/指定助手的名字叫“小飞”。",
+				Summary:    "用户希望我称呼他为“庆哥”。",
+				Content:    "用户明确说：请叫我“庆哥”。",
 				Confidence: 0.9,
-				Tags:       []string{"assistant", "name"},
+				Tags:       []string{"user", "preferred_name"},
 			},
 		},
 	}
@@ -49,8 +49,8 @@ func TestSyncMemoryMDFromExtract_promotesAssistantName(t *testing.T) {
 		t.Fatal(err)
 	}
 	body := string(raw)
-	if !strings.Contains(body, "小飞") {
-		t.Fatalf("expected assistant name promoted into MEMORY.md, got:\n%s", body)
+	if !strings.Contains(body, "庆哥") {
+		t.Fatalf("expected user-facing naming preference promoted into MEMORY.md, got:\n%s", body)
 	}
 	if !strings.Contains(body, autoStartMarker) || !strings.Contains(body, autoEndMarker) {
 		t.Fatalf("expected auto section markers, got:\n%s", body)
@@ -68,9 +68,9 @@ func TestSyncMemoryMDFromExtract_respectsMemoryMDBudget(t *testing.T) {
 		Memories: []lzmem.ExtractedMemory{
 			{
 				Namespace:  lzmem.NamespaceProfile,
-				Summary:    "助手名字叫小飞",
+				Summary:    "请叫我小张（preferred name）",
 				Confidence: 0.95,
-				Tags:       []string{"assistant", "name"},
+				Tags:       []string{"user", "preferred_name"},
 			},
 		},
 	}

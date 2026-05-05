@@ -19,7 +19,7 @@ const (
 )
 
 // SyncMemoryMDFromExtract promotes selected high-confidence profile memories to MEMORY.md.
-// This keeps durable user-facing facts (like how to address the assistant) in the always-injected core memory file.
+// This keeps durable user-facing preferences (explicit naming/calling preferences) in the always-injected core memory file.
 func SyncMemoryMDFromExtract(instructionRoot string, result *lzmem.ExtractResult) error {
 	root := strings.TrimSpace(instructionRoot)
 	if root == "" || result == nil || len(result.Memories) == 0 {
@@ -67,12 +67,15 @@ func promotedMemoryLines(result *lzmem.ExtractResult) []string {
 		if !shouldPromoteToMemoryMD(m) {
 			continue
 		}
-		text := strings.TrimSpace(m.Summary)
+		text := strings.TrimSpace(userFacingPreferencePromotionText(m))
 		if text == "" {
-			text = strings.TrimSpace(m.Title)
-		}
-		if text == "" {
-			text = strings.TrimSpace(m.Content)
+			text = strings.TrimSpace(m.Summary)
+			if text == "" {
+				text = strings.TrimSpace(m.Title)
+			}
+			if text == "" {
+				text = strings.TrimSpace(m.Content)
+			}
 		}
 		text = normalizeInlineText(text)
 		if text == "" {
@@ -95,23 +98,11 @@ func shouldPromoteToMemoryMD(m lzmem.ExtractedMemory) bool {
 	if m.Confidence < 0.80 {
 		return false
 	}
-	text := normalizeInlineText(strings.TrimSpace(m.Summary) + " " + strings.TrimSpace(m.Content))
-	if text == "" {
+	if looksLikeAssistantSelfIdentification(m) {
 		return false
 	}
-	// Promote assistant naming/persona statements so they are always injected next turn.
-	keys := []string{"assistant", "name", "persona", "称呼", "名字", "叫", "小飞"}
-	for _, k := range keys {
-		if strings.Contains(strings.ToLower(text), strings.ToLower(k)) {
-			return true
-		}
-	}
-	for _, tag := range m.Tags {
-		tag = strings.TrimSpace(strings.ToLower(tag))
-		switch tag {
-		case "assistant", "name", "persona":
-			return true
-		}
+	if strings.TrimSpace(userFacingPreferencePromotionText(m)) != "" {
+		return true
 	}
 	return false
 }

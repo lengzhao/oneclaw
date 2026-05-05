@@ -225,8 +225,9 @@ func ExecuteSubAgentTurn(ctx context.Context, deps *RunAgentDeps, sub *catalog.A
 		"workflow":          wfDoc.ID,
 		"workflow_file":     wfPath,
 	}
+	journalKey := strings.TrimSpace(deps.CorrelationID) + "__" + strings.TrimSpace(subRunID)
 	now := time.Now().UTC()
-	if err := session.AppendRunEvent(subSessionRoot, sub.AgentType, session.RunEvent{
+	if err := session.AppendTurnRunEvent(subSessionRoot, sub.AgentType, journalKey, session.RunEvent{
 		Ts: now, AgentType: sub.AgentType, Phase: "sub_agent_start",
 		Detail: corrDetail,
 	}); err != nil {
@@ -336,7 +337,7 @@ func ExecuteSubAgentTurn(ctx context.Context, deps *RunAgentDeps, sub *catalog.A
 		"reply_len":         len(reply),
 		"workflow":          wfDoc.ID,
 	}
-	if err := session.AppendRunEvent(subSessionRoot, sub.AgentType, session.RunEvent{
+	if err := session.AppendTurnRunEvent(subSessionRoot, sub.AgentType, journalKey, session.RunEvent{
 		Ts: end, AgentType: sub.AgentType, Phase: "sub_agent_complete",
 		Detail: endDetail,
 	}); err != nil {

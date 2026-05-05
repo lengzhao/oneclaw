@@ -24,7 +24,9 @@ When the task asks you to call **`read_run_journal`** without embedded JSONL, ca
 
 Otherwise extract stable facts from the **user message** and **main assistant reply** in the task text.
 
-When the assistant states how it should be addressed (name, persona) or contradicts earlier memory, include a **short verbatim quote** from the assistant reply in your bullets so future turns can audit what was actually said — do not only paraphrase.
+Prefer durable **user facts** (preferences, commitments, stable project constraints). Assistant-only persona/name claims are low durability unless the **user explicitly adopts** them as a preference (“以后就叫你…”).
+
+When facts conflict within the same turn (example: user first implies two meetings then clarifies one meeting), store **one reconciled bullet** that matches the **latest user clarification**, and optionally note the correction briefly.
 
 **Write durable notes** under `memory/<UTC-yyyy-mm>/<descriptive>.md` relative to the session instruction root with **`write_file`**. Use `operation: "write"` for a new note or `operation: "append"` to extend the current note; month folder must match UTC. One file per turn is enough if you keep it short.
 

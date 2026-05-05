@@ -63,7 +63,7 @@
 
 - **进程退出码**：成功路径为 `0`。
 - **stdout / Reply**：包含 **`Hello from oneclaw stub model.`**（主 agent 直接回复时）。
-- **`<SessionRoot>/runs/<agent>/runs.jsonl`**：解析最近一条 `run_start`，`detail.mock_llm == true`。
+- **`<SessionRoot>/runs/<agent>/<correlation_id>.jsonl`**：解析该轮 `run_start`，`detail.mock_llm == true`（每轮独立文件；不再依赖聚合 `runs.jsonl`）。
 - **`<SessionRoot>/*_transcript.jsonl`**：按 `agent_type` 分文件；主对话使用 `default_transcript.jsonl`。轮次数与用例设计一致（reset 后变短或清空用户侧历史，依 `session.ResetConversation` 语义）。
 - **日志**（`-log-level debug`）：`adk_main` 前后无真实 HTTP 到 OpenAI 兼容端点（mock 路径不发起外连）。
 - **Memory recall（E2E-10）**：debug / verbose prompt 中含 `## Memory recall` 或预置文件名路径片段。

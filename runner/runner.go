@@ -250,7 +250,7 @@ func ExecuteTurn(p Params) error {
 	now := time.Now().UTC()
 	// User transcript is appended in wfexec adk_main so context prep sees prior turns only;
 	// the model receives history messages plus the current prompt as the final user message.
-	if err := session.AppendRunEvent(sessionRoot, ag.AgentType, session.RunEvent{
+	if err := session.AppendTurnRunEvent(sessionRoot, ag.AgentType, corrID, session.RunEvent{
 		Ts: now, AgentType: ag.AgentType, Phase: "run_start",
 		Detail: map[string]any{
 			"mock_llm": useMock, "profile": prof.ID, "model": prof.DefaultModel,
@@ -331,7 +331,7 @@ func ExecuteTurn(p Params) error {
 			return err
 		}
 	}
-	return session.AppendRunEvent(sessionRoot, ag.AgentType, session.RunEvent{
+	return session.AppendTurnRunEvent(sessionRoot, ag.AgentType, corrID, session.RunEvent{
 		Ts: end, AgentType: ag.AgentType, Phase: "run_complete",
 		Detail: map[string]any{"assistant_len": len(rtx.Assistant), "session_id": sessWire, "correlation_id": corrID, "workflow": wfDoc.ID},
 	})

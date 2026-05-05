@@ -37,6 +37,6 @@ type RunAgentDeps struct {
 	// ParentRegistry is the registry that hosts run_agent; RegisterRunAgent sets this to that registry.
 	ParentRegistry toolhost.Registry
 
-	// HostAgentID is the catalog agent id for the parent turn (runs/<HostAgentID>/runs.jsonl). Populated when wfexec spawns a sub-agent; copied through nested ExecuteSubAgentTurn.
+	// HostAgentID is the catalog agent id for the parent turn (runs/<HostAgentID>/<correlation_id>.jsonl per turn). Populated when wfexec spawns a sub-agent; copied through nested ExecuteSubAgentTurn.
 	HostAgentID string
 }

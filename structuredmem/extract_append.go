@@ -47,6 +47,8 @@ func AppendExtractJournal(ctx context.Context, instructionRoot string, dialog st
 	if err != nil {
 		return err
 	}
+	at := now.UTC()
+	ApplyExtractPostprocess(instructionRoot, at, result)
 	if err := SyncMemoryMDFromExtract(instructionRoot, result); err != nil {
 		slog.WarnContext(ctx, "structuredmem.extract.sync_memory_md_failed", "err", err)
 	}
@@ -62,7 +64,7 @@ func AppendExtractJournal(ctx context.Context, instructionRoot string, dialog st
 	if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
 		return err
 	}
-	md := FormatExtractResultMarkdown(now, result)
+	md := FormatExtractResultMarkdown(at, result)
 	if strings.TrimSpace(md) == "" {
 		return nil
 	}

@@ -16,7 +16,7 @@ func TestBuildSubagentUserPrompt_runJournalPathMetadata(t *testing.T) {
 	if err := os.MkdirAll(journalDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	jpath := filepath.Join(journalDir, "runs.jsonl")
+	jpath := filepath.Join(journalDir, "c1.jsonl")
 	payload := []byte(`{"phase":"run_start","detail":{"correlation_id":"c1"}}` + "\n")
 	if err := os.WriteFile(jpath, payload, 0o644); err != nil {
 		t.Fatal(err)
@@ -42,7 +42,7 @@ func TestBuildSubagentUserPrompt_runJournalPathMetadata(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(s, jpath) || !strings.Contains(s, "size_bytes:") {
+	if !strings.Contains(s, jpath) || !strings.Contains(s, "run_journal_dir:") || !strings.Contains(s, "size_bytes:") {
 		t.Fatalf("unexpected prompt:\n%s", s)
 	}
 }

@@ -17,7 +17,7 @@ type ExecRecord struct {
 }
 
 // AppendExecJournal appends one JSON object as a line to path (creates parent dirs).
-// CLI `run` logs lifecycle under sessions/<id>/runs/<agent>/runs.jsonl instead; use this for finer-grained execution traces when needed.
+// CLI `run` logs lifecycle under sessions/<id>/runs/<agent>/<correlation_id>.jsonl (per turn); use this package for finer-grained execution traces when needed.
 func AppendExecJournal(path string, rec ExecRecord) error {
 	if path == "" {
 		return nil

@@ -3,8 +3,10 @@ package session
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -22,7 +24,7 @@ func AppendTranscriptTurn(sessionRoot, agentType string, t TranscriptTurn) error
 	return appendJSONL(path, t)
 }
 
-// RunEvent is one JSON line under sessions/<id>/runs/<agent_type>/runs.jsonl.
+// RunEvent is one JSON line under sessions/<id>/runs/<agent_type>/<journal_key>.jsonl (one file per turn / sub-agent run).
 type RunEvent struct {
 	Ts        time.Time      `json:"ts"`
 	AgentType string         `json:"agent_type"`
@@ -30,10 +32,21 @@ type RunEvent struct {
 	Detail    map[string]any `json:"detail,omitempty"`
 }
 
-// AppendRunEvent appends an execution record for an agent_type.
-func AppendRunEvent(sessionRoot, agentType string, e RunEvent) error {
-	dir := filepath.Join(sessionRoot, "runs", agentType)
-	path := filepath.Join(dir, "runs.jsonl")
+// TurnRunJournalPath returns sessions/<id>/runs/<agent_type>/<journal_key>.jsonl (one file per host turn or sub-agent run).
+func TurnRunJournalPath(sessionRoot, agentType, journalKey string) string {
+	key := strings.TrimSpace(journalKey)
+	at := strings.TrimSpace(agentType)
+	return filepath.Join(strings.TrimSpace(sessionRoot), "runs", at, key+".jsonl")
+}
+
+// AppendTurnRunEvent appends one line to the per-turn journal file (runs/<agent>/<journal_key>.jsonl).
+func AppendTurnRunEvent(sessionRoot, agentType, journalKey string, e RunEvent) error {
+	key := strings.TrimSpace(journalKey)
+	if key == "" {
+		return fmt.Errorf("turn journal key required")
+	}
+	dir := filepath.Join(strings.TrimSpace(sessionRoot), "runs", strings.TrimSpace(agentType))
+	path := filepath.Join(dir, key+".jsonl")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}

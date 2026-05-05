@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 )
@@ -61,15 +62,78 @@ func journalSnippetHasPhaseComplete(snippet string) bool {
 		if err := json.Unmarshal([]byte(line), &ev); err != nil {
 			continue
 		}
-		if ev.Phase == "run_complete" {
+		switch ev.Phase {
+		case "run_complete", "sub_agent_complete":
 			return true
 		}
 	}
 	return false
 }
 
-// ReadRunJournalText reads runs/<agentType>/runs.jsonl under sessionRoot.
-// scope is current_turn or full (default current_turn when non-empty corr).
+type journalFileInfo struct {
+	path string
+	mod  time.Time
+	name string
+}
+
+func readMergedTurnJournals(dir string) (string, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", fmt.Errorf("run journal directory not found at %s", dir)
+		}
+		return "", err
+	}
+	var files []journalFileInfo
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		if !strings.HasSuffix(strings.ToLower(name), ".jsonl") {
+			continue
+		}
+		if name == "runs.jsonl" {
+			continue
+		}
+		p := filepath.Join(dir, name)
+		st, err := os.Stat(p)
+		if err != nil || !st.Mode().IsRegular() {
+			continue
+		}
+		files = append(files, journalFileInfo{path: p, mod: st.ModTime(), name: name})
+	}
+	sort.Slice(files, func(i, j int) bool {
+		if files[i].mod.Equal(files[j].mod) {
+			return files[i].name < files[j].name
+		}
+		return files[i].mod.Before(files[j].mod)
+	})
+	var out strings.Builder
+	for _, f := range files {
+		b, err := os.ReadFile(f.path)
+		if err != nil {
+			return "", err
+		}
+		s := strings.TrimSpace(string(b))
+		if s == "" {
+			continue
+		}
+		if out.Len() > 0 {
+			out.WriteByte('\n')
+		}
+		out.WriteString(s)
+		out.WriteByte('\n')
+	}
+	if out.Len() == 0 {
+		return "", fmt.Errorf("no per-turn run journals under %s", dir)
+	}
+	return strings.TrimRight(out.String(), "\n") + "\n", nil
+}
+
+// ReadRunJournalText reads per-turn JSONL under sessions/<id>/runs/<agent_type>/<key>.jsonl.
+// scope full merges all *.jsonl files in that directory (excluding legacy runs.jsonl), ordered by modification time.
+// scope current_turn with correlation_id reads exactly that turn file; optional retry until run_complete / sub_agent_complete.
 func ReadRunJournalText(sessionRoot, agentType, correlationID, scope string) (string, error) {
 	sr := strings.TrimSpace(sessionRoot)
 	at := strings.TrimSpace(agentType)
@@ -86,45 +150,36 @@ func ReadRunJournalText(sessionRoot, agentType, correlationID, scope string) (st
 	if sc != "current_turn" && sc != "full" {
 		return "", fmt.Errorf("scope must be current_turn or full")
 	}
-	path := filepath.Join(sr, "runs", at, "runs.jsonl")
+	dir := filepath.Join(sr, "runs", at)
 	corr := strings.TrimSpace(correlationID)
 
-	b, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return "", fmt.Errorf("run journal not found at %s", path)
-		}
-		return "", err
-	}
 	if sc == "full" || corr == "" {
-		return string(b), nil
+		return readMergedTurnJournals(dir)
 	}
 
+	turnPath := TurnRunJournalPath(sr, at, corr)
 	const retryPause = 25 * time.Millisecond
 	for attempt := 0; attempt < 40; attempt++ {
-		out := FilterRunJournalByCorrelation(b, corr)
-		if strings.TrimSpace(out) == "" {
-			if attempt == 39 {
-				return "", fmt.Errorf("no journal lines matched correlation_id %q (try scope full)", corr)
-			}
-			time.Sleep(retryPause)
-			b, err = os.ReadFile(path)
-			if err != nil {
-				return "", err
-			}
-			continue
-		}
-		if journalSnippetHasPhaseComplete(out) {
-			return out, nil
-		}
-		if attempt == 39 {
-			return out, nil
-		}
-		time.Sleep(retryPause)
-		b, err = os.ReadFile(path)
-		if err != nil {
+		b, err := os.ReadFile(turnPath)
+		if err != nil && !os.IsNotExist(err) {
 			return "", err
 		}
+		var content string
+		if err == nil {
+			content = string(b)
+		}
+		trimmed := strings.TrimSpace(content)
+		if trimmed == "" {
+			if attempt == 39 {
+				return "", fmt.Errorf("run journal turn file empty or missing: %s", turnPath)
+			}
+			time.Sleep(retryPause)
+			continue
+		}
+		if journalSnippetHasPhaseComplete(trimmed) || attempt == 39 {
+			return strings.TrimRight(trimmed, "\n"), nil
+		}
+		time.Sleep(retryPause)
 	}
 	return "", fmt.Errorf("run journal read exhausted retries")
 }
