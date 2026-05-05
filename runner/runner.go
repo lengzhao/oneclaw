@@ -107,7 +107,7 @@ func ExecuteTurn(p Params) error {
 		if err := session.ResetConversation(sessionRoot); err != nil {
 			return fmt.Errorf("reset session: %w", err)
 		}
-		const ack = "已清除本会话的用户侧对话记录（transcript.jsonl）。runs/、subs/、MEMORY、工作区文件未改动；后续主 Agent 将不再回放此前的对话消息历史。"
+		const ack = "已清除本会话的用户侧对话记录（*_transcript.jsonl）。runs/、subs/、MEMORY、工作区文件未改动；后续主 Agent 将不再回放此前的对话消息历史。"
 		if p.PostAssistantRespond != nil {
 			if err := p.PostAssistantRespond(ctx, ack); err != nil {
 				return err
@@ -325,7 +325,7 @@ func ExecuteTurn(p Params) error {
 
 	end := time.Now().UTC()
 	if !rtx.SawOnRespond && strings.TrimSpace(rtx.Assistant) != "" {
-		if err := session.AppendTranscriptTurn(sessionRoot, session.TranscriptTurn{
+		if err := session.AppendTranscriptTurn(sessionRoot, ag.AgentType, session.TranscriptTurn{
 			Ts: end, Role: "assistant", Content: rtx.Assistant,
 		}); err != nil {
 			return err

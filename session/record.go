@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// TranscriptTurn is one JSON line in sessions/<id>/transcript.jsonl.
+// TranscriptTurn is one JSON line in sessions/<id>/{agent_type}_transcript.jsonl.
 type TranscriptTurn struct {
 	Ts      time.Time `json:"ts"`
 	Role    string    `json:"role"`
@@ -16,8 +16,9 @@ type TranscriptTurn struct {
 }
 
 // AppendTranscriptTurn appends one transcript record (creates parent dirs).
-func AppendTranscriptTurn(sessionRoot string, t TranscriptTurn) error {
-	path := filepath.Join(sessionRoot, "transcript.jsonl")
+// agentType is usually the catalog agent id (for example: default, memory_extractor, skill_generator).
+func AppendTranscriptTurn(sessionRoot, agentType string, t TranscriptTurn) error {
+	path := transcriptPath(sessionRoot, agentType)
 	return appendJSONL(path, t)
 }
 

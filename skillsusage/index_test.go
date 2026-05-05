@@ -12,13 +12,13 @@ func TestRecordRank(t *testing.T) {
 	if err := os.MkdirAll(skillsRoot, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := Record(skillsRoot, "alpha", "write_skill_file"); err != nil {
+	if err := Record(skillsRoot, "alpha", "write_file"); err != nil {
 		t.Fatal(err)
 	}
-	if err := Record(skillsRoot, "beta", "append_skill_file"); err != nil {
+	if err := Record(skillsRoot, "beta", "write_file"); err != nil {
 		t.Fatal(err)
 	}
-	if err := Record(skillsRoot, "beta", "write_skill_file"); err != nil {
+	if err := Record(skillsRoot, "beta", "write_file"); err != nil {
 		t.Fatal(err)
 	}
 	counts, lastUsed, err := Aggregate(skillsRoot)

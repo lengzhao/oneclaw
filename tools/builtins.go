@@ -79,10 +79,6 @@ func RegisterBuiltinsNamed(r *Registry, names []string) error {
 			t, err = builtin.InferGlob(ws)
 		case builtin.NameWriteFile:
 			t, err = builtin.InferWriteFile(ws)
-		case builtin.NameEditFile:
-			t, err = builtin.InferEditFile(ws)
-		case builtin.NameAppendFile:
-			t, err = builtin.InferAppendFile(ws)
 		case builtin.NameExec:
 			t, err = builtin.InferExec(ws)
 		default:

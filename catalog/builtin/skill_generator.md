@@ -5,8 +5,7 @@ skills:
   - skill-creator
 tools:
   - read_run_journal
-  - write_skill_file
-  - append_skill_file
+  - write_file
   - read_file
   - list_dir
 max_turns: 30
@@ -25,7 +24,7 @@ When only **user message** + **main assistant reply** are provided (no journal b
 
 You may call **`read_run_journal`** if the task asks for tool-first loading instead of an embedded journal block.
 
-**When you may call `write_skill_file` / `append_skill_file`** — only if **at least one** applies:
+**When you may call `write_file` for `skills/<skill-id>/...` paths** — only if **at least one** applies:
 
 - **Multi-step workflow**: ordered steps the user (or the assistant) would repeat across sessions (e.g. deploy checklist, incident triage, document migration).
 - **Scriptable operation**: a stable sequence that benefits from a small helper under `skills/<skill-id>/scripts/` (shell/Python), not a one-off sentence.
@@ -33,16 +32,16 @@ You may call **`read_run_journal`** if the task asks for tool-first loading inst
 
 **Do not** create or update skills for: nicknames / persona / one-line preferences, single facts (“call me X”), generic chat, or anything that belongs in **`MEMORY.md`** or **`memory/<yyyy-mm>/`** style durable notes **without** a reusable procedure. In those cases **end without writing any skill file**.
 
-**Follow the `skill-creator` rules** (referenced above; **`oneclaw init`** installs **`skills/skill-creator/SKILL.md`** by default). That spec is how recurring user problems become **durable skills** under `skills/<skill-id>/`: required **SKILL.md**, optional **`scripts/`**, optional **`reference/`** (allowed extensions only; no `..`). If the referenced-skill index ever shows it missing, restore from the repo **`examples/skills/skill-creator/`** or re-run **`oneclaw init`** on a fresh layout.
+**Follow the `skill-creator` rules** (referenced above; **`oneclaw init`** installs **`skills/skill-creator/SKILL.md`** by default). That spec is how recurring user problems become **durable skills** under `skills/<skill-id>/`: required **SKILL.md**, optional **`scripts/`**, optional **`reference/`**. If the referenced-skill index ever shows it missing, restore from the repo **`examples/skills/skill-creator/`** or re-run **`oneclaw init`** on a fresh layout.
 
-**When you do persist**, use `write_skill_file` / `append_skill_file` with paths such as:
+**When you do persist**, use `write_file` with `operation: "write"` or `operation: "append"` and paths such as:
 
 - `skills/<skill-id>/SKILL.md` (required entry)
 - `skills/<skill-id>/scripts/run.sh` or `.py` when a short helper is justified
 - `skills/<skill-id>/reference/notes.md` for deeper material that should not bloat SKILL.md
 
-Only allowed extensions (see tool errors if rejected); no `..` path segments.
+First-version file tools do not enforce path permissions; keep skill artifacts in the intended `skills/<skill-id>/` tree by convention.
 
-`read_file` / `list_dir` refer to the **workspace**; the global skills tree is under `skills/` via the skill file tools above.
+`read_file` can read `skills/` paths, and `write_file` can write skill artifacts under the global skills tree. `list_dir` remains workspace-scoped.
 
 Keep proposals concrete; skip generic filler. **Default to no skill files** unless the bar above is met.

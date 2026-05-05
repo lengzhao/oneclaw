@@ -12,10 +12,12 @@ import (
 	"github.com/cloudwego/eino/adk"
 	"github.com/cloudwego/eino/schema"
 
+	"github.com/lengzhao/oneclaw/config"
 	"github.com/lengzhao/oneclaw/engine"
 	"github.com/lengzhao/oneclaw/paths"
 	"github.com/lengzhao/oneclaw/preturn"
 	"github.com/lengzhao/oneclaw/session"
+	"github.com/lengzhao/oneclaw/structuredmem"
 	"github.com/lengzhao/oneclaw/workflow"
 )
 
@@ -61,16 +63,62 @@ func handlePassthroughTextNode(_ context.Context, in NodeInput, _ NodeEnv) (work
 	return workflow.WorkflowNodeResult{Text: strings.TrimSpace(in.Text)}, nil
 }
 
+func composeMemoryRecallPrompt(structuredHits, treeListing string) string {
+	structuredHits = strings.TrimSpace(structuredHits)
+	treeListing = strings.TrimSpace(treeListing)
+	if structuredHits == "" && treeListing == "" {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("## Memory recall\n\n")
+	if structuredHits != "" {
+		b.WriteString("### Structured memory (lengzhao/memory)\n\n")
+		b.WriteString(structuredHits)
+		b.WriteString("\n\n")
+	}
+	if treeListing != "" {
+		b.WriteString("### Memory files (paths)\n\n")
+		b.WriteString(treeListing)
+		b.WriteString("\n\n")
+	}
+	b.WriteString("_Primary retrieval is SQLite FTS above when present. Use `read_file` with paths under `memory/` when you need full markdown._")
+	return strings.TrimRight(b.String(), "\n")
+}
+
 func handleLoadMemorySnapshot(rtx *engine.RuntimeContext) error {
 	if rtx == nil {
 		return nil
 	}
 	if contextDisabled(rtx, "memory_recall") {
+		slog.InfoContext(rtx.GoCtx, "wfexec.memory_recall.disabled",
+			"agent_type", runtimeAgentType(rtx),
+			"correlation_id", strings.TrimSpace(rtx.CorrelationID),
+		)
 		return nil
 	}
 	budget := preturn.CoalesceBudget(preturn.DefaultBudget())
-	block := preturn.MemoryRecallSection(rtx.EffectiveInstructionRoot(), budget)
+	q := strings.TrimSpace(rtx.EffectiveUserPrompt())
+	structured := ""
+	if q != "" {
+		structured = strings.TrimSpace(structuredmem.RecallHitsMarkdown(rtx.GoCtx, rtx.EffectiveInstructionRoot(), q, rtx.EffectiveSessionSegment(), runtimeAgentType(rtx), budget.MemoryMaxRunes))
+	}
+	tree := strings.TrimSpace(preturn.MemoryTreeListingMarkdown(rtx.EffectiveInstructionRoot(), budget))
+	block := composeMemoryRecallPrompt(structured, tree)
 	rtx.SetPromptTemplateEntry("MemoryRecall", block)
+	if strings.TrimSpace(block) == "" {
+		slog.InfoContext(rtx.GoCtx, "wfexec.memory_recall.empty",
+			"agent_type", runtimeAgentType(rtx),
+			"correlation_id", strings.TrimSpace(rtx.CorrelationID),
+			"instruction_root", strings.TrimSpace(rtx.EffectiveInstructionRoot()),
+		)
+		return nil
+	}
+	slog.InfoContext(rtx.GoCtx, "wfexec.memory_recall.loaded",
+		"agent_type", runtimeAgentType(rtx),
+		"correlation_id", strings.TrimSpace(rtx.CorrelationID),
+		"instruction_root", strings.TrimSpace(rtx.EffectiveInstructionRoot()),
+		"chars", len(block),
+	)
 	return nil
 }
 
@@ -124,7 +172,7 @@ func handleLoadTranscript(rtx *engine.RuntimeContext) error {
 	if contextDisabled(rtx, "transcript") {
 		return nil
 	}
-	turns, err := session.LoadTranscriptTurns(rtx.EffectiveSessionRoot())
+	turns, err := session.LoadTranscriptTurns(rtx.EffectiveSessionRoot(), runtimeAgentType(rtx))
 	if err != nil {
 		return fmt.Errorf("wfexec: load_transcript: %w", err)
 	}
@@ -178,7 +226,7 @@ func runMainLLM(rtx *engine.RuntimeContext) error {
 		return fmt.Errorf("wfexec: adk_main: empty user prompt")
 	}
 	if !rtx.UserTurnAppended {
-		if err := session.AppendTranscriptTurn(rtx.EffectiveSessionRoot(), session.TranscriptTurn{
+		if err := session.AppendTranscriptTurn(rtx.EffectiveSessionRoot(), runtimeAgentType(rtx), session.TranscriptTurn{
 			Ts: time.Now().UTC(), Role: "user", Content: cur,
 		}); err != nil {
 			return fmt.Errorf("wfexec: adk_main: append user transcript: %w", err)
@@ -197,6 +245,8 @@ func runMainLLM(rtx *engine.RuntimeContext) error {
 	}
 	iter := rtx.ChatAgent.Run(rtx.GoCtx, input)
 	var chunks []string
+	seenToolCalls := make(map[string]bool)
+	seenToolResults := make(map[string]bool)
 	for {
 		ev, ok := iter.Next()
 		if !ok {
@@ -212,6 +262,7 @@ func runMainLLM(rtx *engine.RuntimeContext) error {
 			if msg.Role != "" {
 				role = msg.Role
 			}
+			logToolActivity(rtx.GoCtx, rtx, msg, seenToolCalls, seenToolResults)
 			if role == schema.Tool {
 				continue
 			}
@@ -307,7 +358,7 @@ func recallUserMessageFromPromptData(rtx *engine.RuntimeContext) adk.Message {
 	if body == "" {
 		return nil
 	}
-	// load_memory_snapshot fills MemoryRecall from [preturn.MemoryRecallSection], which already starts with "## Memory recall".
+	// load_memory_snapshot fills MemoryRecall via composeMemoryRecallPrompt (SQLite hits first, optional path digest).
 	return schema.UserMessage(body)
 }
 
@@ -369,6 +420,63 @@ func promptDataString(v any) string {
 	}
 }
 
+func runtimeAgentType(rtx *engine.RuntimeContext) string {
+	if rtx == nil {
+		return ""
+	}
+	if rtx.Agent != nil && strings.TrimSpace(rtx.Agent.AgentType) != "" {
+		return strings.TrimSpace(rtx.Agent.AgentType)
+	}
+	return strings.TrimSpace(rtx.Turn.AgentID)
+}
+
+func logToolActivity(ctx context.Context, rtx *engine.RuntimeContext, msg *schema.Message, seenCalls, seenResults map[string]bool) {
+	if msg == nil {
+		return
+	}
+	agentType := runtimeAgentType(rtx)
+	corr := ""
+	if rtx != nil {
+		corr = strings.TrimSpace(rtx.CorrelationID)
+	}
+	for _, tc := range msg.ToolCalls {
+		id := strings.TrimSpace(tc.ID)
+		if id != "" && seenCalls[id] {
+			continue
+		}
+		if id != "" {
+			seenCalls[id] = true
+		}
+		slog.InfoContext(ctx, "wfexec.llm.tool_call",
+			"agent_type", agentType,
+			"correlation_id", corr,
+			"tool_call_id", id,
+			"tool_name", strings.TrimSpace(tc.Function.Name),
+			"arguments_len", len(strings.TrimSpace(tc.Function.Arguments)),
+		)
+	}
+	if msg.Role != schema.Tool {
+		return
+	}
+	key := strings.TrimSpace(msg.ToolCallID)
+	if key == "" {
+		key = strings.TrimSpace(msg.ToolName)
+	}
+	if key != "" && seenResults[key] {
+		return
+	}
+	if key != "" {
+		seenResults[key] = true
+	}
+	slog.InfoContext(ctx, "wfexec.llm.tool_result",
+		"agent_type", agentType,
+		"correlation_id", corr,
+		"tool_call_id", strings.TrimSpace(msg.ToolCallID),
+		"tool_name", strings.TrimSpace(msg.ToolName),
+		"content_len", len(strings.TrimSpace(msg.Content)),
+	)
+}
+
 func transcriptTurnsToADKMessages(turns []session.TranscriptTurn) []adk.Message {
 	msgs := make([]adk.Message, 0, len(turns))
 	for _, t := range turns {
@@ -398,7 +506,7 @@ func handleOnRespond(_ context.Context, in NodeInput, env NodeEnv) (workflow.Wor
 	if strings.TrimSpace(rtx.Assistant) == "" {
 		return workflow.WorkflowNodeResult{}, nil
 	}
-	if err := session.AppendTranscriptTurn(rtx.EffectiveSessionRoot(), session.TranscriptTurn{
+	if err := session.AppendTranscriptTurn(rtx.EffectiveSessionRoot(), runtimeAgentType(rtx), session.TranscriptTurn{
 		Ts: time.Now().UTC(), Role: "assistant", Content: rtx.Assistant,
 	}); err != nil {
 		return workflow.WorkflowNodeResult{}, err
@@ -412,10 +520,81 @@ func handleOnRespond(_ context.Context, in NodeInput, env NodeEnv) (workflow.Wor
 			return workflow.WorkflowNodeResult{}, err
 		}
 	}
+	if rtx.DelegationDepth == 0 {
+		c := rtx.GoCtx
+		if c == nil {
+			c = context.Background()
+		}
+		if err := extractStructuredMemoryFromMainTurn(rtx); err != nil {
+			slog.WarnContext(c, "wfexec.structuredmem.extract_failed",
+				"agent_type", runtimeAgentType(rtx),
+				"correlation_id", strings.TrimSpace(rtx.CorrelationID),
+				"err", err,
+			)
+		}
+	}
 	rtx.EmitNodeOutput(map[string]any{
 		"use":              "on_respond",
 		"assistant_text":   rtx.Assistant,
 		"transcript_flush": true,
 	})
 	return workflow.WorkflowNodeResult{Text: strings.TrimSpace(rtx.Assistant)}, nil
+}
+
+func extractStructuredMemoryFromMainTurn(rtx *engine.RuntimeContext) error {
+	if rtx == nil {
+		return nil
+	}
+	c := rtx.GoCtx
+	if c == nil {
+		c = context.Background()
+	}
+	assistant := strings.TrimSpace(rtx.Assistant)
+	user := strings.TrimSpace(rtx.EffectiveUserPrompt())
+	if user == "" || assistant == "" {
+		return nil
+	}
+	prof, err := runtimeModelProfile(rtx)
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(prof.ID) == "" && strings.TrimSpace(prof.Provider) == "" {
+		return nil
+	}
+	dialog := "User: " + user + "\nAssistant: " + assistant
+	agentID := runtimeAgentType(rtx)
+	return structuredmem.AppendExtractJournal(
+		c,
+		rtx.EffectiveInstructionRoot(),
+		dialog,
+		prof,
+		rtx.EffectiveSessionSegment(),
+		agentID,
+		time.Now().UTC(),
+	)
+}
+
+func runtimeModelProfile(rtx *engine.RuntimeContext) (config.ModelProfile, error) {
+	if rtx == nil || rtx.Cfg == nil {
+		return config.ModelProfile{}, nil
+	}
+	profile := strings.TrimSpace(rtx.EffectiveProfileID())
+	modelName := strings.TrimSpace(rtx.EffectiveModelName())
+	switch {
+	case profile == "":
+		return config.ModelProfile{}, nil
+	case modelName != "":
+		p, err := config.ResolveModelForTurn(rtx.Cfg, profile+"/"+modelName)
+		if err != nil {
+			return config.ModelProfile{}, err
+		}
+		return *p, nil
+	default:
+		// Fallback: resolve by profile id/provider and use existing cfg default model path.
+		all, err := config.ResolveProfilesForCredentialKey(rtx.Cfg, profile)
+		if err != nil || len(all) == 0 {
+			return config.ModelProfile{}, err
+		}
+		return all[0], nil
+	}
 }

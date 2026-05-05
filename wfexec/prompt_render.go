@@ -19,6 +19,17 @@ import (
 // embeddedAgentPromptTemplate is the default layout when agents/<agent_type>.prompt.tmpl is absent (not shipped in user-data bootstrap).
 const embeddedAgentPromptTemplate = `{{.AGENT_MD}}
 
+{{if .SOUL_MD}}
+---
+
+{{.SOUL_MD}}
+
+{{end}}{{if .USER_MD}}
+---
+
+{{.USER_MD}}
+
+{{end}}
 ---
 
 {{.MEMORY_MD}}
@@ -76,6 +87,14 @@ func RenderMainAgentPrompt(rtx *engine.RuntimeContext) (string, error) {
 	if profile.Disabled("agent_md") {
 		agentMd = ""
 	}
+	soulMd := strings.TrimSpace(readOptionalText(filepath.Join(ir, "SOUL.md")))
+	if profile.Disabled("soul_md") {
+		soulMd = ""
+	}
+	userMd := strings.TrimSpace(readOptionalText(filepath.Join(ir, "USER.md")))
+	if profile.Disabled("user_md") {
+		userMd = ""
+	}
 	memStr := ""
 	if !profile.Disabled("memory_md") {
 		raw, err := os.ReadFile(filepath.Join(ir, "MEMORY.md"))
@@ -88,6 +107,8 @@ func RenderMainAgentPrompt(rtx *engine.RuntimeContext) (string, error) {
 	data := rtx.PromptTemplateDataCopy()
 	// Host-controlled fields win over workflow-provided keys.
 	data["AGENT_MD"] = agentMd
+	data["SOUL_MD"] = soulMd
+	data["USER_MD"] = userMd
 	data["MEMORY_MD"] = memStr
 	data["AgentBody"] = strings.TrimSpace(rtx.Agent.Body)
 	refBlock := preturn.ReferencedSkillsIndexMarkdown(ud, rtx.Agent.ReferencedSkillIDs)

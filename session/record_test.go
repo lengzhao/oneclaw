@@ -9,12 +9,12 @@ import (
 
 func TestAppendTranscriptTurn(t *testing.T) {
 	dir := t.TempDir()
-	if err := AppendTranscriptTurn(dir, TranscriptTurn{
+	if err := AppendTranscriptTurn(dir, "default", TranscriptTurn{
 		Ts: time.Unix(1, 0).UTC(), Role: "user", Content: "hi",
 	}); err != nil {
 		t.Fatal(err)
 	}
-	b, err := os.ReadFile(filepath.Join(dir, "transcript.jsonl"))
+	b, err := os.ReadFile(filepath.Join(dir, "default_transcript.jsonl"))
 	if err != nil {
 		t.Fatal(err)
 	}

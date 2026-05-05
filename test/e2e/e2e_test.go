@@ -182,24 +182,11 @@ func lastRunStartDetail(t *testing.T, sessionRoot, agentType string) map[string]
 
 func transcriptLines(t *testing.T, sessionRoot string) int {
 	t.Helper()
-	b, err := os.ReadFile(filepath.Join(sessionRoot, "transcript.jsonl"))
+	turns, err := session.LoadTranscriptTurns(sessionRoot, "default")
 	if err != nil {
-		if os.IsNotExist(err) {
-			return 0
-		}
 		t.Fatal(err)
 	}
-	n := 0
-	sc := bufio.NewScanner(bytes.NewReader(b))
-	for sc.Scan() {
-		if len(bytes.TrimSpace(sc.Bytes())) > 0 {
-			n++
-		}
-	}
-	if err := sc.Err(); err != nil {
-		t.Fatal(err)
-	}
-	return n
+	return len(turns)
 }
 
 func TestE2E_MockTurn_stdoutAndRunJournal(t *testing.T) {
@@ -301,8 +288,8 @@ func TestE2E_MockTurn_sessionIsolation(t *testing.T) {
 		t.Fatalf("sess-B transcript want ≥2 lines, got %d", n)
 	}
 
-	aPath := filepath.Join(paths.SessionRoot(root, "sess-A"), "transcript.jsonl")
-	bPath := filepath.Join(paths.SessionRoot(root, "sess-B"), "transcript.jsonl")
+	aPath := filepath.Join(paths.SessionRoot(root, "sess-A"), "default_transcript.jsonl")
+	bPath := filepath.Join(paths.SessionRoot(root, "sess-B"), "default_transcript.jsonl")
 	ab, _ := os.ReadFile(aPath)
 	bb, _ := os.ReadFile(bPath)
 	if strings.Contains(string(ab), "hello B") || strings.Contains(string(bb), "hello A") {
@@ -346,9 +333,11 @@ func TestE2E_MockTurn_memoryRecallLogged(t *testing.T) {
 	logBuf, restore := captureVerboseJSONLogs(t)
 	defer restore()
 
-	sessRoot := paths.SessionRoot(root, sess)
+	sessSeg := paths.SanitizeSessionPathSegment(sess)
+	sessRoot := paths.SessionRoot(root, sessSeg)
 	mm := memory.MonthUTC(time.Now().UTC())
-	memPath := filepath.Join(sessRoot, "memory", mm, "e2e-recall.md")
+	instrRoot := paths.InstructionRoot(root, sessSeg, cfg.IsolateInstructionOrDefault())
+	memPath := filepath.Join(instrRoot, "memory", mm, "e2e-recall.md")
 	if err := os.MkdirAll(filepath.Dir(memPath), 0o755); err != nil {
 		t.Fatal(err)
 	}

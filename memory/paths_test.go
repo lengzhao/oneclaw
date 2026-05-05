@@ -43,6 +43,8 @@ func TestNormalizeMemoryMonthRel(t *testing.T) {
 		{"2026-05.md", "memory/2026-05/" + today + ".md"},
 		{"memory/2026-05/extract", "memory/2026-05/extract.md"},
 		{"2026-05/extract", "memory/2026-05/extract.md"},
+		{"memory/2026-05-05.md", "memory/2026-05/2026-05-05.md"},
+		{"2026-05-05.md", "memory/2026-05/2026-05-05.md"},
 		{"", "memory/" + MonthUTC(now) + "/" + today + ".md"},
 	}
 	for _, tt := range tests {
@@ -53,6 +55,9 @@ func TestNormalizeMemoryMonthRel(t *testing.T) {
 	}
 	if _, err := NormalizeMemoryMonthRel("../x"); err == nil {
 		t.Fatal("expected error for ..")
+	}
+	if _, err := NormalizeMemoryMonthRel("memory/2026-13-01.md"); err == nil {
+		t.Fatal("expected error for invalid calendar date")
 	}
 	gotPH, err := NormalizeMemoryMonthRel("memory/YYYY-MM/placeholder.md")
 	if err != nil {
@@ -91,6 +96,14 @@ func TestResolveMemoryMonthMarkdown(t *testing.T) {
 	want2 := filepath.Join(root, "memory", "2026-05", "other.md")
 	if filepath.Clean(got2) != filepath.Clean(want2) {
 		t.Fatalf("implicit memory prefix: got %s want %s", got2, want2)
+	}
+	got3, err := ResolveMemoryMonthMarkdown(root, "memory/2026-05-05.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want3 := filepath.Join(root, "memory", "2026-05", "2026-05-05.md")
+	if filepath.Clean(got3) != filepath.Clean(want3) {
+		t.Fatalf("flat yyyy-mm-dd filename: got %s want %s", got3, want3)
 	}
 }
 

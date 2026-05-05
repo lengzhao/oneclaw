@@ -15,6 +15,36 @@ import (
 // Returns handled=false if name is not a deps-bound builtin.
 func RegisterDepsBoundBuiltin(out *tools.Registry, name string, deps *RunAgentDeps) (handled bool, err error) {
 	switch name {
+	case builtin.NameReadFile:
+		if deps == nil {
+			return false, nil
+		}
+		ws := strings.TrimSpace(deps.ParentWorkspace)
+		if ws == "" {
+			return true, fmt.Errorf("subagent: %s requires ParentWorkspace", name)
+		}
+		ir := strings.TrimSpace(deps.InstructionRoot)
+		ud := strings.TrimSpace(deps.UserDataRoot)
+		tool, err := builtin.InferReadFileScoped(ws, ir, ud)
+		if err != nil {
+			return true, err
+		}
+		return true, out.Register(tool)
+	case builtin.NameWriteFile:
+		if deps == nil {
+			return false, nil
+		}
+		ws := strings.TrimSpace(deps.ParentWorkspace)
+		if ws == "" {
+			return true, fmt.Errorf("subagent: %s requires ParentWorkspace", name)
+		}
+		ir := strings.TrimSpace(deps.InstructionRoot)
+		ud := strings.TrimSpace(deps.UserDataRoot)
+		tool, err := builtin.InferWriteFileScoped(ws, ir, ud)
+		if err != nil {
+			return true, err
+		}
+		return true, out.Register(tool)
 	case builtin.NameTodo:
 		if deps == nil {
 			return true, fmt.Errorf("subagent: %s requires RunAgentDeps", name)
@@ -48,45 +78,6 @@ func RegisterDepsBoundBuiltin(out *tools.Registry, name string, deps *RunAgentDe
 			return true, err
 		}
 		return true, out.Register(tool)
-	case builtin.NameWriteMemoryMonth:
-		if deps == nil {
-			return true, fmt.Errorf("subagent: %s requires RunAgentDeps", name)
-		}
-		ir := strings.TrimSpace(deps.InstructionRoot)
-		if ir == "" {
-			return true, fmt.Errorf("subagent: %s requires InstructionRoot", name)
-		}
-		tool, err := builtin.InferWriteMemoryMonth(ir)
-		if err != nil {
-			return true, err
-		}
-		return true, out.Register(tool)
-	case builtin.NameAppendMemoryMonth:
-		if deps == nil {
-			return true, fmt.Errorf("subagent: %s requires RunAgentDeps", name)
-		}
-		ir := strings.TrimSpace(deps.InstructionRoot)
-		if ir == "" {
-			return true, fmt.Errorf("subagent: %s requires InstructionRoot", name)
-		}
-		tool, err := builtin.InferAppendMemoryMonth(ir)
-		if err != nil {
-			return true, err
-		}
-		return true, out.Register(tool)
-	case builtin.NameReadMemoryMonth:
-		if deps == nil {
-			return true, fmt.Errorf("subagent: %s requires RunAgentDeps", name)
-		}
-		ir := strings.TrimSpace(deps.InstructionRoot)
-		if ir == "" {
-			return true, fmt.Errorf("subagent: %s requires InstructionRoot", name)
-		}
-		tool, err := builtin.InferReadMemoryMonth(ir)
-		if err != nil {
-			return true, err
-		}
-		return true, out.Register(tool)
 	case builtin.NameReadRunJournal:
 		if deps == nil {
 			return true, fmt.Errorf("subagent: %s requires RunAgentDeps", name)
@@ -97,32 +88,6 @@ func RegisterDepsBoundBuiltin(out *tools.Registry, name string, deps *RunAgentDe
 		}
 		host := strings.TrimSpace(deps.HostAgentID)
 		tool, err := builtin.InferReadRunJournal(sr, host, strings.TrimSpace(deps.CorrelationID))
-		if err != nil {
-			return true, err
-		}
-		return true, out.Register(tool)
-	case builtin.NameWriteSkillFile:
-		if deps == nil {
-			return true, fmt.Errorf("subagent: %s requires RunAgentDeps", name)
-		}
-		ud := strings.TrimSpace(deps.UserDataRoot)
-		if ud == "" {
-			return true, fmt.Errorf("subagent: %s requires UserDataRoot", name)
-		}
-		tool, err := builtin.InferWriteSkillFile(ud)
-		if err != nil {
-			return true, err
-		}
-		return true, out.Register(tool)
-	case builtin.NameAppendSkillFile:
-		if deps == nil {
-			return true, fmt.Errorf("subagent: %s requires RunAgentDeps", name)
-		}
-		ud := strings.TrimSpace(deps.UserDataRoot)
-		if ud == "" {
-			return true, fmt.Errorf("subagent: %s requires UserDataRoot", name)
-		}
-		tool, err := builtin.InferAppendSkillFile(ud)
 		if err != nil {
 			return true, err
 		}

@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/cloudwego/eino/compose"
 
@@ -181,6 +182,18 @@ func executeWorkflowNodeV2(ctx context.Context, state *compileState, nodeID stri
 		rtx.CurrentAsync = false
 		rtx.CurrentParams = nil
 	}()
+	agentType := strings.TrimSpace(rtx.Turn.AgentID)
+	if rtx.Agent != nil && strings.TrimSpace(rtx.Agent.AgentType) != "" {
+		agentType = strings.TrimSpace(rtx.Agent.AgentType)
+	}
+	start := time.Now()
+	slog.InfoContext(ctx, "wfexec.node.start",
+		"agent_type", agentType,
+		"correlation_id", strings.TrimSpace(rtx.CorrelationID),
+		"node", nodeID,
+		"use", node.Use,
+		"async", node.Async,
+	)
 
 	h := state.reg.Lookup(node.Use)
 	if h == nil {
@@ -192,11 +205,28 @@ func executeWorkflowNodeV2(ctx context.Context, state *compileState, nodeID stri
 	}
 	out, err := h(ctx, in, NodeEnv{Runtime: rtx, NodeID: nodeID, Node: node})
 	if err != nil {
+		slog.ErrorContext(ctx, "wfexec.node.failed",
+			"agent_type", agentType,
+			"correlation_id", strings.TrimSpace(rtx.CorrelationID),
+			"node", nodeID,
+			"use", node.Use,
+			"async", node.Async,
+			"elapsed_ms", time.Since(start).Milliseconds(),
+			"err", err,
+		)
 		return workflow.WorkflowNodeResult{}, fmt.Errorf("wfexec: node %q (%s): %w", nodeID, node.Use, err)
 	}
 	if out.Data == nil {
 		out.Data = map[string]any{}
 	}
+	slog.InfoContext(ctx, "wfexec.node.done",
+		"agent_type", agentType,
+		"correlation_id", strings.TrimSpace(rtx.CorrelationID),
+		"node", nodeID,
+		"use", node.Use,
+		"async", node.Async,
+		"elapsed_ms", time.Since(start).Milliseconds(),
+	)
 	return out, nil
 }
 

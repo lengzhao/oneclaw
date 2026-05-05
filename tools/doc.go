@@ -3,12 +3,12 @@
 // # Required vs extended builtins (roadmap)
 //
 // **P0 — minimal kernel (current)**  
-//   - `read_file`: read UTF-8 text under [Registry.WorkspaceRoot] (required for workspace-bound agents).  
+//   - `read_file`: read UTF-8 text from absolute paths or paths relative to [Registry.WorkspaceRoot].  
 //   - `echo`: smoke/tests only — not in [DefaultBuiltinIDs]; register explicitly or list in agent `tools:` when needed.
 //
 // **P1 — filesystem (partial)**  
 //   - `list_dir` / `glob`: enumerate / match paths under workspace (caps + path rules align with `read_file`).  
-//   - `write_file` / `append_file` / `edit_file`: mutate workspace (`edit_file`: exact single occurrence replace).
+//   - `write_file`: mutate absolute paths, workspace-relative paths, and scoped file-root conveniences; supports write, append, and exact replace operations.
 //
 // **Meta (not in RegisterBuiltins)**  
 //   - `run_agent`: registered by [github.com/lengzhao/oneclaw/subagent] when explicitly allowed.
@@ -20,7 +20,7 @@
 //
 // Implementations and name constants live in [github.com/lengzhao/oneclaw/tools/builtin] (one package, multiple files, main-branch style).
 // [RegisterBuiltinsNamed] wires tools explicitly via a switch — add a case and an Infer* factory when introducing a builtin.
-// Workspace path rules: [github.com/lengzhao/oneclaw/tools/workspace].
+// First-version file tools do not enforce path permissions; [github.com/lengzhao/oneclaw/tools/workspace] remains for tools that still need workspace-scoped enumeration.
 //
 // # Eino interfaces (avoid parallel abstractions)
 //

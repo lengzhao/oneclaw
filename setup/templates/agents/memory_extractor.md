@@ -3,10 +3,8 @@ name: Memory extractor
 description: Extracts durable memory from the turn (init template; edit freely).
 tools:
   - read_run_journal
-  - read_memory_month
-  - write_memory_month
-  - append_memory_month
   - read_file
+  - write_file
   - list_dir
 max_turns: 16
 context_profile:
@@ -22,4 +20,4 @@ Extract stable facts from this turn and persist concise notes under `memory/<UTC
 
 Prefer `read_run_journal` when available, then write compact bullets that help future turns.
 
-For `write_memory_month` / `append_memory_month` / `read_memory_month`, `path` can be omitted. Empty `path` defaults to `memory/<UTC-yyyy-mm>/<UTC-yyyy-mm-dd>.md`.
+Use **`write_file`** with an explicit `memory/<UTC-yyyy-mm>/<name>.md` path. Use `operation: "write"` for a new note or `operation: "append"` to extend an existing one. Use **`read_file`** with **`memory/…`** paths for existing instruction-root markdown.

@@ -96,11 +96,12 @@ func TestLiveLLM_memoryRecallInVerboseChatLog(t *testing.T) {
 	root := bootstrapUserData(t)
 	cfg := loadRunEnv(t, root, cfgPatchForE2E(t))
 	sess := "live-memrec"
-	sessRoot := paths.SessionRoot(root, sess)
 
 	mm := memory.MonthUTC(time.Now().UTC())
 	memTok := "RECALL_LIVE_LAYER_m4p"
-	memPath := filepath.Join(sessRoot, "memory", mm, "live-layer.md")
+	sessSeg := paths.SanitizeSessionPathSegment(sess)
+	instrRoot := paths.InstructionRoot(root, sessSeg, cfg.IsolateInstructionOrDefault())
+	memPath := filepath.Join(instrRoot, "memory", mm, "live-layer.md")
 	if err := os.MkdirAll(filepath.Dir(memPath), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -145,5 +146,5 @@ func TestLiveLLM_memoryRecallInVerboseChatLog(t *testing.T) {
 	if messageRolePrefix(segs[len(segs)-1]) != "user" {
 		t.Fatalf("last chat segment should be current user turn: %s", truncate(segs[len(segs)-1], 400))
 	}
-	assertRunJournalHasPhase(t, sessRoot, "default", "run_complete")
+	assertRunJournalHasPhase(t, paths.SessionRoot(root, sessSeg), "default", "run_complete")
 }

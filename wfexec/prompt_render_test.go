@@ -44,3 +44,41 @@ func TestRenderMainAgentPrompt_includesNowUTCFromRunStartedAt(t *testing.T) {
 		t.Fatalf("want current time section after tasks section:\n%s", out)
 	}
 }
+
+func TestRenderMainAgentPrompt_includesInstructionCoreFiles(t *testing.T) {
+	dir := t.TempDir()
+	ir := filepath.Join(dir, "instr")
+	if err := os.MkdirAll(ir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	ud := filepath.Join(dir, "userdata")
+	if err := os.MkdirAll(ud, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for name, body := range map[string]string{
+		"AGENT.md":  "AGENT_CORE",
+		"MEMORY.md": "MEMORY_CORE",
+		"SOUL.md":   "SOUL_CORE",
+		"USER.md":   "USER_CORE",
+	} {
+		if err := os.WriteFile(filepath.Join(ir, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rtx := &engine.RuntimeContext{
+		TurnInputs: engine.TurnInputs{
+			InstructionRoot: ir,
+			UserDataRoot:    ud,
+			Agent:           &catalog.Agent{AgentType: "default", Body: "AGENT_BODY"},
+		},
+	}
+	out, err := RenderMainAgentPrompt(rtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"AGENT_CORE", "MEMORY_CORE", "SOUL_CORE", "USER_CORE", "AGENT_BODY"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("missing %s in prompt:\n%s", want, out)
+		}
+	}
+}

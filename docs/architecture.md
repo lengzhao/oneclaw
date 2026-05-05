@@ -93,7 +93,7 @@ sequenceDiagram
   TH->>E:  dequeue / 策略 serial|insert
   E->>R: Invoke TurnContext
   R->>P: OnReceive 已写入上下文
-  P->>P: 按 context_profile 拼 Instruction / MEMORY / skills / recall / transcript<br/>budget 裁剪
+  P->>P: 按 context_profile 拼 Instruction Core / MEMORY / skills / recall / transcript<br/>budget 裁剪
   P->>A: messages + tools + middleware
   loop ReAct 多步
     A->>A: BeforeModelRewriteState 等
@@ -117,7 +117,7 @@ sequenceDiagram
 flowchart LR
   subgraph phases [单回合阶段]
     R[OnReceive<br/>校验 / 附件 / TurnContext]
-    P[PreTurn<br/>md → Instruction<br/>MEMORY 快照<br/>Registry filter]
+    P[PreTurn<br/>md → Instruction<br/>AGENT/SOUL/USER/MEMORY<br/>Registry filter]
     A[ADK<br/>主 agent_type]
     O[OnRespond<br/>裁剪 / transcript<br/>runs 记录 / Bus]
     Q[链后继<br/>YAML；常 async]
@@ -215,7 +215,7 @@ flowchart TB
     MAN[config.yaml catalog<br/>agents / workflows / prompts]
   end
   subgraph session [SessionRoot = InstructionRoot]
-    AG[AGENT.md]
+    AG[AGENT.md / SOUL.md / USER.md]
     MEM[MEMORY / memory/]
     WS[workspace/]
     TR[transcript / runs/]

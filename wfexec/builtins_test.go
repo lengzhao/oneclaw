@@ -114,7 +114,7 @@ func TestPrepareAgentContext_defaultFullContext(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(memDir, "note.md"), []byte("durable fact"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := session.AppendTranscriptTurn(dir, session.TranscriptTurn{Ts: time.Now(), Role: "user", Content: "prior"}); err != nil {
+	if err := session.AppendTranscriptTurn(dir, "default", session.TranscriptTurn{Ts: time.Now(), Role: "user", Content: "prior"}); err != nil {
 		t.Fatal(err)
 	}
 	rtx := &engine.RuntimeContext{
@@ -153,7 +153,7 @@ func TestPrepareAgentContext_disableContextBlocks(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(memDir, "note.md"), []byte("hidden memory"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := session.AppendTranscriptTurn(dir, session.TranscriptTurn{Ts: time.Now(), Role: "user", Content: "hidden prior"}); err != nil {
+	if err := session.AppendTranscriptTurn(dir, "default", session.TranscriptTurn{Ts: time.Now(), Role: "user", Content: "hidden prior"}); err != nil {
 		t.Fatal(err)
 	}
 	rtx := &engine.RuntimeContext{

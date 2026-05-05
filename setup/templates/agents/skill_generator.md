@@ -5,8 +5,7 @@ skills:
   - skill-creator
 tools:
   - read_run_journal
-  - write_skill_file
-  - append_skill_file
+  - write_file
   - read_file
   - list_dir
 max_turns: 30

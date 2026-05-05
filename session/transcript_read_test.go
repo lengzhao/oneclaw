@@ -8,7 +8,7 @@ import (
 )
 
 func TestLoadTranscriptTurns_missingFile(t *testing.T) {
-	got, err := LoadTranscriptTurns(t.TempDir())
+	got, err := LoadTranscriptTurns(t.TempDir(), "default")
 	if err != nil || len(got) != 0 {
 		t.Fatalf("err=%v len=%d", err, len(got))
 	}
@@ -16,14 +16,14 @@ func TestLoadTranscriptTurns_missingFile(t *testing.T) {
 
 func TestLoadTranscriptTurns_trim(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "transcript.jsonl")
-	if err := AppendTranscriptTurn(dir, TranscriptTurn{Ts: time.Now(), Role: "user", Content: "a"}); err != nil {
+	path := filepath.Join(dir, "default_transcript.jsonl")
+	if err := AppendTranscriptTurn(dir, "default", TranscriptTurn{Ts: time.Now(), Role: "user", Content: "a"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := AppendTranscriptTurn(dir, TranscriptTurn{Ts: time.Now(), Role: "assistant", Content: "b"}); err != nil {
+	if err := AppendTranscriptTurn(dir, "default", TranscriptTurn{Ts: time.Now(), Role: "assistant", Content: "b"}); err != nil {
 		t.Fatal(err)
 	}
-	got, err := LoadTranscriptTurns(dir)
+	got, err := LoadTranscriptTurns(dir, "default")
 	if err != nil {
 		t.Fatal(err)
 	}

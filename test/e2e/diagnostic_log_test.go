@@ -109,11 +109,12 @@ func TestE2E_ModelInput_transcriptVsMemoryRecallVsSystemPrompt(t *testing.T) {
 	cfg := loadRunEnv(t, root, cfgPatchForE2E(t))
 	sess := "e2e-layers"
 	mock := useMockLLM(t)
-	sessRoot := paths.SessionRoot(root, sess)
+	sessRoot := paths.SessionRoot(root, paths.SanitizeSessionPathSegment(sess))
 
 	mm := memory.MonthUTC(time.Now().UTC())
 	memRel := "layer-recall.md"
-	memPath := filepath.Join(sessRoot, "memory", mm, memRel)
+	instrRoot := paths.InstructionRoot(root, paths.SanitizeSessionPathSegment(sess), cfg.IsolateInstructionOrDefault())
+	memPath := filepath.Join(instrRoot, "memory", mm, memRel)
 	if err := os.MkdirAll(filepath.Dir(memPath), 0o755); err != nil {
 		t.Fatal(err)
 	}

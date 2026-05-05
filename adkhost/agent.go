@@ -6,6 +6,7 @@ import (
 
 	"github.com/cloudwego/eino/adk"
 	"github.com/cloudwego/eino/components/model"
+	eino_tool "github.com/cloudwego/eino/components/tool"
 
 	"github.com/lengzhao/oneclaw/tools"
 )
@@ -36,7 +37,13 @@ func NewChatModelAgent(ctx context.Context, cm model.ToolCallingChatModel, reg *
 		max = 20
 	}
 	tc := adk.ToolsConfig{}
-	tc.Tools = reg.All()
+	for _, bt := range reg.All() {
+		if inv, ok := bt.(eino_tool.InvokableTool); ok {
+			tc.Tools = append(tc.Tools, tools.WrapInvokableSoftErrors(inv))
+			continue
+		}
+		tc.Tools = append(tc.Tools, bt)
+	}
 	cfg := &adk.ChatModelAgentConfig{
 		Name:          name,
 		Description:   opt.Description,

@@ -14,14 +14,14 @@ import (
 // Each line is one user or assistant turn (pairs count as two lines).
 const DefaultTranscriptTurnLimit = 80
 
-// LoadTranscriptTurns reads transcript.jsonl under sessionRoot (oldest first). Missing file returns (nil, nil).
+// LoadTranscriptTurns reads {agent_type}_transcript.jsonl under sessionRoot (oldest first).
 // Call before appending the current user turn so replay excludes this round's user message (see wfexec adk_main).
-func LoadTranscriptTurns(sessionRoot string) ([]TranscriptTurn, error) {
+func LoadTranscriptTurns(sessionRoot, agentType string) ([]TranscriptTurn, error) {
 	root := strings.TrimSpace(sessionRoot)
 	if root == "" {
 		return nil, fmt.Errorf("session: empty session root")
 	}
-	path := filepath.Join(root, "transcript.jsonl")
+	path := transcriptPath(root, agentType)
 	f, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -41,7 +41,7 @@ func LoadTranscriptTurns(sessionRoot string) ([]TranscriptTurn, error) {
 		}
 		var t TranscriptTurn
 		if err := json.Unmarshal(line, &t); err != nil {
-			return nil, fmt.Errorf("session: transcript.jsonl line %d: %w", lineNum, err)
+			return nil, fmt.Errorf("session: %s line %d: %w", filepath.Base(path), lineNum, err)
 		}
 		out = append(out, t)
 	}

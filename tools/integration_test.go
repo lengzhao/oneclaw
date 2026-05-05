@@ -67,7 +67,7 @@ func TestGlobTool_recursive(t *testing.T) {
 	}
 }
 
-func TestEditFile_exactlyOnce(t *testing.T) {
+func TestWriteFile_replaceExactlyOnce(t *testing.T) {
 	ctx := context.Background()
 	ws := t.TempDir()
 	path := filepath.Join(ws, "t.go")
@@ -75,15 +75,16 @@ func TestEditFile_exactlyOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	r := NewRegistry(ws)
-	if err := RegisterBuiltinsNamed(r, []string{ToolEditFile, ToolReadFile}); err != nil {
+	if err := RegisterBuiltinsNamed(r, []string{ToolWriteFile, ToolReadFile}); err != nil {
 		t.Fatal(err)
 	}
 	args, _ := json.Marshal(map[string]string{
-		"path":     "t.go",
-		"old_text": "beta",
-		"new_text": "BETA",
+		"path":      "t.go",
+		"operation": "replace",
+		"old_text":  "beta",
+		"content":   "BETA",
 	})
-	ts, _ := r.FilterByNames([]string{ToolEditFile})
+	ts, _ := r.FilterByNames([]string{ToolWriteFile})
 	if _, err := ts[0].(tool.InvokableTool).InvokableRun(ctx, string(args)); err != nil {
 		t.Fatal(err)
 	}
@@ -95,18 +96,18 @@ func TestEditFile_exactlyOnce(t *testing.T) {
 	}
 }
 
-func TestEditFile_ambiguous(t *testing.T) {
+func TestWriteFile_replaceAmbiguous(t *testing.T) {
 	ctx := context.Background()
 	ws := t.TempDir()
 	if err := os.WriteFile(filepath.Join(ws, "x.txt"), []byte("aa aa"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	r := NewRegistry(ws)
-	if err := RegisterBuiltinsNamed(r, []string{ToolEditFile}); err != nil {
+	if err := RegisterBuiltinsNamed(r, []string{ToolWriteFile}); err != nil {
 		t.Fatal(err)
 	}
-	args, _ := json.Marshal(map[string]string{"path": "x.txt", "old_text": "aa", "new_text": "b"})
-	ts, _ := r.FilterByNames([]string{ToolEditFile})
+	args, _ := json.Marshal(map[string]string{"path": "x.txt", "operation": "replace", "old_text": "aa", "content": "b"})
+	ts, _ := r.FilterByNames([]string{ToolWriteFile})
 	if _, err := ts[0].(tool.InvokableTool).InvokableRun(ctx, string(args)); err == nil {
 		t.Fatal("expected error for ambiguous old_text")
 	}
@@ -116,7 +117,7 @@ func TestWriteReadAppend_roundTrip(t *testing.T) {
 	ctx := context.Background()
 	ws := t.TempDir()
 	r := NewRegistry(ws)
-	if err := RegisterBuiltinsNamed(r, []string{ToolReadFile, ToolWriteFile, ToolAppendFile}); err != nil {
+	if err := RegisterBuiltinsNamed(r, []string{ToolReadFile, ToolWriteFile}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -137,8 +138,8 @@ func TestWriteReadAppend_roundTrip(t *testing.T) {
 		t.Fatalf("read got %q err=%v", body, err)
 	}
 
-	appArgs, _ := json.Marshal(map[string]string{"path": "nest/x.txt", "content": "\nworld"})
-	ts, _ = r.FilterByNames([]string{ToolAppendFile})
+	appArgs, _ := json.Marshal(map[string]string{"path": "nest/x.txt", "operation": "append", "content": "\nworld"})
+	ts, _ = r.FilterByNames([]string{ToolWriteFile})
 	if _, err := ts[0].(tool.InvokableTool).InvokableRun(ctx, string(appArgs)); err != nil {
 		t.Fatal(err)
 	}
@@ -146,5 +147,55 @@ func TestWriteReadAppend_roundTrip(t *testing.T) {
 	body, err = ts[0].(tool.InvokableTool).InvokableRun(ctx, string(readArgs))
 	if err != nil || body != "hello\nworld" {
 		t.Fatalf("after append got %q err=%v", body, err)
+	}
+}
+
+func TestReadWriteFile_allowsAbsolutePathOutsideWorkspace(t *testing.T) {
+	ctx := context.Background()
+	tmp := t.TempDir()
+	ws := filepath.Join(tmp, "workspace")
+	outside := filepath.Join(tmp, "outside.txt")
+	r := NewRegistry(ws)
+	if err := RegisterBuiltinsNamed(r, []string{ToolReadFile, ToolWriteFile}); err != nil {
+		t.Fatal(err)
+	}
+
+	writeArgs, _ := json.Marshal(map[string]string{"path": outside, "content": "outside"})
+	ts, _ := r.FilterByNames([]string{ToolWriteFile})
+	if _, err := ts[0].(tool.InvokableTool).InvokableRun(ctx, string(writeArgs)); err != nil {
+		t.Fatal(err)
+	}
+
+	readArgs, _ := json.Marshal(map[string]string{"path": outside})
+	ts, _ = r.FilterByNames([]string{ToolReadFile})
+	body, err := ts[0].(tool.InvokableTool).InvokableRun(ctx, string(readArgs))
+	if err != nil || body != "outside" {
+		t.Fatalf("absolute read got %q err=%v", body, err)
+	}
+}
+
+func TestReadWriteFile_allowsParentTraversalOutsideWorkspace(t *testing.T) {
+	ctx := context.Background()
+	tmp := t.TempDir()
+	ws := filepath.Join(tmp, "workspace")
+	r := NewRegistry(ws)
+	if err := RegisterBuiltinsNamed(r, []string{ToolReadFile, ToolWriteFile}); err != nil {
+		t.Fatal(err)
+	}
+
+	writeArgs, _ := json.Marshal(map[string]string{"path": "../parent.txt", "content": "parent"})
+	ts, _ := r.FilterByNames([]string{ToolWriteFile})
+	if _, err := ts[0].(tool.InvokableTool).InvokableRun(ctx, string(writeArgs)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(tmp, "parent.txt")); err != nil {
+		t.Fatal(err)
+	}
+
+	readArgs, _ := json.Marshal(map[string]string{"path": "../parent.txt"})
+	ts, _ = r.FilterByNames([]string{ToolReadFile})
+	body, err := ts[0].(tool.InvokableTool).InvokableRun(ctx, string(readArgs))
+	if err != nil || body != "parent" {
+		t.Fatalf("parent traversal read got %q err=%v", body, err)
 	}
 }

@@ -4,7 +4,7 @@
 
 ## **`skill-creator`** (bundled by default)
 
-**`skill-creator`** is the **authoring spec** for reusable skills: layout (`SKILL.md`, optional `scripts/`, `reference/`), quality bar, and how **`write_skill_file`** / **`append_skill_file`** should be used.
+**`skill-creator`** is the **authoring spec** for reusable skills: layout (`SKILL.md`, optional `scripts/`, `reference/`), quality bar, and how **`write_file`** should write `skills/<skill-id>/...` artifacts.
 
 It is **not** optional fluff: together with the built-in **`skill_generator`** agent and the default workflow’s async **`skill_agent`** step, it forms the **“extract recurring patterns → persist as `skills/<id>/` → inject on later turns”** loop — **固化能力**、减少同一类问题反复教模型。
 

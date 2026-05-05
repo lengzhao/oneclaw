@@ -13,7 +13,7 @@ import (
 	"github.com/lengzhao/oneclaw/tools/builtin"
 )
 
-// 记忆「召回」路径：adk_main context prep → MemoryRecallSection（树状摘要），正文读取走 read_memory_month（见 tools_contract 回合测试）。
+// 记忆「召回」路径：wfexec MemoryRecall（SQLite 为主 + 可选路径摘要）；正文读取走 read_file(memory/…)（见 tools_contract）。
 
 func TestE2E_memory_recallSection_listsWrittenMonthFile(t *testing.T) {
 	tmp := t.TempDir()
@@ -30,16 +30,16 @@ func TestE2E_memory_recallSection_listsWrittenMonthFile(t *testing.T) {
 	if !strings.Contains(block, "## Memory recall") {
 		t.Fatalf("missing header:\n%s", block)
 	}
-	// 树摘要只列路径与体积，不包含正文（正文靠 read_memory_month）。
+	// 树摘要只列路径与体积，不包含正文。
 	if !strings.Contains(block, "extract-note.md") {
 		t.Fatalf("expected path in tree digest:\n%s", block)
 	}
-	if !strings.Contains(block, "read_memory_month") {
-		t.Fatal("expected guidance to use read_memory_month for month files")
+	if !strings.Contains(block, "read_file") || !strings.Contains(block, "memory/") {
+		t.Fatal("expected guidance to use read_file under memory/")
 	}
 }
 
-func TestE2E_memory_extractor_builtin_hasMonthTools(t *testing.T) {
+func TestE2E_memory_extractor_builtin_usesUnifiedFileTools(t *testing.T) {
 	cat, err := catalog.Load("")
 	if err != nil {
 		t.Fatal(err)
@@ -49,14 +49,16 @@ func TestE2E_memory_extractor_builtin_hasMonthTools(t *testing.T) {
 		t.Fatal("missing builtin memory_extractor")
 	}
 	want := map[string]bool{
-		builtin.NameReadRunJournal:    false,
-		builtin.NameWriteMemoryMonth:  false,
-		builtin.NameAppendMemoryMonth: false,
-		builtin.NameReadMemoryMonth:   false,
+		builtin.NameReadRunJournal: false,
+		builtin.NameReadFile:       false,
+		builtin.NameWriteFile:      false,
 	}
 	for _, n := range ag.Tools {
 		if _, ok := want[n]; ok {
 			want[n] = true
+		}
+		if strings.Contains(n, "memory_month") {
+			t.Fatalf("memory_extractor should use unified file tools, got %q in %v", n, ag.Tools)
 		}
 	}
 	for k, v := range want {
@@ -75,14 +77,23 @@ func TestE2E_skill_generator_builtin_hasRunJournalTool(t *testing.T) {
 	if ag == nil {
 		t.Fatal("missing builtin skill_generator")
 	}
-	found := false
+	foundJournal := false
+	foundWrite := false
 	for _, n := range ag.Tools {
 		if n == builtin.NameReadRunJournal {
-			found = true
-			break
+			foundJournal = true
+		}
+		if n == builtin.NameWriteFile {
+			foundWrite = true
+		}
+		if strings.Contains(n, "skill_file") {
+			t.Fatalf("skill_generator should use unified write_file, got %q in %v", n, ag.Tools)
 		}
 	}
-	if !found {
+	if !foundJournal {
 		t.Fatalf("skill_generator agent missing tool %q (have %v)", builtin.NameReadRunJournal, ag.Tools)
+	}
+	if !foundWrite {
+		t.Fatalf("skill_generator agent missing tool %q (have %v)", builtin.NameWriteFile, ag.Tools)
 	}
 }

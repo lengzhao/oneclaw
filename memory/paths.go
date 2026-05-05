@@ -14,6 +14,8 @@ const MEMORYMDMaxBytes = 2048
 var memoryMonthMarkdown = regexp.MustCompile(`^memory/(\d{4}-\d{2})/([^/]+\.md)$`)
 var memoryMonthWithOptionalDotMD = regexp.MustCompile(`^memory/(\d{4}-\d{2})(?:\.md)?$`)
 var memoryMonthName = regexp.MustCompile(`^memory/(\d{4}-\d{2})/([^/]+)$`)
+// memoryDayFlatMarkdown matches models that pass memory/YYYY-MM-DD.md (missing month folder).
+var memoryDayFlatMarkdown = regexp.MustCompile(`^memory/(\d{4}-\d{2}-\d{2})\.md$`)
 
 // MonthUTC returns the yyyy-mm segment for t in UTC (memory_extractor month folders).
 func MonthUTC(t time.Time) string {
@@ -40,6 +42,7 @@ func RequireWriteUsesCurrentUTCMemoryMonth(pathOrRel string, now time.Time) erro
 
 // NormalizeMemoryMonthRel canonicalizes user/tool-provided paths before validation.
 // Accepts optional leading "./", case-insensitive "memory/" prefix, or "<yyyy-mm>/<file>.md" with implied "memory/".
+// Also accepts memory/yyyy-mm-dd.md (missing month directory) and maps it to memory/yyyy-mm/yyyy-mm-dd.md.
 func NormalizeMemoryMonthRel(rel string) (string, error) {
 	rel = filepath.ToSlash(strings.TrimSpace(rel))
 	if strings.Contains(rel, "..") {
@@ -63,6 +66,15 @@ func NormalizeMemoryMonthRel(rel string) (string, error) {
 		rel = strings.Replace(rel, "YYYY-MM", mm, 1)
 	case strings.Contains(rel, "yyyy-mm"):
 		rel = strings.Replace(rel, "yyyy-mm", mm, 1)
+	}
+
+	if m := memoryDayFlatMarkdown.FindStringSubmatch(rel); m != nil {
+		day, err := time.Parse("2006-01-02", m[1])
+		if err != nil {
+			return "", fmt.Errorf("memory: invalid date in path %q", rel)
+		}
+		day = day.UTC()
+		return "memory/" + day.Format("2006-01") + "/" + day.Format("2006-01-02") + ".md", nil
 	}
 
 	if m := memoryMonthWithOptionalDotMD.FindStringSubmatch(rel); m != nil {

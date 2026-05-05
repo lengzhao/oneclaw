@@ -32,15 +32,13 @@ clawbridge:
         path: /
 # 微信：`oneclaw onboard` 或 `oneclaw channel onboard weixin`（见 clawbridge examples/weixin-onboard）。
 
-# 内置工具默认全开；catalog 的 tools: 仍是每 Agent 白名单。生产环境请收窄 exec（allow 前缀或去掉 "*"）。
+# 内置工具保持小集合；catalog 的 tools: 仍是每 Agent 白名单。生产环境请收窄 exec（allow 前缀或去掉 "*"）。
 tools:
   echo: { enabled: true }
   read_file: { enabled: true }
   list_dir: { enabled: true }
   glob: { enabled: true }
   write_file: { enabled: true }
-  edit_file: { enabled: true }
-  append_file: { enabled: true }
   cron: { enabled: true }
   exec:
     enabled: true

@@ -8,8 +8,12 @@ import (
 
 func TestResetConversation(t *testing.T) {
 	dir := t.TempDir()
-	tr := filepath.Join(dir, "transcript.jsonl")
+	tr := filepath.Join(dir, "default_transcript.jsonl")
 	if err := os.WriteFile(tr, []byte("{}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	tr2 := filepath.Join(dir, "memory_extractor_transcript.jsonl")
+	if err := os.WriteFile(tr2, []byte("{}\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	runs := filepath.Join(dir, "runs", "default")
@@ -29,6 +33,9 @@ func TestResetConversation(t *testing.T) {
 	}
 	if _, err := os.Stat(tr); !os.IsNotExist(err) {
 		t.Fatal("expected transcript removed")
+	}
+	if _, err := os.Stat(tr2); !os.IsNotExist(err) {
+		t.Fatal("expected agent transcript removed")
 	}
 	if _, err := os.Stat(filepath.Join(dir, "runs")); err != nil {
 		t.Fatal("expected runs/ preserved", err)

@@ -45,6 +45,11 @@ func TestBootstrap_idempotent(t *testing.T) {
 	if !strings.Contains(string(b), root) {
 		t.Fatalf("default.md should contain rendered UserDataRoot")
 	}
+	for _, name := range []string{"AGENT.md", "MEMORY.md", "SOUL.md", "USER.md"} {
+		if _, err := os.Stat(filepath.Join(root, name)); err != nil {
+			t.Fatalf("expected root instruction template %s copied from embedded templates/: %v", name, err)
+		}
+	}
 	agReadme := filepath.Join(root, "agents", "README.md")
 	if _, err := os.Stat(agReadme); err != nil {
 		t.Fatalf("expected agents/README.md copied from embedded templates/: %v", err)

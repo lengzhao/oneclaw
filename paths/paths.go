@@ -61,11 +61,13 @@ func ScheduledJobsPath(userDataRoot string) string {
 	return filepath.Join(userDataRoot, "scheduled_jobs.json")
 }
 
-// SeedInstructionFiles copies UserDataRoot/AGENT.md and MEMORY.md into InstructionRoot when missing there (session bootstrap).
+// SeedInstructionFiles copies UserDataRoot instruction core files into InstructionRoot when missing there (session bootstrap).
 func SeedInstructionFiles(userDataRoot, instructionRoot string) error {
 	pairs := [][2]string{
 		{filepath.Join(userDataRoot, "AGENT.md"), filepath.Join(instructionRoot, "AGENT.md")},
 		{filepath.Join(userDataRoot, "MEMORY.md"), filepath.Join(instructionRoot, "MEMORY.md")},
+		{filepath.Join(userDataRoot, "SOUL.md"), filepath.Join(instructionRoot, "SOUL.md")},
+		{filepath.Join(userDataRoot, "USER.md"), filepath.Join(instructionRoot, "USER.md")},
 	}
 	for _, p := range pairs {
 		if _, err := os.Stat(p[1]); err == nil {

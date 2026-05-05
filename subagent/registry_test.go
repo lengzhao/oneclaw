@@ -16,6 +16,7 @@ func TestBuildExecRegistry_emptyAllow_noRunAgent(t *testing.T) {
 		Turn:            TurnBinding{SessionSegment: "test-session"},
 		Catalog:         &catalog.Catalog{},
 		Cfg:             &config.File{},
+		ParentWorkspace: ws,
 		InstructionRoot: filepath.Join(tmp, "instructions"),
 	}
 	reg, err := BuildExecRegistry(ws, nil, deps)
@@ -32,8 +33,29 @@ func TestBuildExecRegistry_emptyAllow_noRunAgent(t *testing.T) {
 	if !slices.Contains(names, "todo") {
 		t.Fatalf("want todo in default registry: %v", names)
 	}
-	if !slices.Contains(names, "read_memory_month") {
-		t.Fatalf("want read_memory_month in default registry: %v", names)
+	if slices.Contains(names, "read_memory_month") {
+		t.Fatalf("read_memory_month must not be on default registry (use read_file + memory paths): %v", names)
+	}
+	for _, n := range []string{
+		"append_file",
+		"edit_file",
+		"read_instruction_file",
+		"write_instruction_file",
+		"append_instruction_file",
+		"write_memory_month",
+		"append_memory_month",
+		"write_skill_file",
+		"append_skill_file",
+	} {
+		if slices.Contains(names, n) {
+			t.Fatalf("merged tool %s should not be on default registry: %v", n, names)
+		}
+	}
+	if !slices.Contains(names, "read_file") {
+		t.Fatalf("want read_file in default registry: %v", names)
+	}
+	if !slices.Contains(names, "write_file") {
+		t.Fatalf("want unified write_file in default registry: %v", names)
 	}
 }
 
@@ -44,6 +66,7 @@ func TestBuildExecRegistry_explicitRunAgent(t *testing.T) {
 		Turn:            TurnBinding{SessionSegment: "test-session"},
 		Catalog:         &catalog.Catalog{},
 		Cfg:             &config.File{},
+		ParentWorkspace: ws,
 		InstructionRoot: filepath.Join(tmp, "instructions"),
 	}
 	reg, err := BuildExecRegistry(ws, []string{"read_file", "run_agent"}, deps)

@@ -323,7 +323,7 @@ func ExecuteSubAgentTurn(ctx context.Context, deps *RunAgentDeps, sub *catalog.A
 
 	end := time.Now().UTC()
 	if !childRTX.SawOnRespond && reply != "" {
-		if err := session.AppendTranscriptTurn(subSessionRoot, session.TranscriptTurn{
+		if err := session.AppendTranscriptTurn(subSessionRoot, sub.AgentType, session.TranscriptTurn{
 			Ts: end, Role: "assistant", Content: reply,
 		}); err != nil {
 			return "", err

@@ -1,6 +1,7 @@
 package paths
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -31,6 +32,28 @@ func TestInstructionRoot_isolate(t *testing.T) {
 func TestWorkspace(t *testing.T) {
 	if got, want := Workspace("/i"), filepath.Join("/i", "workspace"); got != want {
 		t.Fatalf("got %q", got)
+	}
+}
+
+func TestSeedInstructionFiles_copiesCoreInstructionFiles(t *testing.T) {
+	root := t.TempDir()
+	instruction := filepath.Join(root, "sessions", "s1")
+	for _, name := range []string{"AGENT.md", "MEMORY.md", "SOUL.md", "USER.md"} {
+		if err := os.WriteFile(filepath.Join(root, name), []byte(name+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := SeedInstructionFiles(root, instruction); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"AGENT.md", "MEMORY.md", "SOUL.md", "USER.md"} {
+		b, err := os.ReadFile(filepath.Join(instruction, name))
+		if err != nil {
+			t.Fatalf("%s not copied: %v", name, err)
+		}
+		if got := string(b); got != name+"\n" {
+			t.Fatalf("%s content = %q", name, got)
+		}
 	}
 }
 

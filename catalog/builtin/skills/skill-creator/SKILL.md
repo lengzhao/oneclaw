@@ -29,13 +29,13 @@ When you **create or extend** a skill under `skills/<skill-id>/`, follow this la
 
 ## Persistence tools
 
-Use `write_skill_file` / `append_skill_file` with paths like:
+Use `write_file` with `operation: "write"` or `operation: "append"` and paths like:
 
 - `skills/<skill-id>/SKILL.md`
 - `skills/<skill-id>/scripts/example.sh`
 - `skills/<skill-id>/reference/details.md`
 
-Only use allowed extensions (markdown, text, common config/scripts); no `..` segments.
+First-version file tools do not enforce path permissions; keep artifacts in the intended skill directory by convention.
 
 ## Quality bar
 

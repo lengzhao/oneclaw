@@ -6,8 +6,6 @@ var DefaultRegistrationOrder = []string{
 	NameListDir,
 	NameGlob,
 	NameWriteFile,
-	NameEditFile,
-	NameAppendFile,
 	NameExec,
 	NameCron,
 	NameTodo,
@@ -19,7 +17,7 @@ var DefaultSubagentOrder = []string{NameReadFile, NameListDir}
 // IsBuiltinName reports names understood by the builtin registration path (including sub-agent rebind).
 func IsBuiltinName(name string) bool {
 	switch name {
-	case NameEcho, NameReadFile, NameListDir, NameGlob, NameWriteFile, NameEditFile, NameAppendFile, NameExec, NameCron, NameTodo:
+	case NameEcho, NameReadFile, NameListDir, NameGlob, NameWriteFile, NameExec, NameCron, NameTodo:
 		return true
 	default:
 		return false

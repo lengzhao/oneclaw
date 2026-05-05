@@ -156,7 +156,7 @@ func TestE2E_skills_createViaTool_surfacesInDigestAndUsage(t *testing.T) {
 	if err := os.MkdirAll(skillsRoot, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	tool, err := builtin.InferWriteSkillFile(root)
+	tool, err := builtin.InferWriteFileScoped(filepath.Join(root, "workspace"), "", root)
 	if err != nil {
 		t.Fatal(err)
 	}

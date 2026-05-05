@@ -202,7 +202,7 @@ func materializeTranscript(rtx *engine.RuntimeContext, header string) (string, e
 	if sr == "" {
 		return "", fmt.Errorf("wfexec: transcript context needs session root")
 	}
-	turns, err := session.LoadTranscriptTurns(sr)
+	turns, err := session.LoadTranscriptTurns(sr, hostCatalogAgentID(rtx))
 	if err != nil {
 		return "", err
 	}

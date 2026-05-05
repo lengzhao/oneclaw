@@ -77,13 +77,13 @@ oneclaw 当前以 **自有机会话 / transcript / runs** 为主；若接入 Ein
 3. 使用 **`service`** 层 API（具体函数名以上游 `service` 包与 `docs/memory.md` 为准）完成 **写入 / 查询 / 抽取 / 合并策略**。
 4. **LLM 抽取**：配置 OpenAI 兼容环境变量（如 `OPENAI_API_KEY`，或 `OPENAI_BASE_URL` 指向 Ollama）；运行上游 `examples/08_extract_demo` 对照行为。
 
-### 3.3 与 oneclaw 的关系（规划用语）
+### 3.3 与 oneclaw 的关系（当前实现口径）
 
-- **`memory_extractor` 可同时写两套**：调用 **`github.com/lengzhao/memory`**（SQLite 条目）**并且** 写入 **`memory/yyyy-mm/*.md`**（§3.4.1）。二者 **不是互斥真源二选一**，而是 **分工**：见 §5。
-- **`memory/yyyy-mm/`**：默认 **不** 自动塞进 PreTurn；主 Agent 通过 **`read_file` 等工具按需打开** 某月目录下的 md，适合长事实、笔记型材料。
-- **`lengzhao/memory`**：通过为workflow暴露的 **工具**（如检索、按 namespace 拉取）调用时，**必然会走召回路径**（查 SQLite / FTS），适合结构化条目、去重、TTL、审计等与模型协作的「入口」。
+- **`memory_extractor` 双写**：在进入 workflow LLM 前将 **本轮传入子 Agent 的整段文本** 交给 **`Extractor.Extract`**（OpenAI 兼容 Chat Completions）；当抽取命中记忆时，结果 **追加写入** `memory/<UTC-yyyy-mm>/<UTC-yyyy-mm-dd>.md`（空结果不落盘），并由上游库 **持久化结构化条目** 到 InstructionRoot 下的 **`memory/structured_sqlite.db`**（WAL SQLite + FTS5，与 `memory/<yyyy-mm>/` 并列）。对高置信的 profile 记忆（如助手称呼/名字）会同步提升到 **`MEMORY.md`**（受 2048 字节上限约束）。
+- **MemoryRecall（主 Agent）**：**以 `Recall`（SQLite FTS）为主**，查询 **当前用户句**，宽度由 **`budget.memory_max_runes`** 约束；**辅以 `memory/` 路径摘要**。读取正文统一 **`read_file`**（路径形如 `memory/<yyyy-mm>/…`、`memory/<yyyy-mm-dd>.md` 等，解析到 InstructionRoot）。写入统一 **`write_file`**，用 `operation: "write"` / `"append"`；第一版不做路径权限控制，绝对路径和 `../` 均可用，`memory/...` 仍作为 InstructionRoot 下的便捷路径。
+- **工具失败**：对 **`InvokableTool`**，`InvokableRun` 的错误会以 **`[tool_error] …`** 正文回流模型，由模型决定是否纠路径或放弃调用；尽量不中断整条 workflow。
 - **不负责**：替代 Eino 的 **`schema.Message` 列表**；对话轨迹仍由 transcript / ADK 状态或 §2 的 Session 策略承载。
-- **隔离**：SQLite 文件路径仍建议按 **会话或用户** 分库；与 md 树 **内容互补** 时，抽取逻辑需约定 **同一事实是否双写摘要**（避免两处长期漂移可依赖 extractor 单次管线原子写入两侧）。
+- **隔离**：`Extract` / `Recall` 使用 **`github.com/lengzhao/memory` 的 `WithIsolation`**（tenant=`default`，user/session 来自会话 segment，agent 为主 Agent 的 catalog id），与 **按 InstructionRoot 分文件** 的 SQLite 路径叠加，避免跨会话串库。
 
 ---
 
@@ -94,7 +94,7 @@ oneclaw 当前以 **自有机会话 / transcript / runs** 为主；若接入 Ein
 - **`MEMORY.md`**：规则与最重要摘要，≤2048 字节（PreTurn 常注入）。
 - **`memory/yyyy-mm/*.md`**：由 **`memory_extractor`**（或等价演进枝）写入的抽取事实（UTC `yyyy-mm`）；**主 Agent 按需自读**，不默认注入。
 - **`UserDataRoot/skills/*`**：`skill_generator` 写入的全局 Skills 树。
-- **并行：`lengzhao/memory`**：同一演进枝可把结构化条目 **写入 SQLite**；主 Agent **仅在调用相应记忆工具时召回**，与是否打开某 md 文件无关。
+- **并行：`lengzhao/memory`**：结构化条目写入 **`memory/structured_sqlite.db`**；MemoryRecall 以 **FTS 召回摘要为主**，按需附上 **`memory/` 文件名摘要**；正文 **`read_file(memory/…)`**。
 
 ---
 
@@ -127,13 +127,13 @@ flowchart TB
   EXT -->|"结构化写入"| DB
   EXT -->|"叙事/摘录 md"| MM
   RUN -.->|"read_file 等按需"| MM
-  DB -.->|"仅当调用记忆工具：检索并入上下文"| RUN
+  DB -.->|"MemoryRecall：FTS 为主 + 路径摘要"| RUN
   RUN -->|"skill_agent async"| SK
 ```
 
 - **横轴**：同一轮模型推理仍在 **消息列表 + Middleware** 闭环。
 - **纵轴读取**：**`MEMORY.md`**（短）+ **skills 摘要** 可走默认注入；**`memory/yyyy-mm/`** 由 Agent **按需读文件**，不默认灌上下文。
-- **纵向召回**：**`lengzhao/memory`** 仅在 Agent **发起约定工具调用** 时检索 SQLite（**必然召回**）；与是否读过某 md 无关。
+- **纵向召回**：**`lengzhao/memory`** 在 **`load_memory_snapshot`** 阶段对 **当前用户句** 做 **`Recall`（主通道）**，再按需附上 **`memory/` 文件名摘要**；需要正文时用 **`read_file(memory/…)`**。
 - **纵向写入**：**`memory_extractor`** 可对 **SQLite + `memory/yyyy-mm/`** 双写，由演进管线保证同一轮抽取两侧一致或互补（字段级约定由实现细化）。
 
 ---
@@ -156,3 +156,4 @@ flowchart TB
 | 日期 | 说明 |
 |------|------|
 | 2026-05-03 | 首版；§2.1–§2.3（跨轮省略 tool、审计分离）；无 §2.4；§3.3–§5：`memory_extractor` 双写 SQLite + `memory/yyyy-mm/`；md 按需读、记忆工具检索入上下文；§5 图与上游链接 |
+| 2026-05-05 | `memory_extractor`：`Extractor.Extract` + 追加当日 md（空结果不写）；SQLite **`memory/structured_sqlite.db`**；MemoryRecall **FTS 优先** + 可选路径摘要；高置信 profile（含助手称呼/名字）同步到 `MEMORY.md`；专用 memory/skill/instruction 文件工具收敛为 **`read_file` / `write_file`**；工具失败 **`[tool_error]`** 回流模型 |

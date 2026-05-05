@@ -12,9 +12,10 @@ import (
 	"github.com/lengzhao/oneclaw/tools/builtin"
 )
 
-func TestE2E_contract_writeMemoryMonth(t *testing.T) {
+func TestE2E_contract_writeFile_memoryPath(t *testing.T) {
 	ctx := context.Background()
 	tmp := t.TempDir()
+	ws := filepath.Join(tmp, "workspace")
 	instr := filepath.Join(tmp, "instruction")
 	if err := os.MkdirAll(instr, 0o755); err != nil {
 		t.Fatal(err)
@@ -22,7 +23,7 @@ func TestE2E_contract_writeMemoryMonth(t *testing.T) {
 	mm := memory.MonthUTC(time.Now().UTC())
 	rel := "memory/" + mm + "/contract-note.md"
 
-	tool, err := builtin.InferWriteMemoryMonth(instr)
+	tool, err := builtin.InferWriteFileScoped(ws, instr, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,11 +48,13 @@ func TestE2E_contract_writeMemoryMonth(t *testing.T) {
 	}
 }
 
-func TestE2E_contract_writeSkillFile(t *testing.T) {
+func TestE2E_contract_writeFile_skillPath(t *testing.T) {
 	ctx := context.Background()
-	root := t.TempDir()
+	tmp := t.TempDir()
+	ws := filepath.Join(tmp, "workspace")
+	root := filepath.Join(tmp, "user-data")
 
-	tool, err := builtin.InferWriteSkillFile(root)
+	tool, err := builtin.InferWriteFileScoped(ws, "", root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,9 +77,10 @@ func TestE2E_contract_writeSkillFile(t *testing.T) {
 	}
 }
 
-func TestE2E_contract_memoryMonth_writeThenReadRoundTrip(t *testing.T) {
+func TestE2E_contract_memoryPath_writeThenReadRoundTrip(t *testing.T) {
 	ctx := context.Background()
 	tmp := t.TempDir()
+	ws := filepath.Join(tmp, "workspace")
 	instr := filepath.Join(tmp, "instruction")
 	if err := os.MkdirAll(instr, 0o755); err != nil {
 		t.Fatal(err)
@@ -85,7 +89,7 @@ func TestE2E_contract_memoryMonth_writeThenReadRoundTrip(t *testing.T) {
 	rel := "memory/" + mm + "/roundtrip.md"
 	body := "extract TOKEN_MEM_R91\n"
 
-	wtool, err := builtin.InferWriteMemoryMonth(instr)
+	wtool, err := builtin.InferWriteFileScoped(ws, instr, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +101,7 @@ func TestE2E_contract_memoryMonth_writeThenReadRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rtool, err := builtin.InferReadMemoryMonth(instr)
+	rtool, err := builtin.InferReadFileScoped(ws, instr, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,85 +114,107 @@ func TestE2E_contract_memoryMonth_writeThenReadRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	if got != body {
-		t.Fatalf("read_memory_month: want %q got %q", body, got)
+		t.Fatalf("read_file memory path: want %q got %q", body, got)
 	}
 }
 
-func TestE2E_contract_memoryMonth_defaultPathWhenOmitted(t *testing.T) {
+func TestE2E_contract_writeFile_appendAndReplace(t *testing.T) {
 	ctx := context.Background()
 	tmp := t.TempDir()
+	ws := filepath.Join(tmp, "workspace")
+
+	wtool, err := builtin.InferWriteFileScoped(ws, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := wtool.InvokableRun(ctx, `{"path":"note.md","content":"alpha\n"}`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := wtool.InvokableRun(ctx, `{"path":"note.md","operation":"append","content":"beta\n"}`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := wtool.InvokableRun(ctx, `{"path":"note.md","operation":"replace","old_text":"alpha\n","content":"gamma\n"}`); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(filepath.Join(ws, "note.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(b) != "gamma\nbeta\n" {
+		t.Fatalf("file content: %q", b)
+	}
+}
+
+func TestE2E_contract_writeFile_allowsAnyMemoryMonth(t *testing.T) {
+	ctx := context.Background()
+	tmp := t.TempDir()
+	ws := filepath.Join(tmp, "workspace")
 	instr := filepath.Join(tmp, "instruction")
 	if err := os.MkdirAll(instr, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	now := time.Now().UTC()
-	rel := "memory/" + memory.MonthUTC(now) + "/" + now.Format("2006-01-02") + ".md"
-	body := "default path body\n"
 
-	wtool, err := builtin.InferWriteMemoryMonth(instr)
+	wtool, err := builtin.InferWriteFileScoped(ws, instr, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	wargs, err := json.Marshal(map[string]string{"content": body})
+	wargs, err := json.Marshal(map[string]string{"path": "memory/1999-01/old.md", "content": "body\n"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := wtool.InvokableRun(ctx, string(wargs)); err != nil {
 		t.Fatal(err)
 	}
-
-	rtool, err := builtin.InferReadMemoryMonth(instr)
-	if err != nil {
+	if _, err := os.Stat(filepath.Join(instr, "memory", "1999-01", "old.md")); err != nil {
 		t.Fatal(err)
-	}
-	rargs, err := json.Marshal(map[string]string{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	got, err := rtool.InvokableRun(ctx, string(rargs))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got != body {
-		t.Fatalf("read default path: want %q got %q", body, got)
-	}
-
-	b, err := os.ReadFile(filepath.Join(instr, filepath.FromSlash(rel)))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(b) != body {
-		t.Fatalf("default file content: want %q got %q", body, string(b))
 	}
 }
 
-func TestE2E_contract_memoryMonth_invalidPathFallsBackToDefault(t *testing.T) {
+func TestE2E_contract_writeFile_instructionCoreFiles(t *testing.T) {
 	ctx := context.Background()
 	tmp := t.TempDir()
+	ws := filepath.Join(tmp, "workspace")
 	instr := filepath.Join(tmp, "instruction")
 	if err := os.MkdirAll(instr, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	now := time.Now().UTC()
-	rel := "memory/" + memory.MonthUTC(now) + "/" + now.Format("2006-01-02") + ".md"
-	body := "fallback path body\n"
+	w, err := builtin.InferWriteFileScoped(ws, instr, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := builtin.InferReadFileScoped(ws, instr, "")
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	wtool, err := builtin.InferWriteMemoryMonth(instr)
+	wargs, _ := json.Marshal(map[string]string{"path": "MEMORY.md", "content": "alpha\n"})
+	if _, err := w.InvokableRun(ctx, string(wargs)); err != nil {
+		t.Fatal(err)
+	}
+	aargs, _ := json.Marshal(map[string]string{"path": "memory.md", "operation": "append", "content": "beta\n"})
+	if _, err := w.InvokableRun(ctx, string(aargs)); err != nil {
+		t.Fatal(err)
+	}
+	rargs, _ := json.Marshal(map[string]string{"path": "MEMORY.md"})
+	got, err := r.InvokableRun(ctx, string(rargs))
 	if err != nil {
 		t.Fatal(err)
 	}
-	wargs, err := json.Marshal(map[string]string{"path": "invalid-path-shape", "content": body})
+	if got != "alpha\nbeta\n" {
+		t.Fatalf("MEMORY.md content: %q", got)
+	}
+	if _, err := w.InvokableRun(ctx, `{"path":"SOUL.md","operation":"replace","old_text":"missing","content":"x"}`); err == nil {
+		t.Fatal("expected replace error for missing old_text")
+	}
+	uargs, _ := json.Marshal(map[string]string{"path": "USER.md", "content": "profile\n"})
+	if _, err := w.InvokableRun(ctx, string(uargs)); err != nil {
+		t.Fatal(err)
+	}
+	gotUser, err := r.InvokableRun(ctx, `{"path":"user.md"}`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := wtool.InvokableRun(ctx, string(wargs)); err != nil {
-		t.Fatal(err)
-	}
-	b, err := os.ReadFile(filepath.Join(instr, filepath.FromSlash(rel)))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(b) != body {
-		t.Fatalf("fallback file content: want %q got %q", body, string(b))
+	if gotUser != "profile\n" {
+		t.Fatalf("USER.md content: %q", gotUser)
 	}
 }
