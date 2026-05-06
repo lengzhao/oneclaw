@@ -6,6 +6,7 @@ import "github.com/lengzhao/oneclaw/tools/builtin"
 const (
 	ToolEcho      = builtin.NameEcho
 	ToolReadFile  = builtin.NameReadFile
+	ToolReadSkill = builtin.NameReadSkill
 	ToolListDir   = builtin.NameListDir
 	ToolGlob      = builtin.NameGlob
 	ToolWriteFile = builtin.NameWriteFile

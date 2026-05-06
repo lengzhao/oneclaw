@@ -80,7 +80,7 @@ oneclaw 当前以 **自有机会话 / transcript / runs** 为主；若接入 Ein
 ### 3.3 与 oneclaw 的关系（当前实现口径）
 
 - **演进收敛（方案 1）**：若希望默认路径 **不设独立 `memory_extractor` / `skill_generator` Agent**，而用宿主内置流水线完成记忆与（可选）Skills 固化，见 **[builtin-post-turn-evolution.md](builtin-post-turn-evolution.md)**。
-- **`memory_extractor` 异步枝（默认）**：`default.turn` 在 `on_respond` 之后 **`async: true` + `agent_task(memory_extractor)`**，宿主通过 **`$runtime.post_turn.ctx`** 传入 **PostTurn YAML**（含宿主 `run_journal.path`）。子 workflow **`memory_extractor.turn`** 使用 builtin **`structured_memory_extract`**：校验路径、读取 **当轮 JSONL**，调用 **`structuredmem.AppendExtractJournal` → `Extractor.Extract`**（OpenAI 兼容 Chat Completions）；命中记忆时结果 **追加写入** `memory/<UTC-yyyy-mm>/<UTC-yyyy-mm-dd>.md`（空结果不落盘），并由上游库 **持久化结构化条目** 到 InstructionRoot 下的 **`memory/structured_sqlite.db`**（WAL SQLite + FTS5，与 `memory/<yyyy-mm>/` 并列）。
+- **`memory_extractor` 异步枝（默认）**：`default.turn` 在 `on_respond` 之后 **`async: true` + `agent_task(memory_extractor)`**，宿主通过 **`$runtime.post_turn.ctx`** 传入 **PostTurn YAML**（含宿主 `run_journal.path`）。子 workflow **`memory_extractor.turn`** 使用 builtin **`structured_memory_extract`**：校验路径、读取 **当轮 JSONL**，调用 **`structuredmem.AppendExtractJournal` → `Extractor.Extract`**（OpenAI 兼容 Chat Completions）；若 **`$start.user_prompt`** 无法解析 PostTurn（例如 **`agent_task`** 误回落为纯文本上下文），则根据子 runtime 上的 **`ParentSessionRoot`** / **`ParentAgentType`** 与 **`CorrelationID`** 回退定位宿主 **`runs/<host>/<corr>.jsonl`**。命中记忆时结果 **追加写入** `memory/<UTC-yyyy-mm>/<UTC-yyyy-mm-dd>.md`（空结果不落盘），并由上游库 **持久化结构化条目** 到 InstructionRoot 下的 **`memory/structured_sqlite.db`**（WAL SQLite + FTS5，与 `memory/<yyyy-mm>/` 并列）。
 - **抽取输入与回落**：输入 **仅为宿主 Run Journal 文件** `runs/<host_agent_id>/<correlation_id>.jsonl`（内含 `run_start` / `user_message` / **`tool_call` / `tool_result`** / `assistant_message` / `run_complete`；子 Agent 自身 journal 键名为 `runs/<agent>/<parent_corr>__<sub_run>.jsonl`）。**不再**写入聚合 `runs.jsonl`；**不再**在主回合 `on_respond` 同步抽取（避免阻塞与双写）。builtin 在路径缺失或越权时应失败或跳过，**不把** `User: …\\nAssistant: …` 当作常态回退。lzmem 内建 **`prompt-default-v3`**（含 **`profile`** 仅面向终端用户、不把助手人设写入 profile 等约束）并约定证据可信度：**用户陈述（`user_message`）> 工具结果（`tool_result`）> 子 Agent 产出 > 主助手（`assistant_message` / Assistant 段）**。抽取结果在 **lzmem** 管线内通过 **`ExtractPolicy{DropTransientEphemeral:true}`**（`StructuredMemoryExtractRequest` 默认）丢弃典型瞬时时间类 `transient`；**同批次结构化冲突**可由宿主 **`PostExtractHook`** 或 lzmem **槽位模型**（P2）扩展。**`MEMORY.md`** 自动区块仅同步 **`namespace == profile` 且模型 `confidence ≥ 0.80`** 的条目（展示文案取 summary / title / content），**无**关键字启发式（≤2048 字节总上限不变）。
 - **MemoryRecall（主 Agent）**：**以 `Recall`（SQLite FTS）为主**，查询 **当前用户句**，宽度由 **`budget.memory_max_runes`** 约束；**辅以 `memory/` 路径摘要**。读取正文统一 **`read_file`**（路径形如 `memory/<yyyy-mm>/…`、`memory/<yyyy-mm-dd>.md` 等，解析到 InstructionRoot）。写入统一 **`write_file`**，用 `operation: "write"` / `"append"`；第一版不做路径权限控制，绝对路径和 `../` 均可用，`memory/...` 仍作为 InstructionRoot 下的便捷路径。
 - **工具失败**：对 **`InvokableTool`**，`InvokableRun` 的错误会以 **`[tool_error] …`** 正文回流模型，由模型决定是否纠路径或放弃调用；尽量不中断整条 workflow。
@@ -95,7 +95,7 @@ oneclaw 当前以 **自有机会话 / transcript / runs** 为主；若接入 Ein
 
 - **`MEMORY.md`**：规则与最重要摘要，≤2048 字节（PreTurn 常注入）。
 - **`memory/yyyy-mm/*.md`**：由 **`memory_extractor`**（或等价演进枝）写入的抽取事实（UTC `yyyy-mm`）；**主 Agent 按需自读**，不默认注入。
-- **`UserDataRoot/skills/*`**：`skill_generator` 写入的全局 Skills 树。
+- **`UserDataRoot/skills/*`**：`skill_generator` 写入的全局 Skills 树。**默认异步枝**：`default.turn` 固定触发 `skill_generator`，是否执行提取由 `skill_generator.turn` 内部的 **`journal_tool_metrics` / `if`** 决定；规则见 [workflows-spec.md §4–§5](workflows-spec.md)。
 - **并行：`lengzhao/memory`**：结构化条目写入 **`memory/structured_sqlite.db`**；MemoryRecall 以 **FTS 召回摘要为主**，按需附上 **`memory/` 文件名摘要**；正文 **`read_file(memory/…)`**。
 
 ---
@@ -161,3 +161,5 @@ flowchart TB
 | 2026-05-05 | `memory_extractor`：`Extractor.Extract` + 追加当日 md（空结果不写）；SQLite **`memory/structured_sqlite.db`**；MemoryRecall **FTS 优先** + 可选路径摘要；主回合 `structuredmem`：**仅** **`runs/<agent>/<correlation_id>.jsonl`**（含 tool）；无聚合 `runs.jsonl`；`read_run_journal` **full** 为目录内多文件合并；`MEMORY.md` 自动区块仅提升 **用户明确的称呼偏好**；专用 memory/skill/instruction 文件工具收敛为 **`read_file` / `write_file`**；工具失败 **`[tool_error]`** 回流模型 |
 | 2026-05-06 | 瞬时 `transient` → lzmem **`ExtractPolicy`**；**`prompt-default-v3`**；**移除** PMO/短语冲突；**`MEMORY.md`** 仅 **`profile` + confidence≥0.8**，无关键字 |
 | 2026-05-06 | PostTurn：**`$runtime.post_turn.ctx`**；**`structured_memory_extract`** + **`memory_extractor.turn`**；主回合 **去掉** `on_respond` 同步结构化抽取 |
+| 2026-05-06 | **`structured_memory_extract`**：子 Agent **`ForkSubAgentRuntime`** 记录宿主会话与 **`ParentAgentType`**，PostTurn 文本无效时回退宿主 journal 路径 |
+| 2026-05-06 | **`skill_generator` 异步枝**：宿主固定调度，门控下沉到 `skill_generator.turn` 内部（`journal_tool_metrics` + `if`）；§4 |

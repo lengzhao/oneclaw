@@ -45,6 +45,11 @@ type TurnInputs struct {
 
 	SessionRoot    string
 	SessionSegment string
+	// ParentSessionRoot is the delegating session root (sessions/<id>/) when this RuntimeContext
+	// runs inside subs/<sub_run_id>/ (ForkSubAgentRuntime). Used to resolve host Run Journal paths.
+	ParentSessionRoot string
+	// ParentAgentType is the catalog agent id of the delegating host for runs/<agent>/ journal files.
+	ParentAgentType string
 	// InboundMediaPaths carries channel inbound attachments (clawbridge InboundMessage.MediaPaths).
 	// wfexec/adk_main may inject them into prompt text and/or multimodal user parts.
 	InboundMediaPaths []string

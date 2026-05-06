@@ -43,7 +43,39 @@ func handleWorkflowCommand(ctx context.Context, in NodeInput, env NodeEnv) (work
 		"correlation_id", strings.TrimSpace(rtx.CorrelationID),
 		"output_chars", len(out),
 	)
-	return workflow.WorkflowNodeResult{Text: strings.TrimSpace(out)}, nil
+	text := strings.TrimSpace(out)
+	data := map[string]any{}
+	if paramBool(env.Node.Params, "parse_json_stdout") && text != "" && json.Valid([]byte(text)) {
+		var parsed map[string]any
+		if err := json.Unmarshal([]byte(text), &parsed); err == nil && parsed != nil {
+			data = parsed
+		}
+	}
+	return workflow.WorkflowNodeResult{Text: text, Data: data}, nil
+}
+
+func paramBool(params map[string]any, keys ...string) bool {
+	if len(params) == 0 {
+		return false
+	}
+	for _, k := range keys {
+		v, ok := params[k]
+		if !ok {
+			continue
+		}
+		switch x := v.(type) {
+		case bool:
+			return x
+		case string:
+			s := strings.TrimSpace(strings.ToLower(x))
+			return s == "true" || s == "1" || s == "yes"
+		case int:
+			return x != 0
+		case float64:
+			return x != 0
+		}
+	}
+	return false
 }
 
 func handleWorkflowToolCall(ctx context.Context, in NodeInput, env NodeEnv) (workflow.WorkflowNodeResult, error) {

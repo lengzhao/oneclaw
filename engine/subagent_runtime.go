@@ -2,6 +2,7 @@ package engine
 
 import (
 	"os"
+	"strings"
 	"time"
 
 	"github.com/cloudwego/eino/adk"
@@ -18,6 +19,8 @@ type SubAgentRuntimeOpts struct {
 	Turn              TurnContext
 	DelegationDepth   int
 	SubSessionRoot    string
+	ParentSessionRoot string
+	ParentAgentType   string
 	SessionSegment    string
 	Agent             *catalog.Agent
 	Bundle            *preturn.Bundle
@@ -49,6 +52,8 @@ func ForkSubAgentRuntime(opts SubAgentRuntimeOpts) *RuntimeContext {
 			Turn:                     opts.Turn,
 			DelegationDepth:          opts.DelegationDepth,
 			SessionRoot:              opts.SubSessionRoot,
+			ParentSessionRoot:        strings.TrimSpace(opts.ParentSessionRoot),
+			ParentAgentType:          strings.TrimSpace(opts.ParentAgentType),
 			SessionSegment:           opts.SessionSegment,
 			Agent:                    opts.Agent,
 			Bundle:                   opts.Bundle,

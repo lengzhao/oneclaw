@@ -116,7 +116,7 @@ nodes:
     input: $start.user_prompt
   extract:
     use: structured_memory_extract
-    input: $nodes.receive
+    input: $start.user_prompt
     depends_on: [receive]
   summarize:
     use: noop
@@ -125,7 +125,7 @@ nodes:
 end: summarize
 ```
 
-宿主把 PostTurn ctx 放进 `agent_task` 侧送入子 workflow 的 **`$start.user_prompt`**（多为 YAML/JSON 文本或单行 `run_journal.path`）。`on_receive` 归一化后输出由 **`$nodes.receive`** 传给 `structured_memory_extract`；节点从该字符串解析 `run_journal.path`，或在单行模式下直接把整段当作绝对路径。后续若模板支持结构化 `$start.*` 字段，仍可改为直传 path，但默认依赖 **`receive → extract`** 的数据流即可。
+宿主把 PostTurn ctx 放进 `agent_task` 侧送入子 workflow 的 **`$start.user_prompt`**（多为 YAML/JSON 文本或单行 `run_journal.path`）。**推荐** `structured_memory_extract` 直接 **`input: $start.user_prompt`**（与宿主传入同一载荷）；`on_receive` 仍建议保留在 **`depends_on`** 前用于校验/归一化。**备选**：由 **`$nodes.receive`** 承接上游 **`Text`**（依赖 workflow §3 所述 **`MapFields`** 合并形态）。节点从字符串解析 **`run_journal.path`**，或在单行模式下把整个字符串当作绝对 journal 路径。
 
 ### 4.2 落盘与检索（不改 PRD 路径）
 
@@ -372,3 +372,4 @@ skill_agent:
 | 2026-05-06 | §4.1 / §10.3：**`prompt-default-v3`**（profile 用户边界）、**ExtractPolicy** / **PostExtractHook**；**`StructuredMemoryExtractRequest`**；**`MEMORY.md`** 完全信任模型 **`profile`+confidence** |
 | 2026-05-06 | §3 / §4 / §6：改为 **显式 PostTurn ctx 传给所有子 Agent**；`memory_extractor.turn` 推荐使用 **Run Journal 路径 + `structured_memory_extract` builtin** 确定性抽取，主回合不再同步双写 |
 | 2026-05-06 | 代码落地：**`$runtime.post_turn.ctx`**、**`structured_memory_extract`**、`memory_extractor.turn` / `default.turn` 模板对齐；移除 **`on_respond` 同步结构化抽取** |
+| 2026-05-06 | §4.1 示例与叙述：**`structured_memory_extract`** 默认 **`input: $start.user_prompt`**（PostTurn 与子 Agent 载荷一致），**`$nodes.receive`** 降为备选 |

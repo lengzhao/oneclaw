@@ -30,6 +30,20 @@ func RegisterDepsBoundBuiltin(out *tools.Registry, name string, deps *RunAgentDe
 			return true, err
 		}
 		return true, out.Register(tool)
+	case builtin.NameReadSkill:
+		if deps == nil {
+			return false, nil
+		}
+		ud := strings.TrimSpace(deps.UserDataRoot)
+		if ud == "" {
+			// Keep root/sub-agent registry construction tolerant when user data root is unavailable.
+			return true, nil
+		}
+		tool, err := builtin.InferReadSkill(ud)
+		if err != nil {
+			return true, err
+		}
+		return true, out.Register(tool)
 	case builtin.NameWriteFile:
 		if deps == nil {
 			return false, nil

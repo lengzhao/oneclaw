@@ -226,6 +226,9 @@ func ExecuteTurn(p Params) error {
 	if err != nil {
 		return fmt.Errorf("parse workflow %s: %w", wfPath, err)
 	}
+	if err := workflow.MergeHostTurnNodesFromSkillGenerator(catRoot, wfDoc); err != nil {
+		return fmt.Errorf("merge host turn nodes from skill_generator: %w", err)
+	}
 	if err := workflow.Validate(wfDoc); err != nil {
 		return fmt.Errorf("workflow %s: %w", wfPath, err)
 	}

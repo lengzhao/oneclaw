@@ -8,7 +8,7 @@ nodes:
     use: on_receive
   extract:
     use: structured_memory_extract
-    input: $nodes.receive
+    input: $start.user_prompt
     depends_on:
       - receive
   done:

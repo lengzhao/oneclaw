@@ -213,6 +213,9 @@ func ExecuteSubAgentTurn(ctx context.Context, deps *RunAgentDeps, sub *catalog.A
 	if err != nil {
 		return "", fmt.Errorf("sub-agent %q parse workflow %s: %w", sub.AgentType, wfPath, err)
 	}
+	if err := workflow.MergeHostTurnNodesFromSkillGenerator(catRoot, wfDoc); err != nil {
+		return "", fmt.Errorf("sub-agent %q merge host turn nodes: %w", sub.AgentType, err)
+	}
 	if err := workflow.Validate(wfDoc); err != nil {
 		return "", fmt.Errorf("sub-agent %q workflow %s: %w", sub.AgentType, wfPath, err)
 	}
@@ -243,9 +246,11 @@ func ExecuteSubAgentTurn(ctx context.Context, deps *RunAgentDeps, sub *catalog.A
 			AgentID:   sub.AgentType,
 			ReplyMeta: maps.Clone(deps.Turn.ReplyMeta),
 		},
-		DelegationDepth: deps.DelegationDepth + 1,
-		SubSessionRoot:  subSessionRoot,
-		SessionSegment:  deps.Turn.SessionSegment,
+		DelegationDepth:   deps.DelegationDepth + 1,
+		SubSessionRoot:    subSessionRoot,
+		ParentSessionRoot: deps.SessionRoot,
+		ParentAgentType:   deps.HostAgentID,
+		SessionSegment:    deps.Turn.SessionSegment,
 		Agent:           sub,
 		Bundle:          bundle,
 		UserPrompt:      strings.TrimSpace(userContent),

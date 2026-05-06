@@ -1,12 +1,34 @@
 workflow_spec_version: 2
 id: skill_generator.turn
-description: Sub-agent workflow for skill_generator (runs under subs/); override .agent/workflows/skill_generator.yaml.
+description: Sub-agent workflow for skill_generator (runs under subs). Always scheduled by host; internally decides whether to run llm extraction.
 meta:
   transcript_mode: summary
+  user_prompt_suffix: 提取文件中的技能。
 steps:
   - use: on_receive
+  - id: skill_stats
+    use: journal_tool_metrics
+    input: $start.user_prompt
+    params:
+      match_tools:
+        - read_skill
+  - id: skill_gen_if
+    use: if
+    depends_on:
+      - skill_stats
+    params:
+      when_any:
+        - truthy: $nodes.skill_stats.tool_matched_read_skill
+        - truthy: $nodes.skill_stats.skill_tree_tool_used
+        - gt:
+            - $nodes.skill_stats.distinct_tool_calls
+            - 5
   - id: main
     use: llm
+    depends_on:
+      - skill_gen_if
+    params:
+      require_truthy: $nodes.skill_gen_if.pass
     prompt: $start.user_prompt
   - id: respond
     use: on_respond

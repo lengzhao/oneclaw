@@ -30,6 +30,7 @@ type stepSugar struct {
 	Prompt    string         `yaml:"prompt,omitempty"`
 	DependsOn []string       `yaml:"depends_on,omitempty"`
 	Async     bool           `yaml:"async,omitempty"`
+	HostTurn  bool           `yaml:"host_turn,omitempty"`
 	Params    map[string]any `yaml:"params,omitempty"`
 }
 

@@ -4,6 +4,7 @@ package builtin
 const (
 	NameEcho      = "echo"
 	NameReadFile  = "read_file"
+	NameReadSkill = "read_skill"
 	NameListDir   = "list_dir"
 	NameGlob      = "glob"
 	NameWriteFile = "write_file"

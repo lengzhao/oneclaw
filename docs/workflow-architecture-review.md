@@ -25,9 +25,9 @@
 
 ## 3. 默认模板形态
 
-- `default.turn`：`on_receive -> llm -> on_respond -> async agent_task(memory/skill)`，`agent_task` 输入 **`$runtime.post_turn.ctx`**，`end: respond`。
-- `memory_extractor.turn`：`on_receive -> structured_memory_extract -> noop`（PostTurn YAML 经 **`$start.user_prompt` / `$nodes.receive`**）。
-- `skill_generator.turn`：`on_receive -> llm -> on_respond`（任务正文可为 PostTurn YAML，工具仍可用 **`read_run_journal`**）。
+- `default.turn`：`on_receive -> llm -> on_respond -> async agent_task(memory/skill)`，`memory_agent` 与 `skill_agent` 固定由宿主触发，`agent_task` 输入 **`$runtime.post_turn.ctx`**，`end: respond`。
+- `memory_extractor.turn`：`on_receive -> structured_memory_extract -> noop`（PostTurn YAML 经 **`$start.user_prompt`**；可选仍可用 **`$nodes.receive`**，依赖 §3 所述合并形态）。
+- `skill_generator.turn`：`on_receive -> journal_tool_metrics -> if -> llm -> on_respond`。`if` 在编译时映射到 Eino 原生 `AddBranch`，未命中条件时分支直达 `END`，不会进入提取路径。
 
 ## 4. 风险与后续
 

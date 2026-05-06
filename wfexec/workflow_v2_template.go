@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/lengzhao/oneclaw/session"
 	"github.com/lengzhao/oneclaw/workflow"
 )
 
@@ -80,6 +81,16 @@ func lookupRef(state *compileState, graphInput map[string]any, ref string) (stri
 		switch strings.Join(p[1:], ".") {
 		case "run_journal.current_turn_metadata":
 			return strings.TrimSpace(state.rtx.CorrelationID), nil
+		case "run_journal.path":
+			sr := strings.TrimSpace(state.rtx.EffectiveSessionRoot())
+			host := runtimeAgentType(state.rtx)
+			corr := strings.TrimSpace(state.rtx.CorrelationID)
+			if sr == "" || host == "" || corr == "" {
+				return "", nil
+			}
+			return session.TurnRunJournalPath(sr, host, corr), nil
+		case "user_data_root":
+			return strings.TrimSpace(state.rtx.EffectiveUserDataRoot()), nil
 		case "post_turn.ctx":
 			s, err := BuildPostTurnCTXYAML(state.rtx)
 			if err != nil {
@@ -99,16 +110,19 @@ func nodeTextFromGraphInput(graphInput map[string]any, nodeID string) string {
 		return ""
 	}
 	raw, ok := graphInput[composeNodeTextInputField]
-	if !ok || raw == nil {
-		return ""
-	}
-	switch m := raw.(type) {
-	case map[string]any:
-		if v, ok := m[nodeID]; ok {
-			return strings.TrimSpace(fmt.Sprint(v))
+	if ok && raw != nil {
+		switch m := raw.(type) {
+		case map[string]any:
+			if v, ok := m[nodeID]; ok {
+				return strings.TrimSpace(fmt.Sprint(v))
+			}
+		case map[string]string:
+			return strings.TrimSpace(m[nodeID])
 		}
-	case map[string]string:
-		return strings.TrimSpace(m[nodeID])
+	}
+	// Eino compose merges MapFields("Text", "__node_text.<id>") as a single top-level key.
+	if v, ok := graphInput[composeNodeTextInputField+"."+nodeID]; ok {
+		return strings.TrimSpace(fmt.Sprint(v))
 	}
 	return ""
 }
@@ -118,18 +132,20 @@ func nodeDataFromGraphInput(graphInput map[string]any, nodeID string, fieldPath 
 		return nil, false
 	}
 	raw, ok := graphInput[composeNodeDataInputField]
-	if !ok || raw == nil {
-		return nil, false
+	if ok && raw != nil {
+		if root, ok := raw.(map[string]any); ok {
+			if nodeData, ok := root[nodeID]; ok {
+				if v, ok := lookupAnyByPath(nodeData, fieldPath); ok {
+					return v, true
+				}
+			}
+		}
 	}
-	root, ok := raw.(map[string]any)
-	if !ok {
-		return nil, false
+	// Eino compose merges MapFields("Data", "__node_data.<id>") as one dotted top-level key.
+	if flat, ok := graphInput[composeNodeDataInputField+"."+nodeID]; ok && flat != nil {
+		return lookupAnyByPath(flat, fieldPath)
 	}
-	nodeData, ok := root[nodeID]
-	if !ok {
-		return nil, false
-	}
-	return lookupAnyByPath(nodeData, fieldPath)
+	return nil, false
 }
 
 func lookupAnyByPath(root any, path []string) (any, bool) {
@@ -164,15 +180,8 @@ func inferredTemplateDeps(node workflow.Node) []string {
 	for _, dep := range node.DependsOn {
 		add(dep)
 	}
-	raw := strings.TrimSpace(node.Prompt)
-	if raw == "" {
-		raw = strings.TrimSpace(node.Input)
-	}
-	for _, m := range templateRefPattern.FindAllString(raw, -1) {
-		p := strings.Split(strings.TrimPrefix(m, "$"), ".")
-		if len(p) >= 2 && p[0] == "nodes" {
-			add(p[1])
-		}
+	for _, dep := range workflow.TemplateReferencedNodes(node) {
+		add(dep)
 	}
 	out := make([]string, 0, len(seen))
 	for k := range seen {
@@ -189,14 +198,12 @@ func simpleTemplateNodeRefs(node workflow.Node) []string {
 			seen[s] = struct{}{}
 		}
 	}
-	raw := strings.TrimSpace(node.Prompt)
-	if raw == "" {
-		raw = strings.TrimSpace(node.Input)
-	}
-	for _, m := range templateRefPattern.FindAllString(raw, -1) {
-		p := strings.Split(strings.TrimPrefix(m, "$"), ".")
-		if len(p) >= 2 && p[0] == "nodes" && (len(p) == 2 || (len(p) == 3 && p[2] == "text")) {
-			add(p[1])
+	for _, chunk := range workflow.TemplateSourceChunks(node) {
+		for _, m := range templateRefPattern.FindAllString(chunk, -1) {
+			p := strings.Split(strings.TrimPrefix(m, "$"), ".")
+			if len(p) >= 2 && p[0] == "nodes" && (len(p) == 2 || (len(p) == 3 && p[2] == "text")) {
+				add(p[1])
+			}
 		}
 	}
 	out := make([]string, 0, len(seen))
@@ -212,38 +219,36 @@ type advancedTemplateRef struct {
 }
 
 func advancedTemplateNodeRefs(node workflow.Node) []advancedTemplateRef {
-	raw := strings.TrimSpace(node.Prompt)
-	if raw == "" {
-		raw = strings.TrimSpace(node.Input)
-	}
 	seen := map[string]advancedTemplateRef{}
-	for _, m := range templateRefPattern.FindAllString(raw, -1) {
-		p := strings.Split(strings.TrimPrefix(m, "$"), ".")
-		if len(p) < 3 || p[0] != "nodes" {
-			continue
-		}
-		if p[2] == "text" && len(p) == 3 {
-			continue
-		}
-		nodeID := strings.TrimSpace(p[1])
-		if nodeID == "" {
-			continue
-		}
-		fieldPath := make([]string, 0, len(p)-2)
-		valid := true
-		for _, x := range p[2:] {
-			x = strings.TrimSpace(x)
-			if x == "" {
-				valid = false
-				break
+	for _, chunk := range workflow.TemplateSourceChunks(node) {
+		for _, m := range templateRefPattern.FindAllString(chunk, -1) {
+			p := strings.Split(strings.TrimPrefix(m, "$"), ".")
+			if len(p) < 3 || p[0] != "nodes" {
+				continue
 			}
-			fieldPath = append(fieldPath, x)
+			if p[2] == "text" && len(p) == 3 {
+				continue
+			}
+			nodeID := strings.TrimSpace(p[1])
+			if nodeID == "" {
+				continue
+			}
+			fieldPath := make([]string, 0, len(p)-2)
+			valid := true
+			for _, x := range p[2:] {
+				x = strings.TrimSpace(x)
+				if x == "" {
+					valid = false
+					break
+				}
+				fieldPath = append(fieldPath, x)
+			}
+			if !valid || len(fieldPath) == 0 {
+				continue
+			}
+			key := nodeID + "::" + strings.Join(fieldPath, ".")
+			seen[key] = advancedTemplateRef{NodeID: nodeID, FieldPath: fieldPath}
 		}
-		if !valid || len(fieldPath) == 0 {
-			continue
-		}
-		key := nodeID + "::" + strings.Join(fieldPath, ".")
-		seen[key] = advancedTemplateRef{NodeID: nodeID, FieldPath: fieldPath}
 	}
 	out := make([]advancedTemplateRef, 0, len(seen))
 	for _, v := range seen {

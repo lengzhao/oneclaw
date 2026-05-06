@@ -67,6 +67,9 @@ func normalizeRootAllow(allow []string, seed *tools.Registry, cfg *config.File) 
 		if cfg == nil || cfg.BuiltinToolEnabled(builtin.NameTodo) {
 			out = append(out, builtin.NameTodo)
 		}
+		if cfg == nil || cfg.BuiltinToolEnabled(builtin.NameReadSkill) {
+			out = append(out, builtin.NameReadSkill)
+		}
 		return dedupeAllow(out)
 	}
 	return dedupeAllow(allow)

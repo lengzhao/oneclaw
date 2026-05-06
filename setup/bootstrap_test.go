@@ -73,3 +73,31 @@ func TestBootstrap_idempotent(t *testing.T) {
 		}
 	}
 }
+
+func TestSyncWorkflowTemplatesFromEmbed_overwritesExistingWorkflowYAML(t *testing.T) {
+	root := t.TempDir()
+	if err := Bootstrap(root); err != nil {
+		t.Fatal(err)
+	}
+	skillPath := filepath.Join(root, "workflows", "skill_generator.yaml")
+	if err := os.WriteFile(skillPath, []byte("workflow_spec_version: 2\nid: stale.stub\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := SyncWorkflowTemplatesFromEmbed(root); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(skillPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := string(b)
+	if strings.Contains(body, "stale.stub") {
+		t.Fatal("expected embedded skill_generator to overwrite stale file")
+	}
+	if !strings.Contains(body, "skill_generator.turn") {
+		t.Fatal("expected embedded skill_generator.turn id in synced file")
+	}
+	if !strings.Contains(body, "require_truthy") {
+		t.Fatal("expected synced skill_generator template to include require_truthy gate on llm")
+	}
+}

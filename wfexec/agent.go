@@ -13,7 +13,7 @@ import (
 	"github.com/lengzhao/oneclaw/workflow"
 )
 
-func handleAgentTask(_ context.Context, in NodeInput, env NodeEnv) (workflow.WorkflowNodeResult, error) {
+func handleAgentTask(ctx context.Context, in NodeInput, env NodeEnv) (workflow.WorkflowNodeResult, error) {
 	rtx := env.Runtime
 	subType := strings.TrimSpace(env.Node.AgentType)
 	if subType == "" {
@@ -22,20 +22,32 @@ func handleAgentTask(_ context.Context, in NodeInput, env NodeEnv) (workflow.Wor
 	if subType == "" {
 		return workflow.WorkflowNodeResult{}, fmt.Errorf("wfexec: agent_task: missing agent_type")
 	}
-	reply, err := executeAgentTask(rtx, subType, strings.TrimSpace(in.Text))
+	reply, err := executeAgentTask(ctx, rtx, subType, strings.TrimSpace(in.Text))
 	if err != nil {
 		return workflow.WorkflowNodeResult{}, err
 	}
 	return workflow.WorkflowNodeResult{Text: reply}, nil
 }
 
-func executeAgentTask(rtx *engine.RuntimeContext, subType string, prompt string) (string, error) {
-	if strings.TrimSpace(prompt) == "" {
+func executeAgentTask(_ context.Context, rtx *engine.RuntimeContext, subType string, prompt string) (string, error) {
+	prompt = strings.TrimSpace(prompt)
+	// Post-turn evolution agents expect PostTurn YAML with run_journal.path. Empty workflow input falls back to
+	// BuildSubagentUserPrompt (plain “Context…” text), which breaks structured_memory_extract / skill journal gates.
+	// Rebuild from runtime when the rendered prompt is missing a resolvable journal path.
+	switch subType {
+	case "memory_extractor", "skill_generator":
+		if !postTurnPromptHasJournalPath(prompt) {
+			if yamlCtx, err := BuildPostTurnCTXYAML(rtx); err == nil && postTurnPromptHasJournalPath(yamlCtx) {
+				prompt = yamlCtx
+			}
+		}
+	}
+	if prompt == "" {
 		p, err := BuildSubagentUserPrompt(rtx)
 		if err != nil {
 			return "", err
 		}
-		prompt = p
+		prompt = strings.TrimSpace(p)
 	}
 	if rtx.Catalog == nil || rtx.Cfg == nil {
 		return "", fmt.Errorf("wfexec: agent_task: Catalog and Cfg must be set on RuntimeContext")

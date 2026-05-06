@@ -13,6 +13,7 @@ import (
 
 	"github.com/lengzhao/oneclaw/engine"
 	"github.com/lengzhao/oneclaw/paths"
+	"github.com/lengzhao/oneclaw/session"
 	"github.com/lengzhao/oneclaw/structuredmem"
 	"github.com/lengzhao/oneclaw/workflow"
 )
@@ -89,7 +90,38 @@ func resolveStructuredMemoryExtractInput(text string, rtx *engine.RuntimeContext
 			return r, nil
 		}
 	}
+	if r, err := inferHostJournalFromDelegation(rtx); err == nil {
+		return r, nil
+	}
 	return resolvedStructuredExtract{}, fmt.Errorf("missing or invalid post_turn_ctx (need YAML with run_journal.path or absolute journal path)")
+}
+
+// inferHostJournalFromDelegation resolves the host turn journal when PostTurn YAML was lost (e.g. agent_task fell
+// back to BuildSubagentUserPrompt) but the sub-agent rtx still carries ParentSessionRoot / ParentAgentType / CorrelationID.
+func inferHostJournalFromDelegation(rtx *engine.RuntimeContext) (resolvedStructuredExtract, error) {
+	if rtx == nil {
+		return resolvedStructuredExtract{}, fmt.Errorf("nil runtime")
+	}
+	psr := filepath.Clean(strings.TrimSpace(rtx.ParentSessionRoot))
+	pat := paths.SanitizeSessionPathSegment(strings.TrimSpace(rtx.ParentAgentType))
+	corr := strings.TrimSpace(rtx.CorrelationID)
+	if psr == "" || pat == "" || corr == "" {
+		return resolvedStructuredExtract{}, fmt.Errorf("parent journal scope incomplete")
+	}
+	jp := filepath.Clean(session.TurnRunJournalPath(psr, pat, corr))
+	return resolvedStructuredExtract{
+		JournalPath:     jp,
+		SessionRoot:     psr,
+		HostAgentID:     pat,
+		SessionSegment:  strings.TrimSpace(rtx.EffectiveSessionSegment()),
+		InstructionRoot: strings.TrimSpace(rtx.EffectiveInstructionRoot()),
+	}, nil
+}
+
+// postTurnPromptHasJournalPath reports whether text parses as PostTurn YAML (envelope or flat) with a non-empty run_journal.path.
+func postTurnPromptHasJournalPath(text string) bool {
+	p, ok := parsePostTurnPayloadYAML(strings.TrimSpace(text))
+	return ok && strings.TrimSpace(p.RunJournal.Path) != ""
 }
 
 func parsePostTurnPayloadYAML(raw string) (postTurnPayload, bool) {

@@ -44,6 +44,37 @@ func TestLookupRef_prefersMappedNodeDataInput(t *testing.T) {
 	}
 }
 
+// Eino workflow merges MapFields("Data", "__node_data.<id>") as one dotted top-level key (see compose.FieldMapping).
+func TestLookupRef_flatEinoNodeDataKey(t *testing.T) {
+	state := &compileState{}
+	graphInput := map[string]any{
+		composeNodeDataInputField + ".skill_stats": map[string]any{
+			"distinct_tool_calls": 7,
+		},
+	}
+	got, err := lookupRef(state, graphInput, "$nodes.skill_stats.distinct_tool_calls")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "7" {
+		t.Fatalf("lookupRef flat key=%q", got)
+	}
+}
+
+func TestLookupRef_flatEinoNodeTextKey(t *testing.T) {
+	state := &compileState{}
+	graphInput := map[string]any{
+		composeNodeTextInputField + ".receive": "hello",
+	}
+	got, err := lookupRef(state, graphInput, "$nodes.receive")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "hello" {
+		t.Fatalf("lookupRef flat text=%q", got)
+	}
+}
+
 func TestLookupRef_supportsNestedNodeDataPath(t *testing.T) {
 	state := &compileState{}
 	graphInput := map[string]any{
@@ -62,6 +93,28 @@ func TestLookupRef_supportsNestedNodeDataPath(t *testing.T) {
 	}
 	if got != "from-mapped-input" {
 		t.Fatalf("lookupRef($nodes.research.documents.title)=%q, want %q", got, "from-mapped-input")
+	}
+}
+
+func TestLookupRef_runtimeRunJournalPath(t *testing.T) {
+	tmp := t.TempDir()
+	host := "default"
+	corr := "c1"
+	rtx := &engine.RuntimeContext{
+		TurnInputs: engine.TurnInputs{
+			SessionRoot:   tmp,
+			Turn:          engine.TurnContext{AgentID: host},
+			CorrelationID: corr,
+		},
+	}
+	state := &compileState{rtx: rtx}
+	got, err := lookupRef(state, nil, "$runtime.run_journal.path")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join(tmp, "runs", host, corr+".jsonl")
+	if got != want {
+		t.Fatalf("lookupRef($runtime.run_journal.path)=%q want %q", got, want)
 	}
 }
 

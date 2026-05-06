@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"text/template"
 
 	"github.com/lengzhao/oneclaw/config"
@@ -124,6 +125,38 @@ func copyTemplateIfMissing(tmplPath, dst string) error {
 		return err
 	}
 	return os.WriteFile(dst, b, 0o644)
+}
+
+// SyncWorkflowTemplatesFromEmbed overwrites UserDataRoot/workflows/* from embedded setup/templates/workflows.
+// Ordinary init uses copy-if-missing only; run this after upgrading the binary when bundled workflows changed
+// (e.g. skill_generator gate + require_truthy).
+func SyncWorkflowTemplatesFromEmbed(userDataRoot string) error {
+	if strings.TrimSpace(userDataRoot) == "" {
+		return fmt.Errorf("setup: empty user data root")
+	}
+	wfEmbed := filepath.Join(embeddedTemplatesRoot, "workflows")
+	return fs.WalkDir(templates, wfEmbed, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		rel, err := filepath.Rel(wfEmbed, path)
+		if err != nil {
+			return err
+		}
+		rel = filepath.ToSlash(rel)
+		b, err := templates.ReadFile(filepath.ToSlash(path))
+		if err != nil {
+			return fmt.Errorf("setup: read embedded workflow %s: %w", rel, err)
+		}
+		dst := filepath.Join(userDataRoot, "workflows", filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+			return err
+		}
+		return os.WriteFile(dst, b, 0o644)
+	})
 }
 
 // TemplateFS exposes embedded templates for tests.

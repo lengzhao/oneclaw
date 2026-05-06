@@ -19,6 +19,7 @@ type NodeEnv struct {
 	Runtime *engine.RuntimeContext
 	NodeID  string
 	Node    workflow.Node
+	Eval    *EvalEnv // optional; set for compiled workflows so handlers can render templates against upstream node outputs
 }
 
 // Handler runs one node instance and returns a structured result.

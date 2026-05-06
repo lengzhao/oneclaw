@@ -25,7 +25,7 @@ func ParseBytes(raw []byte) (*Workflow, error) {
 	case len(d.Nodes) > 0:
 		w.Nodes = d.Nodes
 	case len(d.Steps) > 0:
-		nodes, err := expandSteps(d.Steps)
+		nodes, err := expandSteps(d.Steps, false)
 		if err != nil {
 			return nil, err
 		}
@@ -37,7 +37,7 @@ func ParseBytes(raw []byte) (*Workflow, error) {
 	return w, nil
 }
 
-func expandSteps(steps []stepSugar) (map[string]Node, error) {
+func expandSteps(steps []stepSugar, hostTurn bool) (map[string]Node, error) {
 	if len(steps) == 0 {
 		return nil, fmt.Errorf("workflow: empty steps")
 	}
@@ -45,6 +45,9 @@ func expandSteps(steps []stepSugar) (map[string]Node, error) {
 	seen := map[string]bool{}
 	var lastID string
 	for i, s := range steps {
+		if s.HostTurn != hostTurn {
+			continue
+		}
 		if strings.TrimSpace(s.Use) == "" {
 			return nil, fmt.Errorf("workflow: steps[%d] missing use", i)
 		}
@@ -70,6 +73,12 @@ func expandSteps(steps []stepSugar) (map[string]Node, error) {
 		}
 		nodes[id] = n
 		lastID = id
+	}
+	if len(nodes) == 0 {
+		if hostTurn {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("workflow: no executable steps (all host_turn?)")
 	}
 	return nodes, nil
 }

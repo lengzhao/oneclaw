@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"reflect"
 	"sort"
 	"strings"
 	"time"
@@ -35,6 +36,7 @@ func CompileEinoWorkflow(ctx context.Context, wf *workflow.Workflow, reg *Regist
 			return nil, err
 		}
 	}
+	addNativeIfBranches(w, state)
 	resultNode := w.AddLambdaNode(composeResultNodeID, compose.InvokableLambda(func(_ context.Context, _ any) (TurnWorkflowResult, error) {
 		return TurnWorkflowResult{
 			Assistant: strings.TrimSpace(state.rtx.Assistant),
@@ -51,6 +53,103 @@ func CompileEinoWorkflow(ctx context.Context, wf *workflow.Workflow, reg *Regist
 		return nil, fmt.Errorf("wfexec: compile compose workflow: %w", err)
 	}
 	return run, nil
+}
+
+func addNativeIfBranches(w *compose.Workflow[TurnWorkflowInput, TurnWorkflowResult], state *compileState) {
+	if w == nil || state == nil || state.wf == nil {
+		return
+	}
+	for _, ifID := range sortedNodeIDs(state.wf) {
+		ifNode, ok := state.wf.Nodes[ifID]
+		if !ok || strings.TrimSpace(ifNode.Use) != "if" {
+			continue
+		}
+		targets := ifTrueSuccessors(state.wf, ifID)
+		if len(targets) == 0 {
+			continue
+		}
+		endNodes := map[string]bool{compose.END: true}
+		for _, t := range targets {
+			endNodes[t] = true
+		}
+		w.AddBranch(ifID, compose.NewGraphMultiBranch(func(_ context.Context, in workflow.WorkflowNodeResult) (map[string]bool, error) {
+			if ifResultPass(in) {
+				out := make(map[string]bool, len(targets))
+				for _, t := range targets {
+					out[t] = true
+				}
+				return out, nil
+			}
+			return map[string]bool{compose.END: true}, nil
+		}, endNodes))
+	}
+}
+
+func ifTrueSuccessors(wf *workflow.Workflow, ifID string) []string {
+	if wf == nil || strings.TrimSpace(ifID) == "" {
+		return nil
+	}
+	seen := map[string]struct{}{}
+	for nodeID, n := range wf.Nodes {
+		if strings.TrimSpace(nodeID) == ifID {
+			continue
+		}
+		for _, dep := range n.DependsOn {
+			if strings.TrimSpace(dep) == ifID {
+				seen[nodeID] = struct{}{}
+			}
+		}
+		for _, dep := range inferredTemplateDeps(n) {
+			if strings.TrimSpace(dep) == ifID {
+				seen[nodeID] = struct{}{}
+			}
+		}
+	}
+	out := make([]string, 0, len(seen))
+	for id := range seen {
+		out = append(out, id)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// isIfBranchSuccessor reports whether consumer runs only on the if node's true branch.
+// Edges from such consumers to the if node must not use a direct execution dependency:
+// Eino requires WithNoDirectDependency for data mappings, and DependsOn-only edges must be omitted,
+// otherwise execution bypasses AddBranch and the false branch never skips successors.
+func isIfBranchSuccessor(wf *workflow.Workflow, fromIfID, consumerNodeID string) bool {
+	if wf == nil {
+		return false
+	}
+	fromIfID = strings.TrimSpace(fromIfID)
+	consumerNodeID = strings.TrimSpace(consumerNodeID)
+	if fromIfID == "" || consumerNodeID == "" {
+		return false
+	}
+	n, ok := wf.Nodes[fromIfID]
+	if !ok || strings.TrimSpace(n.Use) != "if" {
+		return false
+	}
+	for _, t := range ifTrueSuccessors(wf, fromIfID) {
+		if t == consumerNodeID {
+			return true
+		}
+	}
+	return false
+}
+
+func ifResultPass(in workflow.WorkflowNodeResult) bool {
+	if in.Data != nil {
+		if v, ok := in.Data["pass"]; ok {
+			switch x := v.(type) {
+			case bool:
+				return x
+			case string:
+				return isTruthyString(x)
+			}
+		}
+	}
+	return isTruthyString(in.Text)
 }
 
 type compileState struct {
@@ -75,6 +174,13 @@ func (s *compileState) finalDependsOn() []string {
 }
 
 func sortedNodeIDs(wf *workflow.Workflow) []string {
+	if wf == nil {
+		return nil
+	}
+	order, err := workflow.TopoSort(wf)
+	if err == nil && len(order) == len(wf.Nodes) {
+		return order
+	}
 	ids := make([]string, 0, len(wf.Nodes))
 	for id := range wf.Nodes {
 		ids = append(ids, id)
@@ -89,32 +195,45 @@ func addWorkflowNodeV2(w *compose.Workflow[TurnWorkflowInput, TurnWorkflowResult
 		return invokeWorkflowNodeV2(ctx, state, nodeID, node, in)
 	}))
 	n.AddInput(compose.START, compose.MapFields("Runtime", "runtime"))
+	mapByDep := map[string][]*compose.FieldMapping{}
 	simpleRefs := simpleTemplateNodeRefs(node)
 	for _, dep := range simpleRefs {
 		dep = strings.TrimSpace(dep)
 		if dep == "" {
 			continue
 		}
-		n.AddInput(dep, compose.MapFields("Text", composeNodeTextInputField+"."+dep))
+		mapByDep[dep] = append(mapByDep[dep], compose.MapFields("Text", composeNodeTextInputField+"."+dep))
 	}
 	advancedRefs := advancedTemplateNodeRefs(node)
+	advancedDepSet := map[string]struct{}{}
 	for _, ref := range advancedRefs {
 		dep := strings.TrimSpace(ref.NodeID)
-		if dep == "" || len(ref.FieldPath) == 0 {
+		if dep == "" {
 			continue
 		}
-		fromPath := "Data." + strings.Join(ref.FieldPath, ".")
-		toPath := composeNodeDataInputField + "." + dep + "." + strings.Join(ref.FieldPath, ".")
-		n.AddInput(dep, compose.MapFields(fromPath, toPath))
+		advancedDepSet[dep] = struct{}{}
+	}
+	for dep := range advancedDepSet {
+		// Pass the whole Data object for this dependency; template renderer resolves nested keys dynamically.
+		mapByDep[dep] = append(mapByDep[dep], compose.MapFields("Data", composeNodeDataInputField+"."+dep))
+	}
+	mapDeps := make([]string, 0, len(mapByDep))
+	for dep := range mapByDep {
+		mapDeps = append(mapDeps, dep)
+	}
+	sort.Strings(mapDeps)
+	for _, dep := range mapDeps {
+		mappings := mapByDep[dep]
+		if isIfBranchSuccessor(state.wf, dep, nodeID) {
+			n.AddInputWithOptions(dep, mappings, compose.WithNoDirectDependency())
+			continue
+		}
+		n.AddInput(dep, mappings...)
 	}
 	simpleSet := map[string]struct{}{}
 	for _, dep := range simpleRefs {
-		simpleSet[dep] = struct{}{}
-	}
-	advancedSet := map[string]struct{}{}
-	for _, ref := range advancedRefs {
-		if strings.TrimSpace(ref.NodeID) != "" {
-			advancedSet[ref.NodeID] = struct{}{}
+		if d := strings.TrimSpace(dep); d != "" {
+			simpleSet[d] = struct{}{}
 		}
 	}
 	deps := inferredTemplateDeps(node)
@@ -126,7 +245,10 @@ func addWorkflowNodeV2(w *compose.Workflow[TurnWorkflowInput, TurnWorkflowResult
 		if _, ok := simpleSet[dep]; ok {
 			continue
 		}
-		if _, ok := advancedSet[dep]; ok {
+		if _, ok := advancedDepSet[dep]; ok {
+			continue
+		}
+		if isIfBranchSuccessor(state.wf, dep, nodeID) {
 			continue
 		}
 		n.AddDependency(dep)
@@ -199,11 +321,33 @@ func executeWorkflowNodeV2(ctx context.Context, state *compileState, nodeID stri
 	if h == nil {
 		return workflow.WorkflowNodeResult{}, fmt.Errorf("wfexec: no handler registered for use %q (node %q)", node.Use, nodeID)
 	}
+	if req := strings.TrimSpace(paramString(node.Params, "require_truthy")); req != "" {
+		ev := &EvalEnv{State: state, GraphInput: graphInput}
+		rendered, err := ev.Render(req)
+		if err != nil {
+			return workflow.WorkflowNodeResult{}, fmt.Errorf("wfexec: node %q (%s): require_truthy: %w", nodeID, node.Use, err)
+		}
+		if !isTruthyString(rendered) {
+			slog.InfoContext(ctx, "wfexec.node.skip_require_truthy",
+				"agent_type", agentType,
+				"correlation_id", strings.TrimSpace(rtx.CorrelationID),
+				"node", nodeID,
+				"use", node.Use,
+				"rendered", strings.TrimSpace(rendered),
+			)
+			return workflow.WorkflowNodeResult{}, nil
+		}
+	}
 	in, err := nodeInputForExec(state, graphInput, node)
 	if err != nil {
 		return workflow.WorkflowNodeResult{}, err
 	}
-	out, err := h(ctx, in, NodeEnv{Runtime: rtx, NodeID: nodeID, Node: node})
+	out, err := h(ctx, in, NodeEnv{
+		Runtime: rtx,
+		NodeID:  nodeID,
+		Node:    node,
+		Eval:    &EvalEnv{State: state, GraphInput: graphInput},
+	})
 	if err != nil {
 		slog.ErrorContext(ctx, "wfexec.node.failed",
 			"agent_type", agentType,
@@ -231,14 +375,26 @@ func executeWorkflowNodeV2(ctx context.Context, state *compileState, nodeID stri
 }
 
 func asGraphInputMap(in any) map[string]any {
-	switch m := in.(type) {
-	case nil:
-		return nil
-	case map[string]any:
-		return m
-	default:
+	if in == nil {
 		return nil
 	}
+	switch m := in.(type) {
+	case map[string]any:
+		return m
+	}
+	v := reflect.ValueOf(in)
+	for v.Kind() == reflect.Pointer && !v.IsNil() {
+		v = v.Elem()
+	}
+	if v.Kind() != reflect.Map || v.Type().Key().Kind() != reflect.String {
+		return nil
+	}
+	out := make(map[string]any, v.Len())
+	it := v.MapRange()
+	for it.Next() {
+		out[it.Key().String()] = it.Value().Interface()
+	}
+	return out
 }
 
 func cloneParams(p map[string]any) map[string]any {

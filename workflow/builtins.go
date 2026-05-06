@@ -12,6 +12,8 @@ var BuiltinUses = []string{
 	"command",
 	"tool_call",
 	"noop",
+	"if",
+	"journal_tool_metrics",
 }
 
 // AllowedUses is the validation whitelist populated from BuiltinUses.

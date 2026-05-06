@@ -44,6 +44,8 @@ func RegisterBuiltins(r *Registry) error {
 		"command":                   handleWorkflowCommand,
 		"tool_call":                 handleWorkflowToolCall,
 		"noop":                      handleNoop,
+		"if":                        handleWorkflowIf,
+		"journal_tool_metrics":      handleJournalToolMetrics,
 	}
 	for _, use := range workflow.BuiltinUses {
 		h, ok := byUse[use]
@@ -194,7 +196,7 @@ func handleNoop(context.Context, NodeInput, NodeEnv) (workflow.WorkflowNodeResul
 	return workflow.WorkflowNodeResult{}, nil
 }
 
-func handleLLM(_ context.Context, in NodeInput, env NodeEnv) (workflow.WorkflowNodeResult, error) {
+func handleLLM(ctx context.Context, in NodeInput, env NodeEnv) (workflow.WorkflowNodeResult, error) {
 	rtx := env.Runtime
 	if strings.TrimSpace(in.Text) != "" {
 		rtx.UserPrompt = strings.TrimSpace(in.Text)
@@ -204,7 +206,7 @@ func handleLLM(_ context.Context, in NodeInput, env NodeEnv) (workflow.WorkflowN
 		at = workflow.AgentTypeParam(env.Node.Params)
 	}
 	if at != "" && (rtx.Agent == nil || at != strings.TrimSpace(rtx.Agent.AgentType)) {
-		reply, err := executeAgentTask(rtx, at, strings.TrimSpace(in.Text))
+		reply, err := executeAgentTask(ctx, rtx, at, strings.TrimSpace(in.Text))
 		if err != nil {
 			return workflow.WorkflowNodeResult{}, err
 		}

@@ -17,12 +17,13 @@ Env:
   ONECLAW_VERBOSE_PROMPT=1   Same prompt/chat logs at INFO (use when -log-level info but you need prompt text)
 
 Commands:
-  init       Bootstrap UserDataRoot (flags: --user-data; merges config keys if config.yaml exists)
+  init       Bootstrap UserDataRoot (flags: --user-data; --upgrade-workflows overwrites workflows/*.yaml from embed)
   onboard    Guided LLM/drivers with skip options (keep defaults/existing); drivers menu like channel onboard
   run, repl  Single-turn agent (flags: --mock-llm, --profile, --agent, --prompt, --session)
   serve      clawbridge + WebChat + TurnHub + optional schedule (flags: --no-schedule, --mock-llm); send /reset to clear *_transcript.jsonl only (runs/subs unchanged)
   channel    clawbridge driver onboarding: list-drivers | onboard <driver> (see -h)
   config     Inspect merged config: show (redacted effective YAML; see -h)
+  journal-stats  Summarize one turn run journal JSONL (--journal PATH [--user-data-root DIR]); prints metrics JSON for workflows/command nodes
   snapshot   Export session snapshot for backup/migration (stub)
   version    Print version
   help       Show this message

@@ -11,9 +11,10 @@ import (
 
 // Build metadata can be overridden by -ldflags during release builds.
 // Example:
-//   -X 'main.version=v0.3.0' -X 'main.buildMarker=media-paths-v2' -X 'main.buildCommit=<sha>' -X 'main.buildTime=<rfc3339>'
+//
+//	-X 'main.version=v0.3.0' -X 'main.buildMarker=media-paths-v2' -X 'main.buildCommit=<sha>' -X 'main.buildTime=<rfc3339>'
 var version = "dev"
-var buildMarker = "dev-local"
+var buildMarker = "dev-v0.1.2"
 var buildCommit = "unknown"
 var buildTime = "unknown"
 
@@ -115,6 +116,12 @@ func run(argv []string) int {
 	case "config":
 		if err := cmdConfig(ctx, g, cmdArgs); err != nil {
 			slog.Error("config", "err", err)
+			return 1
+		}
+		return 0
+	case "journal-stats":
+		if err := cmdJournalStats(ctx, g, cmdArgs); err != nil {
+			slog.Error("journal-stats", "err", err)
 			return 1
 		}
 		return 0

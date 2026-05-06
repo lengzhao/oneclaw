@@ -54,8 +54,30 @@ func bootstrapUserData(t *testing.T) string {
 	if err := os.WriteFile(wf, []byte(e2eSyncDefaultTurn), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	// Omit steps.host_turn / host_turn_nodes / meta.host_turn_nodes_yaml so MergeHostTurnNodesFromSkillGenerator is a no-op for sync-only E2E paths.
+	skillWF := filepath.Join(root, "workflows", "skill_generator.yaml")
+	if err := os.WriteFile(skillWF, []byte(e2eSkillGeneratorTurnNoHostMerge), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	return root
 }
+
+const e2eSkillGeneratorTurnNoHostMerge = `workflow_spec_version: 2
+id: skill_generator.turn
+description: E2E skill_generator turn without host-turn merge (no merge into default.turn).
+meta:
+  transcript_mode: summary
+  user_prompt_suffix: 提取文件中的技能。
+steps:
+  - use: on_receive
+  - id: main
+    use: llm
+    prompt: $start.user_prompt
+  - id: respond
+    use: on_respond
+    input: $nodes.main
+end: respond
+`
 
 func loadRunEnv(t *testing.T, root string, extraYAML string) *config.File {
 	t.Helper()
@@ -123,6 +145,35 @@ func executeTurnCtx(t *testing.T, ctx context.Context, root string, cfg *config.
 		UseMock:        useMock,
 		Stdout:         w,
 		CorrelationID:  subagent.NewCorrelationID(),
+	}
+	err = runner.ExecuteTurn(p)
+	return stdout, err
+}
+
+// executeTurnCtxWithCorrelationID runs one turn with an explicit correlation id (deterministic journals).
+// Pass correlationID empty to synthesize one via subagent.NewCorrelationID().
+func executeTurnCtxWithCorrelationID(t *testing.T, ctx context.Context, root string, cfg *config.File, sess, prompt string, useMock bool, agentID string, correlationID string) (stdout string, err error) {
+	t.Helper()
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	w, capture := pipeStdout(t)
+	defer func() { stdout = capture() }()
+	corr := strings.TrimSpace(correlationID)
+	if corr == "" {
+		corr = subagent.NewCorrelationID()
+	}
+	p := runner.Params{
+		Ctx:             ctx,
+		UserDataRoot:    root,
+		Config:          cfg,
+		Catalog:         loadCatalog(t, root),
+		AgentID:         agentID,
+		SessionSegment:  sess,
+		UserPrompt:      prompt,
+		UseMock:         useMock,
+		Stdout:          w,
+		CorrelationID:   corr,
 	}
 	err = runner.ExecuteTurn(p)
 	return stdout, err
