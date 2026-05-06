@@ -23,7 +23,7 @@ func TestFormatExtractResultMarkdown_emptyMemories(t *testing.T) {
 	}
 }
 
-func TestSyncMemoryMDFromExtract_promotesAssistantName(t *testing.T) {
+func TestSyncMemoryMDFromExtract_promotesHighConfidenceProfile(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "MEMORY.md")
 	initial := "# Memory\n\n## Notes\n\n- baseline\n"
@@ -83,5 +83,32 @@ func TestSyncMemoryMDFromExtract_respectsMemoryMDBudget(t *testing.T) {
 	}
 	if len(raw) > memcore.MEMORYMDMaxBytes {
 		t.Fatalf("MEMORY.md exceeds max bytes: got=%d max=%d", len(raw), memcore.MEMORYMDMaxBytes)
+	}
+}
+
+func TestSyncMemoryMDFromExtract_skipsProfileBelowPromoteThreshold(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "MEMORY.md")
+	if err := os.WriteFile(path, []byte("# Memory\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	res := &lzmem.ExtractResult{
+		Memories: []lzmem.ExtractedMemory{
+			{
+				Namespace:  lzmem.NamespaceProfile,
+				Summary:    "might be user preference",
+				Confidence: 0.79,
+			},
+		},
+	}
+	if err := SyncMemoryMDFromExtract(dir, res); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), autoStartMarker) {
+		t.Fatalf("expected no auto section below %.2f confidence", memoryMDPromoteMinConfidence)
 	}
 }

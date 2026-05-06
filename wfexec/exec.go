@@ -3,6 +3,7 @@ package wfexec
 import (
 	"context"
 	"fmt"
+	"maps"
 
 	"github.com/lengzhao/oneclaw/engine"
 	"github.com/lengzhao/oneclaw/workflow"
@@ -14,6 +15,7 @@ func Execute(ctx context.Context, wf *workflow.Workflow, reg *Registry, rtx *eng
 		return fmt.Errorf("wfexec: nil argument")
 	}
 	rtx.GoCtx = ctx
+	rtx.WorkflowMeta = maps.Clone(wf.Meta)
 	run, err := CompileEinoWorkflow(ctx, wf, reg, rtx)
 	if err != nil {
 		return err

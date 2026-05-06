@@ -40,7 +40,7 @@ type AgentFrontmatter struct {
 	MaxTurns            int            `yaml:"max_turns,omitempty"`
 	Workspace           string         `yaml:"workspace,omitempty"`
 	InheritParentMemory bool           `yaml:"inherit_parent_memory,omitempty"`
-	ContextProfile      ContextProfile `yaml:"context_profile,omitempty"`
+	ContextProfile ContextProfile `yaml:"context_profile,omitempty"`
 }
 
 // ParseAgentMarkdown extracts frontmatter + body. Catalog identity is always stem (filename without extension).

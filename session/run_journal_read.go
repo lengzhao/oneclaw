@@ -133,7 +133,7 @@ func readMergedTurnJournals(dir string) (string, error) {
 
 // ReadRunJournalText reads per-turn JSONL under sessions/<id>/runs/<agent_type>/<key>.jsonl.
 // scope full merges all *.jsonl files in that directory (excluding legacy runs.jsonl), ordered by modification time.
-// scope current_turn with correlation_id reads exactly that turn file; optional retry until run_complete / sub_agent_complete.
+// scope current_turn with correlation_id reads exactly that turn file; optional retry until run_complete (legacy: sub_agent_complete).
 func ReadRunJournalText(sessionRoot, agentType, correlationID, scope string) (string, error) {
 	sr := strings.TrimSpace(sessionRoot)
 	at := strings.TrimSpace(agentType)

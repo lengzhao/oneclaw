@@ -1,12 +1,19 @@
 workflow_spec_version: 2
 id: memory_extractor.turn
-description: Sub-agent workflow for memory_extractor (runs under subs/); override .agent/workflows/memory_extractor.yaml.
-steps:
-  - use: on_receive
-  - id: main
-    use: llm
-    prompt: $start.user_prompt
-  - id: respond
-    use: on_respond
-    input: $nodes.main
-end: respond
+description: PostTurn memory workflow; receives explicit post_turn_ctx via agent_task ($runtime.post_turn.ctx → $start.user_prompt).
+meta:
+  transcript_mode: summary
+nodes:
+  receive:
+    use: on_receive
+  extract:
+    use: structured_memory_extract
+    input: $nodes.receive
+    depends_on:
+      - receive
+  done:
+    use: noop
+    input: $nodes.extract
+    depends_on:
+      - extract
+end: done

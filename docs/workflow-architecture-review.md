@@ -15,14 +15,19 @@
 
 - `on_receive`：入口检查与输入归一化。
 - `llm`：主 LLM/ADK 节点；可选 `agent_type` 指向其它 agent。
+  - 当宿主提供入站 `MediaPaths` 时：运行时会先将附件落盘到 `workspace/inbound/`，再把这些路径注入用户消息（`Context attachment`）；若当前模型判定支持图像输入，则会额外以内联图片多模态 part 传给 LLM（受大小/数量限制）。
 - `on_respond`：以显式输入文本作为 assistant 输出并落 transcript。
 - `agent_task`：显式子 agent 任务（必须 `agent_type`）。
-- `retrieve_context` / `command` / `tool_call`：当前默认文本 passthrough 语义（保留扩展点）。
+- `structured_memory_extract`：读取宿主 Run Journal（PostTurn ctx / 路径），确定性写入结构化记忆管线。
+- `command`：等同 **`exec` 策略** 的 workspace shell（`tools.exec` + allow/deny）。
+- `tool_call`：`ToolRegistry` 上单次 **`InvokableRun`**（禁止 **`run_agent`**）。
+- `retrieve_context`：文本 passthrough 占位。
 
 ## 3. 默认模板形态
 
-- `default.turn`：`on_receive -> llm -> on_respond -> async agent_task(memory/skill)`，`end: respond`。
-- `memory_extractor` / `skill_generator`：`on_receive -> llm -> on_respond`。
+- `default.turn`：`on_receive -> llm -> on_respond -> async agent_task(memory/skill)`，`agent_task` 输入 **`$runtime.post_turn.ctx`**，`end: respond`。
+- `memory_extractor.turn`：`on_receive -> structured_memory_extract -> noop`（PostTurn YAML 经 **`$start.user_prompt` / `$nodes.receive`**）。
+- `skill_generator.turn`：`on_receive -> llm -> on_respond`（任务正文可为 PostTurn YAML，工具仍可用 **`read_run_journal`**）。
 
 ## 4. 风险与后续
 
@@ -43,3 +48,5 @@ flowchart LR
 ## 6. 变更记录
 
 - 2026-05-05：完成 v2 迁移，移除 v1 Graph 主执行路径与旧默认模板。
+- 2026-05-06：PostTurn **`$runtime.post_turn.ctx`**；**`structured_memory_extract`**；**`memory_extractor.turn`** 改为确定性抽取链路。
+- 2026-05-06：**`command`** / **`tool_call`**  workflow 节点接入 **`exec`** 与 **`ToolRegistry`**。

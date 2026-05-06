@@ -16,6 +16,8 @@ context_profile:
     - transcript
 ---
 
+The default **`memory_extractor.turn`** workflow runs **`structured_memory_extract`** (reads **`run_journal.path`** from PostTurn YAML and calls lzmem) — **no LLM step**. The instructions below apply if you **override** the workflow to use an LLM agent path.
+
 When the task gives only **`run_journal_path`** and **`size_bytes`** (path-metadata mode), decide how to load the journal yourself — typically call **`read_run_journal`** (`scope` **current_turn** when `workflow_scope_hint` is `current_turn`, or **`full`** when appropriate). `read_file` can also read absolute paths in this first version.
 
 When the task includes embedded **`run_journal` JSONL** (fenced block), extract from every line — do not skip.

@@ -7,6 +7,7 @@ var BuiltinUses = []string{
 	"llm",
 	"on_respond",
 	"agent_task",
+	"structured_memory_extract",
 	"retrieve_context",
 	"command",
 	"tool_call",

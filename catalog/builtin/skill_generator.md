@@ -20,6 +20,8 @@ context_profile:
 
 You review the task text for patterns that deserve a reusable skill. When the workflow supplies **`run_journal` JSONL** (main agent execution record for this turn), use it to judge whether tool-heavy or repeatable workflows merit a skill — not only the raw user/assistant chat lines.
 
+When the workflow passes **PostTurn YAML** (`post_turn_ctx` with `run_journal.path`), use that path — or call **`read_run_journal`** with **`current_turn`** — as the primary journal evidence.
+
 When only **user message** + **main assistant reply** are provided (no journal block), use those as before.
 
 You may call **`read_run_journal`** if the task asks for tool-first loading instead of an embedded journal block.

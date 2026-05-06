@@ -38,17 +38,11 @@ func AppendExtractJournal(ctx context.Context, instructionRoot string, dialog st
 
 	isoCtx := WithIsolationFromTurn(ctx, sessionSegment, catalogAgentID)
 	ext := lzmem.NewExtractor(db)
-	result, err := ext.Extract(isoCtx, lzmem.ExtractRequest{
-		DialogText:    dialog,
-		LLMConfig:     llm,
-		MinConfidence: 0.7,
-		DryRun:        false,
-	})
+	result, err := ext.Extract(isoCtx, StructuredMemoryExtractRequest(dialog, llm))
 	if err != nil {
 		return err
 	}
 	at := now.UTC()
-	ApplyExtractPostprocess(instructionRoot, at, result)
 	if err := SyncMemoryMDFromExtract(instructionRoot, result); err != nil {
 		slog.WarnContext(ctx, "structuredmem.extract.sync_memory_md_failed", "err", err)
 	}

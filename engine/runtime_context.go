@@ -45,6 +45,9 @@ type TurnInputs struct {
 
 	SessionRoot    string
 	SessionSegment string
+	// InboundMediaPaths carries channel inbound attachments (clawbridge InboundMessage.MediaPaths).
+	// wfexec/adk_main may inject them into prompt text and/or multimodal user parts.
+	InboundMediaPaths []string
 	Agent          *catalog.Agent
 	Bundle         *preturn.Bundle
 	UserPrompt     string
@@ -70,6 +73,9 @@ type TurnInputs struct {
 	ModelName    string
 
 	CorrelationID string // ties one CLI/turn invocation to sub-agent logs (optional; wfexec may synthesize if empty)
+
+	// WorkflowMeta is a shallow copy of workflow.Meta at wfexec.Execute time (e.g. transcript_mode).
+	WorkflowMeta map[string]any
 
 	// PostAssistantRespond runs after on_respond appends the assistant transcript (phase 5 outbound); optional.
 	PostAssistantRespond func(ctx context.Context, assistant string) error

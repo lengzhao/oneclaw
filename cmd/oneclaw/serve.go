@@ -39,6 +39,7 @@ const (
 	turnhubQueueDiscardUserText = "您的消息因处理队列已满已被丢弃，请稍后重试。"
 	// inboundLogPreviewMaxRunes caps logged user text (full length still in content_len_runes).
 	inboundLogPreviewMaxRunes = 200
+	inboundLogPreviewMaxMedia = 3
 )
 
 func cmdServe(ctx context.Context, g globalOpts, args []string) error {
@@ -212,6 +213,8 @@ func inboundReceivedAttrs(in clawbridge.InboundMessage) []any {
 		"sender_display", strings.TrimSpace(in.Sender.DisplayName),
 		"peer_kind", strings.TrimSpace(in.Peer.Kind),
 		"peer_id", strings.TrimSpace(in.Peer.ID),
+		"media_paths_count", len(in.MediaPaths),
+		"media_paths_preview", previewMediaPaths(in.MediaPaths, inboundLogPreviewMaxMedia),
 	}
 	if in.Metadata != nil {
 		if c := strings.TrimSpace(in.Metadata[runner.InboundMetaCorrelation]); c != "" {
@@ -228,6 +231,24 @@ func inboundReceivedAttrs(in clawbridge.InboundMessage) []any {
 		}
 	}
 	return args
+}
+
+func previewMediaPaths(paths []string, max int) []string {
+	if max <= 0 || len(paths) == 0 {
+		return nil
+	}
+	out := make([]string, 0, min(len(paths), max))
+	for _, p := range paths {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		out = append(out, p)
+		if len(out) >= max {
+			break
+		}
+	}
+	return out
 }
 
 func previewRunes(s string, max int) string {
@@ -273,6 +294,7 @@ func newTurnProcessor(b *clawbridge.Bridge, root string, ocfg *config.File, cat 
 			Stdout:          os.Stdout,
 			CorrelationID:   corr,
 			InboundClientID: strings.TrimSpace(msgCopy.ClientID),
+			InboundMediaPaths: append([]string(nil), msgCopy.MediaPaths...),
 			InboundMeta:     inboundMeta,
 			RequiredOutboundMetadataKeysForSend: func(clientID string) []string {
 				keys, ok := b.RequiredOutboundMetadataKeysForSend(clientID)

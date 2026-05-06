@@ -9,8 +9,13 @@ import (
 	"github.com/lengzhao/oneclaw/observe"
 )
 
-// version is set by -ldflags at release; default "dev".
+// Build metadata can be overridden by -ldflags during release builds.
+// Example:
+//   -X 'main.version=v0.3.0' -X 'main.buildMarker=media-paths-v2' -X 'main.buildCommit=<sha>' -X 'main.buildTime=<rfc3339>'
 var version = "dev"
+var buildMarker = "dev-local"
+var buildCommit = "unknown"
+var buildTime = "unknown"
 
 func main() {
 	os.Exit(run(os.Args))

@@ -20,4 +20,6 @@ context_profile:
 
 Identify repeatable, multi-step patterns and persist only high-value skills under `skills/<skill-id>/`.
 
+When the workflow passes **PostTurn YAML** (`post_turn_ctx` with `run_journal.path`), prefer that path — or call **`read_run_journal`** with **`current_turn`** — before proposing writes.
+
 Default to no write unless the pattern is clearly reusable.

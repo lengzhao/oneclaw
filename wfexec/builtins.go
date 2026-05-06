@@ -2,8 +2,11 @@ package wfexec
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
+	"io"
 	"log/slog"
+	"mime"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,20 +24,26 @@ import (
 	"github.com/lengzhao/oneclaw/workflow"
 )
 
+const (
+	maxInlineImageCount = 4
+	maxInlineImageBytes = 5 << 20
+)
+
 // RegisterBuiltins registers handlers for each entry in workflow.BuiltinUses.
 func RegisterBuiltins(r *Registry) error {
 	if r == nil {
 		return fmt.Errorf("wfexec: nil registry")
 	}
 	byUse := map[string]Handler{
-		"on_receive":       handleOnReceive,
-		"llm":              handleLLM,
-		"on_respond":       handleOnRespond,
-		"agent_task":       handleAgentTask,
-		"retrieve_context": handlePassthroughTextNode,
-		"command":          handlePassthroughTextNode,
-		"tool_call":        handlePassthroughTextNode,
-		"noop":             handleNoop,
+		"on_receive":                handleOnReceive,
+		"llm":                       handleLLM,
+		"on_respond":                handleOnRespond,
+		"agent_task":                handleAgentTask,
+		"structured_memory_extract": handleStructuredMemoryExtract,
+		"retrieve_context":          handlePassthroughTextNode,
+		"command":                   handleWorkflowCommand,
+		"tool_call":                 handleWorkflowToolCall,
+		"noop":                      handleNoop,
 	}
 	for _, use := range workflow.BuiltinUses {
 		h, ok := byUse[use]
@@ -221,13 +230,21 @@ func runMainLLM(rtx *engine.RuntimeContext) error {
 	if err := rebuildChatAgentForInstruction(rtx, instr); err != nil {
 		return fmt.Errorf("wfexec: adk_main: %w", err)
 	}
-	cur := strings.TrimSpace(rtx.EffectiveUserPrompt())
+	basePrompt := strings.TrimSpace(rtx.EffectiveUserPrompt())
+	if basePrompt == "" {
+		return fmt.Errorf("wfexec: adk_main: empty user prompt")
+	}
+	cur := strings.TrimSpace(workflow.ComposeUserPrompt(rtx.WorkflowMeta, basePrompt))
 	if cur == "" {
 		return fmt.Errorf("wfexec: adk_main: empty user prompt")
 	}
+	userTranscript := cur
+	if recordSummaryTranscript(rtx) {
+		userTranscript = fmt.Sprintf("[%s] async task · full prompt in Run Journal", runtimeAgentType(rtx))
+	}
 	if !rtx.UserTurnAppended {
 		if err := session.AppendTranscriptTurn(rtx.EffectiveSessionRoot(), runtimeAgentType(rtx), session.TranscriptTurn{
-			Ts: time.Now().UTC(), Role: "user", Content: cur,
+			Ts: time.Now().UTC(), Role: "user", Content: userTranscript,
 		}); err != nil {
 			return fmt.Errorf("wfexec: adk_main: append user transcript: %w", err)
 		}
@@ -287,9 +304,10 @@ func runMainLLM(rtx *engine.RuntimeContext) error {
 		rtx.SetAssistant(strings.TrimSpace(strings.Join(chunks, "\n")))
 	}
 	rtx.EmitNodeOutput(map[string]any{
-		"use":            "llm",
-		"assistant_text": rtx.Assistant,
-		"user_prompt":    rtx.UserPrompt,
+		"use":               "llm",
+		"assistant_text":    rtx.Assistant,
+		"user_prompt":       rtx.UserPrompt,
+		"user_prompt_model": cur,
 	})
 	return nil
 }
@@ -329,7 +347,7 @@ func adkMessagesForMain(rtx *engine.RuntimeContext) ([]adk.Message, error) {
 	if rtx == nil {
 		return nil, fmt.Errorf("wfexec: nil runtime context")
 	}
-	cur := strings.TrimSpace(rtx.EffectiveUserPrompt())
+	cur := strings.TrimSpace(workflow.ComposeUserPrompt(rtx.WorkflowMeta, rtx.EffectiveUserPrompt()))
 	if cur == "" {
 		return nil, fmt.Errorf("wfexec: empty user prompt")
 	}
@@ -340,8 +358,305 @@ func adkMessagesForMain(rtx *engine.RuntimeContext) ([]adk.Message, error) {
 	if rm := recallUserMessageFromPromptData(rtx); rm != nil {
 		msgs = append(msgs, rm)
 	}
-	msgs = append(msgs, schema.UserMessage(cur))
+	mediaPaths := normalizeMediaPaths(rtx.EffectiveInboundMediaPaths())
+	if len(mediaPaths) > 0 {
+		slog.Info("wfexec.adk_main.inbound_media.received",
+			"agent_type", runtimeAgentType(rtx),
+			"correlation_id", strings.TrimSpace(rtx.CorrelationID),
+			"count", len(mediaPaths),
+			"workspace", strings.TrimSpace(rtx.EffectiveWorkspacePath()),
+			"paths", mediaPaths,
+		)
+	}
+	if len(mediaPaths) > 0 {
+		mediaPaths = materializeInboundMediaToWorkspace(rtx, mediaPaths)
+		slog.Info("wfexec.adk_main.inbound_media.materialized",
+			"agent_type", runtimeAgentType(rtx),
+			"correlation_id", strings.TrimSpace(rtx.CorrelationID),
+			"count", len(mediaPaths),
+			"paths", mediaPaths,
+		)
+	}
+	if len(mediaPaths) == 0 {
+		msgs = append(msgs, schema.UserMessage(cur))
+		return msgs, nil
+	}
+	if !runtimeModelSupportsImageInput(rtx) {
+		msgs = append(msgs, schema.UserMessage(injectMediaPathsPrompt(cur, mediaPaths)))
+		return msgs, nil
+	}
+	userMsg, attached := buildUserMessageWithInlineImages(cur, mediaPaths)
+	if attached == 0 {
+		msgs = append(msgs, schema.UserMessage(injectMediaPathsPrompt(cur, mediaPaths)))
+		return msgs, nil
+	}
+	msgs = append(msgs, userMsg)
 	return msgs, nil
+}
+
+func materializeInboundMediaToWorkspace(rtx *engine.RuntimeContext, mediaPaths []string) []string {
+	workspace := strings.TrimSpace(rtx.EffectiveWorkspacePath())
+	if workspace == "" || len(mediaPaths) == 0 {
+		if len(mediaPaths) > 0 {
+			slog.Warn("wfexec.adk_main.inbound_materialize.skip_empty_workspace",
+				"agent_type", runtimeAgentType(rtx),
+				"correlation_id", strings.TrimSpace(rtx.CorrelationID),
+				"count", len(mediaPaths),
+			)
+		}
+		return mediaPaths
+	}
+	inboundDir := filepath.Join(workspace, "inbound")
+	if err := os.MkdirAll(inboundDir, 0o755); err != nil {
+		slog.Warn("wfexec.adk_main.inbound_materialize.mkdir", "dir", inboundDir, "err", err)
+		return mediaPaths
+	}
+	slog.Info("wfexec.adk_main.inbound_materialize.begin",
+		"agent_type", runtimeAgentType(rtx),
+		"correlation_id", strings.TrimSpace(rtx.CorrelationID),
+		"workspace", workspace,
+		"inbound_dir", inboundDir,
+		"count", len(mediaPaths),
+	)
+	out := make([]string, 0, len(mediaPaths))
+	for i, loc := range mediaPaths {
+		dst, ok := materializeOneInboundMedia(loc, inboundDir, i)
+		if ok {
+			slog.Info("wfexec.adk_main.inbound_materialize.copied",
+				"src", loc,
+				"dst", dst,
+			)
+			out = append(out, dst)
+			continue
+		}
+		slog.Info("wfexec.adk_main.inbound_materialize.keep_original",
+			"src", loc,
+		)
+		out = append(out, loc)
+	}
+	return out
+}
+
+func materializeOneInboundMedia(src, inboundDir string, idx int) (string, bool) {
+	src = strings.TrimSpace(src)
+	if src == "" {
+		return "", false
+	}
+	low := strings.ToLower(src)
+	if strings.HasPrefix(low, "http://") || strings.HasPrefix(low, "https://") {
+		return "", false
+	}
+	info, err := os.Stat(src)
+	if err != nil || info.IsDir() {
+		if err != nil {
+			slog.Warn("wfexec.adk_main.inbound_materialize.stat", "src", src, "err", err)
+		}
+		return "", false
+	}
+	name := filepath.Base(src)
+	if name == "" || name == "." || name == string(filepath.Separator) {
+		name = fmt.Sprintf("attachment-%d", idx+1)
+	}
+	dst := nextAvailableInboundPath(filepath.Join(inboundDir, name))
+	if err := copyFile(src, dst); err != nil {
+		slog.Warn("wfexec.adk_main.inbound_materialize.copy", "src", src, "dst", dst, "err", err)
+		return "", false
+	}
+	return dst, true
+}
+
+func nextAvailableInboundPath(path string) string {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return path
+	}
+	ext := filepath.Ext(path)
+	base := strings.TrimSuffix(path, ext)
+	for i := 1; ; i++ {
+		cand := fmt.Sprintf("%s-%d%s", base, i, ext)
+		if _, err := os.Stat(cand); os.IsNotExist(err) {
+			return cand
+		}
+	}
+}
+
+func copyFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	_, copyErr := io.Copy(out, in)
+	closeErr := out.Close()
+	if copyErr != nil {
+		_ = os.Remove(dst)
+		return copyErr
+	}
+	return closeErr
+}
+
+func normalizeMediaPaths(paths []string) []string {
+	if len(paths) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(paths))
+	for _, p := range paths {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		out = append(out, p)
+	}
+	return out
+}
+
+func injectMediaPathsPrompt(userPrompt string, mediaPaths []string) string {
+	if len(mediaPaths) == 0 {
+		return userPrompt
+	}
+	var b strings.Builder
+	b.WriteString(strings.TrimSpace(userPrompt))
+	b.WriteString("\n\n## Context attachment\n\n")
+	for _, p := range mediaPaths {
+		b.WriteString("- ")
+		b.WriteString(p)
+		b.WriteByte('\n')
+	}
+	return strings.TrimSpace(b.String())
+}
+
+func runtimeModelSupportsImageInput(rtx *engine.RuntimeContext) bool {
+	prof, err := runtimeModelProfile(rtx)
+	if err != nil {
+		return false
+	}
+	return modelSupportsImageInput(prof)
+}
+
+func modelSupportsImageInput(prof config.ModelProfile) bool {
+	provider := strings.ToLower(strings.TrimSpace(prof.Provider))
+	model := strings.ToLower(strings.TrimSpace(prof.DefaultModel))
+	switch provider {
+	case "gemini", "claude":
+		return true
+	case "openai", "openai_compatible", "moonshot", "openrouter":
+		return strings.Contains(model, "gpt-4o") ||
+			strings.Contains(model, "gpt-4.1") ||
+			strings.Contains(model, "gpt-5") ||
+			strings.Contains(model, "claude-3") ||
+			strings.Contains(model, "claude-4") ||
+			strings.Contains(model, "gemini") ||
+			strings.Contains(model, "vision") ||
+			strings.Contains(model, "vl")
+	case "qwen", "deepseek", "ark":
+		return strings.Contains(model, "vision") || strings.Contains(model, "vl")
+	default:
+		return strings.Contains(model, "vision") || strings.Contains(model, "vl")
+	}
+}
+
+func buildUserMessageWithInlineImages(userPrompt string, mediaPaths []string) (adk.Message, int) {
+	parts := []schema.MessageInputPart{
+		{
+			Type: schema.ChatMessagePartTypeText,
+			Text: injectMediaPathsPrompt(userPrompt, mediaPaths),
+		},
+	}
+	attached := 0
+	for _, loc := range mediaPaths {
+		if attached >= maxInlineImageCount {
+			break
+		}
+		imgPart, ok, err := imageInputPartFromLocator(loc)
+		if err != nil {
+			slog.Warn("wfexec.adk_main.inline_image.skip", "loc", loc, "err", err)
+			continue
+		}
+		if !ok {
+			continue
+		}
+		parts = append(parts, imgPart)
+		attached++
+	}
+	return &schema.Message{
+		Role:                  schema.User,
+		UserInputMultiContent: parts,
+	}, attached
+}
+
+func imageInputPartFromLocator(loc string) (schema.MessageInputPart, bool, error) {
+	loc = strings.TrimSpace(loc)
+	if loc == "" {
+		return schema.MessageInputPart{}, false, nil
+	}
+	low := strings.ToLower(loc)
+	if strings.HasPrefix(low, "http://") || strings.HasPrefix(low, "https://") {
+		mimeType := imageMIMEByExt(loc)
+		if !strings.HasPrefix(mimeType, "image/") {
+			return schema.MessageInputPart{}, false, nil
+		}
+		url := loc
+		return schema.MessageInputPart{
+			Type: schema.ChatMessagePartTypeImageURL,
+			Image: &schema.MessageInputImage{
+				MessagePartCommon: schema.MessagePartCommon{
+					URL:      &url,
+					MIMEType: mimeType,
+				},
+				Detail: schema.ImageURLDetailAuto,
+			},
+		}, true, nil
+	}
+	mimeType := imageMIMEByExt(loc)
+	if !strings.HasPrefix(mimeType, "image/") {
+		return schema.MessageInputPart{}, false, nil
+	}
+	b, err := os.ReadFile(loc)
+	if err != nil {
+		return schema.MessageInputPart{}, false, err
+	}
+	if len(b) == 0 {
+		return schema.MessageInputPart{}, false, nil
+	}
+	if len(b) > maxInlineImageBytes {
+		return schema.MessageInputPart{}, false, fmt.Errorf("image too large: %d > %d", len(b), maxInlineImageBytes)
+	}
+	encoded := base64.StdEncoding.EncodeToString(b)
+	return schema.MessageInputPart{
+		Type: schema.ChatMessagePartTypeImageURL,
+		Image: &schema.MessageInputImage{
+			MessagePartCommon: schema.MessagePartCommon{
+				Base64Data: &encoded,
+				MIMEType:   mimeType,
+			},
+			Detail: schema.ImageURLDetailAuto,
+		},
+	}, true, nil
+}
+
+func imageMIMEByExt(loc string) string {
+	ext := strings.ToLower(strings.TrimSpace(filepath.Ext(loc)))
+	switch ext {
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".png":
+		return "image/png"
+	case ".webp":
+		return "image/webp"
+	case ".gif":
+		return "image/gif"
+	case ".bmp":
+		return "image/bmp"
+	default:
+		mt := strings.TrimSpace(mime.TypeByExtension(ext))
+		if strings.HasPrefix(mt, "image/") {
+			return mt
+		}
+		return ""
+	}
 }
 
 func recallUserMessageFromPromptData(rtx *engine.RuntimeContext) adk.Message {
@@ -429,6 +744,10 @@ func runtimeAgentType(rtx *engine.RuntimeContext) string {
 		return strings.TrimSpace(rtx.Agent.AgentType)
 	}
 	return strings.TrimSpace(rtx.Turn.AgentID)
+}
+
+func recordSummaryTranscript(rtx *engine.RuntimeContext) bool {
+	return rtx != nil && workflow.TranscriptSummaryMode(rtx.WorkflowMeta)
 }
 
 func logToolActivity(ctx context.Context, rtx *engine.RuntimeContext, msg *schema.Message, seenCalls, seenResults map[string]bool) {
@@ -529,8 +848,13 @@ func handleOnRespond(_ context.Context, in NodeInput, env NodeEnv) (workflow.Wor
 	if strings.TrimSpace(rtx.Assistant) == "" {
 		return workflow.WorkflowNodeResult{}, nil
 	}
+	assistOut := strings.TrimSpace(rtx.Assistant)
+	transcriptBody := assistOut
+	if recordSummaryTranscript(rtx) {
+		transcriptBody = fmt.Sprintf("[%s] completed · reply_len=%d", runtimeAgentType(rtx), len(assistOut))
+	}
 	if err := session.AppendTranscriptTurn(rtx.EffectiveSessionRoot(), runtimeAgentType(rtx), session.TranscriptTurn{
-		Ts: time.Now().UTC(), Role: "assistant", Content: rtx.Assistant,
+		Ts: time.Now().UTC(), Role: "assistant", Content: transcriptBody,
 	}); err != nil {
 		return workflow.WorkflowNodeResult{}, err
 	}
@@ -544,70 +868,12 @@ func handleOnRespond(_ context.Context, in NodeInput, env NodeEnv) (workflow.Wor
 			return workflow.WorkflowNodeResult{}, err
 		}
 	}
-	if rtx.DelegationDepth == 0 {
-		c := rtx.GoCtx
-		if c == nil {
-			c = context.Background()
-		}
-		if err := extractStructuredMemoryFromMainTurn(rtx); err != nil {
-			slog.WarnContext(c, "wfexec.structuredmem.extract_failed",
-				"agent_type", runtimeAgentType(rtx),
-				"correlation_id", strings.TrimSpace(rtx.CorrelationID),
-				"err", err,
-			)
-		}
-	}
 	rtx.EmitNodeOutput(map[string]any{
 		"use":              "on_respond",
 		"assistant_text":   rtx.Assistant,
 		"transcript_flush": true,
 	})
 	return workflow.WorkflowNodeResult{Text: strings.TrimSpace(rtx.Assistant)}, nil
-}
-
-func extractStructuredMemoryFromMainTurn(rtx *engine.RuntimeContext) error {
-	if rtx == nil {
-		return nil
-	}
-	c := rtx.GoCtx
-	if c == nil {
-		c = context.Background()
-	}
-	assistant := strings.TrimSpace(rtx.Assistant)
-	user := strings.TrimSpace(rtx.EffectiveUserPrompt())
-	if user == "" || assistant == "" {
-		return nil
-	}
-	prof, err := runtimeModelProfile(rtx)
-	if err != nil {
-		return err
-	}
-	if strings.TrimSpace(prof.ID) == "" && strings.TrimSpace(prof.Provider) == "" {
-		return nil
-	}
-	dialog := ""
-	corr := strings.TrimSpace(rtx.CorrelationID)
-	sr := strings.TrimSpace(rtx.EffectiveSessionRoot())
-	at := runtimeAgentType(rtx)
-	if corr != "" && sr != "" && at != "" {
-		p := session.TurnRunJournalPath(sr, at, corr)
-		if b, err := os.ReadFile(p); err == nil && strings.TrimSpace(string(b)) != "" {
-			dialog = string(b)
-		}
-	}
-	if strings.TrimSpace(dialog) == "" {
-		dialog = "User: " + user + "\nAssistant: " + assistant
-	}
-	agentID := runtimeAgentType(rtx)
-	return structuredmem.AppendExtractJournal(
-		c,
-		rtx.EffectiveInstructionRoot(),
-		dialog,
-		prof,
-		rtx.EffectiveSessionSegment(),
-		agentID,
-		time.Now().UTC(),
-	)
 }
 
 func runtimeModelProfile(rtx *engine.RuntimeContext) (config.ModelProfile, error) {

@@ -18,8 +18,12 @@ const (
 	maxAutoLines     = 8
 )
 
-// SyncMemoryMDFromExtract promotes selected high-confidence profile memories to MEMORY.md.
-// This keeps durable user-facing preferences (explicit naming/calling preferences) in the always-injected core memory file.
+// memoryMDPromoteMinConfidence is the minimum model-reported confidence for syncing a profile row into MEMORY.md.
+// Extract already applies MinConfidence (default 0.7); this threshold is slightly higher to keep the injected block small.
+const memoryMDPromoteMinConfidence = 0.80
+
+// SyncMemoryMDFromExtract appends high-confidence profile memories from the extract result into MEMORY.md.
+// Promotion uses only namespace + confidence from the model — no keyword heuristics.
 func SyncMemoryMDFromExtract(instructionRoot string, result *lzmem.ExtractResult) error {
 	root := strings.TrimSpace(instructionRoot)
 	if root == "" || result == nil || len(result.Memories) == 0 {
@@ -39,7 +43,6 @@ func SyncMemoryMDFromExtract(instructionRoot string, result *lzmem.ExtractResult
 	if len(merged) == 0 {
 		return nil
 	}
-	// Keep latest promoted memories while honoring MEMORY.md hard byte cap.
 	candidate := renderWithAutoSection(existing, merged)
 	for len([]byte(candidate)) > memcore.MEMORYMDMaxBytes && len(merged) > 0 {
 		merged = merged[:len(merged)-1]
@@ -67,15 +70,12 @@ func promotedMemoryLines(result *lzmem.ExtractResult) []string {
 		if !shouldPromoteToMemoryMD(m) {
 			continue
 		}
-		text := strings.TrimSpace(userFacingPreferencePromotionText(m))
+		text := strings.TrimSpace(m.Summary)
 		if text == "" {
-			text = strings.TrimSpace(m.Summary)
-			if text == "" {
-				text = strings.TrimSpace(m.Title)
-			}
-			if text == "" {
-				text = strings.TrimSpace(m.Content)
-			}
+			text = strings.TrimSpace(m.Title)
+		}
+		if text == "" {
+			text = strings.TrimSpace(m.Content)
 		}
 		text = normalizeInlineText(text)
 		if text == "" {
@@ -95,16 +95,7 @@ func shouldPromoteToMemoryMD(m lzmem.ExtractedMemory) bool {
 	if !strings.EqualFold(strings.TrimSpace(string(m.Namespace)), string(lzmem.NamespaceProfile)) {
 		return false
 	}
-	if m.Confidence < 0.80 {
-		return false
-	}
-	if looksLikeAssistantSelfIdentification(m) {
-		return false
-	}
-	if strings.TrimSpace(userFacingPreferencePromotionText(m)) != "" {
-		return true
-	}
-	return false
+	return m.Confidence >= memoryMDPromoteMinConfidence
 }
 
 func normalizeInlineText(s string) string {

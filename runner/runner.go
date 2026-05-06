@@ -47,6 +47,8 @@ type Params struct {
 
 	// InboundClientID is set for multi-channel serve turns so scheduled jobs reply on the same client.
 	InboundClientID string
+	// InboundMediaPaths mirrors clawbridge InboundMessage.MediaPaths for this turn.
+	InboundMediaPaths []string
 	// InboundMeta is clawbridge inbound Metadata (serve); used to snapshot reply keys into cron jobs (e.g. Weixin context_token).
 	InboundMeta map[string]string
 	// RequiredOutboundMetadataKeysForSend resolves driver-specific Metadata keys to persist (see clawbridge Bridge.RequiredOutboundMetadataKeysForSend); optional.
@@ -269,6 +271,7 @@ func ExecuteTurn(p Params) error {
 			DelegationDepth:      0,
 			SessionRoot:          sessionRoot,
 			SessionSegment:       sessWire,
+			InboundMediaPaths:    append([]string(nil), p.InboundMediaPaths...),
 			Agent:                ag,
 			Bundle:               bundle,
 			UserPrompt:           prompt,

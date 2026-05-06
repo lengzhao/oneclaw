@@ -2,7 +2,6 @@ package wfexec
 
 import (
 	"log/slog"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -10,22 +9,11 @@ import (
 	"github.com/lengzhao/oneclaw/session"
 )
 
-// turnJournalKey names runs/<agent>/<key>.jsonl: host turns use correlation_id; nested workflows use correlation_id__<sub_session_leaf>.
 func turnJournalKey(rtx *engine.RuntimeContext) string {
 	if rtx == nil {
 		return ""
 	}
-	corr := strings.TrimSpace(rtx.CorrelationID)
-	if corr == "" {
-		return ""
-	}
-	if rtx.DelegationDepth > 0 {
-		base := filepath.Base(strings.TrimSpace(rtx.SessionRoot))
-		if base != "" && base != "." && base != "/" {
-			return corr + "__" + base
-		}
-	}
-	return corr
+	return session.TurnJournalKey(rtx.CorrelationID, rtx.DelegationDepth, rtx.SessionRoot)
 }
 
 func appendRunJournalEntry(rtx *engine.RuntimeContext, phase string, detail map[string]any) {

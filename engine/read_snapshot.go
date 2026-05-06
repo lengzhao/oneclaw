@@ -10,6 +10,7 @@ type ReadSnapshot struct {
 	UserPrompt      string
 	SessionRoot     string
 	SessionSegment  string
+	InboundMediaPaths []string
 	ProfileID       string
 	ModelName       string
 	UseMock         bool
@@ -40,6 +41,7 @@ func CaptureReadSnapshot(rtx *RuntimeContext) ReadSnapshot {
 		UserPrompt:      rtx.UserPrompt,
 		SessionRoot:     rtx.SessionRoot,
 		SessionSegment:  rtx.SessionSegment,
+		InboundMediaPaths: append([]string(nil), rtx.InboundMediaPaths...),
 		ProfileID:       rtx.ProfileID,
 		ModelName:       rtx.ModelName,
 		UseMock:         rtx.UseMock,
@@ -84,6 +86,16 @@ func (rtx *RuntimeContext) EffectiveSessionSegment() string {
 		return ""
 	}
 	return rtx.SessionSegment
+}
+
+func (rtx *RuntimeContext) EffectiveInboundMediaPaths() []string {
+	if s, ok := rtx.readOverlay(); ok {
+		return append([]string(nil), s.InboundMediaPaths...)
+	}
+	if rtx == nil || len(rtx.InboundMediaPaths) == 0 {
+		return nil
+	}
+	return append([]string(nil), rtx.InboundMediaPaths...)
 }
 
 func (rtx *RuntimeContext) EffectiveProfileID() string {

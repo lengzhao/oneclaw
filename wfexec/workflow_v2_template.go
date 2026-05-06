@@ -77,10 +77,18 @@ func lookupRef(state *compileState, graphInput map[string]any, ref string) (stri
 		}
 		return "", nil
 	case "runtime":
-		if strings.Join(p[1:], ".") == "run_journal.current_turn_metadata" {
+		switch strings.Join(p[1:], ".") {
+		case "run_journal.current_turn_metadata":
 			return strings.TrimSpace(state.rtx.CorrelationID), nil
+		case "post_turn.ctx":
+			s, err := BuildPostTurnCTXYAML(state.rtx)
+			if err != nil {
+				return "", err
+			}
+			return s, nil
+		default:
+			return "", fmt.Errorf("wfexec: unsupported runtime ref %q", ref)
 		}
-		return "", nil
 	default:
 		return "", fmt.Errorf("wfexec: unknown template root %q", ref)
 	}
