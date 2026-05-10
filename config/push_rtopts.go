@@ -117,6 +117,7 @@ func (r *Resolved) PushRuntime() {
 	s.DisableScheduledTasks = featTrue(f.Features.DisableScheduledTasks)
 	s.DisableSemanticCompact = featTrue(f.Features.DisableSemanticCompact)
 	s.DisableSkills = featTrue(f.Features.DisableSkills)
+	s.DisableAutoSkillGenerator = featTrue(f.Features.DisableAutoSkillGenerator)
 	s.DisableTasks = featTrue(f.Features.DisableTasks)
 
 	if f.Usage.DefaultInputPerMtok > 0 {

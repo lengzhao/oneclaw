@@ -91,6 +91,7 @@ type File struct {
 		DisableScheduledTasks       *bool `yaml:"disable_scheduled_tasks"`
 		DisableSemanticCompact      *bool `yaml:"disable_semantic_compact"`
 		DisableSkills               *bool `yaml:"disable_skills"`
+		DisableAutoSkillGenerator   *bool `yaml:"disable_auto_skill_generator"`
 		DisableTasks                *bool `yaml:"disable_tasks"`
 		// Notify audit JSONL sinks (.oneclaw/audit/...): disable_audit_sinks turns all off; the rest are per-path.
 		DisableAuditSinks           *bool `yaml:"disable_audit_sinks"`
@@ -262,6 +263,7 @@ func mergeFile(dst *File, src File) {
 	mergeBoolPtr(&dst.Features.DisableScheduledTasks, src.Features.DisableScheduledTasks)
 	mergeBoolPtr(&dst.Features.DisableSemanticCompact, src.Features.DisableSemanticCompact)
 	mergeBoolPtr(&dst.Features.DisableSkills, src.Features.DisableSkills)
+	mergeBoolPtr(&dst.Features.DisableAutoSkillGenerator, src.Features.DisableAutoSkillGenerator)
 	mergeBoolPtr(&dst.Features.DisableTasks, src.Features.DisableTasks)
 	mergeBoolPtr(&dst.Features.DisableAuditSinks, src.Features.DisableAuditSinks)
 	mergeBoolPtr(&dst.Features.DisableAuditLLM, src.Features.DisableAuditLLM)

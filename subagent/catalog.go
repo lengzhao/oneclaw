@@ -16,7 +16,8 @@ const maxAgentListingDescRunes = 120
 // RunAgentToolDescriptionBase is the static OpenAI tool description for run_agent (agent list lives in the main system prompt).
 const RunAgentToolDescriptionBase = `Run a named sub-agent with its own short-lived context and tool surface. ` +
 	`Built-in types: general-purpose, explore. ` +
-	`Add markdown definitions under <cwd>/agents (YAML frontmatter: agent_type, description, tools, max_turns, optional model). ` +
+	`Host template adds agents under the data root (e.g. skill-generator). ` +
+	`Add markdown definitions under <instruction-root>/agents (YAML frontmatter: agent_type, description, tools, max_turns, optional model, optional default_skill to preload a skill catalog entry like invoke_skill). ` +
 	`Set inherit_context true to prepend a trimmed copy of the parent message list (still no mutation of the main transcript).`
 
 // Catalog maps agent_type -> definition (user files override builtins with same name).

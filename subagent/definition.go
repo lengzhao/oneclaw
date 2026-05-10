@@ -16,6 +16,8 @@ type Definition struct {
 	MaxTurns    int      `yaml:"max_turns"`
 	// Model, when non-empty after trim, overrides the host default for this agent's nested loop.
 	Model string `yaml:"model"`
+	// DefaultSkill, when set, preloads that skill catalog entry (same body as invoke_skill) into the sub-agent transcript before the task.
+	DefaultSkill string `yaml:"default_skill"`
 	// OmitMemoryInjection: when true, run_agent does not prepend memory user blocks (explore-style).
 	OmitMemoryInjection bool `yaml:"omit_memory_injection"`
 	SystemPrompt        string
@@ -29,6 +31,7 @@ type frontmatterFields struct {
 	Tools               []string `yaml:"tools"`
 	MaxTurns            int      `yaml:"max_turns"`
 	Model               string   `yaml:"model"`
+	DefaultSkill        string   `yaml:"default_skill"`
 	OmitMemoryInjection bool     `yaml:"omit_memory_injection"`
 }
 
@@ -72,6 +75,7 @@ func ParseAgentFile(path string, raw []byte) (Definition, error) {
 		Tools:               fm.Tools,
 		MaxTurns:            fm.MaxTurns,
 		Model:               strings.TrimSpace(fm.Model),
+		DefaultSkill:        strings.TrimSpace(fm.DefaultSkill),
 		OmitMemoryInjection: fm.OmitMemoryInjection,
 		SystemPrompt:        body,
 		SourcePath:          path,

@@ -108,3 +108,50 @@ func formatMaintainToolDetail(entries []loop.ToolTraceEntry) string {
 	}
 	return strings.TrimRight(b.String(), "\n")
 }
+
+// SkillGeneratorAutoTask builds the delegated prompt for run_agent(agent_type=skill-generator) after a heavy turn.
+func SkillGeneratorAutoTask(userPreview, assistantVisible, sessionID, correlationID string, tools []loop.ToolTraceEntry) string {
+	rt := rtopts.Current()
+	maxU := rt.PostTurnUserSnapshotBytes
+	maxA := rt.PostTurnAssistantSnapshotBytes
+	if maxU <= 0 {
+		maxU = 4000
+	}
+	if maxA <= 0 {
+		maxA = 8000
+	}
+	if maxU < 200 {
+		maxU = 200
+	}
+	if maxA < 200 {
+		maxA = 200
+	}
+	u := strings.TrimSpace(userPreview)
+	if len(u) > maxU {
+		u = strings.TrimRight(utf8SafePrefix(u, maxU), "\n") + "\n…"
+	}
+	a := strings.TrimSpace(assistantVisible)
+	if len(a) > maxA {
+		a = strings.TrimRight(utf8SafePrefix(a, maxA), "\n") + "\n…"
+	}
+
+	var b strings.Builder
+	b.WriteString("Automated post-turn delegation: this turn had many tool calls or used invoke_skill.\n\n")
+	b.WriteString("Decide whether to create, update, or merge a reusable Oneclaw skill (SKILL.md under the skills catalog). ")
+	b.WriteString("The skill-creator guidance is preloaded for this sub-agent. ")
+	b.WriteString("If nothing reusable emerged, reply briefly that no skill file changes are needed and avoid write_behavior_policy.\n\n")
+	b.WriteString("session_id: ")
+	b.WriteString(strings.TrimSpace(sessionID))
+	b.WriteString("\ncorrelation_id: ")
+	b.WriteString(strings.TrimSpace(correlationID))
+	b.WriteString("\n\n### User message (preview)\n")
+	b.WriteString(u)
+	b.WriteString("\n\n### Assistant final reply (visible)\n")
+	b.WriteString(a)
+	if td := formatMaintainToolDetail(tools); td != "" {
+		b.WriteString("\n\n### Tool trace (this turn)\n")
+		b.WriteString(td)
+		b.WriteByte('\n')
+	}
+	return b.String()
+}

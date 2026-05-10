@@ -47,6 +47,14 @@ func TestInitWorkspaceWritesConfigAndDirs(t *testing.T) {
 	if _, err := os.Stat(agentPath); err != nil {
 		t.Fatalf("AGENT.md from init template: %v", err)
 	}
+	skillCreator := filepath.Join(home, memory.DotDir, "skills", "skill-creator", "SKILL.md")
+	if _, err := os.Stat(skillCreator); err != nil {
+		t.Fatalf("skills/skill-creator/SKILL.md from init template: %v", err)
+	}
+	genAgent := filepath.Join(home, memory.DotDir, "agents", "skill-generator.md")
+	if _, err := os.Stat(genAgent); err != nil {
+		t.Fatalf("agents/skill-generator.md from init template: %v", err)
+	}
 }
 
 func TestInitWorkspaceMergesMissingKeys(t *testing.T) {

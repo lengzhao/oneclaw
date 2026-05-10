@@ -11,6 +11,7 @@ func DefaultRegistry() *tools.Registry {
 	r.MustRegister(GlobTool{})
 	r.MustRegister(ListDirTool{})
 	r.MustRegister(ExecTool{})
+	r.MustRegister(WriteBehaviorPolicyTool{})
 	r.MustRegister(RunAgentTool{})
 	r.MustRegister(ForkContextTool{})
 	r.MustRegister(InvokeSkillTool{})

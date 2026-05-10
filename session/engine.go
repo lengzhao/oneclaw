@@ -182,8 +182,12 @@ func (e *Engine) SubmitUser(ctx context.Context, in bus.InboundMessage) (err err
 	bundle := prep.bundle
 	system := prep.system
 
+	needSkillGenToolTrace := false
+	if !rtopts.Current().DisableAutoSkillGenerator && !rtopts.Current().DisableSkills && prep.catalog != nil {
+		_, needSkillGenToolTrace = prep.catalog.Get("skill-generator")
+	}
 	var traceSink *loop.ToolTraceSink
-	needToolTrace := (memOK && memory.MemoryExtractEnabled()) || e.hasNotify()
+	needToolTrace := (memOK && memory.MemoryExtractEnabled()) || e.hasNotify() || needSkillGenToolTrace
 	if needToolTrace {
 		traceSink = &loop.ToolTraceSink{}
 	}
@@ -308,6 +312,7 @@ func (e *Engine) SubmitUser(ctx context.Context, in bus.InboundMessage) (err err
 		}
 		e.runPostTurnAndScheduleMaintain(layout, pti)
 	}
+	e.maybeAutoSkillGeneratorAfterTurn(prep, traceSink, preview, strings.TrimSpace(in.MessageID))
 	e.persistRecall()
 	return nil
 }

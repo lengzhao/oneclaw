@@ -17,6 +17,7 @@ import (
 	"github.com/lengzhao/oneclaw/rtopts"
 	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/oneclaw/notify"
+	"github.com/lengzhao/oneclaw/skills"
 	"github.com/lengzhao/oneclaw/toolctx"
 	"github.com/lengzhao/oneclaw/tools"
 	"github.com/openai/openai-go"
@@ -162,6 +163,7 @@ func RunAgent(ctx context.Context, h *Host, parent *toolctx.Context, agentType, 
 	if inheritContext && h.ParentMessages != nil {
 		msgs = append(msgs, trimInheritedParentMessages(*h.ParentMessages, h.maxInherited())...)
 	}
+	appendDefaultSkillUserMessage(&msgs, child, def)
 
 	sys := buildSubagentSystem(h.CWD, def.SystemPrompt)
 	extraJSON := rtopts.Current().ChatCompletionExtraJSON
@@ -289,6 +291,34 @@ func applySidechainMerge(parent *toolctx.Context, kind, agentID, scPath string, 
 	if SidechainMergeToolSuffix() && scPath != "" {
 		*reply = *reply + "\n\n---\n[sidechain] transcript file: " + scPath
 	}
+}
+
+func appendDefaultSkillUserMessage(msgs *[]openai.ChatCompletionMessageParamUnion, child *toolctx.Context, def Definition) {
+	name := strings.TrimSpace(def.DefaultSkill)
+	if name == "" || msgs == nil || child == nil {
+		return
+	}
+	home := strings.TrimSpace(child.HomeDir)
+	if home == "" {
+		var err error
+		home, err = os.UserHomeDir()
+		if err != nil || home == "" {
+			slog.Warn("subagent.default_skill.skip", "skill", name, "reason", "no_home")
+			return
+		}
+	}
+	sk, ok := skills.Lookup(child.CWD, home, name, child.WorkspaceFlat, child.InstructionRoot)
+	if !ok {
+		slog.Warn("subagent.default_skill.not_found", "skill", name, "cwd", child.CWD)
+		return
+	}
+	body, err := sk.PromptBody()
+	if err != nil || strings.TrimSpace(body) == "" {
+		slog.Warn("subagent.default_skill.read_failed", "skill", name, "err", err)
+		return
+	}
+	note := fmt.Sprintf("<system-reminder>Preloaded default skill %q (same text as invoke_skill). Follow it unless the task conflicts.</system-reminder>\n\n%s", name, body)
+	*msgs = append(*msgs, openai.UserMessage(note))
 }
 
 func buildSubagentSystem(cwd, role string) string {

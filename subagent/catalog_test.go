@@ -14,6 +14,7 @@ tools:
   - read_file
 max_turns: 5
 model: " gpt-4o-mini "
+default_skill: " skill-creator "
 ---
 You are a demo.
 `)
@@ -21,7 +22,7 @@ You are a demo.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if d.AgentType != "demo-agent" || d.MaxTurns != 5 || len(d.Tools) != 1 || d.Model != "gpt-4o-mini" {
+	if d.AgentType != "demo-agent" || d.MaxTurns != 5 || len(d.Tools) != 1 || d.Model != "gpt-4o-mini" || d.DefaultSkill != "skill-creator" {
 		t.Fatalf("def: %+v", d)
 	}
 	if d.SystemPrompt != "You are a demo." {

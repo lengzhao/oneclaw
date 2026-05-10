@@ -103,6 +103,7 @@ func baseStubTransport(t *testing.T, _ *openaistub.Server) {
 	t.Cleanup(func() { rtopts.Set(nil) })
 	s := rtopts.DefaultSnapshot()
 	s.ChatTransport = "non_stream"
+	s.DisableAutoSkillGenerator = true
 	rtopts.Set(&s)
 }
 

@@ -43,7 +43,9 @@ type Snapshot struct {
 	CompactSummaryMaxBytes  int
 
 	DisableSkills bool
-	SkillsRecent  string
+	// DisableAutoSkillGenerator skips async run_agent(skill-generator) after heavy turns (≥5 tools or invoke_skill).
+	DisableAutoSkillGenerator bool
+	SkillsRecent              string
 
 	DisableTasks bool
 
