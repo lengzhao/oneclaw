@@ -93,6 +93,7 @@ func runScheduledAgentMemoryMaintain(ctx context.Context, layout Layout, mainCha
 	if m, _ := ResolveMaintenanceModel(mainChatModel, true); strings.TrimSpace(m) != "" {
 		llm.Model = strings.TrimSpace(m)
 	}
+	normalizeExtractLLMTemperature(llm)
 
 	migrateScheduledMaintainState(layout)
 	incrementalStatePath := scheduledMaintainStatePath(layout)

@@ -6,6 +6,37 @@ import (
 	lzmodel "github.com/lengzhao/memory/model"
 )
 
+// modelRequiresExtractTemperatureOne matches OpenAI-compatible models that reject sampling temperature != 1.
+func modelRequiresExtractTemperatureOne(model string) bool {
+	m := strings.TrimSpace(model)
+	if i := strings.LastIndex(m, "/"); i >= 0 {
+		m = m[i+1:]
+	}
+	m = strings.ToLower(m)
+	switch {
+	case strings.HasPrefix(m, "o1"),
+		strings.HasPrefix(m, "o3"),
+		strings.HasPrefix(m, "o4"),
+		strings.HasPrefix(m, "gpt-5"),
+		strings.HasPrefix(m, "kimi"): // Moonshot Kimi (e.g. kimi-k2.5): API allows only temperature 1
+		return true
+	default:
+		return false
+	}
+}
+
+// normalizeExtractLLMTemperature sets Temperature for extraction requests (may run again after the model string changes).
+func normalizeExtractLLMTemperature(cfg *lzmodel.LLMConfig) {
+	if cfg == nil {
+		return
+	}
+	if modelRequiresExtractTemperatureOne(cfg.Model) {
+		cfg.Temperature = 1
+	} else if cfg.Temperature == 0 {
+		cfg.Temperature = 0.2
+	}
+}
+
 func resolveExtractLLM(explicit *lzmodel.LLMConfig, maxOut int64, postTurn bool) *lzmodel.LLMConfig {
 	if explicit == nil || strings.TrimSpace(explicit.APIKey) == "" || strings.TrimSpace(explicit.Model) == "" {
 		return nil
@@ -37,8 +68,6 @@ func resolveExtractLLM(explicit *lzmodel.LLMConfig, maxOut int64, postTurn bool)
 	if c.TimeoutSeconds <= 0 {
 		c.TimeoutSeconds = timeoutSec
 	}
-	if c.Temperature == 0 {
-		c.Temperature = 0.2
-	}
+	normalizeExtractLLMTemperature(&c)
 	return &c
 }
