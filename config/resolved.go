@@ -35,6 +35,27 @@ type Resolved struct {
 	explicitConfig string
 }
 
+// MaintainDailyLocalHour returns the local wall-clock hour [0,23] for the resident process embedded daily
+// RunScheduledMaintain cron (minute 0). If YAML omits maintain.daily_local_hour, defaults to 1 (01:00).
+// enabled is false when daily_local_hour is set to -1 (explicit off).
+func (r *Resolved) MaintainDailyLocalHour() (hour int, enabled bool) {
+	if r == nil {
+		return 1, true
+	}
+	p := r.merged.Maintain.DailyLocalHour
+	if p == nil {
+		return 1, true
+	}
+	h := *p
+	if h < 0 {
+		return 0, false
+	}
+	if h > 23 {
+		h = 23
+	}
+	return h, true
+}
+
 // UserDataRoot is the host data directory (~/.oneclaw or paths.memory_base): sessions, sqlite, and flat host files.
 func (r *Resolved) UserDataRoot() string {
 	if r == nil || r.home == "" {

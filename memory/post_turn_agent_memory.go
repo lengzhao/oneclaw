@@ -111,7 +111,8 @@ func runPostTurnAgentMemoryExtract(ctx context.Context, layout Layout, llm *lzmo
 		return
 	}
 	postTurnSnap := strings.TrimSpace(formatMaintainTurnSnapshot(turn))
-	if len(postTurnSnap) < postTurnMaintenanceMinLogBytes() {
+	skillTrig := PostTurnSkillMaintainTrigger(turn)
+	if len(postTurnSnap) < postTurnMaintenanceMinLogBytes() && !skillTrig {
 		slog.Debug("memory.post_turn_extract.skip", "reason", "turn_snapshot_too_small",
 			"snapshot_bytes", len(postTurnSnap), "min", postTurnMaintenanceMinLogBytes())
 		return
@@ -139,12 +140,13 @@ func runPostTurnAgentMemoryExtract(ctx context.Context, layout Layout, llm *lzmo
 	}
 
 	_ = runAgentMemoryExtract(ctx, layout, llm, agentMemoryExtractParams{
-		kind:              agentMemoryExtractPostTurn,
-		isolateSessionID:  sessionID,
-		dialogText:        dialog,
-		contextMemories:   contextMemories,
-		resolutionContext: resCtx,
-		auditSource:       AuditSourcePostTurnMaintain,
+		kind:                  agentMemoryExtractPostTurn,
+		isolateSessionID:      sessionID,
+		dialogText:            dialog,
+		contextMemories:       contextMemories,
+		resolutionContext:     resCtx,
+		auditSource:           AuditSourcePostTurnMaintain,
+		skillAugmentedExtract: skillTrig,
 	})
 }
 

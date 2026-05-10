@@ -103,6 +103,20 @@ func AgentMemoryDir(cwd, memoryBase, agentType string, scope AgentScope) string 
 	}
 }
 
+// ProjectExtractDailyMarkdownPath returns <projectMemoryDir>/YYYY-MM-DD.md (calendar date "2006-01-02", UTC).
+// Structured extract results are appended here after github.com/lengzhao/memory Extract succeeds.
+func ProjectExtractDailyMarkdownPath(projectMemoryDir, date string) string {
+	date = strings.TrimSpace(date)
+	if len(date) >= 10 {
+		date = date[:10]
+	}
+	if len(date) != 10 {
+		date = "0000-00-00"
+	}
+	name := fmt.Sprintf("%s.md", date)
+	return filepath.Join(projectMemoryDir, name)
+}
+
 // DailyLogPath returns <autoMemoryDir>/logs/YYYY/MM/YYYY-MM-DD.md for the given calendar date string ("2006-01-02").
 // Callers should use the same timezone convention as PostTurn (UTC calendar day; see daily log line timestamps).
 func DailyLogPath(autoMemoryDir, date string) string {

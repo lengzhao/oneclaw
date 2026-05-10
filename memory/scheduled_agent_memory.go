@@ -208,12 +208,13 @@ func runScheduledAgentMemoryExtract(ctx context.Context, layout Layout, llm *lzm
 		dialog = "Project MEMORY.md rules excerpt (avoid extracting duplicates already covered as standing rules):\n```\n" + ex + "\n```\n\n" + dialog
 	}
 	return runAgentMemoryExtract(ctx, layout, llm, agentMemoryExtractParams{
-		kind:               agentMemoryExtractScheduled,
-		isolateSessionID:   ScheduledMaintainIsolationSessionID,
-		dialogText:         dialog,
-		contextMemories:    nil,
-		resolutionContext:  "scheduled batch maintenance",
-		auditSource:        AuditSourceScheduledMaintain,
-		auditExtra:         map[string]any{"pathway": "scheduled"},
+		kind:                  agentMemoryExtractScheduled,
+		isolateSessionID:      ScheduledMaintainIsolationSessionID,
+		dialogText:            dialog,
+		contextMemories:       nil,
+		resolutionContext:     "scheduled batch maintenance",
+		auditSource:           AuditSourceScheduledMaintain,
+		auditExtra:            map[string]any{"pathway": "scheduled"},
+		skillAugmentedExtract: true,
 	})
 }

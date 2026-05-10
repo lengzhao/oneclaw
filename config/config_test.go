@@ -507,3 +507,47 @@ func TestLoad_explicitRelativeUnderUserDotDir(t *testing.T) {
 		t.Fatalf("model: %q", r.ChatModel())
 	}
 }
+
+func TestMaintainDailyLocalHour(t *testing.T) {
+	home := t.TempDir()
+	ud := userConfigDir(home)
+	if err := os.MkdirAll(ud, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	def, err := Load(LoadOptions{Home: home})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h, ok := def.MaintainDailyLocalHour()
+	if !ok || h != 1 {
+		t.Fatalf("default: hour=%d ok=%v", h, ok)
+	}
+	if err := os.WriteFile(filepath.Join(ud, "config.yaml"), []byte(`
+maintain:
+  daily_local_hour: 3
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	r3, err := Load(LoadOptions{Home: home})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h3, ok3 := r3.MaintainDailyLocalHour()
+	if !ok3 || h3 != 3 {
+		t.Fatalf("explicit 3: hour=%d ok=%v", h3, ok3)
+	}
+	if err := os.WriteFile(filepath.Join(ud, "config.yaml"), []byte(`
+maintain:
+  daily_local_hour: -1
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	off, err := Load(LoadOptions{Home: home})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, okOff := off.MaintainDailyLocalHour()
+	if okOff {
+		t.Fatal("expected disabled for -1")
+	}
+}

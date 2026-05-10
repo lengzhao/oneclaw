@@ -52,7 +52,7 @@
 | 开关 | `features.disable_*` | `true` 为关闭；省略或 `false` 为开启 |
 | 通知审计 | `features.disable_audit_sinks`、`disable_audit_llm`、`disable_audit_orchestration`、`disable_audit_visible` | 默认三路全开；`disable_audit_sinks` 关闭全部；其余按路径关闭。`cmd/oneclaw` 在 IM 下锚到 **InstructionRoot**：共享 workspace 时为 `<UserDataRoot>/audit/...`，隔离 workspace 时为 `<UserDataRoot>/sessions/<id>/audit/...`（见 [notify-sinks-audit-design.md](notify-sinks-audit-design.md)） |
 | 入站多模态 | `features.disable_multimodal_image`、`features.disable_multimodal_audio` | 默认 **不** 禁用：图片注入 Chat Completions `image_url`（data URL），wav/mp3 注入 `input_audio`；任一为 `true` 时对应类型仅保留 read_file 路径提示，不送多模态载荷 |
-| 维护 | `maintain.*` | 定时/远场/回合后参数；`maintain.interval` 非空时主进程内 `maintainloop` 周期唤醒 |
+| 维护 | `maintain.*` | 回合后 / 远场参数；常驻进程默认 **本地每天 `maintain.daily_local_hour`（省略则 01:00）** 跑一次 `RunScheduledMaintain`；`-1` 关闭内置每日任务 |
 | 记忆召回索引 | `memory.recall.*` | 可选：SQLite **FTS-only** 索引召回；语义检索走后续外部 RAG；见 [memory-recall-sqlite-design.md](memory-recall-sqlite-design.md) |
 | 日志 | `log.level`、`log.format`、`log.file` | `log.file`：可选，追加落盘（与 stderr 双写）；相对路径相对 `UserDataRoot()`；可被 `-log-file` 覆盖 |
 | 侧链 | `sidechain_merge` | 留空关闭；`1` / `true` / `tool` / `append` / `user` 等见历史设计文档 |
@@ -62,7 +62,7 @@
 | Skills | `skills.recent_path` | 可选覆盖 skills 最近列表路径 |
 | MCP | `mcp.enabled`、`mcp.servers.<name>.*` | 显式 `mcp.enabled: true` 后连接外部 MCP；`servers` 下每项 `enabled`、`command`+`args`（stdio）或 `url`+`type`（`sse`/`http`），可选 `env`、`env_file`、`headers`；工具以 `mcp_*` 前缀注册 |
 
-**`disable_scheduled_maintenance`**：关闭进程内 `maintainloop` 与 `cmd/maintain` 的 interval 循环；**不**影响 `oneclaw -maintain-once` / `maintain -once`。
+**`disable_scheduled_maintenance`**：关闭常驻进程内置**每日**远场整理定时任务；**不**影响 `oneclaw -maintain-once`。
 
 ### 上下文预算（`budget.*`，UTF-8 字节）
 
@@ -115,12 +115,13 @@
 ### 维护（`maintain.*`）
 
 - **回合后**（`MaybePostTurnMaintain`）：`maintain.post_turn.*`（如 `min_log_bytes`、`memory_preview_bytes`、`timeout_seconds`、`max_tokens` 等）。
+- **常驻每日远场**：`maintain.daily_local_hour` — 本地时区每天该整点（0–23）调用 `RunScheduledMaintain`（与 `-maintain-once` 同级入口）；**省略则默认 1**（凌晨 1 点）；**`-1`** 关闭内置每日任务。受 **`features.disable_scheduled_maintenance`** 约束。
 - **定时 / 远场**（`RunScheduledMaintain`、`oneclaw -maintain-once`）：`maintain.model` / `maintain.scheduled_model`、`maintain.max_tokens`、`maintain.log_days`、`maintain.min_log_bytes`、`maintain.max_log_bytes`、`maintain.scheduled_timeout_seconds`、`maintain.scheduled_max_steps`、`maintain.incremental_overlap`、`maintain.incremental_max_span` 等。
 - **可选文件**（非 YAML）：在 **`Layout.DotOrDataRoot()`**（与 `AGENT.md` 同目录）放置 **`MAINTAIN_POST_TURN.md`** / **`MAINTAIN_SCHEDULED.md`** 可 **整段覆盖** 对应维护 **system** 提示（Go `text/template` + `MaintainPromptData` 字段）；见 [memory-maintain-dual-entry-design.md](memory-maintain-dual-entry-design.md) §3.2。
-- **`opts.Interval > 0`**（`maintainloop`、`cmd/maintain -interval`）：daily log **增量**模式（行内时间戳 + `UserDataRoot()` 下 `scheduled_maintain_state.json` 等，见实现）。
-- **`Interval == 0` 或 `-once`**：按日历天 `log_days` 窗口做体量探测；远场为多步、只读工具，需 `opts.ToolRegistry`（如 `builtin.ScheduledMaintainReadRegistry()`）。
+- **`opts.Interval > 0`**（自定义调度传入 `ScheduledMaintainOpts`）：daily log **增量**模式（行内时间戳 + `UserDataRoot()` 下 `scheduled_maintain_state.json` 等，见实现）。
+- **`Interval == nil` / `0` 或 `-once` / 内置每日 cron**：按日历天 `log_days` 窗口做体量探测。
 
-`features.disable_auto_maintenance`：关闭回合后维护。`features.disable_scheduled_maintenance`：关闭后台定时循环（见上）。
+`features.disable_auto_maintenance`：关闭回合后维护。`features.disable_scheduled_maintenance`：关闭常驻**每日**远场任务（见上）。
 
 详见 [memory-maintain-dual-entry-design.md](memory-maintain-dual-entry-design.md)、[embedded-maintain-scheduler-design.md](embedded-maintain-scheduler-design.md)。
 

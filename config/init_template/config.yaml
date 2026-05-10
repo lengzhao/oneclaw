@@ -167,12 +167,14 @@ features:
 # -----------------------------------------------------------------------------
 # 自动维护（将 daily log 蒸馏进 MEMORY.md）
 # -----------------------------------------------------------------------------
-# 代码上分为两入口：回合后 MaybePostTurnMaintain（近场）与定时 RunScheduledMaintain（oneclaw -maintain-once / 外部 cron 等调用）。
-# 回合后：maintain.post_turn.*（见 docs/config.md）。
-# 主进程不再内置定时协程；需要周期远场维护时请自行调度（例如 cron 执行 oneclaw -maintain-once，或循环调用 RunScheduledMaintain）。
+# 代码上分为两入口：回合后 MaybePostTurnMaintain（近场）与定时 RunScheduledMaintain。
+# 常驻 oneclaw：默认每天本地时间 01:00 跑一次远场整理（与 -maintain-once 相同入口）；可用 maintain.daily_local_hour 调整；-1 关闭。
+# features.disable_scheduled_maintenance：关闭上述内置每日任务（不挡 oneclaw -maintain-once）。
 # RunScheduledMaintain 传入 ScheduledMaintainOpts.Interval > 0 时 daily log 为增量（行内时间戳），状态文件在 UserDataRoot 下 scheduled_maintain_state.json。
-# oneclaw -maintain-once：按天 LOG_DAYS 窗口。YAML maintain.interval 可由 config.Resolved.MaintainLoopInterval() 解析供外部脚本使用。
+# oneclaw -maintain-once：按天 LOG_DAYS 窗口。
 maintain:
+  # 本地时间整点（0-23）；省略为凌晨 1 点；-1 关闭内置每日整理
+  # daily_local_hour: 1
   # interval: 8h
   model: ""
   scheduled_model: ""

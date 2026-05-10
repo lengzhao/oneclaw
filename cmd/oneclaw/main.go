@@ -278,6 +278,39 @@ func main() {
 		}
 	}
 
+	if hour, ok := cfg.MaintainDailyLocalHour(); ok && !memory.ScheduledMaintenanceBackgroundDisabled() {
+		schedModel, _ := memory.ResolveMaintenanceModel(mainModel, true)
+		if schedModel == "" {
+			schedModel = mainModel
+		}
+		k, u := cfg.OpenAIMemoryCredentials()
+		dailyExtractLLM := memory.NewScheduledExtractLLM(k, u, schedModel)
+		if dailyExtractLLM == nil {
+			slog.Warn("memory.maintain.daily_disabled", "reason", "no_scheduled_extract_llm")
+		} else {
+			maxMaintainTok := memory.MaintenanceMaxOutputTokens(8192)
+			ur := cfg.UserDataRoot()
+			maintainLay := memory.IMHostMaintainLayout(ur, home)
+			if err := schedule.StartDailyJobAtLocalHour(rootCtx, hour, func() {
+				if memory.ScheduledMaintenanceBackgroundDisabled() {
+					slog.Info("memory.maintain.daily_skip", "reason", "disable_scheduled_maintenance")
+					return
+				}
+				if memory.AutoMemoryDisabled() {
+					slog.Info("memory.maintain.daily_skip", "reason", "disable_auto_memory")
+					return
+				}
+				slog.Info("memory.maintain.daily_run", "local_hour", hour, "data_root", ur)
+				runCtx, cancel := context.WithTimeout(context.Background(), 3*time.Hour)
+				defer cancel()
+				memory.RunScheduledMaintain(runCtx, maintainLay, mainModel, maxMaintainTok, nil, dailyExtractLLM)
+			}); err != nil {
+				slog.Error("schedule.daily_maintain", "err", err)
+				os.Exit(1)
+			}
+		}
+	}
+
 	var inboundInflight sync.WaitGroup
 	go func() {
 		for {

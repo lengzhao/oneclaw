@@ -117,6 +117,9 @@ type File struct {
 
 	Maintain struct {
 		Interval        string `yaml:"interval"`
+		// DailyLocalHour: local-time hour (0-23) for embedded daily RunScheduledMaintain in the resident process.
+		// Omit or nil → default 1 (01:00). Pointer to -1 disables this cron. Requires features.disable_scheduled_maintenance == false.
+		DailyLocalHour *int `yaml:"daily_local_hour"`
 		LogDays         int    `yaml:"log_days"` // calendar-mode window for scheduled maintain; 0 = default 3
 		Model           string `yaml:"model"`
 		ScheduledModel  string `yaml:"scheduled_model"`
@@ -295,6 +298,9 @@ func mergeFile(dst *File, src File) {
 	}
 	if src.Maintain.Interval != "" {
 		dst.Maintain.Interval = src.Maintain.Interval
+	}
+	if src.Maintain.DailyLocalHour != nil {
+		dst.Maintain.DailyLocalHour = src.Maintain.DailyLocalHour
 	}
 	if src.Maintain.LogDays != 0 {
 		dst.Maintain.LogDays = src.Maintain.LogDays

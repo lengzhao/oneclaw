@@ -27,7 +27,7 @@ go run ./cmd/oneclaw
 
 常用 REPL 命令：`/exit` 退出。对话落盘依赖配置中的 transcript 路径及每轮成功结束后的自动保存（见上段）；另存副本请用外部工具复制该文件。
 
-**Memory 维护**：**回合后**由 `MaybePostTurnMaintain`（`features.disable_auto_maintenance`）；**定时**由 **`RunScheduledMaintain`** —— 在 IM 主机路径上将可整理要点写入 **`<UserDataRoot>/memory/YYYY-MM-DD.md`**（默认 **`~/.oneclaw/memory/…`**）；同目录下 **`MEMORY.md`** 仅作**规则**（与 `AGENT.md` 类似，进 prompt），不由维护追加大块 episodic 正文。合并 YAML 里 **`maintain.interval` 非空** 时主进程内 **`maintainloop`** 周期唤醒，**或** **`oneclaw -maintain-once`**。关闭后台定时（不挡单次维护）：`features.disable_scheduled_maintenance`。详见 [`docs/config.md`](docs/config.md)、[`docs/memory-maintain-dual-entry-design.md`](docs/memory-maintain-dual-entry-design.md)。
+**Memory 维护**：**回合后**由 `MaybePostTurnMaintain`（`features.disable_auto_maintenance`）；**远场**由 **`RunScheduledMaintain`** —— IM 主机路径上将要点写入 **`<UserDataRoot>/memory/…`** 与 **`agent_memory.sqlite`**。常驻进程默认 **每天本地凌晨 1 点**自动跑一次（`maintain.daily_local_hour`，`-1` 关闭）；亦可 **`oneclaw -maintain-once`**。关闭内置每日任务：`features.disable_scheduled_maintenance`（不挡 `-maintain-once`）。详见 [`docs/config.md`](docs/config.md)、[`docs/memory-maintain-dual-entry-design.md`](docs/memory-maintain-dual-entry-design.md)。
 
 ```bash
 go run ./cmd/oneclaw -maintain-once
