@@ -18,11 +18,9 @@ import (
 
 	"github.com/lengzhao/oneclaw/config"
 	"github.com/lengzhao/oneclaw/logx"
-	"github.com/lengzhao/oneclaw/maintainloop"
 	"github.com/lengzhao/oneclaw/mcpclient"
 	"github.com/lengzhao/oneclaw/memory"
 	"github.com/lengzhao/oneclaw/schedule"
-	"github.com/lengzhao/oneclaw/sessdb"
 	"github.com/lengzhao/oneclaw/session"
 	"github.com/lengzhao/oneclaw/tools/builtin"
 	"github.com/openai/openai-go"
@@ -30,7 +28,7 @@ import (
 
 func main() {
 	configPath := flag.String("config", "", "path to extra YAML layer (merged after ~/.oneclaw/config.yaml; relative paths are under ~/.oneclaw/)")
-	maintainOnce := flag.Bool("maintain-once", false, "run one scheduled memory distill pass and exit (no channels)")
+	maintainOnce := flag.Bool("maintain-once", false, "run one scheduled memory extract pass (agent_memory.sqlite) and exit (no channels)")
 	initFlag := flag.Bool("init", false, "create ~/.oneclaw from template; merge config keys if config.yaml already exists; if stdin is a TTY, prompt for openai, model, maintain models, sessions.isolate_workspace, clawbridge.clients preset; then exit")
 	exportSession := flag.String("export-session", "", "copy host data from ~/.oneclaw into this directory, then exit (no API key required)")
 	probeMaintainModel := flag.Bool("probe-maintain-model", false, "send a minimal chat request for each configured maintenance model, then exit (needs API key)")
@@ -136,17 +134,24 @@ func main() {
 			)
 			os.Exit(1)
 		}
-		client := openai.NewClient(cfg.OpenAIOptions()...)
 		mainModel := string(openai.ChatModelGPT4o)
 		if m := cfg.ChatModel(); m != "" {
 			mainModel = m
 		}
 		maxTok := memory.MaintenanceMaxOutputTokens(8192)
-		reg := builtin.ScheduledMaintainReadRegistry()
 		ur := cfg.UserDataRoot()
 		slog.Info("memory.maintain.scheduled_pass", "reason", "maintain-once", "data_root", ur)
-		memory.RunScheduledMaintain(context.Background(), memory.IMHostMaintainLayout(ur, home), &client, mainModel, maxTok,
-			&memory.ScheduledMaintainOpts{ToolRegistry: reg})
+		schedModel, _ := memory.ResolveMaintenanceModel(mainModel, true)
+		if schedModel == "" {
+			schedModel = mainModel
+		}
+		k, u := cfg.OpenAIMemoryCredentials()
+		extractLLM := memory.NewScheduledExtractLLM(k, u, schedModel)
+		if extractLLM == nil {
+			slog.Error("maintain-once: cannot build memory extract LLM (need openai.api_key and maintenance model)")
+			os.Exit(1)
+		}
+		memory.RunScheduledMaintain(context.Background(), memory.IMHostMaintainLayout(ur, home), nil, mainModel, maxTok, nil, extractLLM)
 		return
 	}
 
@@ -158,17 +163,6 @@ func main() {
 	}
 
 	llmAudit, orchAudit, visAudit := cfg.NotifyAuditSinkPaths()
-
-	var sessStore *sessdb.Store
-	if p := cfg.SessionsSQLitePath(); p != "" {
-		st, err := sessdb.Open(p)
-		if err != nil {
-			slog.Warn("sessdb.open", "path", p, "err", err)
-		} else {
-			sessStore = st
-			defer func() { _ = sessStore.Close() }()
-		}
-	}
 
 	if !cfg.HasAPIKey() {
 		slog.Error("missing API key: set openai.api_key in config",
@@ -217,11 +211,6 @@ func main() {
 		VisAudit:      visAudit,
 		Bridge:        bridge,
 	}
-	if sessStore != nil {
-		deps.NewRecallPersister = func(h session.SessionHandle) session.RecallPersister {
-			return sessdb.NewRecallBridge(sessStore, h)
-		}
-	}
 	engineFactory := session.MainEngineFactory(deps)
 
 	workers := cfg.SessionWorkerCount()
@@ -239,14 +228,6 @@ func main() {
 		}
 		return workerPool.SubmitUser(ctx, m)
 	}
-
-	maintainloop.Start(rootCtx, maintainloop.Params{
-		Interval:          cfg.EmbeddedScheduledMaintainInterval(),
-		Layout:            memory.IMHostMaintainLayout(cfg.UserDataRoot(), home),
-		Client:            &sharedClient,
-		MainModel:         mainModel,
-		MaxMaintainTokens: 8192,
-	})
 
 	if err := bridge.Start(rootCtx); err != nil {
 		slog.Error("clawbridge.start", "err", err)

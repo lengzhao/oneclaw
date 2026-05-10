@@ -1,8 +1,8 @@
 package memory
 
-// RecallState tracks surfaced recall attachments across turns (path dedupe + byte budget).
+// RecallState tracks surfaced recall attachments across turns (memory item id dedupe + byte budget).
 type RecallState struct {
-	SurfacedPaths map[string]struct{}
+	SurfacedPaths map[string]struct{} // github.com/lengzhao/memory MemoryItem ids
 	SurfacedBytes int
 }
 

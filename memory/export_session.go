@@ -49,7 +49,6 @@ func ExportSessionSnapshot(dataRoot, outDir string) error {
 		"config.yaml",
 		"scheduled_maintain_state.json",
 		"scheduled_jobs.json",
-		"sessions.sqlite",
 	}
 	for _, name := range files {
 		if err := copyFileIfExists(filepath.Join(srcRoot, name), filepath.Join(dstDot, name)); err != nil {

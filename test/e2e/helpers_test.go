@@ -4,6 +4,7 @@ package e2e_test
 
 import (
 	"context"
+	"database/sql"
 	"os"
 	"path/filepath"
 	"strings"
@@ -40,6 +41,12 @@ func newStubEngine(t *testing.T, stub *openaistub.Server, cwd string) *session.E
 	e.MaxSteps = 16
 	e.Client = openai.NewClient(stubOpenAIOptions(stub)...)
 	return e
+}
+
+// stubAttachPostTurnExtractLLM enables github.com/lengzhao/memory turn-end extract against openaistub (enqueue an extra completion).
+func stubAttachPostTurnExtractLLM(e *session.Engine, stub *openaistub.Server) {
+	base := strings.TrimSuffix(stub.BaseURL(), "/")
+	e.PostTurnExtractLLM = memory.NewPostTurnExtractLLM("sk-test-stub", base, "gpt-4o")
 }
 
 // newStubEngineWithRegistry like newStubEngine but custom registry (e.g. empty for unknown-tool test).
@@ -132,6 +139,29 @@ func e2eWaitMinChatRequests(t *testing.T, stub *openaistub.Server, want int, dea
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
+}
+
+// e2eWaitAgentMemorySubstring polls agent_memory.sqlite until a row's content contains needle (turn-end extract runs in a goroutine).
+func e2eWaitAgentMemorySubstring(t *testing.T, sqlitePath, needle string, deadline time.Duration) {
+	t.Helper()
+	dsn := sqlitePath + "?_pragma=busy_timeout(5000)"
+	deadlineAt := time.Now().Add(deadline)
+	for time.Now().Before(deadlineAt) {
+		db, err := sql.Open("sqlite", dsn)
+		if err != nil {
+			time.Sleep(15 * time.Millisecond)
+			continue
+		}
+		db.SetMaxOpenConns(1)
+		var n int
+		qerr := db.QueryRow(`SELECT COUNT(*) FROM memory_items WHERE instr(content, ?) > 0`, needle).Scan(&n)
+		_ = db.Close()
+		if qerr == nil && n >= 1 {
+			return
+		}
+		time.Sleep(15 * time.Millisecond)
+	}
+	t.Fatalf("timed out after %v waiting for agent_memory row containing %q in %s", deadline, needle, sqlitePath)
 }
 
 // e2eWaitForFile polls until path exists and is readable (post-turn maintain runs in a goroutine after the last stub chat body is recorded).

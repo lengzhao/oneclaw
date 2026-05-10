@@ -46,18 +46,6 @@ func MemoryBaseDir(home string) string {
 	return filepath.Join(home, DotDir)
 }
 
-func recallSQLitePath(layout Layout) string {
-	p := strings.TrimSpace(rtopts.Current().MemoryRecallSQLitePath)
-	base := layout.MemoryBase
-	if p == "" {
-		return filepath.Join(base, "memory", "recall_index.sqlite")
-	}
-	if filepath.IsAbs(p) {
-		return filepath.Clean(p)
-	}
-	return filepath.Join(base, p)
-}
-
 // AutoMemoryDir is the per-project auto memory directory (<base>/projects/<slug>/memory).
 func AutoMemoryDir(cwd, memoryBase string) string {
 	slug := projectSlug(cwd)
@@ -188,15 +176,6 @@ func (l Layout) DotOrDataRoot() string {
 	return filepath.Clean(l.CWD)
 }
 
-// EpisodeDailyPath returns the episodic digest markdown path for the given calendar day (YYYY-MM-DD prefix).
-func (l Layout) EpisodeDailyPath(dateYYYYMMDD string) string {
-	dateYYYYMMDD = strings.TrimSpace(dateYYYYMMDD)
-	if len(dateYYYYMMDD) >= 10 {
-		dateYYYYMMDD = dateYYYYMMDD[:10]
-	}
-	return filepath.Join(l.Project, dateYYYYMMDD+".md")
-}
-
 // DefaultLayout builds standard paths for cwd and home directory.
 func DefaultLayout(cwd, home string) Layout {
 	mb := MemoryBaseDir(home)
@@ -281,7 +260,7 @@ func LayoutForIMWorkspace(cwd, home, userDataRoot string, workspaceFlat bool, in
 }
 
 // IMHostMaintainLayout is for cmd/oneclaw IM mode: userDataRoot is config.UserDataRoot() (~/.oneclaw).
-// CWD is <userDataRoot>/workspace; episodic project memory under <userDataRoot>/memory (no nested .oneclaw).
+// CWD is <userDataRoot>/workspace; project memory roots under <userDataRoot>/memory (no nested .oneclaw).
 func IMHostMaintainLayout(userDataRoot, home string) Layout {
 	mb := MemoryBaseDir(home)
 	ur := filepath.Clean(userDataRoot)

@@ -10,22 +10,20 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/oneclaw/memory"
 	"github.com/lengzhao/oneclaw/rtopts"
-	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/oneclaw/test/openaistub"
-	"github.com/lengzhao/oneclaw/tools/builtin"
-	"github.com/openai/openai-go"
 )
 
-// E2E-101 近场维护：user prompt 仅含 Current turn snapshot + MEMORY 摘录，不含多日 daily log / project topic（盘中虽有文件也不注入）。
+// E2E-101 回合后 extract：user 侧为 lengzhao/memory 提取模板，仅含本回合快照 + 上下文；不注入多日 daily log / topic。
 func TestE2E_101_PostTurnMaintainPromptSessionOnly(t *testing.T) {
 	stub := openaistub.New(t)
 	stub.Enqueue(openaistub.CompletionStop("", "main turn e2e101"))
 	date := time.Now().Format("2006-01-02")
 	yesterday := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
-	section := "## Auto-maintained (" + date + ")\n- E2E101_NEW_FACT\n"
-	stub.Enqueue(openaistub.CompletionStop("", section))
+	extractJSON := `{"memories":[{"namespace":"knowledge","title":"e2e101","content":"E2E101_NEW_FACT","summary":"","tags":[],"importance":70,"confidence":0.92,"reasoning":"e2e"}]}`
+	stub.Enqueue(openaistub.CompletionStop("", extractJSON))
 
 	e2eEnvWithMemory(t, stub)
 	s := rtopts.Current()
@@ -59,6 +57,7 @@ func TestE2E_101_PostTurnMaintainPromptSessionOnly(t *testing.T) {
 	}
 
 	e := newStubEngine(t, stub, cwd)
+	stubAttachPostTurnExtractLLM(e, stub)
 	if err := e.SubmitUser(context.Background(), bus.InboundMessage{Content: "E2E101_TODAY_MARKER ping"}); err != nil {
 		t.Fatal(err)
 	}
@@ -73,6 +72,7 @@ func TestE2E_101_PostTurnMaintainPromptSessionOnly(t *testing.T) {
 		t.Fatalf("parse maintain request: %v", err)
 	}
 	for _, sub := range []string{
+		"## Dialog to analyze",
 		"Current turn snapshot",
 		"E2E101_TODAY_MARKER",
 		"main turn e2e101",
@@ -95,20 +95,18 @@ func TestE2E_101_PostTurnMaintainPromptSessionOnly(t *testing.T) {
 		}
 	}
 
-	epPath := filepath.Join(memory.ProjectMemoryDir(cwd), date+".md")
-	raw := e2eWaitForFile(t, epPath, 3*time.Second)
-	if !strings.Contains(string(raw), "E2E101_NEW_FACT") {
-		t.Fatalf("expected new fact in daily digest:\n%s", string(raw))
-	}
+	sqlitePath := filepath.Join(lay.Auto, "agent_memory.sqlite")
+	e2eWaitForFile(t, sqlitePath, 5*time.Second)
+	e2eWaitAgentMemorySubstring(t, sqlitePath, "E2E101_NEW_FACT", 3*time.Second)
 }
 
-// E2E-113 远场维护 RunScheduledMaintain：user 为工具型任务说明（绝对路径），不内嵌 daily log / topic 全文。
+// E2E-113 远场维护 RunScheduledMaintain：lengzhao/memory Extract，user 含多日 log / topic 语料与规则摘要上下文。
 func TestE2E_113_ScheduledMaintainPromptToolOrientedPaths(t *testing.T) {
 	stub := openaistub.New(t)
 	date := time.Now().Format("2006-01-02")
 	yesterday := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
-	section := "## Auto-maintained (" + date + ")\n- E2E103_NEW_FACT\n"
-	stub.Enqueue(openaistub.CompletionStop("", section))
+	extractJSON := `{"memories":[{"namespace":"knowledge","title":"e2e103","content":"E2E103_NEW_FACT","summary":"","tags":[],"importance":70,"confidence":0.92,"reasoning":"e2e"}]}`
+	stub.Enqueue(openaistub.CompletionStop("", extractJSON))
 
 	baseStubTransport(t, stub)
 	s113 := rtopts.Current()
@@ -137,74 +135,58 @@ func TestE2E_113_ScheduledMaintainPromptToolOrientedPaths(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	memDir := filepath.Join(cwd, memory.DotDir, "memory")
-	if err := os.MkdirAll(memDir, 0o755); err != nil {
+	if err := os.MkdirAll(lay.Project, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	topicPath := filepath.Join(memDir, "e2e103_topic.md")
+	topicPath := filepath.Join(lay.Project, "e2e103_topic.md")
 	if err := os.WriteFile(topicPath, []byte("# topic\nE2E103_TOPIC_MARKER body\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	rulesMem := filepath.Join(lay.Project, "MEMORY.md")
+	if err := os.WriteFile(rulesMem, []byte("# MEMORY\nE2E103_RULES_MARKER\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
-	client := openai.NewClient(stubOpenAIOptions(stub)...)
-	memory.RunScheduledMaintain(context.Background(), lay, &client, "gpt-4o", 512,
-		&memory.ScheduledMaintainOpts{ToolRegistry: builtin.ScheduledMaintainReadRegistry()})
+	base := strings.TrimSuffix(stub.BaseURL(), "/")
+	extractLLM := memory.NewScheduledExtractLLM("sk-test-stub", base, "gpt-4o")
+	memory.RunScheduledMaintain(context.Background(), lay, nil, "gpt-4o", 512, nil, extractLLM)
 
 	bodies := stub.ChatRequestBodies()
 	if len(bodies) < 1 {
 		t.Fatalf("want scheduled maintain chat request, got %d", len(bodies))
 	}
-	maintainUser, err := openaistub.ChatRequestUserTextConcat(bodies[0])
+	uMsg, err := openaistub.ChatRequestUserTextConcat(bodies[0])
 	if err != nil {
 		t.Fatalf("parse maintain request: %v", err)
 	}
-	rulesMem := filepath.Join(memDir, "MEMORY.md")
-	epPath := filepath.Join(memory.ProjectMemoryDir(cwd), date+".md")
-	todayLog := filepath.Clean(memory.DailyLogPath(lay.Auto, date))
 	for _, sub := range []string{
-		"far-field",
-		"read_file",
-		"write_behavior_policy",
-		filepath.Clean(lay.Auto),
-		todayLog,
-		filepath.Clean(rulesMem),
-		filepath.Clean(epPath),
-		filepath.Clean(lay.Project),
-	} {
-		if !strings.Contains(maintainUser, sub) {
-			n := min(800, len(maintainUser))
-			t.Fatalf("scheduled prompt missing %q\n---\n%s", sub, maintainUser[:n])
-		}
-	}
-	for _, sub := range []string{
+		"Project MEMORY.md rules excerpt",
+		"E2E103_RULES_MARKER",
+		"Scheduled / far-field",
+		"## Corpus",
 		"### Daily log " + date,
+		"### Daily log " + yesterday,
 		"E2E103_YESTERDAY_MARKER",
 		"E2E103_TODAY_MARKER",
+		"### Topic e2e103_topic.md",
 		"E2E103_TOPIC_MARKER",
 	} {
-		if strings.Contains(maintainUser, sub) {
-			n := min(800, len(maintainUser))
-			t.Fatalf("scheduled user prompt must not embed log/topic body %q\n---\n%s", sub, maintainUser[:n])
+		if !strings.Contains(uMsg, sub) {
+			n := min(800, len(uMsg))
+			t.Fatalf("scheduled extract user prompt missing %q\n---\n%s", sub, uMsg[:n])
 		}
 	}
 
-	raw, err := os.ReadFile(epPath)
-	if err != nil {
-		t.Fatalf("read episodic digest: %v", err)
-	}
-	if !strings.Contains(string(raw), "E2E103_NEW_FACT") {
-		t.Fatalf("expected new fact in daily digest:\n%s", string(raw))
-	}
+	sqlitePath := filepath.Join(lay.Auto, "agent_memory.sqlite")
+	e2eWaitForFile(t, sqlitePath, 5*time.Second)
+	e2eWaitAgentMemorySubstring(t, sqlitePath, "E2E103_NEW_FACT", 3*time.Second)
 }
 
-// E2E-102 维护强去重：规则 MEMORY.md 已有同义 bullet 时，维护输出全被去重则不再写入 episodic 段。
+// E2E-102 回合后 extract 返回空 memories 时不改规则 MEMORY.md。
 func TestE2E_102_MaintainDedupeSkipsAppendWhenNoNewBullets(t *testing.T) {
 	stub := openaistub.New(t)
 	stub.Enqueue(openaistub.CompletionStop("", "main e2e102"))
-	date := time.Now().Format("2006-01-02")
-	dupLine := "- E2E102_DUP_LINE\n"
-	section := "## Auto-maintained (" + date + ")\n" + dupLine
-	stub.Enqueue(openaistub.CompletionStop("", section))
+	stub.Enqueue(openaistub.CompletionStop("", `{"memories":[]}`))
 
 	e2eEnvWithMemory(t, stub)
 	s102 := rtopts.Current()
@@ -230,6 +212,7 @@ func TestE2E_102_MaintainDedupeSkipsAppendWhenNoNewBullets(t *testing.T) {
 	}
 
 	e := newStubEngine(t, stub, cwd)
+	stubAttachPostTurnExtractLLM(e, stub)
 	if err := e.SubmitUser(context.Background(), bus.InboundMessage{Content: "E2E102_USER turn filler text for daily log"}); err != nil {
 		t.Fatal(err)
 	}

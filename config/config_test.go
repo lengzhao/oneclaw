@@ -372,51 +372,6 @@ func TestSessionWorkerCount(t *testing.T) {
 	}
 }
 
-func TestSessionsSQLitePath(t *testing.T) {
-	home := t.TempDir()
-	ur := filepath.Join(home, memory.DotDir)
-	f := File{}
-	r := &Resolved{merged: f, home: home}
-	got := r.SessionsSQLitePath()
-	want := filepath.Join(ur, "sessions.sqlite")
-	if got != want {
-		t.Fatalf("got %q want %q", got, want)
-	}
-	f.Sessions.DisableSQLite = boolPtr(true)
-	r2 := &Resolved{merged: f, home: home}
-	if r2.SessionsSQLitePath() != "" {
-		t.Fatal("expected empty when disabled")
-	}
-	f = File{}
-	f.Sessions.SQLitePath = "custom.db"
-	r3 := &Resolved{merged: f, home: home}
-	if r3.SessionsSQLitePath() != filepath.Join(ur, "custom.db") {
-		t.Fatalf("relative: %q", r3.SessionsSQLitePath())
-	}
-}
-
-func TestPushRuntime_MemoryRecallBackend(t *testing.T) {
-	t.Cleanup(func() { rtopts.Set(nil) })
-	f := File{}
-	f.Memory.Recall.Backend = "sqlite"
-	r := &Resolved{merged: f}
-	r.PushRuntime()
-	if got := rtopts.Current().MemoryRecallBackend; got != "sqlite" {
-		t.Fatalf("MemoryRecallBackend = %q, want sqlite", got)
-	}
-}
-
-func TestPushRuntime_MemoryRecallSQLitePath(t *testing.T) {
-	t.Cleanup(func() { rtopts.Set(nil) })
-	f := File{}
-	f.Memory.Recall.SQLitePath = "memory/custom-recall.sqlite"
-	r := &Resolved{merged: f}
-	r.PushRuntime()
-	if got := rtopts.Current().MemoryRecallSQLitePath; got != "memory/custom-recall.sqlite" {
-		t.Fatalf("MemoryRecallSQLitePath = %q, want %q", got, "memory/custom-recall.sqlite")
-	}
-}
-
 func TestPushRuntime_CompletionExtraJSON(t *testing.T) {
 	t.Cleanup(func() { rtopts.Set(nil) })
 	f := File{}

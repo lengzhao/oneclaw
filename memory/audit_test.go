@@ -128,7 +128,7 @@ func TestPathUnderRoot(t *testing.T) {
 	}
 }
 
-func TestAppendMaintenanceSection_Audits(t *testing.T) {
+func TestAppendMemoryAudit_PostTurnMaintainSource(t *testing.T) {
 	t.Cleanup(func() { rtopts.Set(nil) })
 	s := rtopts.DefaultSnapshot()
 	s.DisableMemoryAudit = false
@@ -138,10 +138,8 @@ func TestAppendMaintenanceSection_Audits(t *testing.T) {
 	t.Setenv("HOME", home)
 	lay := DefaultLayout(cwd, home)
 	memPath := filepath.Join(lay.Project, entrypointName)
-	section := "## Auto-maintained (2099-01-01)\n- test bullet\n"
-	if err := appendMaintenanceSection(lay, memPath, section, AuditSourcePostTurnMaintain); err != nil {
-		t.Fatal(err)
-	}
+	payload := []byte(`{"extraction_id":"test","status":"ok","memories":0}`)
+	AppendMemoryAudit(lay, memPath, AuditSourcePostTurnMaintain, payload)
 	raw, err := os.ReadFile(filepath.Join(cwd, "audit", "memory-write.jsonl"))
 	if err != nil {
 		t.Fatal(err)
@@ -151,7 +149,7 @@ func TestAppendMaintenanceSection_Audits(t *testing.T) {
 	if err := json.Unmarshal([]byte(line), &rec); err != nil {
 		t.Fatal(err)
 	}
-	if rec.Source != AuditSourcePostTurnMaintain {
-		t.Fatalf("got %q", rec.Source)
+	if rec.Source != AuditSourcePostTurnMaintain || rec.Path != memPath || rec.Bytes != len(payload) {
+		t.Fatalf("record: %+v", rec)
 	}
 }

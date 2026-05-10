@@ -42,18 +42,6 @@ func postTurnMaintainTimeout() time.Duration {
 	return rtopts.Current().PostTurnMaintainTimeout
 }
 
-// scheduledMaintainMaxSteps caps model↔tool rounds for far-field scheduled maintenance (read-only tools).
-func scheduledMaintainMaxSteps() int {
-	n := rtopts.Current().ScheduledMaintainMaxSteps
-	if n < 2 {
-		n = 2
-	}
-	if n > 64 {
-		n = 64
-	}
-	return n
-}
-
 func maintenanceMaxTopicFiles() int {
 	n := rtopts.Current().MaintenanceMaxTopicFiles
 	if n < 0 {

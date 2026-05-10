@@ -50,6 +50,15 @@ func (r *Resolved) UserDataRoot() string {
 // HasAPIKey reports whether a non-empty API key is set in merged YAML.
 func (r *Resolved) HasAPIKey() bool { return strings.TrimSpace(r.merged.OpenAI.APIKey) != "" }
 
+// OpenAIMemoryCredentials returns the merged YAML OpenAI API key and base URL for HTTP side clients
+// (e.g. structured turn-end memory extraction) that do not use openai-go.
+func (r *Resolved) OpenAIMemoryCredentials() (apiKey, baseURL string) {
+	if r == nil {
+		return "", ""
+	}
+	return strings.TrimSpace(r.merged.OpenAI.APIKey), strings.TrimSpace(r.merged.OpenAI.BaseURL)
+}
+
 func (r *Resolved) apiKeyResolved() string {
 	return strings.TrimSpace(r.merged.OpenAI.APIKey)
 }
@@ -198,35 +207,6 @@ func (r *Resolved) transcriptDisabled() bool {
 	return boolPtrTrue(r.merged.Features.DisableTranscript)
 }
 
-// SessionsSQLiteDisabled reports sessions.disable_sqlite (default false = SQLite enabled when path resolves).
-func (r *Resolved) SessionsSQLiteDisabled() bool {
-	if r == nil {
-		return true
-	}
-	return boolPtrTrue(r.merged.Sessions.DisableSQLite)
-}
-
-// SessionsSQLitePath returns the SQLite database path for session metadata and recall state.
-// Empty means "do not open SQLite" (when disabled or misconfigured).
-func (r *Resolved) SessionsSQLitePath() string {
-	if r == nil || r.SessionsSQLiteDisabled() {
-		return ""
-	}
-	p := strings.TrimSpace(r.merged.Sessions.SQLitePath)
-	base := r.UserDataRoot()
-	if p == "" {
-		return filepath.Join(base, "sessions.sqlite")
-	}
-	if filepath.IsAbs(p) {
-		return filepath.Clean(p)
-	}
-	abs, err := filepath.Abs(filepath.Join(base, p))
-	if err != nil {
-		return filepath.Join(base, p)
-	}
-	return abs
-}
-
 // SessionTranscriptDir is the session workspace root: <userDataRoot>/sessions/<id>/.
 func (r *Resolved) SessionTranscriptDir(sessionSegment string) string {
 	seg := strings.TrimSpace(sessionSegment)
@@ -295,15 +275,6 @@ func (r *Resolved) MultimodalAudioDisabled() bool {
 
 func boolPtrTrue(p *bool) bool {
 	return p != nil && *p
-}
-
-// EmbeddedScheduledMaintainInterval returns the interval for in-process maintainloop (oneclaw main).
-// It is 0 unless maintain.interval is non-empty in merged YAML.
-func (r *Resolved) EmbeddedScheduledMaintainInterval() time.Duration {
-	if strings.TrimSpace(r.merged.Maintain.Interval) == "" {
-		return 0
-	}
-	return r.MaintainLoopInterval()
 }
 
 // MaintainLoopInterval parses maintain.interval from YAML.

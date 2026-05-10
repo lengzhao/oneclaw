@@ -2,9 +2,9 @@ package memory
 
 import "github.com/lengzhao/oneclaw/rtopts"
 
-// ScheduledMaintenanceBackgroundDisabled is true when scheduled / interval background maintenance
-// must not run (embedded maintainloop, cmd/maintain interval loop). Does not apply to explicit
-// oneclaw -maintain-once or cmd/maintain -once. Config: features.disable_scheduled_maintenance.
+// ScheduledMaintenanceBackgroundDisabled is true when features.disable_scheduled_maintenance is set.
+// oneclaw no longer embeds a maintenance goroutine; external schedulers calling RunScheduledMaintain
+// should respect this flag. Does not apply to explicit oneclaw -maintain-once.
 func ScheduledMaintenanceBackgroundDisabled() bool {
 	return rtopts.Current().DisableScheduledMaintenance
 }

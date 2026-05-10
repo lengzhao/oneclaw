@@ -16,6 +16,7 @@ import (
 	"github.com/lengzhao/clawbridge"
 	"github.com/lengzhao/clawbridge/bus"
 	"github.com/lengzhao/clawbridge/client"
+	lzmodel "github.com/lengzhao/memory/model"
 	"github.com/lengzhao/oneclaw/loop"
 	"github.com/lengzhao/oneclaw/memory"
 	"github.com/lengzhao/oneclaw/notify"
@@ -78,8 +79,11 @@ type Engine struct {
 	WorkingTranscriptMaxMessages int
 	// RecallState tracks memory recall surfacing across turns (phase B).
 	RecallState memory.RecallState
-	// RecallPersister loads/saves RecallState across restarts when set (e.g. sessdb).
+	// RecallPersister loads/saves RecallState across restarts when set.
 	RecallPersister RecallPersister
+	// PostTurnExtractLLM configures github.com/lengzhao/memory extraction after each turn (API key + model).
+	// When nil, turn-end extract falls back to OPENAI_* env if set.
+	PostTurnExtractLLM *lzmodel.LLMConfig
 	// ChatTransport overrides default transport when non-empty (from unified config).
 	ChatTransport string
 	// MCPSystemNote is optional; non-empty injects the MCP section in the main-thread system prompt.
@@ -413,7 +417,7 @@ func (e *Engine) persistRecall() {
 func (e *Engine) runPostTurnAndScheduleMaintain(layout memory.Layout, pti memory.PostTurnInput) {
 	memory.PostTurn(layout, pti)
 	go func(in memory.PostTurnInput) {
-		memory.MaybePostTurnMaintain(context.Background(), layout, &e.Client, e.Model, e.MaxTokens, &in)
+		memory.MaybePostTurnMaintain(context.Background(), layout, e.MaxTokens, &in, e.PostTurnExtractLLM)
 	}(pti)
 }
 

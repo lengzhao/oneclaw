@@ -17,8 +17,9 @@ type TurnBundle struct {
 }
 
 // BuildTurn assembles discovery, system memory indices, and recall for this turn.
+// isolateSessionID must match [session.Engine.SessionID] so recall sees the same isolation scope as extract.
 // recallBudget caps SelectRecall output (bytes); if <= 0, MaxSurfacedRecallBytes is used.
-func BuildTurn(layout Layout, home, userText string, recall *RecallState, recallBudget int) TurnBundle {
+func BuildTurn(layout Layout, home, userText string, recall *RecallState, recallBudget int, isolateSessionID string) TurnBundle {
 	layout.EnsureDirs()
 
 	var sys strings.Builder
@@ -27,7 +28,7 @@ func BuildTurn(layout Layout, home, userText string, recall *RecallState, recall
 	writeDirList(&sys, layout)
 	sys.WriteString("### Memory layout\n\n")
 	sys.WriteString("- **Rules** (`MEMORY.md` at each memory root) are injected below in `<system-reminder>` with AGENT/rules — keep them short.\n")
-	sys.WriteString("- **Episodic** digests and notes are `.md` files in each memory directory (e.g. `memory/YYYY-MM-DD.md` under the host/session root from maintenance); **recall** searches those files but **skips** root **`MEMORY.md`** (rules — already injected above). Hits are surfaced as short excerpts: file path, UTF-8 **byte offset from the start of the file on disk** (so you can read with file tools using that offset), and nearby context (not whole files).\n\n")
+	sys.WriteString("- **Structured recall** queries **`agent_memory.sqlite`** (same DB as automatic extract): matching memories are injected below as short excerpts (id, namespace, title, summary/content snippet). Episodic markdown digests may still exist on disk from older workflows — use read tools when you need full files.\n\n")
 
 	var ctx strings.Builder
 	ctx.WriteString("Codebase and user instructions are shown below. Follow them; they override defaults.\n\n")
@@ -83,7 +84,7 @@ func BuildTurn(layout Layout, home, userText string, recall *RecallState, recall
 	if recallBudget <= 0 {
 		recallBudget = MaxSurfacedRecallBytes
 	}
-	recallBody, nextRecall := SelectRecall(layout, userText, recall, recallBudget)
+	recallBody, nextRecall := SelectRecall(layout, isolateSessionID, userText, recall, recallBudget)
 
 	return TurnBundle{
 		SystemSuffix:  sys.String(),

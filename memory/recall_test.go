@@ -1,196 +1,132 @@
 package memory
 
 import (
-	"os"
-	"path/filepath"
-	"strconv"
+	"context"
 	"strings"
 	"testing"
+
+	lzmem "github.com/lengzhao/memory"
+	lzmodel "github.com/lengzhao/memory/model"
+	lzservice "github.com/lengzhao/memory/service"
 )
 
-func TestTokenizeRecall_hanBigrams(t *testing.T) {
-	terms := tokenizeRecall("用户登录配置")
-	want := []string{"用户", "户登", "登录", "录配", "配置"}
-	if len(terms) != len(want) {
-		t.Fatalf("got %d terms %v, want %d %v", len(terms), terms, len(want), want)
+func TestTruncateRecallDisplay(t *testing.T) {
+	if got := truncateRecallDisplay("hello", 10); got != "hello" {
+		t.Fatalf("short string: %q", got)
 	}
-	for i, w := range want {
-		if terms[i] != w {
-			t.Fatalf("terms[%d]=%q, want %q (full %v)", i, terms[i], w, terms)
-		}
+	long := strings.Repeat("あ", 20)
+	got := truncateRecallDisplay(long, 5)
+	if len([]rune(got)) != 6 { // 5 runes + ellipsis
+		t.Fatalf("want 6 runes, got %q len runes %d", got, len([]rune(got)))
 	}
-}
-
-func TestTokenizeRecall_mixedLatinHan(t *testing.T) {
-	terms := tokenizeRecall("查一下 login 流程问题")
-	seen := make(map[string]struct{})
-	for _, x := range terms {
-		seen[x] = struct{}{}
-	}
-	if _, ok := seen["login"]; !ok {
-		t.Fatalf("missing latin token login: %v", terms)
-	}
-	if _, ok := seen["流程"]; !ok {
-		t.Fatalf("missing bigram 流程: %v", terms)
-	}
-	if _, ok := seen["问题"]; !ok {
-		t.Fatalf("missing bigram 问题: %v", terms)
+	if !strings.HasSuffix(got, "…") {
+		t.Fatalf("expected ellipsis suffix: %q", got)
 	}
 }
 
-func TestTokenizeRecall_singleHanDropped(t *testing.T) {
-	terms := tokenizeRecall("查")
-	if len(terms) != 0 {
-		t.Fatalf("expected no terms for single Han, got %v", terms)
-	}
-}
-
-func TestTokenizeRecall_englishCompatible(t *testing.T) {
-	terms := tokenizeRecall("What about zebrarecall_e2e_30?")
-	seen := make(map[string]struct{})
-	for _, x := range terms {
-		seen[x] = struct{}{}
-	}
-	if _, ok := seen["zebrarecall"]; !ok {
-		t.Fatalf("expected zebrarecall token, got %v", terms)
-	}
-	if _, ok := seen["e2e"]; !ok {
-		t.Fatalf("expected e2e token, got %v", terms)
-	}
-}
-
-func TestTokenizeRecall_dedupe(t *testing.T) {
-	terms := tokenizeRecall("用户用户")
-	seen := make(map[string]struct{})
-	for _, x := range terms {
-		if _, ok := seen[x]; ok {
-			t.Fatalf("duplicate term %q in %v", x, terms)
-		}
-		seen[x] = struct{}{}
-	}
-	// 用户用户 → 用户 户用 用户 户用，去重后仅 用户、户用
-	if len(terms) != 2 {
-		t.Fatalf("want 2 unique bigrams, got %d: %v", len(terms), terms)
-	}
-}
-
-func TestTokenizeRecall_termCap(t *testing.T) {
-	var b strings.Builder
-	for i := range maxRecallTermCount + 8 {
-		if i > 0 {
-			b.WriteByte(' ')
-		}
-		b.WriteString("tok")
-		b.WriteByte(byte('a' + (i % 26)))
-		b.WriteByte(byte('a' + ((i / 26) % 26)))
-	}
-	terms := tokenizeRecall(b.String())
-	if len(terms) != maxRecallTermCount {
-		t.Fatalf("want %d terms capped, got %d", maxRecallTermCount, len(terms))
-	}
-}
-
-func TestSelectRecall_skipsRootMemoryMdOnly(t *testing.T) {
+func TestSelectRecall_findsRememberedItem(t *testing.T) {
 	cwd := t.TempDir()
 	home := t.TempDir()
 	lay := DefaultLayout(cwd, home)
-	proj := lay.Project
-	if err := os.MkdirAll(proj, 0o755); err != nil {
+	lay.EnsureDirs()
+	sess := "session-recall-test"
+	ctx := lzservice.WithIsolation(context.Background(), layoutStableTenantID(lay), "default", sess, DefaultRootAgentMemoryAgentID)
+	db, err := getAgentMemoryGorm(lay)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(proj, "MEMORY.md"), []byte("standing rules secretphrase\n"), 0o644); err != nil {
+	svc := lzmem.NewMemoryService(db)
+	marker := "zebrarecall_selectrecall_unique_token_42"
+	if _, err := svc.Remember(ctx, lzservice.RememberRequest{
+		NamespaceType: lzmodel.NamespaceTypeKnowledge,
+		Title:         "recall test",
+		Content:       "body text " + marker + " tail",
+		SourceType:    lzmodel.SourceTypeUser,
+		Confidence:    0.95,
+		Importance:    50,
+	}); err != nil {
 		t.Fatal(err)
 	}
-	episodicPath := filepath.Join(proj, "2026-04-07.md")
-	episodicBytes := []byte("episodic recallmarker_fact here\n")
-	if err := os.WriteFile(episodicPath, episodicBytes, 0o644); err != nil {
-		t.Fatal(err)
+	body, st := SelectRecall(lay, sess, marker, nil, 12_000)
+	if !strings.Contains(body, marker) {
+		t.Fatalf("expected marker in recall:\n%s", body)
 	}
-	wantOff := strings.Index(string(episodicBytes), "recallmarker_fact")
-	if wantOff < 0 {
-		t.Fatal("fixture broken")
+	if !strings.Contains(body, "Attachment: relevant_memories") {
+		t.Fatalf("expected attachment header:\n%s", body)
 	}
-	body, _ := SelectRecall(lay, "recallmarker_fact", nil, 12_000)
-	if !strings.Contains(body, "recallmarker_fact") {
-		t.Fatalf("expected episodic file in recall, got:\n%s", body)
-	}
-	if strings.Contains(body, "secretphrase") {
-		t.Fatalf("root MEMORY.md should not be recalled, got:\n%s", body)
-	}
-	// Snippet-style recall: file byte offset must match on-disk index for read_file-style tools.
-	if !strings.Contains(body, "offset "+strconv.Itoa(wantOff)+" (file bytes):") {
-		t.Fatalf("expected file byte offset %d, got:\n%s", wantOff, body)
+	if st == nil || len(st.SurfacedPaths) == 0 {
+		t.Fatal("expected UpdatedRecall to record surfaced memory ids")
 	}
 }
 
-func TestSelectRecall_snippetOmitsDistantNoise(t *testing.T) {
+func TestSelectRecall_wrongSessionEmpty_forTransient(t *testing.T) {
 	cwd := t.TempDir()
 	home := t.TempDir()
 	lay := DefaultLayout(cwd, home)
-	proj := lay.Project
-	if err := os.MkdirAll(proj, 0o755); err != nil {
+	lay.EnsureDirs()
+	ctx := lzservice.WithIsolation(context.Background(), layoutStableTenantID(lay), "default", "session-a", DefaultRootAgentMemoryAgentID)
+	db, err := getAgentMemoryGorm(lay)
+	if err != nil {
 		t.Fatal(err)
 	}
-	noise := strings.Repeat("Z", 8000)
-	mid := "needle_snippet_recall_unique"
-	fileBytes := []byte(noise + "\n" + mid + "\n" + noise + "\n")
-	if err := os.WriteFile(filepath.Join(proj, "noisy.md"), fileBytes, 0o644); err != nil {
+	svc := lzmem.NewMemoryService(db)
+	marker := "session_isolation_marker_qwerty"
+	// Transient namespace includes session in the DB key; knowledge/profile/action are tenant+user scoped only.
+	if _, err := svc.Remember(ctx, lzservice.RememberRequest{
+		NamespaceType: lzmodel.NamespaceTypeTransient,
+		Title:         "iso",
+		Content:       marker,
+		SourceType:    lzmodel.SourceTypeUser,
+		Confidence:    0.95,
+		Importance:    50,
+	}); err != nil {
 		t.Fatal(err)
 	}
-	wantOff := strings.Index(string(fileBytes), mid)
-	if wantOff < 0 {
-		t.Fatal("fixture broken")
-	}
-	body, _ := SelectRecall(lay, mid, nil, 12_000)
-	if !strings.Contains(body, "offset "+strconv.Itoa(wantOff)+" (file bytes):") {
-		t.Fatalf("expected file offset %d, got:\n%s", wantOff, body)
-	}
-	if !strings.Contains(body, mid) {
-		t.Fatalf("expected needle in recall, got:\n%s", body)
-	}
-	if strings.Count(body, "ZZZZ") > 200 {
-		t.Fatalf("expected small snippet, got long dump (ZZ count):\n%s", body)
+	body, _ := SelectRecall(lay, "session-b", marker, nil, 12_000)
+	if body != "" {
+		t.Fatalf("expected empty recall for wrong session, got:\n%s", body)
 	}
 }
 
-func TestSelectRecall_fileByteOffsetSkipsYAMLFrontmatter(t *testing.T) {
+func TestSelectRecall_secondCallDedupesSurfacedIDs(t *testing.T) {
 	cwd := t.TempDir()
 	home := t.TempDir()
 	lay := DefaultLayout(cwd, home)
-	proj := lay.Project
-	if err := os.MkdirAll(proj, 0o755); err != nil {
+	lay.EnsureDirs()
+	sess := "session-dedupe"
+	ctx := lzservice.WithIsolation(context.Background(), layoutStableTenantID(lay), "default", sess, DefaultRootAgentMemoryAgentID)
+	db, err := getAgentMemoryGorm(lay)
+	if err != nil {
 		t.Fatal(err)
 	}
-	token := "recall_fm_unique_token_xyz"
-	raw := "---\ntitle: t\n---\n\npreamble " + token + " tail\n"
-	path := filepath.Join(proj, "with_fm.md")
-	if err := os.WriteFile(path, []byte(raw), 0o644); err != nil {
+	svc := lzmem.NewMemoryService(db)
+	shared := "overlap_shared_keyword_xyzzy"
+	if _, err := svc.Remember(ctx, lzservice.RememberRequest{
+		NamespaceType: lzmodel.NamespaceTypeKnowledge,
+		Title:         "first",
+		Content:       "aaa " + shared + " one",
+		SourceType:    lzmodel.SourceTypeUser,
+		Confidence:    0.95,
+		Importance:    50,
+	}); err != nil {
 		t.Fatal(err)
 	}
-	wantOff := strings.Index(raw, token)
-	if wantOff < 0 {
-		t.Fatal("fixture broken")
-	}
-	body, _ := SelectRecall(lay, token, nil, 12_000)
-	if !strings.Contains(body, "offset "+strconv.Itoa(wantOff)+" (file bytes):") {
-		t.Fatalf("expected on-disk offset %d past frontmatter, got:\n%s", wantOff, body)
-	}
-}
-
-func TestSelectRecall_filenameMatchLine(t *testing.T) {
-	cwd := t.TempDir()
-	home := t.TempDir()
-	lay := DefaultLayout(cwd, home)
-	proj := lay.Project
-	if err := os.MkdirAll(proj, 0o755); err != nil {
+	if _, err := svc.Remember(ctx, lzservice.RememberRequest{
+		NamespaceType: lzmodel.NamespaceTypeKnowledge,
+		Title:         "second",
+		Content:       "bbb " + shared + " two",
+		SourceType:    lzmodel.SourceTypeUser,
+		Confidence:    0.95,
+		Importance:    50,
+	}); err != nil {
 		t.Fatal(err)
 	}
-	// Latin token "alpha" (>2 chars) appears only in basename.
-	if err := os.WriteFile(filepath.Join(proj, "alpha_beta_notes.md"), []byte("hello world.\n"), 0o644); err != nil {
-		t.Fatal(err)
+	body1, st1 := SelectRecall(lay, sess, shared, nil, 12_000)
+	if !strings.Contains(body1, shared) {
+		t.Fatalf("first recall missing keyword:\n%s", body1)
 	}
-	body, _ := SelectRecall(lay, "alpha", nil, 12_000)
-	if !strings.Contains(body, "filename match:") || !strings.Contains(body, "alpha") {
-		t.Fatalf("expected filename match line, got:\n%s", body)
+	body2, _ := SelectRecall(lay, sess, shared, st1, 12_000)
+	if body2 != "" {
+		t.Fatalf("expected empty second recall after dedupe, got:\n%s", body2)
 	}
 }

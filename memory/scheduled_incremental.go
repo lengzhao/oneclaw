@@ -118,8 +118,8 @@ func saveScheduledLastSuccess(path string, wallUTC time.Time) error {
 	return os.WriteFile(path, append(out, '\n'), 0o644)
 }
 
-func persistScheduledMaintainSuccess(statePath string, p distillConfig) {
-	if p.pathway != pathwayScheduled || statePath == "" {
+func persistScheduledMaintainSuccess(statePath string) {
+	if statePath == "" {
 		return
 	}
 	wall := time.Now().UTC()

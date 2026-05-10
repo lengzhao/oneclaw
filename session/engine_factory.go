@@ -24,7 +24,7 @@ type MainEngineFactoryDeps struct {
 	LLMAudit      bool
 	OrchAudit     bool
 	VisAudit      bool
-	// NewRecallPersister, if non-nil, provides recall persistence for the given handle (e.g. sessdb bridge).
+	// NewRecallPersister, if non-nil, provides recall persistence for the given handle across Engine restarts.
 	NewRecallPersister func(SessionHandle) RecallPersister
 	// Bridge is the clawbridge instance for outbound and inbound status; required for IM runs ([cmd/oneclaw] always sets it).
 	Bridge *clawbridge.Bridge
@@ -57,6 +57,15 @@ func MainEngineFactory(deps MainEngineFactoryDeps) func(SessionHandle) (*Engine,
 		eng.Client = deps.Client
 		eng.CanUseTool = DefaultCanUseToolWithScheduleGate()
 		eng.Model = deps.Model
+		if k, u := deps.Resolved.OpenAIMemoryCredentials(); k != "" {
+			modelStr, _ := memory.ResolveMaintenanceModel(deps.Model, false)
+			if modelStr == "" {
+				modelStr = deps.Resolved.ChatModel()
+			}
+			if modelStr != "" {
+				eng.PostTurnExtractLLM = memory.NewPostTurnExtractLLM(k, u, modelStr)
+			}
+		}
 		eng.MaxSteps = deps.Resolved.MainAgentMaxSteps()
 		eng.MaxTokens = deps.Resolved.MainAgentMaxCompletionTokens()
 		eng.ChatTransport = deps.Resolved.ChatTransport()

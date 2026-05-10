@@ -24,7 +24,7 @@ func TestE2E_20_MemoryMDInAgentMdBlock(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(lay.Project, "MEMORY.md"), []byte("E2E20_IDX_MARKER\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	b := memory.BuildTurn(lay, home, "hi", nil, 0)
+	b := memory.BuildTurn(lay, home, "hi", nil, 0, "default")
 	if !strings.Contains(b.AgentMdBlock, "E2E20_IDX_MARKER") {
 		t.Fatalf("agent md block missing marker:\n%s", b.AgentMdBlock)
 	}
@@ -47,7 +47,7 @@ func TestE2E_21_MemoryMDLineTruncationWarning(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(lay.Project, "MEMORY.md"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	b := memory.BuildTurn(lay, home, "hi", nil, 0)
+	b := memory.BuildTurn(lay, home, "hi", nil, 0, "default")
 	if !strings.Contains(b.AgentMdBlock, "WARNING") || !strings.Contains(b.AgentMdBlock, "lines") {
 		t.Fatalf("expected line-cap warning in:\n%s", b.AgentMdBlock)
 	}
@@ -68,7 +68,7 @@ func TestE2E_22_MemoryMDByteTruncationWarning(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(lay.Project, "MEMORY.md"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	b := memory.BuildTurn(lay, home, "hi", nil, 0)
+	b := memory.BuildTurn(lay, home, "hi", nil, 0, "default")
 	if !strings.Contains(b.AgentMdBlock, "WARNING") {
 		t.Fatalf("expected byte-cap warning in:\n%s", b.AgentMdBlock)
 	}
@@ -84,7 +84,7 @@ func TestE2E_52_AutoMemoryDisabledOmitsAutoBullet(t *testing.T) {
 	cwd := t.TempDir()
 	e2eIsolateUserMemory(t, home)
 	lay := memory.DefaultLayout(cwd, home)
-	b := memory.BuildTurn(lay, home, "hi", nil, 0)
+	b := memory.BuildTurn(lay, home, "hi", nil, 0, "default")
 	if strings.Contains(b.SystemSuffix, "**auto**") {
 		t.Fatalf("auto bullet should be omitted: %s", b.SystemSuffix)
 	}

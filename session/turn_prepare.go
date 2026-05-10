@@ -52,7 +52,7 @@ func (e *Engine) prepareSharedTurn(ctx context.Context, in bus.InboundMessage, p
 	p.memOK = herr == nil && !rtopts.Current().DisableMemory
 	if p.memOK {
 		p.layout = e.MemoryLayout(home)
-		p.bundle = memory.BuildTurn(p.layout, home, preview, &e.RecallState, p.bg.RecallBytes())
+		p.bundle = memory.BuildTurn(p.layout, home, preview, &e.RecallState, p.bg.RecallBytes(), e.SessionID)
 		memory.ApplyTurnBudget(&p.bundle, p.bg)
 		if p.bundle.UpdatedRecall != nil {
 			e.RecallState = *p.bundle.UpdatedRecall

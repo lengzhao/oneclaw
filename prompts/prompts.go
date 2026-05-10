@@ -12,11 +12,8 @@ import (
 
 // Template names for [Render] (basename of files under templates/, as registered by ParseFS).
 const (
-	NameMainThreadSystem = "main_thread_system"
-	// NameMaintenanceSystem is legacy; prefer post-turn / scheduled-specific templates.
-	NameMaintenanceSystem          = "maintenance_system"
+	NameMainThreadSystem           = "main_thread_system"
 	NameMaintenanceSystemPostTurn  = "maintenance_system_post_turn"
-	NameMaintenanceSystemScheduled = "maintenance_system_scheduled"
 	NameCompactEnvelope            = "compact_envelope"
 )
 

@@ -66,20 +66,4 @@ func TestRenderMaintenanceData(t *testing.T) {
 	if !strings.Contains(got, "/p") || !strings.Contains(got, "silent memory") || !strings.Contains(got, "post-turn") {
 		t.Fatalf("got %q", got)
 	}
-	got2, err := Render(NameMaintenanceSystemScheduled, d)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(got2, "scheduled") || !strings.Contains(got2, "far-field") {
-		t.Fatalf("scheduled template missing scope: %q", got2)
-	}
-	if !strings.Contains(got2, "dialog_history.json") {
-		t.Fatalf("scheduled template missing session paths: %q", got2)
-	}
-	if !strings.Contains(got2, "SKILL.md") || !strings.Contains(got2, "write_behavior_policy") {
-		t.Fatalf("scheduled template missing skills guidance: %q", got2)
-	}
-	if !strings.Contains(got2, "agent_memory") || !strings.Contains(got2, "agent_type") {
-		t.Fatalf("scheduled template missing agent memory targets: %q", got2)
-	}
 }

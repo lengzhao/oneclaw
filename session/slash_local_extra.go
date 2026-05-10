@@ -97,7 +97,7 @@ func (e *Engine) slashStatus(in bus.InboundMessage) string {
 	if e.RecallState.SurfacedPaths != nil {
 		nPaths = len(e.RecallState.SurfacedPaths)
 	}
-	fmt.Fprintf(&b, "Recall: %d 条已展示路径, 累计约 %d 字节\n", nPaths, e.RecallState.SurfacedBytes)
+		fmt.Fprintf(&b, "Recall: %d 条已展示记忆, 累计约 %d 字节\n", nPaths, e.RecallState.SurfacedBytes)
 	return strings.TrimRight(b.String(), "\n")
 }
 
@@ -158,8 +158,8 @@ func (e *Engine) slashRecall(args string) string {
 	switch a {
 	case "", "help", "h", "?":
 		return strings.TrimSpace(`
-/recall reset — 清空本会话的 recall 展示去重状态（SurfacedPaths / 字节计数），并尝试写回持久化。
-下次对话会重新按规则注入记忆召回。不影响磁盘上的 MEMORY.md 等文件。
+/recall reset — 清空本会话的 recall 展示去重状态（已注入的记忆条目 id / 字节计数），并尝试写回持久化。
+下次对话会重新按规则注入结构化记忆召回。不影响磁盘上的 MEMORY.md 或 agent_memory.sqlite。
 `)
 	case "reset", "clear":
 		e.RecallState = memory.RecallState{SurfacedPaths: make(map[string]struct{})}

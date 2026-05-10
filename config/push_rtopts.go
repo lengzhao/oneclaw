@@ -133,8 +133,6 @@ func (r *Resolved) PushRuntime() {
 		s.CompactSummaryMaxBytes = f.SemanticCompact.SummaryMaxBytes
 	}
 	s.SkillsRecent = strings.TrimSpace(f.Skills.RecentPath)
-	s.MemoryRecallBackend = strings.TrimSpace(f.Memory.Recall.Backend)
-	s.MemoryRecallSQLitePath = strings.TrimSpace(f.Memory.Recall.SQLitePath)
 
 	m := f.Maintain
 	pt := m.PostTurn

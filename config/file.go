@@ -169,17 +169,8 @@ type File struct {
 		RecentPath string `yaml:"recent_path"`
 	} `yaml:"skills"`
 
-	Memory struct {
-		Recall struct {
-			Backend    string `yaml:"backend"`
-			SQLitePath string `yaml:"sqlite_path"`
-		} `yaml:"recall"`
-	} `yaml:"memory"`
-
-	// Sessions: per-chat isolation (IM threads). SQLite stores session index + recall state; transcripts stay as files under sessions/<id>/.
+	// Sessions: per-chat isolation (IM threads). Transcripts stay as files under sessions/<id>/.
 	Sessions struct {
-		DisableSQLite *bool  `yaml:"disable_sqlite"`
-		SQLitePath    string `yaml:"sqlite_path"`
 		// WorkerCount: fixed goroutine shards for cmd/oneclaw (hash session → worker). 0 = default 8.
 		WorkerCount int `yaml:"worker_count"`
 		// IsolateWorkspace: when true, InstructionRoot is <UserDataRoot>/sessions/<id>/ (per-session AGENT/MEMORY/workspace).
@@ -400,21 +391,11 @@ func mergeFile(dst *File, src File) {
 	if src.Skills.RecentPath != "" {
 		dst.Skills.RecentPath = src.Skills.RecentPath
 	}
-	if src.Memory.Recall.Backend != "" {
-		dst.Memory.Recall.Backend = src.Memory.Recall.Backend
-	}
-	if src.Memory.Recall.SQLitePath != "" {
-		dst.Memory.Recall.SQLitePath = src.Memory.Recall.SQLitePath
-	}
 	if src.Clawbridge.Media.Root != "" {
 		dst.Clawbridge.Media.Root = src.Clawbridge.Media.Root
 	}
 	if len(src.Clawbridge.Clients) > 0 {
 		dst.Clawbridge.Clients = append([]cbconfig.ClientConfig(nil), src.Clawbridge.Clients...)
-	}
-	mergeBoolPtr(&dst.Sessions.DisableSQLite, src.Sessions.DisableSQLite)
-	if src.Sessions.SQLitePath != "" {
-		dst.Sessions.SQLitePath = src.Sessions.SQLitePath
 	}
 	if src.Sessions.WorkerCount != 0 {
 		dst.Sessions.WorkerCount = src.Sessions.WorkerCount

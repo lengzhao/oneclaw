@@ -80,12 +80,12 @@ func repoRoot(t *testing.T) string {
 	}
 }
 
-// E2E-96 oneclaw -maintain-once：子进程 + stub，一轮蒸馏写入 UserDataRoot 下 memory/YYYY-MM-DD.md
+// E2E-96 oneclaw -maintain-once：子进程 + stub，一轮 lengzhao/memory Extract 写入 agent_memory.sqlite
 func TestE2E_96_MaintainCLIOnce(t *testing.T) {
 	stub := openaistub.New(t)
 	date := time.Now().Format("2006-01-02")
-	section := "## Auto-maintained (" + date + ")\n- E2E96_CLI_MAINTAIN_MARKER\n"
-	stub.Enqueue(openaistub.CompletionStop("", section))
+	extractJSON := `{"memories":[{"namespace":"knowledge","title":"e2e96","content":"E2E96_CLI_MAINTAIN_MARKER","summary":"","tags":[],"importance":70,"confidence":0.92,"reasoning":"e2e"}]}`
+	stub.Enqueue(openaistub.CompletionStop("", extractJSON))
 
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -111,6 +111,12 @@ func TestE2E_96_MaintainCLIOnce(t *testing.T) {
 
 	ur := memBase
 	lay := memory.IMHostMaintainLayout(ur, home)
+	if err := os.MkdirAll(lay.Project, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(lay.Project, "MEMORY.md"), []byte("# MEMORY\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	logPath := memory.DailyLogPath(lay.Auto, date)
 	if err := os.MkdirAll(filepath.Dir(logPath), 0o755); err != nil {
 		t.Fatal(err)
@@ -128,14 +134,9 @@ func TestE2E_96_MaintainCLIOnce(t *testing.T) {
 		t.Fatalf("oneclaw -maintain-once: %v\n%s", err, out)
 	}
 
-	epPath := lay.EpisodeDailyPath(date)
-	raw, err := os.ReadFile(epPath)
-	if err != nil {
-		t.Fatalf("episodic digest: %v", err)
-	}
-	if !strings.Contains(string(raw), "E2E96_CLI_MAINTAIN_MARKER") {
-		t.Fatalf("expected marker in:\n%s", string(raw))
-	}
+	sqlitePath := filepath.Join(lay.Auto, "agent_memory.sqlite")
+	e2eWaitForFile(t, sqlitePath, 5*time.Second)
+	e2eWaitAgentMemorySubstring(t, sqlitePath, "E2E96_CLI_MAINTAIN_MARKER", 3*time.Second)
 }
 
 // E2E-97 oneclaw -init：子进程写入 $HOME/.oneclaw/config.yaml（无需 API）

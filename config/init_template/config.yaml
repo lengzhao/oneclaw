@@ -64,14 +64,9 @@ paths:
 # -----------------------------------------------------------------------------
 # 多会话（IM 线程隔离）；主进程 cmd/oneclaw 使用 WorkerPool：按 session 分片串行，每轮新建 Engine（见 docs/config.md）。
 # 转写文件：<UserDataRoot>/sessions/<stable_id>/transcript.json 与 working_transcript.json（与下方 paths.transcript 覆盖关系见 docs/config.md）。
-# SQLite：会话元数据 + memory recall 去重状态；路径相对 UserDataRoot。
 # isolate_workspace：true 时每个会话 Engine.CWD 为 sessions/<id>/workspace；false（默认）时 CWD 为 <UserDataRoot>/workspace，多会话共享同一 workspace。
 # -----------------------------------------------------------------------------
 sessions:
-  # true：不打开 SQLite，仅文件（测试或极简环境）
-  disable_sqlite: false
-  # 留空：默认 <UserDataRoot>/sessions.sqlite；可填绝对路径或相对 UserDataRoot 的路径
-  sqlite_path: ""
   # cmd/oneclaw 固定 worker 数（按 session 哈希分片）；0 或未设置则运行时默认 8；不会随会话数无限增加 goroutine
   worker_count: 0
   # false：共享 <UserDataRoot>/workspace；true：每会话 <UserDataRoot>/sessions/<id>/workspace
@@ -172,12 +167,11 @@ features:
 # -----------------------------------------------------------------------------
 # 自动维护（将 daily log 蒸馏进 MEMORY.md）
 # -----------------------------------------------------------------------------
-# 代码上分为两入口：回合后 MaybePostTurnMaintain（近场）与定时 RunScheduledMaintain（oneclaw -maintain-once / 可选进程内 loop）。
+# 代码上分为两入口：回合后 MaybePostTurnMaintain（近场）与定时 RunScheduledMaintain（oneclaw -maintain-once / 外部 cron 等调用）。
 # 回合后：maintain.post_turn.*（见 docs/config.md）。
-# 进程内定时：仅当下面 interval 在 YAML 中非空时 oneclaw 才启动 maintainloop；留空则不启（避免默认多扣 API）。
-# 未写 interval 时仍可用 oneclaw -maintain-once；间隔默认值见 MaintainLoopInterval。
-# interval 模式（进程内 loop）：远场 daily log 为增量（行内时间戳），状态文件在 UserDataRoot 下 scheduled_maintain_state.json（IM 主机布局）。
-# oneclaw -maintain-once：按天 LOG_DAYS 窗口。
+# 主进程不再内置定时协程；需要周期远场维护时请自行调度（例如 cron 执行 oneclaw -maintain-once，或循环调用 RunScheduledMaintain）。
+# RunScheduledMaintain 传入 ScheduledMaintainOpts.Interval > 0 时 daily log 为增量（行内时间戳），状态文件在 UserDataRoot 下 scheduled_maintain_state.json。
+# oneclaw -maintain-once：按天 LOG_DAYS 窗口。YAML maintain.interval 可由 config.Resolved.MaintainLoopInterval() 解析供外部脚本使用。
 maintain:
   # interval: 8h
   model: ""
