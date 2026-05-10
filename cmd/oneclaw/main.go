@@ -26,7 +26,34 @@ import (
 	"github.com/openai/openai-go"
 )
 
+func runOnboard(args []string) {
+	fs := flag.NewFlagSet("onboard", flag.ExitOnError)
+	logLevel := fs.String("log-level", "", "debug|info|warn|error")
+	logFormat := fs.String("log-format", "", "text|json")
+	logFile := fs.String("log-file", "", "append logs to this file (UTF-8) in addition to stderr")
+	if err := fs.Parse(args); err != nil {
+		os.Exit(2)
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		slog.Error("user home", "err", err)
+		os.Exit(1)
+	}
+	userDataRoot := filepath.Join(home, memory.DotDir)
+	logClose := logx.Init(*logLevel, *logFormat, config.ResolveLogPath(userDataRoot, *logFile))
+	defer logClose()
+	if err := config.RunOnboardInteractive(home, os.Stdin, os.Stdout, os.Stderr); err != nil {
+		slog.Error("onboard", "err", err)
+		os.Exit(1)
+	}
+}
+
 func main() {
+	if len(os.Args) >= 2 && os.Args[1] == "onboard" {
+		runOnboard(os.Args[2:])
+		return
+	}
+
 	configPath := flag.String("config", "", "path to extra YAML layer (merged after ~/.oneclaw/config.yaml; relative paths are under ~/.oneclaw/)")
 	maintainOnce := flag.Bool("maintain-once", false, "run one scheduled memory extract pass (agent_memory.sqlite) and exit (no channels)")
 	initFlag := flag.Bool("init", false, "create ~/.oneclaw from template; merge config keys if config.yaml already exists; if stdin is a TTY, prompt for openai, model, maintain models, sessions.isolate_workspace, clawbridge.clients preset; then exit")

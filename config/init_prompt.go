@@ -12,6 +12,125 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// promptLLMAndMaintainSessions prompts openai（api_key/base_url）、model、maintain（model/scheduled_model）、
+// sessions.isolate_workspace and applies to root. Does not touch clawbridge.clients.
+func promptLLMAndMaintainSessions(stdin *os.File, stdout io.Writer, root map[string]any) (changed bool, br *bufio.Reader, err error) {
+	openaiMap := openaiSection(root)
+	curKey, _ := scalarString(openaiMap["api_key"])
+	curBase, _ := scalarString(openaiMap["base_url"])
+	curModel, _ := scalarString(root["model"])
+
+	flushWriter(stdout)
+
+	fmt.Fprintln(stdout)
+	fmt.Fprintln(stdout, "── oneclaw 配置引导（OpenAI 兼容 API，直接回车保留当前值）──")
+
+	fmt.Fprint(stdout, "API Key")
+	if curKey != "" {
+		fmt.Fprint(stdout, " [已配置，回车保留]")
+	}
+	fmt.Fprint(stdout, ": ")
+	flushWriter(stdout)
+	keyBytes, err := term.ReadPassword(int(stdin.Fd()))
+	if err != nil {
+		return false, nil, fmt.Errorf("config.init.prompt: read api_key: %w", err)
+	}
+	fmt.Fprintln(stdout)
+	keyInput := strings.TrimSpace(string(keyBytes))
+
+	br = bufio.NewReader(stdin)
+	fmt.Fprintf(stdout, "Base URL [%s]: ", promptDefault(curBase))
+	baseLine, err := readLine(br)
+	if err != nil {
+		return false, br, fmt.Errorf("config.init.prompt: read base_url: %w", err)
+	}
+	baseInput := strings.TrimSpace(baseLine)
+
+	fmt.Fprintf(stdout, "主模型 model [%s]: ", promptDefault(curModel))
+	modelLine, err := readLine(br)
+	if err != nil {
+		return false, br, fmt.Errorf("config.init.prompt: read model: %w", err)
+	}
+	modelInput := strings.TrimSpace(modelLine)
+
+	maintainMap := maintainSection(root)
+	curMaintModel, _ := scalarString(maintainMap["model"])
+	curSchedModel, _ := scalarString(maintainMap["scheduled_model"])
+
+	fmt.Fprintf(stdout, "维护模型 maintain.model [%s]: ", promptDefault(curMaintModel))
+	maintModelLine, err := readLine(br)
+	if err != nil {
+		return false, br, fmt.Errorf("config.init.prompt: read maintain.model: %w", err)
+	}
+	maintModelInput := strings.TrimSpace(maintModelLine)
+
+	fmt.Fprintf(stdout, "定时维护模型 maintain.scheduled_model [%s]: ", promptDefault(curSchedModel))
+	schedModelLine, err := readLine(br)
+	if err != nil {
+		return false, br, fmt.Errorf("config.init.prompt: read maintain.scheduled_model: %w", err)
+	}
+	schedModelInput := strings.TrimSpace(schedModelLine)
+
+	sessionsMap := sessionsSection(root)
+	curIsolate := false
+	if v, ok := sessionsMap["isolate_workspace"]; ok {
+		if b, ok := yamlBool(v); ok {
+			curIsolate = b
+		}
+	}
+	curIsolateLabel := "关闭（多会话共享同一工作区）"
+	if curIsolate {
+		curIsolateLabel = "开启（每会话独立 sessions/<id>/）"
+	}
+	fmt.Fprintln(stdout)
+	fmt.Fprintf(stdout, "会话工作区隔离 sessions.isolate_workspace？当前: %s\n", curIsolateLabel)
+	fmt.Fprint(stdout, "  输入 y/yes 开启，n/no 关闭，回车保留: ")
+	isolateLine, err := readLine(br)
+	if err != nil {
+		return false, br, fmt.Errorf("config.init.prompt: read isolate_workspace: %w", err)
+	}
+	sessionsChanged := false
+	if newVal, explicit, valid := parseYesNoInput(isolateLine); !valid && strings.TrimSpace(isolateLine) != "" {
+		fmt.Fprintln(stdout, "无效输入，已保留当前设置。")
+	} else if explicit {
+		if newVal != curIsolate {
+			sessionsMap["isolate_workspace"] = newVal
+			sessionsChanged = true
+		}
+	}
+	root["sessions"] = sessionsMap
+
+	outChanged := false
+	if keyInput != "" {
+		openaiMap["api_key"] = keyInput
+		outChanged = true
+	}
+	if baseInput != "" {
+		openaiMap["base_url"] = baseInput
+		outChanged = true
+	}
+	if modelInput != "" {
+		root["model"] = modelInput
+		outChanged = true
+	}
+	root["openai"] = openaiMap
+
+	if maintModelInput != "" {
+		maintainMap["model"] = maintModelInput
+		outChanged = true
+	}
+	if schedModelInput != "" {
+		maintainMap["scheduled_model"] = schedModelInput
+		outChanged = true
+	}
+	root["maintain"] = maintainMap
+
+	if sessionsChanged {
+		outChanged = true
+	}
+	return outChanged, br, nil
+}
+
 // PromptInitIfTerminal interactively fills openai（api_key/base_url）、model、maintain（model/scheduled_model）、
 // sessions.isolate_workspace、clawbridge.clients 预设（noop / webchat 组合及监听地址）when stdin is a TTY.
 // 非终端（CI、管道、子进程）下立即返回且不读 stdin，不改变文件。
@@ -32,127 +151,17 @@ func PromptInitIfTerminal(cfgPath string, stdin *os.File, stdout io.Writer) erro
 		return fmt.Errorf("config.init.prompt: parse %s: %w", cfgPath, err)
 	}
 
-	openaiMap := openaiSection(root)
-	curKey, _ := scalarString(openaiMap["api_key"])
-	curBase, _ := scalarString(openaiMap["base_url"])
-	curModel, _ := scalarString(root["model"])
-
-	flushWriter(stdout)
-
-	fmt.Fprintln(stdout)
-	fmt.Fprintln(stdout, "── oneclaw 配置引导（OpenAI 兼容 API，直接回车保留当前值）──")
-
-	fmt.Fprint(stdout, "API Key")
-	if curKey != "" {
-		fmt.Fprint(stdout, " [已配置，回车保留]")
-	}
-	fmt.Fprint(stdout, ": ")
-	flushWriter(stdout)
-	keyBytes, err := term.ReadPassword(int(stdin.Fd()))
+	llmChanged, br, err := promptLLMAndMaintainSessions(stdin, stdout, root)
 	if err != nil {
-		return fmt.Errorf("config.init.prompt: read api_key: %w", err)
+		return err
 	}
-	fmt.Fprintln(stdout)
-	keyInput := strings.TrimSpace(string(keyBytes))
-
-	br := bufio.NewReader(stdin)
-	fmt.Fprintf(stdout, "Base URL [%s]: ", promptDefault(curBase))
-	baseLine, err := readLine(br)
-	if err != nil {
-		return fmt.Errorf("config.init.prompt: read base_url: %w", err)
-	}
-	baseInput := strings.TrimSpace(baseLine)
-
-	fmt.Fprintf(stdout, "主模型 model [%s]: ", promptDefault(curModel))
-	modelLine, err := readLine(br)
-	if err != nil {
-		return fmt.Errorf("config.init.prompt: read model: %w", err)
-	}
-	modelInput := strings.TrimSpace(modelLine)
-
-	maintainMap := maintainSection(root)
-	curMaintModel, _ := scalarString(maintainMap["model"])
-	curSchedModel, _ := scalarString(maintainMap["scheduled_model"])
-
-	fmt.Fprintf(stdout, "维护模型 maintain.model [%s]: ", promptDefault(curMaintModel))
-	maintModelLine, err := readLine(br)
-	if err != nil {
-		return fmt.Errorf("config.init.prompt: read maintain.model: %w", err)
-	}
-	maintModelInput := strings.TrimSpace(maintModelLine)
-
-	fmt.Fprintf(stdout, "定时维护模型 maintain.scheduled_model [%s]: ", promptDefault(curSchedModel))
-	schedModelLine, err := readLine(br)
-	if err != nil {
-		return fmt.Errorf("config.init.prompt: read maintain.scheduled_model: %w", err)
-	}
-	schedModelInput := strings.TrimSpace(schedModelLine)
-
-	sessionsMap := sessionsSection(root)
-	curIsolate := false
-	if v, ok := sessionsMap["isolate_workspace"]; ok {
-		if b, ok := yamlBool(v); ok {
-			curIsolate = b
-		}
-	}
-	curIsolateLabel := "关闭（多会话共享同一工作区）"
-	if curIsolate {
-		curIsolateLabel = "开启（每会话独立 sessions/<id>/）"
-	}
-	fmt.Fprintln(stdout)
-	fmt.Fprintf(stdout, "会话工作区隔离 sessions.isolate_workspace？当前: %s\n", curIsolateLabel)
-	fmt.Fprint(stdout, "  输入 y/yes 开启，n/no 关闭，回车保留: ")
-	isolateLine, err := readLine(br)
-	if err != nil {
-		return fmt.Errorf("config.init.prompt: read isolate_workspace: %w", err)
-	}
-	sessionsChanged := false
-	if newVal, explicit, valid := parseYesNoInput(isolateLine); !valid && strings.TrimSpace(isolateLine) != "" {
-		fmt.Fprintln(stdout, "无效输入，已保留当前设置。")
-	} else if explicit {
-		if newVal != curIsolate {
-			sessionsMap["isolate_workspace"] = newVal
-			sessionsChanged = true
-		}
-	}
-	root["sessions"] = sessionsMap
 
 	clientsChanged, err := promptClawbridgeClients(br, stdout, root)
 	if err != nil {
 		return err
 	}
 
-	changed := false
-	if keyInput != "" {
-		openaiMap["api_key"] = keyInput
-		changed = true
-	}
-	if baseInput != "" {
-		openaiMap["base_url"] = baseInput
-		changed = true
-	}
-	if modelInput != "" {
-		root["model"] = modelInput
-		changed = true
-	}
-	root["openai"] = openaiMap
-
-	if maintModelInput != "" {
-		maintainMap["model"] = maintModelInput
-		changed = true
-	}
-	if schedModelInput != "" {
-		maintainMap["scheduled_model"] = schedModelInput
-		changed = true
-	}
-	root["maintain"] = maintainMap
-
-	if clientsChanged {
-		changed = true
-	}
-	if sessionsChanged {
-		changed = true
-	}
+	changed := llmChanged || clientsChanged
 
 	if !changed {
 		fmt.Fprintln(stdout, "未修改任何项，保留现有 config.yaml。")
