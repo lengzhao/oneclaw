@@ -157,7 +157,7 @@ func TestLiveLLM_DailyLogExtract(t *testing.T) {
 	}
 
 	layout := memory.DefaultLayout(sessionHome, home)
-	today := time.Now().Format("2006-01-02")
+	today := time.Now().UTC().Format("2006-01-02")
 	logPath := memory.DailyLogPath(layout.Auto, today)
 	b, err := os.ReadFile(logPath)
 	if err != nil {

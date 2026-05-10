@@ -8,7 +8,6 @@ import (
 	"time"
 
 	lzmodel "github.com/lengzhao/memory/model"
-	"github.com/openai/openai-go"
 )
 
 // maintainPipelineMu serializes scheduled extraction writes with turn-end agent memory extraction SQLite writes.
@@ -54,10 +53,9 @@ type ScheduledMaintainOpts struct {
 }
 
 // RunScheduledMaintain runs scheduled / far-field memory extraction via github.com/lengzhao/memory into agent_memory.sqlite.
-// client is ignored (kept for API stability). extractLLM must be non-nil with API key and model (same pattern as post-turn).
+// extractLLM must be non-nil with API key and model (same pattern as post-turn).
 // Does not write episodic digest markdown. Serialized with MaybePostTurnMaintain on maintainPipelineMu.
-func RunScheduledMaintain(ctx context.Context, layout Layout, client *openai.Client, mainChatModel string, maxOutputTokens int64, opts *ScheduledMaintainOpts, extractLLM *lzmodel.LLMConfig) {
-	_ = client
+func RunScheduledMaintain(ctx context.Context, layout Layout, mainChatModel string, maxOutputTokens int64, opts *ScheduledMaintainOpts, extractLLM *lzmodel.LLMConfig) {
 	inc := time.Duration(0)
 	if opts != nil {
 		inc = opts.Interval
@@ -66,13 +64,13 @@ func RunScheduledMaintain(ctx context.Context, layout Layout, client *openai.Cli
 }
 
 // MaybePostTurnMaintain runs github.com/lengzhao/memory/service.Extractor.Extract once for this turn (writes agent_memory.sqlite).
-// Skips when features.disable_auto_maintenance is set, or when [MemoryExtractEnabled] is false (same effective gates as [PostTurn] daily logging).
+// Skips when features.disable_auto_maintenance is set, or when MemoryExtractEnabled() is false.
 // session.Engine calls this from a goroutine after each successful turn so inbound channels are not blocked.
 func MaybePostTurnMaintain(ctx context.Context, layout Layout, maxTokens int64, turn *PostTurnInput, extractLLM *lzmodel.LLMConfig) {
-	if !autoMaintenanceEnabled() || !MemoryExtractEnabled() {
+	if !shouldRunSQLiteExtract() {
 		return
 	}
-	llm := resolvePostTurnExtractLLM(extractLLM, maxTokens)
+	llm := resolveExtractLLM(extractLLM, maxTokens, true)
 	if llm == nil {
 		slog.Debug("memory.post_turn_extract.skip", "reason", "no_llm_config")
 		return
@@ -87,7 +85,7 @@ func runScheduledAgentMemoryMaintain(ctx context.Context, layout Layout, mainCha
 		logScheduledSkip("auto_memory_disabled")
 		return
 	}
-	llm := resolveScheduledExtractLLM(extractLLM, maxOutputTokens)
+	llm := resolveExtractLLM(extractLLM, maxOutputTokens, false)
 	if llm == nil {
 		slog.Debug("memory.scheduled_extract.skip", "reason", "no_llm_config")
 		return
@@ -99,7 +97,7 @@ func runScheduledAgentMemoryMaintain(ctx context.Context, layout Layout, mainCha
 	migrateScheduledMaintainState(layout)
 	incrementalStatePath := scheduledMaintainStatePath(layout)
 
-	dateStr := time.Now().Format("2006-01-02")
+	dateStr := time.Now().UTC().Format("2006-01-02")
 	p := scheduledExtractConfig(incrementalInterval)
 
 	corpus, probeBytes := buildScheduledMaintenanceCorpus(layout, dateStr, p, incrementalStatePath)
@@ -121,7 +119,7 @@ func runScheduledAgentMemoryMaintain(ctx context.Context, layout Layout, mainCha
 	maintainPipelineMu.Lock()
 	defer maintainPipelineMu.Unlock()
 
-	rulesExcerpt := rulesExcerptForScheduledMaintain(layout, 8000)
+	rulesExcerpt := projectMemoryRulesExcerpt(layout, scheduledMaintainRulesExcerptBytes)
 	if err := runScheduledAgentMemoryExtract(ctx, layout, llm, corpus, rulesExcerpt); err != nil {
 		return
 	}

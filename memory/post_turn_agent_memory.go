@@ -4,16 +4,13 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
-	"time"
 
 	lzmodel "github.com/lengzhao/memory/model"
-	lzservice "github.com/lengzhao/memory/service"
 	lzstore "github.com/lengzhao/memory/store"
 	"github.com/lengzhao/oneclaw/rtopts"
 	"gorm.io/gorm"
@@ -68,36 +65,6 @@ func NewPostTurnExtractLLM(apiKey, baseURL, model string) *lzmodel.LLMConfig {
 	return cfg
 }
 
-func resolvePostTurnExtractLLM(explicit *lzmodel.LLMConfig, maxOut int64) *lzmodel.LLMConfig {
-	outTok := maintenanceEffectiveMaxTokens(maxOut, true)
-	maxTok := 4096
-	if outTok > 0 && int(outTok) < maxTok {
-		maxTok = int(outTok)
-	}
-	if maxTok < 512 {
-		maxTok = 512
-	}
-	timeoutSec := int(postTurnMaintainTimeout().Seconds())
-	if timeoutSec <= 0 {
-		timeoutSec = 120
-	}
-
-	if explicit == nil || strings.TrimSpace(explicit.APIKey) == "" || strings.TrimSpace(explicit.Model) == "" {
-		return nil
-	}
-	c := *explicit
-	if c.MaxTokens <= 0 {
-		c.MaxTokens = maxTok
-	}
-	if c.TimeoutSeconds <= 0 {
-		c.TimeoutSeconds = timeoutSec
-	}
-	if c.Temperature == 0 {
-		c.Temperature = 0.2
-	}
-	return &c
-}
-
 func getAgentMemoryGorm(layout Layout) (*gorm.DB, error) {
 	path := filepath.Clean(agentMemorySQLitePath(layout))
 	agentMemDBCache.mu.Lock()
@@ -123,6 +90,18 @@ func getAgentMemoryGorm(layout Layout) (*gorm.DB, error) {
 	return db, nil
 }
 
+// CloseAgentMemoryDBCache closes any cached agent_memory.sqlite GORM connections (e.g. tests swap temp dirs).
+func CloseAgentMemoryDBCache() {
+	agentMemDBCache.mu.Lock()
+	defer agentMemDBCache.mu.Unlock()
+	for _, db := range agentMemDBCache.m {
+		if sqlDB, err := db.DB(); err == nil {
+			_ = sqlDB.Close()
+		}
+	}
+	clear(agentMemDBCache.m)
+}
+
 // runPostTurnAgentMemoryExtract is the post-turn github.com/lengzhao/memory integration: NewExtractor(db).Extract(...)
 // into agent_memory.sqlite (same DB as recall). Caller must hold maintainPipelineMu.
 // MEMORY.md under layout.Project is optional context only for duplicate avoidance.
@@ -138,29 +117,11 @@ func runPostTurnAgentMemoryExtract(ctx context.Context, layout Layout, llm *lzmo
 		return
 	}
 
-	db, err := getAgentMemoryGorm(layout)
-	if err != nil {
-		slog.Warn("memory.post_turn_extract.db_open_failed", "err", err)
-		return
-	}
-
-	timeout := time.Duration(llm.TimeoutSeconds) * time.Second
-	if timeout <= 0 {
-		timeout = 120 * time.Second
-	}
-	runCtx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-
-	rulesPath := filepath.Join(layout.Project, entrypointName)
-	rulesBytes, _ := os.ReadFile(rulesPath)
-	prev := string(rulesBytes)
 	mprev := postTurnMaintenanceMemoryPreviewBytes()
 	if mprev <= 0 {
 		mprev = 8000
 	}
-	if len(prev) > mprev {
-		prev = strings.TrimRight(utf8SafePrefix(prev, mprev), "\n") + "\n…"
-	}
+	prev := projectMemoryRulesExcerpt(layout, mprev)
 	var contextMemories []string
 	if strings.TrimSpace(prev) != "" {
 		contextMemories = append(contextMemories, "Project MEMORY.md rules excerpt (avoid extracting duplicates):\n"+prev)
@@ -177,43 +138,14 @@ func runPostTurnAgentMemoryExtract(ctx context.Context, layout Layout, llm *lzmo
 		resCtx = "correlation_id=" + cid
 	}
 
-	extCtx := lzservice.WithIsolation(runCtx, layoutStableTenantID(layout), "default", sessionID, DefaultRootAgentMemoryAgentID)
-
-	ref := time.Now()
-	extractor := lzservice.NewExtractor(db)
-	req := lzservice.ExtractRequest{
-		DialogText:        dialog,
-		ContextMemories:   contextMemories,
-		MinConfidence:     0.7,
-		DryRun:            false,
-		UseDecisionEngine: false,
-		LLMConfig:         llm,
-		ReferenceTime:     &ref,
-		ResolutionContext: resCtx,
-	}
-
-	result, err := extractor.Extract(extCtx, req)
-	if err != nil {
-		slog.Warn("memory.post_turn_extract.failed", "err", err)
-		return
-	}
-
-	sqlitePath := agentMemorySQLitePath(layout)
-	auditPayload, _ := json.Marshal(map[string]any{
-		"extraction_id": result.ExtractionID,
-		"status":        result.Status,
-		"memories":      len(result.Memories),
-		"tokens":        result.TotalTokens,
+	_ = runAgentMemoryExtract(ctx, layout, llm, agentMemoryExtractParams{
+		kind:              agentMemoryExtractPostTurn,
+		isolateSessionID:  sessionID,
+		dialogText:        dialog,
+		contextMemories:   contextMemories,
+		resolutionContext: resCtx,
+		auditSource:       AuditSourcePostTurnMaintain,
 	})
-	AppendMemoryAudit(layout, sqlitePath, AuditSourcePostTurnMaintain, auditPayload)
-
-	slog.Info("memory.post_turn_extract.done",
-		"path", sqlitePath,
-		"model", llm.Model,
-		"memories", len(result.Memories),
-		"status", result.Status,
-		"tokens", result.TotalTokens,
-	)
 }
 
 // DefaultRootAgentMemoryAgentID matches session.DefaultRootAgentID for isolation rows.

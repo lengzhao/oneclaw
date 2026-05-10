@@ -16,6 +16,16 @@ func ApplyTurnBudget(b *TurnBundle, g budget.Global) {
 	}
 	recallCap := g.RecallBytes()
 	if len(b.RecallBlock) > recallCap {
+		before := len(b.RecallBlock)
 		b.RecallBlock = budget.TruncateUTF8(b.RecallBlock, recallCap)
+		if b.UpdatedRecall != nil {
+			delta := before - len(b.RecallBlock)
+			if delta > 0 {
+				b.UpdatedRecall.SurfacedBytes -= delta
+				if b.UpdatedRecall.SurfacedBytes < 0 {
+					b.UpdatedRecall.SurfacedBytes = 0
+				}
+			}
+		}
 	}
 }

@@ -151,7 +151,7 @@ func main() {
 			slog.Error("maintain-once: cannot build memory extract LLM (need openai.api_key and maintenance model)")
 			os.Exit(1)
 		}
-		memory.RunScheduledMaintain(context.Background(), memory.IMHostMaintainLayout(ur, home), nil, mainModel, maxTok, nil, extractLLM)
+		memory.RunScheduledMaintain(context.Background(), memory.IMHostMaintainLayout(ur, home), mainModel, maxTok, nil, extractLLM)
 		return
 	}
 

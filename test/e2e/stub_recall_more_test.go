@@ -5,31 +5,21 @@ package e2e_test
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/lengzhao/oneclaw/memory"
 	"github.com/lengzhao/clawbridge/bus"
+	lzmodel "github.com/lengzhao/memory/model"
+	"github.com/lengzhao/oneclaw/memory"
 	"github.com/lengzhao/oneclaw/rtopts"
 	"github.com/lengzhao/oneclaw/test/openaistub"
 )
 
-// E2E-32 同一会话内 recall 路径去重：第二轮不再附加已 surface 过的文件
+// E2E-32 同一会话内 recall 去重：第二轮不再附加已 surface 过的记忆 id
 func TestE2E_32_RecallPathDedupSecondTurn(t *testing.T) {
 	home := t.TempDir()
 	cwd := t.TempDir()
 	t.Setenv("HOME", home)
-	memDir := filepath.Join(cwd, memory.DotDir, "memory")
-	if err := os.MkdirAll(memDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	onlyPath := filepath.Join(memDir, "dedup.md")
-	if err := os.WriteFile(onlyPath, []byte("recall_dedup_e2e_32 unique content\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
 	stub := openaistub.New(t)
 	stub.Enqueue(openaistub.CompletionStop("", "t1"))
 	stub.Enqueue(openaistub.CompletionStop("", "t2"))
@@ -39,6 +29,11 @@ func TestE2E_32_RecallPathDedupSecondTurn(t *testing.T) {
 	rtopts.Set(&s)
 	e2eIsolateUserMemory(t, home)
 	e := newStubEngine(t, stub, cwd)
+	lay := memory.DefaultLayout(cwd, home)
+	token := "recall_dedup_e2e_32 unique content"
+	if err := memory.SeedAgentMemoryItem(lay, e.SessionID, lzmodel.NamespaceTypeKnowledge, "dedup", token+"\n"); err != nil {
+		t.Fatal(err)
+	}
 
 	if err := e.SubmitUser(context.Background(), bus.InboundMessage{Content: "recall_dedup_e2e_32 first turn"}); err != nil {
 		t.Fatal(err)
@@ -51,7 +46,7 @@ func TestE2E_32_RecallPathDedupSecondTurn(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(t1, "relevant_memories") || !strings.Contains(t1, onlyPath) {
+	if !strings.Contains(t1, "relevant_memories") || !strings.Contains(t1, token) {
 		t.Fatalf("turn1 missing recall:\n%s", t1)
 	}
 
@@ -66,25 +61,21 @@ func TestE2E_32_RecallPathDedupSecondTurn(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(t2, onlyPath) {
-		t.Fatalf("dedup: second request should not re-surface same path:\n%s", t2)
+	if strings.Contains(t2, "relevant_memories") {
+		t.Fatalf("dedup: second request should not re-attach recall block:\n%s", t2)
 	}
 }
 
-// E2E-33 recall 总字节预算：多文件命中时单轮附件体积受 MaxSurfacedRecallBytes 约束
+// E2E-33 recall 总字节预算：多条 SQLite 命中时单轮附件体积受 MaxSurfacedRecallBytes 约束
 func TestE2E_33_RecallTotalByteBudget(t *testing.T) {
 	home := t.TempDir()
 	cwd := t.TempDir()
 	t.Setenv("HOME", home)
-	memDir := filepath.Join(cwd, memory.DotDir, "memory")
-	if err := os.MkdirAll(memDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
 	keyword := "budcap_e2e_33_kw"
+	lay := memory.DefaultLayout(cwd, home)
 	for i := 0; i < 6; i++ {
 		body := strings.Repeat("x", 3500) + "\n" + keyword + "\n"
-		p := filepath.Join(memDir, fmt.Sprintf("budcap_f%d.md", i))
-		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+		if err := memory.SeedAgentMemoryItem(lay, "", lzmodel.NamespaceTypeKnowledge, fmt.Sprintf("cap%d", i), body); err != nil {
 			t.Fatal(err)
 		}
 	}

@@ -16,7 +16,7 @@ const maxAgentListingDescRunes = 120
 // RunAgentToolDescriptionBase is the static OpenAI tool description for run_agent (agent list lives in the main system prompt).
 const RunAgentToolDescriptionBase = `Run a named sub-agent with its own short-lived context and tool surface. ` +
 	`Built-in types: general-purpose, explore. ` +
-	`Add markdown definitions under the session agent catalog directory (YAML frontmatter: agent_type, description, tools, max_turns, optional model). ` +
+	`Add markdown definitions under <cwd>/agents (YAML frontmatter: agent_type, description, tools, max_turns, optional model). ` +
 	`Set inherit_context true to prepend a trimmed copy of the parent message list (still no mutation of the main transcript).`
 
 // Catalog maps agent_type -> definition (user files override builtins with same name).
@@ -31,12 +31,17 @@ func LoadCatalog(cwd string, workspaceFlat bool, instructionRoot string) *Catalo
 		byName[d.AgentType] = d
 	}
 	dir := memory.JoinSessionWorkspaceWithInstruction(cwd, instructionRoot, workspaceFlat, "agents")
+	loadCatalogMarkdownDir(byName, dir)
+	return &Catalog{byName: byName}
+}
+
+func loadCatalogMarkdownDir(byName map[string]Definition, dir string) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		if !os.IsNotExist(err) {
 			slog.Warn("subagent.catalog.read_dir", "dir", dir, "err", err)
 		}
-		return &Catalog{byName: byName}
+		return
 	}
 	for _, ent := range entries {
 		if ent.IsDir() {
@@ -63,7 +68,6 @@ func LoadCatalog(cwd string, workspaceFlat bool, instructionRoot string) *Catalo
 		}
 		byName[def.AgentType] = def
 	}
-	return &Catalog{byName: byName}
 }
 
 // Get returns a definition by agent_type.

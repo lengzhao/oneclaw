@@ -123,4 +123,28 @@ func TestIMHostMaintainLayout_DotOrDataRoot(t *testing.T) {
 	if lay.Project != wantProj {
 		t.Fatalf("Project = %q want %q", lay.Project, wantProj)
 	}
+	wantRules := filepath.Join(ur, entrypointName)
+	if got := lay.ProjectRulesMemoryPath(); got != wantRules {
+		t.Fatalf("ProjectRulesMemoryPath = %q want %q", got, wantRules)
+	}
+}
+
+func TestLayout_ProjectRulesMemoryPath_IMSessionUsesInstructionRoot(t *testing.T) {
+	home := "/Users/x"
+	ir := filepath.Join(home, ".oneclaw", "sessions", "s1")
+	lay := IMSessionLayout(ir, home)
+	want := filepath.Join(ir, entrypointName)
+	if got := lay.ProjectRulesMemoryPath(); got != want {
+		t.Fatalf("ProjectRulesMemoryPath = %q want %q", got, want)
+	}
+}
+
+func TestLayout_ProjectRulesMemoryPath_repoUsesProjectMemory(t *testing.T) {
+	cwd := "/tmp/repo"
+	home := "/Users/x"
+	lay := DefaultLayout(cwd, home)
+	want := filepath.Join(lay.Project, entrypointName)
+	if got := lay.ProjectRulesMemoryPath(); got != want {
+		t.Fatalf("ProjectRulesMemoryPath = %q want %q", got, want)
+	}
 }

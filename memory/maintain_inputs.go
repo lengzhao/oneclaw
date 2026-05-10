@@ -69,7 +69,7 @@ func countRecentDailyLogBytes(autoDir, anchorDate string, days, minBytesPerFile 
 	if days < 1 {
 		return 0
 	}
-	t, err := time.ParseInLocation("2006-01-02", anchorDate, time.Local)
+	t, err := time.ParseInLocation("2006-01-02", anchorDate, time.UTC)
 	if err != nil {
 		return 0
 	}

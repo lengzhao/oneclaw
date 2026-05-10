@@ -35,7 +35,7 @@ func TestE2E_StubRunAgentNested(t *testing.T) {
 		t.Fatalf("expected parent final assistant, got %#v", last)
 	}
 
-	sideDir := filepath.Join(cwd, ".oneclaw", "sidechain")
+	sideDir := filepath.Join(cwd, "sidechain")
 	entries, err := os.ReadDir(sideDir)
 	if err != nil || len(entries) == 0 {
 		t.Fatalf("expected sidechain files under %s: %v entries=%v", sideDir, err, entries)

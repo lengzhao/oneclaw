@@ -9,8 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lengzhao/oneclaw/memory"
 	"github.com/lengzhao/clawbridge/bus"
+	lzmodel "github.com/lengzhao/memory/model"
+	"github.com/lengzhao/oneclaw/memory"
 	"github.com/lengzhao/oneclaw/test/openaistub"
 )
 
@@ -46,16 +47,12 @@ func TestE2E_10_UserAgentMdInjected(t *testing.T) {
 	}
 }
 
-// E2E-11 项目 `.oneclaw/AGENT.md` 注入（不再使用仓库根 AGENT.md）
+// E2E-11 项目根目录 AGENT.md 注入
 func TestE2E_11_ProjectOneclawAgentMd(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	cwd := t.TempDir()
-	dot := filepath.Join(cwd, memory.DotDir)
-	if err := os.MkdirAll(dot, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dot, memory.AgentInstructionsFile), []byte("E2E11_PROJECT_MARKER\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(cwd, memory.AgentInstructionsFile), []byte("E2E11_PROJECT_MARKER\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	stub := openaistub.New(t)
@@ -79,16 +76,12 @@ func TestE2E_11_ProjectOneclawAgentMd(t *testing.T) {
 	}
 }
 
-// E2E-12 仅 .oneclaw/AGENT.md（根目录无 AGENT.md）
+// E2E-12 仅项目根 AGENT.md（用于 walk-up 最具体一层）
 func TestE2E_12_DotOneclawAgentMdOnly(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	cwd := t.TempDir()
-	dot := filepath.Join(cwd, memory.DotDir)
-	if err := os.MkdirAll(dot, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dot, memory.AgentInstructionsFile), []byte("E2E12_DOTONLY_MARKER\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(cwd, memory.AgentInstructionsFile), []byte("E2E12_DOTONLY_MARKER\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	stub := openaistub.New(t)
@@ -112,12 +105,12 @@ func TestE2E_12_DotOneclawAgentMdOnly(t *testing.T) {
 	}
 }
 
-// E2E-13 .oneclaw/rules/*.md
+// E2E-13 项目 rules/*.md
 func TestE2E_13_DotOneclawRules(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	cwd := t.TempDir()
-	rules := filepath.Join(cwd, memory.DotDir, "rules")
+	rules := filepath.Join(cwd, "rules")
 	if err := os.MkdirAll(rules, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -154,18 +147,10 @@ func TestE2E_14_WalkUpOrderChildAfterParent(t *testing.T) {
 	if err := os.MkdirAll(child, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	pDot := filepath.Join(parent, memory.DotDir)
-	cDot := filepath.Join(child, memory.DotDir)
-	if err := os.MkdirAll(pDot, 0o755); err != nil {
+	if err := os.WriteFile(filepath.Join(parent, memory.AgentInstructionsFile), []byte("E2E14_PARENT\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(cDot, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(pDot, memory.AgentInstructionsFile), []byte("E2E14_PARENT\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(cDot, memory.AgentInstructionsFile), []byte("E2E14_CHILD\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(child, memory.AgentInstructionsFile), []byte("E2E14_CHILD\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	stub := openaistub.New(t)
@@ -199,11 +184,7 @@ func TestE2E_15_MemoryDisabledNoAgentInject(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	cwd := t.TempDir()
-	dot := filepath.Join(cwd, memory.DotDir)
-	if err := os.MkdirAll(dot, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dot, memory.AgentInstructionsFile), []byte("E2E15_SHOULD_NOT_APPEAR\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(cwd, memory.AgentInstructionsFile), []byte("E2E15_SHOULD_NOT_APPEAR\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	stub := openaistub.New(t)
@@ -231,22 +212,19 @@ func TestE2E_16_NoHomeDegradesGracefully(t *testing.T) {
 	}
 }
 
-// E2E-30 recall 命中关键词
+// E2E-30 recall 命中关键词（结构化 recall 读 agent_memory.sqlite）
 func TestE2E_30_RecallHit(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	cwd := t.TempDir()
-	memDir := filepath.Join(cwd, memory.DotDir, "memory")
-	if err := os.MkdirAll(memDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(memDir, "topic.md"), []byte("zebrarecall_e2e_30 is documented here.\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
 	stub := openaistub.New(t)
 	stub.Enqueue(openaistub.CompletionStop("", "ok"))
 	e2eEnvWithMemory(t, stub)
 	e2eIsolateUserMemory(t, home)
+	lay := memory.DefaultLayout(cwd, home)
+	if err := memory.SeedAgentMemoryItem(lay, "", lzmodel.NamespaceTypeKnowledge, "e2e30", "zebrarecall_e2e_30 is documented here.\n"); err != nil {
+		t.Fatal(err)
+	}
 	e := newStubEngine(t, stub, cwd)
 	if err := e.SubmitUser(context.Background(), bus.InboundMessage{Content: "What about zebrarecall_e2e_30?"}); err != nil {
 		t.Fatal(err)

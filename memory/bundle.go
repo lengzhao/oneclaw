@@ -59,11 +59,7 @@ func BuildTurn(layout Layout, home, userText string, recall *RecallState, recall
 			ctx.WriteString(fmt.Sprintf("### %s:%s\n\n%s\n\n", chunk.Kind, chunk.Path, body))
 		}
 	}
-	projRules := filepath.Join(layout.Project, entrypointName)
-	if layout.InstructionRoot != "" {
-		projRules = filepath.Join(layout.InstructionRoot, entrypointName)
-	}
-	appendMemoryRulesEntrypoint(&ctx, "project:memory", projRules)
+	appendMemoryRulesEntrypoint(&ctx, "project:memory", layout.ProjectRulesMemoryPath())
 	if !AutoMemoryDisabled() {
 		appendMemoryRulesEntrypoint(&ctx, "auto:memory", filepath.Join(layout.Auto, entrypointName))
 	}

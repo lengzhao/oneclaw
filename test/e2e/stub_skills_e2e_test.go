@@ -11,9 +11,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lengzhao/oneclaw/loop"
-	"github.com/lengzhao/oneclaw/memory"
 	"github.com/lengzhao/clawbridge/bus"
+	"github.com/lengzhao/oneclaw/loop"
 	"github.com/lengzhao/oneclaw/rtopts"
 	"github.com/lengzhao/oneclaw/test/openaistub"
 	"github.com/lengzhao/oneclaw/toolctx"
@@ -23,7 +22,7 @@ import (
 
 func writeSkill(t *testing.T, cwd, name, description, body string) {
 	t.Helper()
-	dir := filepath.Join(cwd, memory.DotDir, "skills", name)
+	dir := filepath.Join(cwd, "skills", name)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -33,7 +32,7 @@ func writeSkill(t *testing.T, cwd, name, description, body string) {
 	}
 }
 
-// E2E-105 存在 .oneclaw/skills 时，首轮 chat 请求的 system 含 Skills 索引与技能名。
+// E2E-105 存在 <cwd>/skills 时，首轮 chat 请求的 system 含 Skills 索引与技能名。
 func TestE2E_105_SkillsIndexInSystemPrompt(t *testing.T) {
 	cwd := t.TempDir()
 	writeSkill(t, cwd, "e2e-demo", "E2E105_SKILL_DESC", "body ignored for index")
@@ -111,7 +110,7 @@ func TestE2E_106_InvokeSkillToolAndRecentFile(t *testing.T) {
 		t.Fatalf("tool output missing base dir line:\n%s", toolOut)
 	}
 
-	recentPath := filepath.Join(cwd, memory.DotDir, "skills-recent.json")
+	recentPath := filepath.Join(cwd, "skills-recent.json")
 	b, err := os.ReadFile(recentPath)
 	if err != nil {
 		t.Fatalf("skills-recent.json: %v", err)

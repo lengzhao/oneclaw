@@ -130,3 +130,31 @@ func TestSelectRecall_secondCallDedupesSurfacedIDs(t *testing.T) {
 		t.Fatalf("expected empty second recall after dedupe, got:\n%s", body2)
 	}
 }
+
+func TestSelectRecall_mergesScheduledMaintainIsolation(t *testing.T) {
+	cwd := t.TempDir()
+	home := t.TempDir()
+	lay := DefaultLayout(cwd, home)
+	lay.EnsureDirs()
+	ctxSched := lzservice.WithIsolation(context.Background(), layoutStableTenantID(lay), "default", ScheduledMaintainIsolationSessionID, DefaultRootAgentMemoryAgentID)
+	db, err := getAgentMemoryGorm(lay)
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := lzmem.NewMemoryService(db)
+	marker := "scheduled_scope_merge_marker_unique_zx"
+	if _, err := svc.Remember(ctxSched, lzservice.RememberRequest{
+		NamespaceType: lzmodel.NamespaceTypeTransient,
+		Title:         "sched",
+		Content:       marker,
+		SourceType:    lzmodel.SourceTypeUser,
+		Confidence:    0.95,
+		Importance:    50,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	body, _ := SelectRecall(lay, "user-session-normal", marker, nil, 12_000)
+	if !strings.Contains(body, marker) {
+		t.Fatalf("expected merged recall from scheduled isolation, got:\n%s", body)
+	}
+}

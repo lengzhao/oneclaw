@@ -20,8 +20,8 @@ import (
 func TestE2E_101_PostTurnMaintainPromptSessionOnly(t *testing.T) {
 	stub := openaistub.New(t)
 	stub.Enqueue(openaistub.CompletionStop("", "main turn e2e101"))
-	date := time.Now().Format("2006-01-02")
-	yesterday := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
+	date := time.Now().UTC().Format("2006-01-02")
+	yesterday := time.Now().UTC().AddDate(0, 0, -1).Format("2006-01-02")
 	extractJSON := `{"memories":[{"namespace":"knowledge","title":"e2e101","content":"E2E101_NEW_FACT","summary":"","tags":[],"importance":70,"confidence":0.92,"reasoning":"e2e"}]}`
 	stub.Enqueue(openaistub.CompletionStop("", extractJSON))
 
@@ -47,7 +47,7 @@ func TestE2E_101_PostTurnMaintainPromptSessionOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	memDir := filepath.Join(cwd, memory.DotDir, "memory")
+	memDir := filepath.Join(cwd, "memory")
 	if err := os.MkdirAll(memDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -103,8 +103,8 @@ func TestE2E_101_PostTurnMaintainPromptSessionOnly(t *testing.T) {
 // E2E-113 远场维护 RunScheduledMaintain：lengzhao/memory Extract，user 含多日 log / topic 语料与规则摘要上下文。
 func TestE2E_113_ScheduledMaintainPromptToolOrientedPaths(t *testing.T) {
 	stub := openaistub.New(t)
-	date := time.Now().Format("2006-01-02")
-	yesterday := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
+	date := time.Now().UTC().Format("2006-01-02")
+	yesterday := time.Now().UTC().AddDate(0, 0, -1).Format("2006-01-02")
 	extractJSON := `{"memories":[{"namespace":"knowledge","title":"e2e103","content":"E2E103_NEW_FACT","summary":"","tags":[],"importance":70,"confidence":0.92,"reasoning":"e2e"}]}`
 	stub.Enqueue(openaistub.CompletionStop("", extractJSON))
 
@@ -149,7 +149,7 @@ func TestE2E_113_ScheduledMaintainPromptToolOrientedPaths(t *testing.T) {
 
 	base := strings.TrimSuffix(stub.BaseURL(), "/")
 	extractLLM := memory.NewScheduledExtractLLM("sk-test-stub", base, "gpt-4o")
-	memory.RunScheduledMaintain(context.Background(), lay, nil, "gpt-4o", 512, nil, extractLLM)
+	memory.RunScheduledMaintain(context.Background(), lay, "gpt-4o", 512, nil, extractLLM)
 
 	bodies := stub.ChatRequestBodies()
 	if len(bodies) < 1 {
@@ -201,7 +201,7 @@ func TestE2E_102_MaintainDedupeSkipsAppendWhenNoNewBullets(t *testing.T) {
 	t.Setenv("HOME", home)
 	e2eIsolateUserMemory(t, home)
 
-	memDir := filepath.Join(cwd, memory.DotDir, "memory")
+	memDir := filepath.Join(cwd, "memory")
 	if err := os.MkdirAll(memDir, 0o755); err != nil {
 		t.Fatal(err)
 	}

@@ -103,7 +103,8 @@ func AgentMemoryDir(cwd, memoryBase, agentType string, scope AgentScope) string 
 	}
 }
 
-// DailyLogPath returns <autoMemoryDir>/logs/YYYY/MM/YYYY-MM-DD.md for the given date (date "2006-01-02").
+// DailyLogPath returns <autoMemoryDir>/logs/YYYY/MM/YYYY-MM-DD.md for the given calendar date string ("2006-01-02").
+// Callers should use the same timezone convention as PostTurn (UTC calendar day; see daily log line timestamps).
 func DailyLogPath(autoMemoryDir, date string) string {
 	if len(date) < 10 {
 		date = date[:0]
@@ -174,6 +175,24 @@ func (l Layout) DotOrDataRoot() string {
 		return filepath.Clean(l.CWD)
 	}
 	return filepath.Clean(l.CWD)
+}
+
+func (l Layout) rulesEntrypointFileName() string {
+	if strings.TrimSpace(l.EntrypointName) != "" {
+		return l.EntrypointName
+	}
+	return entrypointName
+}
+
+// ProjectRulesMemoryPath returns the canonical project MEMORY.md path used for prompt injection
+// (project:memory in [BuildTurn]) and for extract-side rule excerpts: when InstructionRoot is set it is
+// `<InstructionRoot>/<MEMORY.md>`; otherwise `<Project>/<MEMORY.md>`.
+func (l Layout) ProjectRulesMemoryPath() string {
+	name := l.rulesEntrypointFileName()
+	if l.InstructionRoot != "" {
+		return filepath.Join(l.InstructionRoot, name)
+	}
+	return filepath.Join(l.Project, name)
 }
 
 // DefaultLayout builds standard paths for cwd and home directory.

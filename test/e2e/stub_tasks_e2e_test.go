@@ -11,10 +11,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lengzhao/oneclaw/loop"
-	"github.com/lengzhao/oneclaw/memory"
-	"github.com/lengzhao/oneclaw/rtopts"
 	"github.com/lengzhao/clawbridge/bus"
+	"github.com/lengzhao/oneclaw/loop"
+	"github.com/lengzhao/oneclaw/rtopts"
 	"github.com/lengzhao/oneclaw/tasks"
 	"github.com/lengzhao/oneclaw/test/openaistub"
 	"github.com/lengzhao/oneclaw/toolctx"
@@ -80,7 +79,7 @@ func TestE2E_109_TaskToolsWriteFileAndDisableHidesBlock(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	path := filepath.Join(cwd, memory.DotDir, "tasks.json")
+	path := filepath.Join(cwd, "tasks.json")
 	b, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("tasks.json: %v", err)

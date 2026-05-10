@@ -143,12 +143,12 @@ func TestE2E_42_WriteFileRejectedOutsideRoots(t *testing.T) {
 	}
 }
 
-// E2E-43 grep 在 .oneclaw/memory 下（memory 根白名单）
+// E2E-43 grep 在 project memory 根目录下（memory 根白名单）
 func TestE2E_43_GrepUnderProjectMemoryRoot(t *testing.T) {
 	home := t.TempDir()
 	cwd := t.TempDir()
 	t.Setenv("HOME", home)
-	memDir := filepath.Join(cwd, memory.DotDir, "memory")
+	memDir := filepath.Join(cwd, "memory")
 	if err := os.MkdirAll(memDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -157,7 +157,7 @@ func TestE2E_43_GrepUnderProjectMemoryRoot(t *testing.T) {
 	}
 
 	stub := openaistub.New(t)
-	gargs, _ := json.Marshal(map[string]string{"pattern": "GREP_UNIQUE_E2E_43", "path": filepath.Join(memory.DotDir, "memory")})
+	gargs, _ := json.Marshal(map[string]string{"pattern": "GREP_UNIQUE_E2E_43", "path": "memory"})
 	stub.Enqueue(openaistub.CompletionToolCalls("", []map[string]any{
 		openaistub.ToolCall("g", "grep", string(gargs)),
 	}))

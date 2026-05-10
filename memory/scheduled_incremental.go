@@ -153,8 +153,8 @@ func incrementalLineMinExclusive(lastWall, lineHigh *time.Time, interval time.Du
 
 func countFilteredDailyLogBytesSince(autoDir string, minExclusive time.Time) int {
 	untilUTC := time.Now().UTC()
-	startDay := truncateToLocalDate(minExclusive)
-	endDay := truncateToLocalDate(untilUTC)
+	startDay := truncateToUTCDate(minExclusive)
+	endDay := truncateToUTCDate(untilUTC)
 	sum := 0
 	for d := endDay; !d.Before(startDay); d = d.AddDate(0, 0, -1) {
 		ds := d.Format("2006-01-02")
@@ -215,8 +215,8 @@ func filterDailyLogBytesAfter(data []byte, minExclusive time.Time, untilUTC time
 	return []byte(strings.TrimSuffix(b.String(), "\n"))
 }
 
-func truncateToLocalDate(t time.Time) time.Time {
-	t = t.In(time.Local)
+func truncateToUTCDate(t time.Time) time.Time {
+	t = t.UTC()
 	y, m, d := t.Date()
-	return time.Date(y, m, d, 0, 0, 0, 0, time.Local)
+	return time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
 }

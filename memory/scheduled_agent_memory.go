@@ -2,7 +2,6 @@ package memory
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
@@ -12,9 +11,11 @@ import (
 	"time"
 
 	lzmodel "github.com/lengzhao/memory/model"
-	lzservice "github.com/lengzhao/memory/service"
 	"github.com/lengzhao/oneclaw/rtopts"
 )
+
+// scheduledMaintainRulesExcerptBytes caps MEMORY.md text embedded in scheduled extract DialogText.
+const scheduledMaintainRulesExcerptBytes = 8000
 
 // NewScheduledExtractLLM builds LLM config for scheduled/far-field extraction (timeouts + caps from maintain.* rtopts).
 func NewScheduledExtractLLM(apiKey, baseURL, model string) *lzmodel.LLMConfig {
@@ -47,37 +48,9 @@ func NewScheduledExtractLLM(apiKey, baseURL, model string) *lzmodel.LLMConfig {
 	return cfg
 }
 
-func resolveScheduledExtractLLM(explicit *lzmodel.LLMConfig, maxOut int64) *lzmodel.LLMConfig {
-	if explicit == nil || strings.TrimSpace(explicit.APIKey) == "" || strings.TrimSpace(explicit.Model) == "" {
-		return nil
-	}
-	outTok := maintenanceEffectiveMaxTokens(maxOut, false)
-	maxTok := 4096
-	if outTok > 0 && int(outTok) < maxTok {
-		maxTok = int(outTok)
-	}
-	if maxTok < 512 {
-		maxTok = 512
-	}
-	timeoutSec := int(scheduledMaintainTimeout().Seconds())
-	if timeoutSec <= 0 {
-		timeoutSec = 1800
-	}
-	c := *explicit
-	if c.MaxTokens <= 0 {
-		c.MaxTokens = maxTok
-	}
-	if c.TimeoutSeconds <= 0 {
-		c.TimeoutSeconds = timeoutSec
-	}
-	if c.Temperature == 0 {
-		c.Temperature = 0.2
-	}
-	return &c
-}
-
-func rulesExcerptForScheduledMaintain(layout Layout, maxBytes int) string {
-	rulesPath := filepath.Join(layout.Project, entrypointName)
+// projectMemoryRulesExcerpt reads layout.Project MEMORY.md truncated to maxBytes (UTF-8 safe).
+func projectMemoryRulesExcerpt(layout Layout, maxBytes int) string {
+	rulesPath := layout.ProjectRulesMemoryPath()
 	raw, err := os.ReadFile(rulesPath)
 	if err != nil || len(raw) == 0 {
 		return ""
@@ -90,6 +63,24 @@ func rulesExcerptForScheduledMaintain(layout Layout, maxBytes int) string {
 		s = strings.TrimRight(utf8SafePrefix(s, maxBytes), "\n") + "\n…"
 	}
 	return s
+}
+
+func appendDailyLogCorpusSection(b *strings.Builder, ds string, raw []byte, perFile, totalCap int, incrementalHeading bool) bool {
+	chunk := string(raw)
+	if len(chunk) > perFile {
+		chunk = strings.TrimRight(utf8SafePrefix(chunk, perFile), "\n") + "\n…"
+	}
+	var sec string
+	if incrementalHeading {
+		sec = fmt.Sprintf("### Daily log %s (incremental lines)\n```\n%s\n```\n\n", ds, chunk)
+	} else {
+		sec = fmt.Sprintf("### Daily log %s\n```\n%s\n```\n\n", ds, chunk)
+	}
+	if b.Len()+len(sec) > totalCap {
+		return false
+	}
+	b.WriteString(sec)
+	return true
 }
 
 // buildScheduledMaintenanceCorpus assembles daily log text (+ optional topic excerpts) for Extract DialogText.
@@ -113,8 +104,8 @@ func buildScheduledMaintenanceCorpus(layout Layout, dateStr string, p distillCon
 		}
 		minX := incrementalLineMinExclusive(lastWall, lineHW, p.incrementalInterval)
 		probeBytes = countFilteredDailyLogBytesSince(layout.Auto, minX)
-		startDay := truncateToLocalDate(minX)
-		endDay := truncateToLocalDate(untilUTC)
+		startDay := truncateToUTCDate(minX)
+		endDay := truncateToUTCDate(untilUTC)
 		for d := endDay; !d.Before(startDay); d = d.AddDate(0, 0, -1) {
 			ds := d.Format("2006-01-02")
 			path := DailyLogPath(layout.Auto, ds)
@@ -122,23 +113,17 @@ func buildScheduledMaintenanceCorpus(layout Layout, dateStr string, p distillCon
 			if err != nil || len(data) == 0 {
 				continue
 			}
-			f := filterDailyLogBytesAfter(data, minX, untilUTC)
-			if len(f) == 0 {
+			filtered := filterDailyLogBytesAfter(data, minX, untilUTC)
+			if len(filtered) == 0 {
 				continue
 			}
-			chunk := string(f)
-			if len(chunk) > perFile {
-				chunk = strings.TrimRight(utf8SafePrefix(chunk, perFile), "\n") + "\n…"
-			}
-			sec := fmt.Sprintf("### Daily log %s (incremental lines)\n```\n%s\n```\n\n", ds, chunk)
-			if b.Len()+len(sec) > totalCap {
+			if !appendDailyLogCorpusSection(&b, ds, filtered, perFile, totalCap, true) {
 				break
 			}
-			b.WriteString(sec)
 		}
 	} else {
 		probeBytes = countRecentDailyLogBytes(layout.Auto, dateStr, p.logDays, p.minLogBytes)
-		t, err := time.ParseInLocation("2006-01-02", dateStr, time.Local)
+		t, err := time.ParseInLocation("2006-01-02", dateStr, time.UTC)
 		if err != nil {
 			return "", probeBytes
 		}
@@ -150,15 +135,9 @@ func buildScheduledMaintenanceCorpus(layout Layout, dateStr string, p distillCon
 			if err != nil || len(data) < p.minLogBytes {
 				continue
 			}
-			chunk := string(data)
-			if len(chunk) > perFile {
-				chunk = strings.TrimRight(utf8SafePrefix(chunk, perFile), "\n") + "\n…"
-			}
-			sec := fmt.Sprintf("### Daily log %s\n```\n%s\n```\n\n", ds, chunk)
-			if b.Len()+len(sec) > totalCap {
+			if !appendDailyLogCorpusSection(&b, ds, data, perFile, totalCap, false) {
 				break
 			}
-			b.WriteString(sec)
 		}
 	}
 	appendTopicCorpus(&b, layout, p, totalCap)
@@ -224,56 +203,17 @@ func appendTopicCorpus(b *strings.Builder, layout Layout, p distillConfig, total
 }
 
 func runScheduledAgentMemoryExtract(ctx context.Context, layout Layout, llm *lzmodel.LLMConfig, corpus string, rulesExcerpt string) error {
-	db, err := getAgentMemoryGorm(layout)
-	if err != nil {
-		slog.Warn("memory.scheduled_extract.db_open_failed", "err", err)
-		return err
-	}
-	timeout := time.Duration(llm.TimeoutSeconds) * time.Second
-	if timeout <= 0 {
-		timeout = 1800 * time.Second
-	}
-	runCtx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-
 	dialog := "Scheduled / far-field memory consolidation from recent daily logs and optional topic excerpts.\n\n## Corpus\n\n" + corpus
 	if ex := strings.TrimSpace(rulesExcerpt); ex != "" {
 		dialog = "Project MEMORY.md rules excerpt (avoid extracting duplicates already covered as standing rules):\n```\n" + ex + "\n```\n\n" + dialog
 	}
-
-	extCtx := lzservice.WithIsolation(runCtx, layoutStableTenantID(layout), "default", "scheduled_maintain", DefaultRootAgentMemoryAgentID)
-	ref := time.Now()
-	extractor := lzservice.NewExtractor(db)
-	req := lzservice.ExtractRequest{
-		DialogText:        dialog,
-		ContextMemories:   nil,
-		MinConfidence:     0.7,
-		DryRun:            false,
-		UseDecisionEngine: false,
-		LLMConfig:         llm,
-		ReferenceTime:     &ref,
-		ResolutionContext: "scheduled batch maintenance",
-	}
-	result, err := extractor.Extract(extCtx, req)
-	if err != nil {
-		slog.Warn("memory.scheduled_extract.failed", "err", err)
-		return err
-	}
-	sqlitePath := agentMemorySQLitePath(layout)
-	auditPayload, _ := json.Marshal(map[string]any{
-		"extraction_id": result.ExtractionID,
-		"status":        result.Status,
-		"memories":      len(result.Memories),
-		"tokens":        result.TotalTokens,
-		"pathway":       "scheduled",
+	return runAgentMemoryExtract(ctx, layout, llm, agentMemoryExtractParams{
+		kind:               agentMemoryExtractScheduled,
+		isolateSessionID:   ScheduledMaintainIsolationSessionID,
+		dialogText:         dialog,
+		contextMemories:    nil,
+		resolutionContext:  "scheduled batch maintenance",
+		auditSource:        AuditSourceScheduledMaintain,
+		auditExtra:         map[string]any{"pathway": "scheduled"},
 	})
-	AppendMemoryAudit(layout, sqlitePath, AuditSourceScheduledMaintain, auditPayload)
-	slog.Info("memory.scheduled_extract.done",
-		"path", sqlitePath,
-		"model", llm.Model,
-		"memories", len(result.Memories),
-		"status", result.Status,
-		"tokens", result.TotalTokens,
-	)
-	return nil
 }

@@ -17,7 +17,7 @@ import (
 
 func writeBusinessAgent(t *testing.T, cwd, agentType, description, body string) {
 	t.Helper()
-	dir := filepath.Join(cwd, ".oneclaw", "agents")
+	dir := filepath.Join(cwd, "agents")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -52,7 +52,7 @@ func runAgentToolDescriptionFromChatBody(body []byte) (string, bool) {
 	return "", false
 }
 
-// E2E-116 存在 .oneclaw/agents 业务定义时：system 含 Delegated agents 段；run_agent 在请求中出现且 description 不含动态目录附录。
+// E2E-116 存在 <cwd>/agents 业务定义时：system 含 Delegated agents 段；run_agent 在请求中出现且 description 不含动态目录附录。
 func TestE2E_116_AgentCatalogInSystemAndRunAgentTool(t *testing.T) {
 	cwd := t.TempDir()
 	writeBusinessAgent(t, cwd, "e2e-biz", "E2E116_BIZ_DESC", "You are the e2e business agent.")

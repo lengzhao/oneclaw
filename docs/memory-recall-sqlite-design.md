@@ -24,7 +24,7 @@
 | 替代文件真源 | 索引是**派生数据**；仍以磁盘上的 `MEMORY.md`、topic、日文件等为准，索引可全量重建。 |
 | 本地语义 / 混合检索 | **不在本地 SQLite 层实现**；见 §10「后续：外部 RAG」。 |
 | 跨设备实时同步 | 不做多主同步；多机场景以「各端重建索引」或文件同步后再重建为主。 |
-| 改写 memory 生产链路 | `PostTurn` / `RunScheduledMaintain` 仍只写 Markdown，不直接写 SQLite。 |
+| 改写 memory 生产链路 | 运行时 **`PostTurn`（daily log）+ `MaybePostTurnMaintain` / `RunScheduledMaintain`** 已通过 **`github.com/lengzhao/memory` Extract** 写入 **`agent_memory.sqlite`**；Markdown 文件仍为规则/话题真源之一。 |
 
 ---
 
@@ -76,7 +76,7 @@ flowchart LR
 
 原因：
 
-- 当前 `PostTurn`、`RunPostTurnMaintain`、`RunScheduledMaintain`、`AppendMemoryAudit` 都明显依赖文件路径、日文件、规则文件与审计落盘语义；
+- 当前 `PostTurn`（日志行）、`MaybePostTurnMaintain`、`RunScheduledMaintain`、`SelectRecall`、`AppendMemoryAudit` 依赖 daily log 路径、规则文件路径、`agent_memory.sqlite` 与审计落盘语义；
 - 若过早抽象统一 `MemoryStore`，会把“文件为真源”的设计约束打散，导致接口要么过宽、要么充满特判；
 - recall 是天然可替换的消费侧：`scan`、`sqlite`、未来外部 RAG 都可以共享同一调用面。
 

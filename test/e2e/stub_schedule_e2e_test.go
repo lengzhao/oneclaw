@@ -10,9 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lengzhao/oneclaw/loop"
-	"github.com/lengzhao/oneclaw/memory"
 	"github.com/lengzhao/clawbridge/bus"
+	"github.com/lengzhao/oneclaw/loop"
 	"github.com/lengzhao/oneclaw/schedule"
 	"github.com/lengzhao/oneclaw/test/openaistub"
 	"github.com/lengzhao/oneclaw/toolctx"
@@ -20,7 +19,7 @@ import (
 	"github.com/openai/openai-go"
 )
 
-// E2E-111 cron 工具 add 写入 .oneclaw/scheduled_jobs.json
+// E2E-111 cron 工具 add 写入会话 cwd 下 scheduled_jobs.json（与 [schedule.JobsFilePath] 仓库布局一致）
 func TestE2E_111_CronToolWritesFile(t *testing.T) {
 	cwd := t.TempDir()
 	stub := openaistub.New(t)
@@ -46,7 +45,7 @@ func TestE2E_111_CronToolWritesFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	path := filepath.Join(cwd, memory.DotDir, "scheduled_jobs.json")
+	path := filepath.Join(cwd, "scheduled_jobs.json")
 	b, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("scheduled_jobs.json: %v", err)

@@ -83,7 +83,7 @@ func repoRoot(t *testing.T) string {
 // E2E-96 oneclaw -maintain-once：子进程 + stub，一轮 lengzhao/memory Extract 写入 agent_memory.sqlite
 func TestE2E_96_MaintainCLIOnce(t *testing.T) {
 	stub := openaistub.New(t)
-	date := time.Now().Format("2006-01-02")
+	date := time.Now().UTC().Format("2006-01-02")
 	extractJSON := `{"memories":[{"namespace":"knowledge","title":"e2e96","content":"E2E96_CLI_MAINTAIN_MARKER","summary":"","tags":[],"importance":70,"confidence":0.92,"reasoning":"e2e"}]}`
 	stub.Enqueue(openaistub.CompletionStop("", extractJSON))
 
@@ -114,7 +114,7 @@ func TestE2E_96_MaintainCLIOnce(t *testing.T) {
 	if err := os.MkdirAll(lay.Project, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(lay.Project, "MEMORY.md"), []byte("# MEMORY\n"), 0o644); err != nil {
+	if err := os.WriteFile(lay.ProjectRulesMemoryPath(), []byte("# MEMORY\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	logPath := memory.DailyLogPath(lay.Auto, date)

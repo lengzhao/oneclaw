@@ -43,11 +43,11 @@ func TestE2E_93_PostTurnDailyLogSkipsProjectsAudit(t *testing.T) {
 		t.Fatal(err)
 	}
 	lay := memory.DefaultLayout(cwd, home)
-	logPath := memory.DailyLogPath(lay.Auto, time.Now().Format("2006-01-02"))
+	logPath := memory.DailyLogPath(lay.Auto, time.Now().UTC().Format("2006-01-02"))
 	if _, err := os.Stat(logPath); err != nil {
 		t.Fatalf("daily log should exist: %v", err)
 	}
-	auditPath := filepath.Join(cwd, memory.DotDir, "audit", "memory-write.jsonl")
+	auditPath := filepath.Join(lay.DotOrDataRoot(), "audit", "memory-write.jsonl")
 	raw, err := os.ReadFile(auditPath)
 	if os.IsNotExist(err) {
 		return
@@ -87,7 +87,8 @@ func TestE2E_94_MemoryAuditDisabledNoFile(t *testing.T) {
 	if err := e.SubmitUser(context.Background(), bus.InboundMessage{Content: "y"}); err != nil {
 		t.Fatal(err)
 	}
-	auditPath := filepath.Join(cwd, memory.DotDir, "audit", "memory-write.jsonl")
+	lay := memory.DefaultLayout(cwd, home)
+	auditPath := filepath.Join(lay.DotOrDataRoot(), "audit", "memory-write.jsonl")
 	if _, err := os.Stat(auditPath); err == nil {
 		t.Fatalf("audit file should not exist: %s", auditPath)
 	} else if !os.IsNotExist(err) {
@@ -101,7 +102,7 @@ func TestE2E_95_MemoryAuditWriteFileUnderMemoryRoot(t *testing.T) {
 	cwd := t.TempDir()
 	t.Setenv("HOME", home)
 	stub := openaistub.New(t)
-	memRel := filepath.Join(".oneclaw", "memory", "audit_write_e2e.md")
+	memRel := filepath.Join("memory", "audit_write_e2e.md")
 	content := "E2E95_AUDIT_WRITE_MARKER\n"
 	args, err := json.Marshal(map[string]string{"path": memRel, "content": content})
 	if err != nil {
@@ -121,7 +122,8 @@ func TestE2E_95_MemoryAuditWriteFileUnderMemoryRoot(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantPath := filepath.Join(cwd, memRel)
-	auditPath := filepath.Join(cwd, memory.DotDir, "audit", "memory-write.jsonl")
+	lay := memory.DefaultLayout(cwd, home)
+	auditPath := filepath.Join(lay.DotOrDataRoot(), "audit", "memory-write.jsonl")
 	raw, err := os.ReadFile(auditPath)
 	if err != nil {
 		t.Fatalf("audit file: %v", err)

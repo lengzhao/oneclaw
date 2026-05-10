@@ -549,7 +549,7 @@ func (e *Engine) appendDialogHistoryIfComplete() {
 		return
 	}
 	layout := e.MemoryLayout(home)
-	date := time.Now().Format("2006-01-02")
+	date := time.Now().UTC().Format("2006-01-02")
 	if err := memory.AppendDialogHistoryPair(layout, date, e.SessionID, u, a); err != nil {
 		slog.Warn("session.dialog_history.append", "err", err)
 	}

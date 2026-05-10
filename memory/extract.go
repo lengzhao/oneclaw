@@ -25,16 +25,17 @@ func MemoryExtractEnabled() bool {
 	return !AutoMemoryDisabled() && !memoryExtractDisabled()
 }
 
+func shouldRunSQLiteExtract() bool {
+	return autoMaintenanceEnabled() && MemoryExtractEnabled()
+}
+
 // PostTurn runs optional memory maintenance after a successful turn (simplified extract / dream hook).
 func PostTurn(layout Layout, in PostTurnInput) {
-	if AutoMemoryDisabled() {
-		return
-	}
-	if memoryExtractDisabled() {
+	if !MemoryExtractEnabled() {
 		return
 	}
 	line := buildDailyLogLine(in.UserText, in.AssistantVisible, in.Tools)
-	path := DailyLogPath(layout.Auto, time.Now().Format("2006-01-02"))
+	path := DailyLogPath(layout.Auto, time.Now().UTC().Format("2006-01-02"))
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		slog.Warn("memory.daily_log.mkdir", "path", path, "err", err)
 		return
@@ -90,10 +91,10 @@ func formatToolSummary(entries []loop.ToolTraceEntry) string {
 func oneLine(s string, max int) string {
 	s = strings.ReplaceAll(s, "\n", " ")
 	s = strings.TrimSpace(s)
-	if len(s) <= max {
+	if max <= 0 || len(s) <= max {
 		return s
 	}
-	return s[:max] + "…"
+	return utf8SafePrefix(s, max) + "…"
 }
 
 func memoryExtractDisabled() bool {

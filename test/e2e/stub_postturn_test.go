@@ -32,7 +32,7 @@ func TestE2E_50_DailyLogAppendDefault(t *testing.T) {
 		t.Fatal(err)
 	}
 	lay := memory.DefaultLayout(cwd, home)
-	logPath := memory.DailyLogPath(lay.Auto, time.Now().Format("2006-01-02"))
+	logPath := memory.DailyLogPath(lay.Auto, time.Now().UTC().Format("2006-01-02"))
 	b, err := os.ReadFile(logPath)
 	if err != nil {
 		t.Fatalf("daily log: %v", err)
@@ -59,7 +59,7 @@ func TestE2E_51_DailyLogDisabledByEnv(t *testing.T) {
 		t.Fatal(err)
 	}
 	lay := memory.DefaultLayout(cwd, home)
-	logPath := memory.DailyLogPath(lay.Auto, time.Now().Format("2006-01-02"))
+	logPath := memory.DailyLogPath(lay.Auto, time.Now().UTC().Format("2006-01-02"))
 	if _, err := os.Stat(logPath); err == nil {
 		t.Fatalf("log should not exist: %s", logPath)
 	} else if !os.IsNotExist(err) {
