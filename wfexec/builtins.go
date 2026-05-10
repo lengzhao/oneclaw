@@ -3,6 +3,8 @@ package wfexec
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -13,6 +15,7 @@ import (
 	"time"
 
 	"github.com/cloudwego/eino/adk"
+	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/schema"
 
 	"github.com/lengzhao/oneclaw/config"
@@ -218,6 +221,58 @@ func handleLLM(ctx context.Context, in NodeInput, env NodeEnv) (workflow.Workflo
 	return workflow.WorkflowNodeResult{Text: strings.TrimSpace(rtx.Assistant)}, nil
 }
 
+func buildMaxIterationsClosingUserContent(toolLoopLen int, fallbackChunks []string) string {
+	var b strings.Builder
+	b.WriteString("The maximum tool-use iteration budget for this turn has been reached. You must not use any tools.\n\n")
+	if toolLoopLen == 0 && len(fallbackChunks) > 0 {
+		prior := strings.TrimSpace(strings.Join(fallbackChunks, "\n"))
+		if prior != "" {
+			b.WriteString("Assistant text observed during the tool loop (tool calls/results were not captured in context — summarize cautiously):\n\n")
+			b.WriteString(prior)
+			b.WriteString("\n\n")
+		}
+	}
+	b.WriteString("Reply with one final message to the user: summarize what was accomplished, note anything unfinished, and suggest concrete next steps if useful.")
+	return b.String()
+}
+
+func cloneSchemaMessageForTrace(msg *schema.Message) (*schema.Message, error) {
+	if msg == nil {
+		return nil, fmt.Errorf("wfexec: nil message")
+	}
+	b, err := json.Marshal(msg)
+	if err != nil {
+		return nil, fmt.Errorf("wfexec: clone message: %w", err)
+	}
+	var out schema.Message
+	if err := json.Unmarshal(b, &out); err != nil {
+		return nil, fmt.Errorf("wfexec: clone message: %w", err)
+	}
+	return &out, nil
+}
+
+func generateFinalAnswerNoTools(ctx context.Context, cm model.ToolCallingChatModel, systemInstr string, prior []*schema.Message, toolLoop []*schema.Message, fallbackChunks []string) (string, error) {
+	if cm == nil {
+		return "", fmt.Errorf("wfexec: nil chat model for final reply")
+	}
+	sys := strings.TrimSpace(systemInstr)
+	hist := make([]*schema.Message, 0, len(prior)+len(toolLoop)+2)
+	if sys != "" {
+		hist = append(hist, schema.SystemMessage(sys))
+	}
+	hist = append(hist, prior...)
+	hist = append(hist, toolLoop...)
+	hist = append(hist, schema.UserMessage(buildMaxIterationsClosingUserContent(len(toolLoop), fallbackChunks)))
+	out, err := cm.Generate(ctx, hist)
+	if err != nil {
+		return "", err
+	}
+	if out == nil {
+		return "", fmt.Errorf("wfexec: final generate returned nil message")
+	}
+	return strings.TrimSpace(out.Content), nil
+}
+
 func runMainLLM(rtx *engine.RuntimeContext) error {
 	if rtx.ChatAgent == nil {
 		return fmt.Errorf("wfexec: adk_main: ChatAgent not configured")
@@ -265,14 +320,20 @@ func runMainLLM(rtx *engine.RuntimeContext) error {
 	}
 	iter := rtx.ChatAgent.Run(rtx.GoCtx, input)
 	var chunks []string
+	var toolLoopTrace []*schema.Message
 	seenToolCalls := make(map[string]bool)
 	seenToolResults := make(map[string]bool)
+	hitMaxIterations := false
 	for {
 		ev, ok := iter.Next()
 		if !ok {
 			break
 		}
 		if ev.Err != nil {
+			if errors.Is(ev.Err, adk.ErrExceedMaxIterations) {
+				hitMaxIterations = true
+				break
+			}
 			return ev.Err
 		}
 		if ev.Output != nil && ev.Output.MessageOutput != nil && ev.Output.MessageOutput.Message != nil {
@@ -283,6 +344,13 @@ func runMainLLM(rtx *engine.RuntimeContext) error {
 				role = msg.Role
 			}
 			logToolActivity(rtx.GoCtx, rtx, msg, seenToolCalls, seenToolResults)
+			if role == schema.Assistant || role == schema.Tool {
+				cp, err := cloneSchemaMessageForTrace(msg)
+				if err != nil {
+					return fmt.Errorf("wfexec: adk_main: %w", err)
+				}
+				toolLoopTrace = append(toolLoopTrace, cp)
+			}
 			if role == schema.Tool {
 				continue
 			}
@@ -299,8 +367,33 @@ func runMainLLM(rtx *engine.RuntimeContext) error {
 			}
 		}
 	}
-	// Join assistant MessageOutputs (intermediate model text included). Tool result outputs (Role tool) are omitted.
-	if len(chunks) == 0 {
+	if hitMaxIterations {
+		if rtx.ChatModel == nil {
+			return fmt.Errorf("wfexec: adk_main: max iterations exceeded and ChatModel unset: %w", adk.ErrExceedMaxIterations)
+		}
+		slog.InfoContext(rtx.GoCtx, "wfexec.adk_main.max_iterations.final_generate",
+			"agent_type", runtimeAgentType(rtx),
+			"correlation_id", strings.TrimSpace(rtx.CorrelationID),
+			"tool_loop_msgs", len(toolLoopTrace),
+			"prior_chunk_count", len(chunks),
+		)
+		finalText, err := generateFinalAnswerNoTools(rtx.GoCtx, rtx.ChatModel, instr, msgs, toolLoopTrace, chunks)
+		if err != nil {
+			return fmt.Errorf("wfexec: adk_main: final reply after max iterations: %w", err)
+		}
+		if finalText == "" {
+			rtx.SetAssistant("")
+		} else {
+			rtx.SetAssistant(finalText)
+			if rtx.Stdout != nil && rtx.OnAssistantChunk == nil {
+				fmt.Fprintln(rtx.Stdout, finalText)
+			}
+			if rtx.OnAssistantChunk != nil {
+				rtx.OnAssistantChunk(finalText)
+			}
+		}
+	} else if len(chunks) == 0 {
+		// Join assistant MessageOutputs (intermediate model text included). Tool result outputs (Role tool) are omitted.
 		rtx.SetAssistant("")
 	} else {
 		rtx.SetAssistant(strings.TrimSpace(strings.Join(chunks, "\n")))

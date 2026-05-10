@@ -1,6 +1,7 @@
 package wfexec
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/cloudwego/eino/schema"
 
+	"github.com/lengzhao/oneclaw/adkhost"
 	"github.com/lengzhao/oneclaw/catalog"
 	"github.com/lengzhao/oneclaw/config"
 	"github.com/lengzhao/oneclaw/engine"
@@ -284,5 +286,47 @@ func TestPrepareAgentContext_disableContextBlocks(t *testing.T) {
 	}
 	if got := rtx.PromptTemplateData["SkillsIndex"]; strings.TrimSpace(got.(string)) == "" {
 		t.Fatalf("skills should remain enabled by default: %#v", rtx.PromptTemplateData)
+	}
+}
+
+func TestBuildMaxIterationsClosingUserContent(t *testing.T) {
+	withTrace := buildMaxIterationsClosingUserContent(3, []string{"ignored"})
+	if strings.Contains(withTrace, "partial") || strings.Contains(withTrace, "not captured") {
+		t.Fatalf("with tool-loop messages, should not embed fallback chunks, got %q", withTrace)
+	}
+	if !strings.Contains(withTrace, "maximum tool-use iteration budget") || !strings.Contains(withTrace, "must not use any tools") {
+		t.Fatalf("expected budget + no-tools constraint, got %q", withTrace)
+	}
+	noTrace := buildMaxIterationsClosingUserContent(0, []string{"partial", "lines"})
+	if !strings.Contains(noTrace, "partial") || !strings.Contains(noTrace, "lines") {
+		t.Fatalf("without trace, expected fallback chunks embedded, got %q", noTrace)
+	}
+	if strings.TrimSpace(buildMaxIterationsClosingUserContent(1, nil)) == "" {
+		t.Fatal("non-empty trace len should still produce closing text")
+	}
+}
+
+func TestGenerateFinalAnswerNoTools(t *testing.T) {
+	ctx := context.Background()
+	cm := adkhost.NewStubChatModel("final-from-stub")
+	got, err := generateFinalAnswerNoTools(ctx, cm, "sys", []*schema.Message{schema.UserMessage("hi")}, []*schema.Message{schema.AssistantMessage("mid", nil)}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "final-from-stub" {
+		t.Fatalf("want stub reply, got %q", got)
+	}
+}
+
+func TestCloneSchemaMessageForTrace_roundTrip(t *testing.T) {
+	src := schema.AssistantMessage("", []schema.ToolCall{
+		{ID: "c1", Type: "function", Function: schema.FunctionCall{Name: "read_file", Arguments: `{"path":"x"}`}},
+	})
+	cp, err := cloneSchemaMessageForTrace(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cp.ToolCalls) != 1 || cp.ToolCalls[0].Function.Name != "read_file" {
+		t.Fatalf("tool call lost in clone: %#v", cp.ToolCalls)
 	}
 }
